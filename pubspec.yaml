@@ -45,6 +45,10 @@ dependencies:
   # Toast - https://pub.dev/packages/fluttertoast
   fluttertoast: ^8.2.8
 
+  file_picker: ^8.0.0
+  image: ^4.1.7
+  path_provider: ^2.1.5
+
 
 dev_dependencies:
   flutter_test:
