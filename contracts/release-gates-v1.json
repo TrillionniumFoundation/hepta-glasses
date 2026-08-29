@@ -1,0 +1,41 @@
+{
+  "contract_id": "hepta-glasses-release-gates-v1",
+  "version": 1,
+  "source_gate": {
+    "required": [
+      "exact_commit",
+      "exact_tree",
+      "repository-contracts",
+      "flutter",
+      "secret-and-boundary-scan",
+      "sbom_sha256",
+      "provenance_sha256",
+      "contracts_version"
+    ]
+  },
+  "product_gate": {
+    "required": [
+      "protected_main",
+      "independent_review",
+      "android_physical_qualification",
+      "ios_physical_qualification",
+      "security_review",
+      "privacy_review",
+      "legal_review",
+      "kill_switch_drill",
+      "rollback_drill",
+      "android_signing_evidence",
+      "ios_signing_evidence",
+      "pilot_cohort",
+      "pilot_crash_free_rate",
+      "zero_duplicate_effects"
+    ]
+  },
+  "forbidden_substitutions": [
+    "digital_twin_for_physical_device",
+    "source_test_for_production_credentials",
+    "self_review_for_independent_review",
+    "unsigned_build_for_release_signing",
+    "synthetic_pilot_for_real_pilot"
+  ]
+}

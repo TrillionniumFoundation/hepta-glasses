@@ -1,0 +1,22 @@
+{
+  "scenario_id": "ios-g1-physical-v1",
+  "platform": "ios",
+  "minimum_duration_seconds": 3600,
+  "maximum_wake_to_listening_p95_ms": 300,
+  "maximum_eos_to_first_display_p95_ms": 3500,
+  "maximum_packet_loss_ratio": 0.01,
+  "maximum_temperature_c": 42.0,
+  "maximum_duplicate_effects": 0,
+  "minimum_end_battery_percent": 10.0,
+  "required_faults": [
+    "left_disconnect",
+    "right_disconnect",
+    "dual_disconnect",
+    "network_handoff",
+    "token_expiry",
+    "model_timeout",
+    "application_restart",
+    "user_cancel_before_effect",
+    "external_effect_after_local_timeout"
+  ]
+}

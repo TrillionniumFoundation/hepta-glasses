@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """Fail-closed source contract validator with no third-party dependencies."""
 
@@ -23,9 +22,20 @@ REQUIRED = {
     "docs/PRIVACY_MODEL.md",
     "docs/CAPABILITY_MODEL.md",
     "docs/HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md",
+    "docs/development/G3_G8_SOURCE_CLOSURE.md",
+    "docs/operations/PRODUCTION_CONTROL_PLANE_RUNBOOK.md",
+    "docs/operations/REALTIME_AND_CAPABILITY_RUNBOOK.md",
+    "docs/operations/DEVICE_QUALIFICATION_RUNBOOK.md",
+    "docs/operations/REPOSITORY_GOVERNANCE_RUNBOOK.md",
+    "docs/operations/PRIVACY_SECURITY_REVIEW_CHECKLIST.md",
+    "docs/operations/RELEASE_AND_ROLLBACK_RUNBOOK.md",
     "docs/GAP_LEDGER.yaml",
     "docs/EVIDENCE_INDEX.yaml",
     "contracts/hepta-glasses-runtime-v1.json",
+    "contracts/control-plane-v1.json",
+    "contracts/main-branch-protection-v1.json",
+    "contracts/release-gates-v1.json",
+    "contracts/qualification-slo-v1.json",
     "lib/runtime/contracts.dart",
     "lib/runtime/audit_journal.dart",
     "lib/runtime/task_engine.dart",
@@ -36,18 +46,49 @@ REQUIRED = {
     "lib/runtime/dual_leg_coordinator.dart",
     "lib/runtime/model_gateway.dart",
     "lib/simulator/g1_digital_twin.dart",
+    "services/control_plane/identity.py",
+    "services/control_plane/realtime.py",
+    "services/control_plane/capabilities.py",
+    "services/skills/registry.py",
+    "services/skills/memory.py",
+    "services/qualification/device_report.py",
+    "services/qualification/release_gate.py",
+    "services/qualification/sbom.py",
+    "services/qualification/governance.py",
     "services/codex_worker/worker.py",
     "adapters/mcp/hepta_glasses_mcp_server.py",
+    "tools/qualify_device_trace.py",
+    "tools/build_source_evidence.py",
+    "tools/evaluate_release_gate.py",
+    "tools/repository_governance.py",
+    "evidence/templates/android-g1-qualification-scenario.json",
+    "evidence/templates/ios-g1-qualification-scenario.json",
+    "evidence/templates/product-release-bundle.template.json",
     ".github/workflows/ci.yml",
 }
 
 FORBIDDEN_PATTERNS = {
-    "provider key name": re.compile(r"DASHSCOPE_API_KEY|DEEPSEEK_API_KEY|OPENAI_API_KEY"),
-    "direct provider endpoint": re.compile(r"api\.deepseek\.com|dashscope\.aliyuncs\.com"),
-    "Codex sandbox bypass": re.compile(r"dangerously-bypass-approvals-and-sandbox|--yolo|danger-full-access"),
+    "provider key name": re.compile(
+        r"DASHSCOPE_API_KEY|DEEPSEEK_API_KEY|OPENAI_API_KEY"
+    ),
+    "direct provider endpoint": re.compile(
+        r"api\.deepseek\.com|dashscope\.aliyuncs\.com|api\.openai\.com"
+    ),
+    "Codex sandbox bypass": re.compile(
+        r"dangerously-bypass-approvals-and-sandbox|--yolo|danger-full-access"
+    ),
+    "private key material": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    "GitHub token material": re.compile(r"gh[pousr]_[A-Za-z0-9]{30,}"),
 }
 
-SCAN_SOURCE = ["lib", "android", "ios", "services", "adapters", "plugins"]
+SCAN_SOURCE = [
+    "lib",
+    "android",
+    "ios",
+    "services",
+    "adapters",
+    "plugins",
+]
 ALLOWED_GAP_STATUSES = {
     "CLOSED_SOURCE",
     "CLOSED_VERIFIED",
@@ -55,6 +96,12 @@ ALLOWED_GAP_STATUSES = {
     "BLOCKED_ADMIN_SETTING",
     "BLOCKED_UPSTREAM",
     "OPEN",
+}
+EXPECTED_CHECKS = {
+    "repository-contracts",
+    "flutter",
+    "secret-and-boundary-scan",
+    "source-evidence",
 }
 
 
@@ -73,25 +120,37 @@ def validate_required() -> None:
     missing = sorted(path for path in REQUIRED if not (ROOT / path).is_file())
     if missing:
         fail(f"missing required files: {missing}")
-    if len((ROOT / "README.md").read_text(encoding="utf-8").strip()) < 200:
+    if len((ROOT / "README.md").read_text(encoding="utf-8").strip()) < 500:
         fail("README.md is not a meaningful product entry point")
 
 
 def validate_json_contracts() -> None:
-    for path in sorted((ROOT / "schemas").glob("*.json")):
+    schemas = sorted((ROOT / "schemas").glob("*.json"))
+    if len(schemas) < 12:
+        fail("expected expanded runtime/control-plane/release schema set")
+    for path in schemas:
         document = read_json(path)
         if document.get("$schema") != "https://json-schema.org/draft/2020-12/schema":
             fail(f"{path.relative_to(ROOT)} is not a draft-2020-12 schema")
         if document.get("type") != "object" or not document.get("required"):
             fail(f"{path.relative_to(ROOT)} lacks an object/required contract")
-    read_json(ROOT / "contracts/hepta-glasses-runtime-v1.json")
+    for name in (
+        "hepta-glasses-runtime-v1.json",
+        "control-plane-v1.json",
+        "main-branch-protection-v1.json",
+        "release-gates-v1.json",
+        "qualification-slo-v1.json",
+    ):
+        read_json(ROOT / "contracts" / name)
 
 
 def validate_gap_ledger() -> None:
     ledger = read_json(ROOT / "docs/GAP_LEDGER.yaml")
+    if ledger.get("plan_revision") != "2026-08-30-g2":
+        fail("Gap Ledger is not bound to the canonical g2 plan")
     gaps = ledger.get("gaps")
-    if not isinstance(gaps, list) or not gaps:
-        fail("Gap Ledger has no gaps")
+    if not isinstance(gaps, list) or len(gaps) < 27:
+        fail("Gap Ledger does not contain the complete source/external gate set")
     seen = set()
     for gap in gaps:
         gap_id = gap.get("id")
@@ -103,16 +162,31 @@ def validate_gap_ledger() -> None:
             fail(f"{gap_id} has invalid status {status!r}")
         if status.startswith("CLOSED") and not gap.get("evidence"):
             fail(f"{gap_id} is closed without evidence")
-        if status.startswith("BLOCKED") and not gap.get("evidence_required"):
-            fail(f"{gap_id} is blocked without explicit evidence requirements")
-    source_open = [g["id"] for g in gaps if g["status"] == "OPEN"]
+        if status.startswith("BLOCKED"):
+            if not gap.get("evidence_required"):
+                fail(f"{gap_id} is blocked without explicit evidence requirements")
+            if not gap.get("source_preparation"):
+                fail(f"{gap_id} has no source-side resume package")
+            if not gap.get("unblock_condition"):
+                fail(f"{gap_id} has no concrete unblock condition")
+    source_open = [gap["id"] for gap in gaps if gap["status"] == "OPEN"]
     if source_open:
         fail(f"actionable source gaps remain open: {source_open}")
 
 
 def iter_text_files(base: Path):
     for path in base.rglob("*"):
-        if path.is_file() and path.suffix.lower() in {".dart", ".kt", ".swift", ".py", ".json", ".toml", ".md"}:
+        if path.is_file() and path.suffix.lower() in {
+            ".dart",
+            ".kt",
+            ".swift",
+            ".py",
+            ".json",
+            ".toml",
+            ".md",
+            ".yaml",
+            ".yml",
+        }:
             yield path
 
 
@@ -148,6 +222,48 @@ def validate_codex_policy() -> None:
         fail("Codex worker sandbox allowlist changed")
     if policy.get("network_access_default") is not False:
         fail("Codex worker network must default to disabled")
+    mcp = (ROOT / "adapters/mcp/hepta_glasses_mcp_server.py").read_text(
+        encoding="utf-8"
+    )
+    forbidden_tools = {
+        "shell.exec",
+        "firmware.flash",
+        "credential.read",
+        "payment.execute",
+        "account.modify",
+        "device.write",
+    }
+    present = sorted(tool for tool in forbidden_tools if f'"{tool}"' in mcp)
+    if present:
+        fail(f"forbidden MCP mutation tools are present: {present}")
+
+
+def validate_governance_contract() -> None:
+    protection = read_json(ROOT / "contracts/main-branch-protection-v1.json")
+    contexts = set(protection.get("required_status_checks", {}).get("contexts", []))
+    if contexts != EXPECTED_CHECKS:
+        fail(f"branch protection contexts drifted: {sorted(contexts)}")
+    reviews = protection.get("required_pull_request_reviews", {})
+    if reviews.get("required_approving_review_count", 0) < 1:
+        fail("branch protection requires no independent approval")
+    if not reviews.get("require_code_owner_reviews"):
+        fail("branch protection does not require CODEOWNER review")
+    if protection.get("allow_force_pushes") is not False:
+        fail("branch protection permits force push")
+    if protection.get("allow_deletions") is not False:
+        fail("branch protection permits deletion")
+
+
+def validate_evidence_templates() -> None:
+    for name in (
+        "android-g1-qualification-scenario.json",
+        "ios-g1-qualification-scenario.json",
+        "product-release-bundle.template.json",
+    ):
+        read_json(ROOT / "evidence" / "templates" / name)
+    index = read_json(ROOT / "docs/EVIDENCE_INDEX.yaml")
+    if index.get("plan_revision") != "2026-08-30-g2":
+        fail("Evidence Index is not bound to the canonical g2 plan")
 
 
 def main() -> int:
@@ -157,6 +273,8 @@ def main() -> int:
         validate_gap_ledger,
         validate_boundaries,
         validate_codex_policy,
+        validate_governance_contract,
+        validate_evidence_templates,
     ]
     for check in checks:
         check()

@@ -1,0 +1,36 @@
+{
+  "source": {
+    "commit": "REPLACE_WITH_40_HEX_COMMIT",
+    "tree": "REPLACE_WITH_40_HEX_TREE",
+    "ci_checks": [],
+    "sbom": {"sha256": "REPLACE_WITH_64_HEX"},
+    "provenance": {"sha256": "REPLACE_WITH_64_HEX"},
+    "contracts_version": "2026-08-30-g2"
+  },
+  "branch_protection": {
+    "protected": false,
+    "required_approvals": 0,
+    "force_pushes_allowed": true,
+    "required_checks": []
+  },
+  "device_qualification": [],
+  "reviews": {
+    "security": "pending",
+    "privacy": "pending",
+    "legal": "pending"
+  },
+  "drills": {
+    "kill_switch": "pending",
+    "rollback": "pending"
+  },
+  "signing": {
+    "android_digest": "",
+    "ios_digest": "",
+    "provenance_digest": ""
+  },
+  "pilot": {
+    "cohort_size": 0,
+    "crash_free_rate": 0,
+    "duplicate_effects": 0
+  }
+}

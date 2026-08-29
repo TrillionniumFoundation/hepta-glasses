@@ -1,7 +1,8 @@
 {
-  "schema_version": 1,
-  "baseline_commit": "32178d3cb4ae38c2ef91db05bde836838c274259",
-  "baseline_tree": "f01ea2e305f5c1d54e8328c9028940e28519cb6e",
+  "schema_version": 2,
+  "plan_revision": "2026-08-30-g2",
+  "audited_base_commit": "32178d3cb4ae38c2ef91db05bde836838c274259",
+  "audited_base_tree": "f01ea2e305f5c1d54e8328c9028940e28519cb6e",
   "allowed_statuses": [
     "CLOSED_SOURCE",
     "CLOSED_VERIFIED",
@@ -16,10 +17,7 @@
       "title": "Empty product README and no canonical entry point",
       "status": "CLOSED_SOURCE",
       "owner": "repository",
-      "evidence": [
-        "README.md",
-        "docs/README.md"
-      ]
+      "evidence": ["README.md", "docs/README.md"]
     },
     {
       "id": "HG-0002",
@@ -48,21 +46,14 @@
       "title": "No typed Agent, task, lease, tool, display, or skill contracts",
       "status": "CLOSED_SOURCE",
       "owner": "runtime",
-      "evidence": [
-        "lib/runtime/contracts.dart",
-        "schemas",
-        "contracts/hepta-glasses-runtime-v1.json"
-      ]
+      "evidence": ["lib/runtime/contracts.dart", "schemas", "contracts"]
     },
     {
       "id": "HG-0005",
       "title": "Protocol framing mixed with global BLE state",
       "status": "CLOSED_SOURCE",
       "owner": "device-hal",
-      "evidence": [
-        "lib/runtime/packet_codec.dart",
-        "test/runtime/packet_codec_test.dart"
-      ]
+      "evidence": ["lib/runtime/packet_codec.dart", "test/runtime/packet_codec_test.dart"]
     },
     {
       "id": "HG-0006",
@@ -79,10 +70,7 @@
       "title": "No digital twin or deterministic fault injection",
       "status": "CLOSED_SOURCE",
       "owner": "simulator",
-      "evidence": [
-        "lib/simulator/g1_digital_twin.dart",
-        "test/runtime/dual_leg_coordinator_test.dart"
-      ]
+      "evidence": ["lib/simulator/g1_digital_twin.dart", "test/runtime"]
     },
     {
       "id": "HG-0008",
@@ -101,20 +89,14 @@
       "title": "No deny-by-default policy or single-use decision lease",
       "status": "CLOSED_SOURCE",
       "owner": "security",
-      "evidence": [
-        "lib/runtime/policy_engine.dart",
-        "test/runtime/policy_engine_test.dart"
-      ]
+      "evidence": ["lib/runtime/policy_engine.dart", "test/runtime/policy_engine_test.dart"]
     },
     {
       "id": "HG-0010",
       "title": "No journal-before-effect tool authority and replay-safe receipt",
       "status": "CLOSED_SOURCE",
       "owner": "runtime",
-      "evidence": [
-        "lib/runtime/tool_gateway.dart",
-        "test/runtime/tool_gateway_test.dart"
-      ]
+      "evidence": ["lib/runtime/tool_gateway.dart", "test/runtime/tool_gateway_test.dart"]
     },
     {
       "id": "HG-0011",
@@ -136,8 +118,7 @@
         ".github/workflows/ci.yml",
         "tools/validate_repository.py",
         "test/runtime",
-        "services/model_gateway/test_app.py",
-        "services/codex_worker/test_worker.py",
+        "services",
         "adapters/mcp/test_mcp_server.py"
       ]
     },
@@ -167,70 +148,208 @@
       "title": "Physical G1 protocol, latency, power, thermal, and soak evidence absent",
       "status": "BLOCKED_EXTERNAL",
       "owner": "device-lab",
+      "source_preparation": [
+        "services/qualification/device_report.py",
+        "tools/qualify_device_trace.py",
+        "evidence/templates/android-g1-qualification-scenario.json",
+        "evidence/templates/ios-g1-qualification-scenario.json",
+        "docs/operations/DEVICE_QUALIFICATION_RUNBOOK.md"
+      ],
       "evidence_required": [
-        "physical Android and iOS devices",
+        "physical Android device",
+        "physical iOS device",
         "Even G1 hardware",
-        "captured traces",
-        "soak report"
-      ]
+        "content-addressed Android and iOS traces",
+        "passing qualification reports",
+        "power and thermal lab record"
+      ],
+      "unblock_condition": "Run both physical scenarios on exact signed builds and attach passing E5 reports."
     },
     {
       "id": "HG-0016",
       "title": "Production identity, device attestation, short-lived tokens, and revoke service absent",
       "status": "BLOCKED_EXTERNAL",
       "owner": "cloud-platform",
+      "source_preparation": [
+        "services/control_plane/identity.py",
+        "contracts/control-plane-v1.json",
+        "schemas/access-token-claims.schema.json",
+        "docs/operations/PRODUCTION_CONTROL_PLANE_RUNBOOK.md"
+      ],
       "evidence_required": [
-        "deployed identity broker",
+        "deployed KMS or HSM-backed issuer",
+        "Android and Apple attestation verification",
         "rotation drill",
-        "revoke drill",
-        "attestation evidence"
-      ]
+        "token/session/device revoke drill",
+        "lost-device and account-recovery drill"
+      ],
+      "unblock_condition": "Deploy production control plane and attach redacted E5/E6 drill evidence."
     },
     {
       "id": "HG-0017",
-      "title": "Main branch protection disabled at baseline",
+      "title": "Main branch protection disabled",
       "status": "BLOCKED_ADMIN_SETTING",
       "owner": "repository-admin",
+      "source_preparation": [
+        "contracts/main-branch-protection-v1.json",
+        "tools/repository_governance.py",
+        "docs/operations/REPOSITORY_GOVERNANCE_RUNBOOK.md"
+      ],
       "evidence_required": [
-        "required checks",
-        "review requirement",
-        "force-push protection"
-      ]
+        "strict required checks",
+        "one independent approval",
+        "CODEOWNER review",
+        "admin enforcement",
+        "force-push and deletion disabled",
+        "conversation resolution"
+      ],
+      "unblock_condition": "Apply the canonical contract with a short-lived admin token and attach the verified GitHub response."
     },
     {
       "id": "HG-0018",
       "title": "G1 firmware, bootloader, and signed OTA development access absent",
       "status": "BLOCKED_UPSTREAM",
       "owner": "vendor-integration",
+      "source_preparation": [
+        "docs/PRODUCT_BOUNDARY.md",
+        "docs/HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md"
+      ],
       "evidence_required": [
-        "firmware SDK/source",
-        "signing path",
+        "firmware SDK or source",
         "vendor permission",
+        "boot and recovery contract",
+        "signing path",
         "rollback evidence"
-      ]
+      ],
+      "unblock_condition": "Obtain vendor-authorized firmware and signing access, then open a separately gated firmware package."
     },
     {
       "id": "HG-0019",
       "title": "Production realtime voice, OAuth capability adapters, and external reconciliation absent",
       "status": "BLOCKED_EXTERNAL",
       "owner": "product-platform",
+      "source_preparation": [
+        "services/control_plane/realtime.py",
+        "services/control_plane/capabilities.py",
+        "schemas/realtime-ticket.schema.json",
+        "docs/operations/REALTIME_AND_CAPABILITY_RUNBOOK.md"
+      ],
       "evidence_required": [
-        "deployed service",
-        "negative tests",
-        "real external-system receipts"
-      ]
+        "provider tenant and server-side session exchange",
+        "real OAuth application registrations",
+        "external-system mutation receipts",
+        "timeout reconciliation evidence",
+        "physical cancellation and barge-in trace"
+      ],
+      "unblock_condition": "Deploy provider/OAuth adapters and attach E5 authoritative receipts and physical traces."
     },
     {
       "id": "HG-0020",
-      "title": "Privacy/legal/security review, pilot, staged rollout, and release drill absent",
+      "title": "Independent review, pilot, staged rollout, signing, and release drills absent",
       "status": "BLOCKED_EXTERNAL",
       "owner": "release",
+      "source_preparation": [
+        "services/qualification/release_gate.py",
+        "services/qualification/sbom.py",
+        "tools/build_source_evidence.py",
+        "tools/evaluate_release_gate.py",
+        "contracts/release-gates-v1.json",
+        "docs/operations/PRIVACY_SECURITY_REVIEW_CHECKLIST.md",
+        "docs/operations/RELEASE_AND_ROLLBACK_RUNBOOK.md"
+      ],
       "evidence_required": [
-        "independent reviews",
+        "independent security review",
+        "independent privacy and legal review",
+        "Android and iOS signing evidence",
         "pilot telemetry",
         "kill-switch drill",
         "rollback drill",
-        "signed release provenance"
+        "passing product release bundle"
+      ],
+      "unblock_condition": "Complete E6/E7 review and operational evidence; product release gate must pass without override."
+    },
+    {
+      "id": "HG-0021",
+      "title": "No production control-plane source contract for identity, rotation, rate limits, and revocation",
+      "status": "CLOSED_SOURCE",
+      "owner": "cloud-platform",
+      "evidence": [
+        "services/control_plane/identity.py",
+        "services/control_plane/test_identity.py",
+        "contracts/control-plane-v1.json"
+      ]
+    },
+    {
+      "id": "HG-0022",
+      "title": "No one-time realtime bootstrap or generation-fenced barge-in state machine",
+      "status": "CLOSED_SOURCE",
+      "owner": "realtime",
+      "evidence": [
+        "services/control_plane/realtime.py",
+        "services/control_plane/test_realtime.py",
+        "schemas/realtime-ticket.schema.json"
+      ]
+    },
+    {
+      "id": "HG-0023",
+      "title": "No typed OAuth capability adapter, Prompt Injection boundary, or authoritative reconciliation reference",
+      "status": "CLOSED_SOURCE",
+      "owner": "capability-runtime",
+      "evidence": [
+        "services/control_plane/capabilities.py",
+        "services/control_plane/test_capabilities.py"
+      ]
+    },
+    {
+      "id": "HG-0024",
+      "title": "No signed Skill admission, upgrade re-consent, revoke, or user-approved Memory lifecycle",
+      "status": "CLOSED_SOURCE",
+      "owner": "skills-memory",
+      "evidence": [
+        "services/skills/registry.py",
+        "services/skills/memory.py",
+        "services/skills/test_registry.py",
+        "services/skills/test_memory.py",
+        "schemas/memory-record.schema.json"
+      ]
+    },
+    {
+      "id": "HG-0025",
+      "title": "No machine evaluator for physical Android/iOS G1 traces",
+      "status": "CLOSED_SOURCE",
+      "owner": "device-lab",
+      "evidence": [
+        "services/qualification/device_report.py",
+        "services/qualification/test_device_report.py",
+        "tools/qualify_device_trace.py",
+        "schemas/device-qualification-report.schema.json"
+      ]
+    },
+    {
+      "id": "HG-0026",
+      "title": "No source SBOM, provenance, release evidence bundle, or non-overridable release gate",
+      "status": "CLOSED_SOURCE",
+      "owner": "release",
+      "evidence": [
+        "services/qualification/sbom.py",
+        "services/qualification/release_gate.py",
+        "services/qualification/test_sbom.py",
+        "services/qualification/test_release_gate.py",
+        "tools/build_source_evidence.py",
+        "tools/evaluate_release_gate.py",
+        ".github/workflows/ci.yml"
+      ]
+    },
+    {
+      "id": "HG-0027",
+      "title": "No canonical branch-protection contract or apply/verify automation",
+      "status": "CLOSED_SOURCE",
+      "owner": "repository",
+      "evidence": [
+        "contracts/main-branch-protection-v1.json",
+        "services/qualification/governance.py",
+        "services/qualification/test_governance.py",
+        "tools/repository_governance.py"
       ]
     }
   ]

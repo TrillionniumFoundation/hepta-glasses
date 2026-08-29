@@ -1,1 +1,0 @@
-"""Hepta Glasses development services."""

@@ -1,19 +1,46 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "plan_revision": "2026-08-30-g2",
   "source_records": [
     {
-      "id": "EV-SRC-2026-08-30-FOUNDATION",
+      "id": "EV-SRC-FOUNDATION-V1",
       "path": "docs/evidence/2026-08-30-foundation-source-closure.md",
-      "level": "E0-E3",
-      "claim": "repository-side AI-native foundation"
+      "levels": ["E0", "E1", "E2"],
+      "claim": "G0, G1/G2 substrate, model boundary, Codex and MCP source foundation"
+    },
+    {
+      "id": "EV-SRC-G3-G8-V1",
+      "path": "docs/development/G3_G8_SOURCE_CLOSURE.md",
+      "levels": ["E0", "E1"],
+      "claim": "G3-G8 repository-side contracts, reference implementations, tests and evidence harness"
     }
   ],
-  "ci_records": [],
-  "device_records": [],
-  "pilot_records": [],
+  "ci_records": {
+    "storage": "GitHub Actions and PR conversation",
+    "required_artifact": "hepta-source-evidence",
+    "required_files": [
+      "source-sbom.spdx.json",
+      "source-provenance.json",
+      "source-release-bundle.json",
+      "source-evidence-summary.json",
+      "source-gate-result.json"
+    ],
+    "rule": "The CI record must name the exact PR-head commit and tree; committing a CI SHA to the same branch would invalidate it."
+  },
+  "external_slots": {
+    "governance": "evidence/governance/<date>.json",
+    "android_device": "evidence/device/android/<session>.report.json",
+    "ios_device": "evidence/device/ios/<session>.report.json",
+    "control_plane_drills": "evidence/control-plane/<drill>.json",
+    "external_receipts": "evidence/capabilities/<adapter>/<session>.json",
+    "independent_reviews": "evidence/reviews/<discipline>/<review>.json",
+    "release_bundle": "evidence/release/<release>.json"
+  },
   "rules": [
-    "CI records must name the exact commit SHA.",
-    "Digital-twin evidence cannot be cited as a physical-device result.",
-    "Production and release claims require their named higher-level evidence."
+    "Digital-twin or synthetic trace evidence cannot be indexed as physical-device evidence.",
+    "No evidence file may contain raw credentials, signing material, raw audio, or sensitive transcript content.",
+    "Production and release claims require the product release gate to pass.",
+    "Self-review is not independent review.",
+    "A source CI pass does not close an external gate."
   ]
 }

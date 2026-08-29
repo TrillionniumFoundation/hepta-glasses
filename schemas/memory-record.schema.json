@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hepta.invalid/schemas/memory-record-v1.json",
+  "title": "MemoryRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "memory_id",
+    "subject",
+    "purpose",
+    "data_class",
+    "value_digest",
+    "created_at",
+    "expires_at"
+  ],
+  "properties": {
+    "memory_id": {"type": "string", "minLength": 1},
+    "subject": {"type": "string", "minLength": 1},
+    "purpose": {"type": "string", "minLength": 1},
+    "data_class": {"enum": ["public", "personal", "sensitive"]},
+    "value_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "created_at": {"type": "integer", "minimum": 0},
+    "expires_at": {"type": "integer", "minimum": 1}
+  }
+}

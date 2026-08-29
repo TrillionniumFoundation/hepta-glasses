@@ -1,71 +1,90 @@
-
 # Architecture
 
 ```text
-G1 left/right legs
-  microphone / touch / display / state
-                |
-                | bounded BLE packets + ACK/timeout
-                v
-Device HAL + DualLegCoordinator
-                |
-                | versioned runtime contracts
-                v
-Edge Runtime
-  EventBus / TaskEngine / AuditJournal / PolicyEngine
-  ToolGateway / DisplayComposer / Context minimizer / Recovery
+Even G1 left/right legs
+  microphone / touch / display / battery / firmware protocol
+                  |
+                  | bounded BLE frames, ACK/timeout, sequence and trace
+                  v
+Device HAL + Packet Codec + DualLegCoordinator
+                  |
+                  | versioned event/task/tool/display contracts
+                  v
+Mobile Edge Execution Authority
+  Event Bus       Task Engine       Audit Journal
+  Policy Engine   Decision Leases   Tool Gateway
+  Context Filter  Display Composer  Recovery/Reconciliation
         |                                  |
-        | capability tools                 | short-lived authenticated API
+        | opaque capability request        | short-lived authenticated API
         v                                  v
-Phone capabilities                    Cloud control plane
-calendar / notifications              identity / model gateway / task service
-location / reminders                  revocation / rate limits / Codex allocator
+Phone Capability Adapters             Cloud Control Plane
+calendar/reminder/notification        Device Registry / Attestation
+location/storage/accessibility        Key Ring / Token / Revocation
+opaque OAuth credential handles       Rate Limits / Realtime Broker
+        |                                  |
+        | authoritative receipt            | one-time bootstrap
+        v                                  v
+External systems                    Provider Adapter / Realtime session
                                            |
-                                  isolated Codex workers
+                                           v
+                                  Isolated Codex workers
+                                  one task/workspace/identity
 ```
 
-## Core data path
+## Authority boundaries
+
+- G1 firmware is a device endpoint, not an Agent authority.
+- Flutter UI submits intent and displays state; it does not decide authorization.
+- Mobile Edge Runtime is final authority for BLE and local device effects.
+- Cloud Control Plane is authority for identity, token, revoke, provider routing, and long-running task allocation.
+- Capability adapters hold opaque server-side OAuth handles; the model never receives refresh tokens.
+- Codex produces plans, patches, test results, and Skill candidates; it cannot directly mutate a G1, release firmware, or merge its own PR.
+
+## Fast interaction lane
 
 ```text
-GlassesEvent
-  -> context minimization
-  -> AgentIntent proposal
-  -> tool lookup and schema validation
-  -> policy and lease evaluation
-  -> journal decision
-  -> journal mutation preparation
-  -> deterministic handler
-  -> authoritative reconciliation
-  -> ToolReceipt
-  -> DisplayCard pages
+wake/gesture
+  -> audio ingress and privacy indicator
+  -> one-time realtime bootstrap
+  -> provider session established server-side
+  -> partial transcript / model proposal
+  -> bounded tool proposal
+  -> policy and lease
+  -> deterministic capability or display execution
+  -> receipt
 ```
 
-## Runtime packages
+Barge-in increments the session generation. Events from an older generation are stale and rejected, preventing a cancelled response from committing later output.
 
-- `runtime/contracts.dart` — typed task, tool, lease, display, and policy objects.
-- `runtime/audit_journal.dart` — append-only hash chain and integrity verification.
-- `runtime/task_engine.dart` — recoverable state machine and idempotent creation.
-- `runtime/policy_engine.dart` — deny-by-default risk and lease evaluation.
-- `runtime/tool_gateway.dart` — sole source-level mutation boundary.
-- `runtime/device_hal.dart` — transport-neutral G1 device boundary.
-- `runtime/packet_codec.dart` — bounded deterministic packet framing.
-- `runtime/dual_leg_coordinator.dart` — mirrored writes and degraded-state receipt.
-- `runtime/model_gateway.dart` — backend-only provider boundary.
-- `runtime/display_composer.dart` — bounded display-page composition.
-- `simulator/g1_digital_twin.dart` — deterministic device and fault simulator.
+## Deliberative Codex lane
 
-## Two AI lanes
+```text
+Durable task
+  -> isolated worker allocation
+  -> exact repository/workspace binding
+  -> read-only or workspace-write sandbox
+  -> bounded network/runtime/output
+  -> patch and tests
+  -> source validation
+  -> independent maintainer review
+  -> separate release authority
+```
 
-The reflex lane handles low-latency voice, translation, read-only queries, and bounded R0/R1 tools.
-The deliberative lane creates durable tasks and assigns coding-focused work to isolated Codex
-workers. The lanes share contracts and receipts but not execution authority or latency budgets.
+## Skill and memory lane
+
+A Skill is unavailable until publisher, signature, package digest, capability set, data classes, domains, timeout, and risk pass admission. New capabilities or data classes on upgrade require re-consent. Memory is bound to subject and purpose, excludes secret/raw-audio/credential classes, has TTL, and supports export and deletion.
 
 ## Failure semantics
 
 - Timeout is indeterminate, not proof of failure.
-- Duplicate idempotency keys with the same fingerprint replay the existing receipt.
-- Duplicate keys with a different fingerprint fail closed.
-- One-leg success produces a degraded receipt and requires reconciliation.
-- Invalid journal linkage prevents recovery.
-- Expired, mismatched, or consumed leases deny execution.
-- User cancellation is durable and propagates before more side effects are admitted.
+- Same idempotency key and fingerprint returns the existing receipt.
+- Same key with a different fingerprint fails closed.
+- One-leg success is degraded and requires reconciliation.
+- Invalid journal linkage blocks recovery.
+- Expired, consumed, mismatched, or stale-generation authority is rejected.
+- Untrusted content cannot authorize a mutation.
+- Revoked subject, device, session, token, or Skill loses authority immediately.
+
+## Evidence architecture
+
+Physical device processes emit JSONL trace events. The qualification evaluator produces a content-addressed report. CI generates a source SBOM and provenance. The product release gate requires exact source, governance, physical-device, review, drill, signing, and pilot evidence in one machine-readable bundle.

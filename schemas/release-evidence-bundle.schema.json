@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hepta.invalid/schemas/release-evidence-bundle-v1.json",
+  "title": "ReleaseEvidenceBundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source"],
+  "properties": {
+    "source": {
+      "type": "object",
+      "required": [
+        "commit",
+        "tree",
+        "ci_checks",
+        "sbom",
+        "provenance",
+        "contracts_version"
+      ]
+    },
+    "branch_protection": {"type": "object"},
+    "device_qualification": {"type": "array"},
+    "reviews": {"type": "object"},
+    "drills": {"type": "object"},
+    "signing": {"type": "object"},
+    "pilot": {"type": "object"}
+  }
+}
