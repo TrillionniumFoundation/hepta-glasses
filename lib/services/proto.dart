@@ -1,223 +1,239 @@
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:demo_ai_even/ble_manager.dart';
+import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
+import 'package:demo_ai_even/services/ble.dart';
 import 'package:demo_ai_even/services/evenai_proto.dart';
 import 'package:demo_ai_even/utils/utils.dart';
 
 class Proto {
-  static String lR() {
-    // todo
-    if (BleManager.isBothConnected()) return "R";
-    //if (BleManager.isConnectedR()) return "R";
-    return "L";
+  Proto._();
+
+  static String lR() => BleManager.isBothConnected() ? 'R' : 'L';
+
+  static Future<(int, bool)> micOn({String? lr}) async {
+    final begin = Utils.getTimestampMs();
+    final data = Uint8List.fromList(<int>[0x0E, 0x01]);
+    final receive = await BleManager.request(data, lr: lr);
+    final end = Utils.getTimestampMs();
+    final startMic = begin + ((end - begin) ~/ 2);
+    final success = !receive.isTimeout && _isAck(receive.data);
+    PrivacySafeLog.event(
+      'microphone_command_completed',
+      fields: <String, Object?>{'success': success},
+    );
+    return (startMic, success);
   }
 
-  /// Returns the time consumed by the command and whether it is successful
-  static Future<(int, bool)> micOn({
-    String? lr,
+  static int _evenAiSequence = 0;
+
+  static Future<bool> sendEvenAIData(
+    String text, {
+    int? timeoutMs,
+    required int newScreen,
+    required int pos,
+    required int currentPageNumber,
+    required int maxPageNumber,
   }) async {
-    var begin = Utils.getTimestampMs();
-    var data = Uint8List.fromList([0x0E, 0x01]);
-    var receive = await BleManager.request(data, lr: lr);
-
-    var end = Utils.getTimestampMs();
-    var startMic = (begin + ((end - begin) ~/ 2));
-
-    print("Proto---micOn---startMic---$startMic-------");
-    return (startMic, (!receive.isTimeout && receive.data[1] == 0xc9));
-  }
-
-  /// Even AI
-  static int _evenaiSeq = 0;
-  // AI result transmission (also compatible with AI startup and Q&A status synchronization)
-  static Future<bool> sendEvenAIData(String text,
-      {int? timeoutMs,
-      required int newScreen,
-      required int pos,
-      required int current_page_num,
-      required int max_page_num}) async {
-    var data = utf8.encode(text);
-    var syncSeq = _evenaiSeq & 0xff;
-
-    List<Uint8List> dataList = EvenaiProto.evenaiMultiPackListV2(0x4E,
-        data: data,
-        syncSeq: syncSeq,
-        newScreen: newScreen,
-        pos: pos,
-        current_page_num: current_page_num,
-        max_page_num: max_page_num);
-    _evenaiSeq++;
-
-    print(
-        '${DateTime.now()} proto--sendEvenAIData---text---$text---_evenaiSeq----$_evenaiSeq---newScreen---$newScreen---pos---$pos---current_page_num--$current_page_num---max_page_num--$max_page_num--dataList----$dataList---');
-
-    bool isSuccess = await BleManager.requestList(dataList,
-        lr: "L", timeoutMs: timeoutMs ?? 2000);
-
-    print(
-        '${DateTime.now()} sendEvenAIData-----isSuccess-----$isSuccess-------');
-    if (!isSuccess) {
-      print("${DateTime.now()} sendEvenAIData failed  L ");
+    final encoded = utf8.encode(text);
+    final syncSequence = _evenAiSequence & 0xff;
+    final packets = EvenaiProto.evenaiMultiPackListV2(
+      0x4E,
+      data: encoded,
+      syncSeq: syncSequence,
+      newScreen: newScreen,
+      pos: pos,
+      current_page_num: currentPageNumber,
+      max_page_num: maxPageNumber,
+    );
+    _evenAiSequence = (_evenAiSequence + 1) & 0xff;
+    if (packets.isEmpty) {
       return false;
-    } else {
-      isSuccess = await BleManager.requestList(dataList,
-          lr: "R", timeoutMs: timeoutMs ?? 2000);
-
-      if (!isSuccess) {
-        print("${DateTime.now()} sendEvenAIData failed  R ");
-        return false;
-      }
-      return true;
     }
+
+    final left = await BleManager.requestList(
+      packets,
+      lr: 'L',
+      timeoutMs: timeoutMs ?? 2000,
+    );
+    if (!left) {
+      PrivacySafeLog.event(
+        'display_packet_batch_failed',
+        fields: <String, Object?>{'side': 'left', 'packets': packets.length},
+      );
+      return false;
+    }
+    final right = await BleManager.requestList(
+      packets,
+      lr: 'R',
+      timeoutMs: timeoutMs ?? 2000,
+    );
+    if (!right) {
+      PrivacySafeLog.event(
+        'display_packet_batch_failed',
+        fields: <String, Object?>{'side': 'right', 'packets': packets.length},
+      );
+    }
+    return right;
   }
 
-  static int _beatHeartSeq = 0;
+  static int _heartbeatSequence = 0;
+
   static Future<bool> sendHeartBeat() async {
-    var length = 6;
-    var data = Uint8List.fromList([
+    const length = 6;
+    final sequence = _heartbeatSequence & 0xff;
+    final data = Uint8List.fromList(<int>[
       0x25,
       length & 0xff,
       (length >> 8) & 0xff,
-      _beatHeartSeq % 0xff,
+      sequence,
       0x04,
-      _beatHeartSeq % 0xff //0xff,
+      sequence,
     ]);
-    _beatHeartSeq++;
+    _heartbeatSequence = (_heartbeatSequence + 1) & 0xff;
 
-    print('${DateTime.now()} sendHeartBeat--------data---$data--');
-    var ret = await BleManager.request(data, lr: "L", timeoutMs: 1500);
-
-    print('${DateTime.now()} sendHeartBeat----L----ret---${ret.data}--');
-    if (ret.isTimeout) {
-      print('${DateTime.now()} sendHeartBeat----L----time out--');
-      return false;
-    } else if (ret.data[0].toInt() == 0x25 &&
-        ret.data.length > 5 &&
-        ret.data[4].toInt() == 0x04) {
-      var retR = await BleManager.request(data, lr: "R", timeoutMs: 1500);
-      print('${DateTime.now()} sendHeartBeat----R----retR---${retR.data}--');
-      if (retR.isTimeout) {
-        return false;
-      } else if (retR.data[0].toInt() == 0x25 &&
-          retR.data.length > 5 &&
-          retR.data[4].toInt() == 0x04) {
-        return true;
-      } else {
-        return false;
-      }
-    } else {
+    final left = await BleManager.request(data, lr: 'L', timeoutMs: 1500);
+    if (!_isHeartbeatAck(left)) {
       return false;
     }
+    final right = await BleManager.request(data, lr: 'R', timeoutMs: 1500);
+    return _isHeartbeatAck(right);
   }
+
+  static bool _isHeartbeatAck(BleReceive response) =>
+      !response.isTimeout &&
+      response.data.length > 5 &&
+      response.data[0] == 0x25 &&
+      response.data[4] == 0x04;
+
+  static bool _isAck(Uint8List data) =>
+      data.length > 1 && (data[1] == 0xc9 || data[1] == 0xcb);
 
   static Future<String> getLegSn(String lr) async {
-    var cmd = Uint8List.fromList([0x34]);
-    var resp = await BleManager.request(cmd, lr: lr);
-    var sn = String.fromCharCodes(resp.data.sublist(2, 18).toList());
-    return sn;
+    final response = await BleManager.request(
+      Uint8List.fromList(<int>[0x34]),
+      lr: lr,
+    );
+    if (response.isTimeout || response.data.length < 18) {
+      throw StateError('Serial-number response was incomplete.');
+    }
+    return String.fromCharCodes(response.data.sublist(2, 18));
   }
 
-  // tell the glasses to exit function to dashboard
   static Future<bool> exit() async {
-    print("send exit all func");
-    var data = Uint8List.fromList([0x18]);
-
-    var retL = await BleManager.request(data, lr: "L", timeoutMs: 1500);
-    print('${DateTime.now()} exit----L----ret---${retL.data}--');
-    if (retL.isTimeout) {
-      return false;
-    } else if (retL.data.isNotEmpty && retL.data[1].toInt() == 0xc9) {
-      var retR = await BleManager.request(data, lr: "R", timeoutMs: 1500);
-      print('${DateTime.now()} exit----R----retR---${retR.data}--');
-      if (retR.isTimeout) {
-        return false;
-      } else if (retR.data.isNotEmpty && retR.data[1].toInt() == 0xc9) {
-        return true;
-      } else {
-        return false;
-      }
-    } else {
+    final data = Uint8List.fromList(<int>[0x18]);
+    final left = await BleManager.request(data, lr: 'L', timeoutMs: 1500);
+    if (left.isTimeout || !_isAck(left.data)) {
       return false;
     }
+    final right = await BleManager.request(data, lr: 'R', timeoutMs: 1500);
+    return !right.isTimeout && _isAck(right.data);
   }
 
-  static List<Uint8List> _getPackList(int cmd, Uint8List data,
-      {int count = 20}) {
-    final realCount = count - 3;
-    List<Uint8List> send = [];
-    int maxSeq = data.length ~/ realCount;
-    if (data.length % realCount > 0) {
-      maxSeq++;
+  static List<Uint8List> _getPackList(
+    int command,
+    Uint8List data, {
+    int count = 20,
+  }) {
+    if (count <= 3) {
+      throw ArgumentError.value(count, 'count', 'must exceed header size');
     }
-    for (var seq = 0; seq < maxSeq; seq++) {
-      var start = seq * realCount;
-      var end = start + realCount;
-      if (end > data.length) {
-        end = data.length;
-      }
-      var itemData = data.sublist(start, end);
-      var pack = Utils.addPrefixToUint8List([cmd, maxSeq, seq], itemData);
-      send.add(pack);
+    final payloadBytes = count - 3;
+    final packetCount = max(1, (data.length + payloadBytes - 1) ~/ payloadBytes);
+    if (packetCount > 255) {
+      throw StateError('Payload exceeds protocol packet limit.');
     }
-    return send;
+    final packets = <Uint8List>[];
+    for (var sequence = 0; sequence < packetCount; sequence++) {
+      final start = sequence * payloadBytes;
+      final end = start + payloadBytes < data.length
+          ? start + payloadBytes
+          : data.length;
+      final itemData = start < data.length
+          ? data.sublist(start, end)
+          : Uint8List(0);
+      packets.add(
+        Utils.addPrefixToUint8List(
+          <int>[command, packetCount, sequence],
+          itemData,
+        ),
+      );
+    }
+    return packets;
   }
 
   static Future<void> sendNewAppWhiteListJson(String whitelistJson) async {
-    print("proto -> sendNewAppWhiteListJson: whitelist = $whitelistJson");
-    final whitelistData = utf8.encode(whitelistJson);
-    //  2、转换为接口格式
-    final dataList = _getPackList(0x04, whitelistData, count: 180);
-    print(
-        "proto -> sendNewAppWhiteListJson: length = ${dataList.length}, dataList = $dataList");
-    for (var i = 0; i < 3; i++) {
-      final isSuccess =
-          await BleManager.requestList(dataList, timeoutMs: 300, lr: "L");
-      if (isSuccess) {
+    final packets = _getPackList(
+      0x04,
+      Uint8List.fromList(utf8.encode(whitelistJson)),
+      count: 180,
+    );
+    for (var attempt = 0; attempt < 3; attempt++) {
+      if (await BleManager.requestList(packets, timeoutMs: 300, lr: 'L')) {
         return;
       }
     }
+    PrivacySafeLog.event(
+      'whitelist_send_failed',
+      fields: <String, Object?>{'packets': packets.length},
+    );
   }
 
-  /// 发送通知
-  ///
-  /// - app [Map] 通知消息数据
-  static Future<void> sendNotify(Map appData, int notifyId,
-      {int retry = 6}) async {
-    final notifyJson = jsonEncode({
-      "ncs_notification": appData,
+  static Future<void> sendNotify(
+    Map<Object?, Object?> appData,
+    int notifyId, {
+    int retry = 6,
+  }) async {
+    final notifyJson = jsonEncode(<String, Object?>{
+      'ncs_notification': appData,
     });
-    final dataList =
-        _getNotifyPackList(0x4B, notifyId, utf8.encode(notifyJson));
-    print(
-        "proto -> sendNotify: notifyId = $notifyId, data length = ${dataList.length} , data = $dataList, app = $notifyJson");
-    for (var i = 0; i < retry; i++) {
-      final isSuccess =
-          await BleManager.requestList(dataList, timeoutMs: 1000, lr: "L");
-      if (isSuccess) {
+    final packets = _getNotifyPackList(
+      0x4B,
+      notifyId,
+      Uint8List.fromList(utf8.encode(notifyJson)),
+    );
+    for (var attempt = 0; attempt < retry; attempt++) {
+      if (await BleManager.requestList(packets, timeoutMs: 1000, lr: 'L')) {
         return;
       }
     }
+    PrivacySafeLog.event(
+      'notification_send_failed',
+      fields: <String, Object?>{
+        'notification_id': notifyId,
+        'packets': packets.length,
+      },
+    );
   }
 
   static List<Uint8List> _getNotifyPackList(
-      int cmd, int msgId, Uint8List data) {
-    List<Uint8List> send = [];
-    int maxSeq = data.length ~/ 176;
-    if (data.length % 176 > 0) {
-      maxSeq++;
+    int command,
+    int messageId,
+    Uint8List data,
+  ) {
+    const payloadBytes = 176;
+    final packetCount = max(1, (data.length + payloadBytes - 1) ~/ payloadBytes);
+    if (packetCount > 255) {
+      throw StateError('Notification exceeds protocol packet limit.');
     }
-    for (var seq = 0; seq < maxSeq; seq++) {
-      var start = seq * 176;
-      var end = start + 176;
-      if (end > data.length) {
-        end = data.length;
-      }
-      var itemData = data.sublist(start, end);
-      var pack =
-          Utils.addPrefixToUint8List([cmd, msgId, maxSeq, seq], itemData);
-      send.add(pack);
+    final packets = <Uint8List>[];
+    for (var sequence = 0; sequence < packetCount; sequence++) {
+      final start = sequence * payloadBytes;
+      final end = start + payloadBytes < data.length
+          ? start + payloadBytes
+          : data.length;
+      final itemData = start < data.length
+          ? data.sublist(start, end)
+          : Uint8List(0);
+      packets.add(
+        Utils.addPrefixToUint8List(
+          <int>[command, messageId, packetCount, sequence],
+          itemData,
+        ),
+      );
     }
-    return send;
+    return packets;
   }
 }

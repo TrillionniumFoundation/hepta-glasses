@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "32178d3cb4ae38c2ef91db05bde836838c274259",
+  "baseline_tree": "f01ea2e305f5c1d54e8328c9028940e28519cb6e",
+  "allowed_statuses": [
+    "CLOSED_SOURCE",
+    "CLOSED_VERIFIED",
+    "BLOCKED_EXTERNAL",
+    "BLOCKED_ADMIN_SETTING",
+    "BLOCKED_UPSTREAM",
+    "OPEN"
+  ],
+  "gaps": [
+    {
+      "id": "HG-0001",
+      "title": "Empty product README and no canonical entry point",
+      "status": "CLOSED_SOURCE",
+      "owner": "repository",
+      "evidence": [
+        "README.md",
+        "docs/README.md"
+      ]
+    },
+    {
+      "id": "HG-0002",
+      "title": "No canonical development plan or exact current-state truth",
+      "status": "CLOSED_SOURCE",
+      "owner": "repository",
+      "evidence": [
+        "docs/HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md",
+        "docs/CURRENT_STATE.md"
+      ]
+    },
+    {
+      "id": "HG-0003",
+      "title": "Mobile client directly targeted external model providers",
+      "status": "CLOSED_SOURCE",
+      "owner": "edge-runtime",
+      "evidence": [
+        "lib/runtime/model_gateway.dart",
+        "lib/services/api_services.dart",
+        "lib/services/api_services_deepseek.dart",
+        "tools/validate_repository.py"
+      ]
+    },
+    {
+      "id": "HG-0004",
+      "title": "No typed Agent, task, lease, tool, display, or skill contracts",
+      "status": "CLOSED_SOURCE",
+      "owner": "runtime",
+      "evidence": [
+        "lib/runtime/contracts.dart",
+        "schemas",
+        "contracts/hepta-glasses-runtime-v1.json"
+      ]
+    },
+    {
+      "id": "HG-0005",
+      "title": "Protocol framing mixed with global BLE state",
+      "status": "CLOSED_SOURCE",
+      "owner": "device-hal",
+      "evidence": [
+        "lib/runtime/packet_codec.dart",
+        "test/runtime/packet_codec_test.dart"
+      ]
+    },
+    {
+      "id": "HG-0006",
+      "title": "No explicit dual-leg idempotency or degraded-state receipt",
+      "status": "CLOSED_SOURCE",
+      "owner": "device-hal",
+      "evidence": [
+        "lib/runtime/dual_leg_coordinator.dart",
+        "test/runtime/dual_leg_coordinator_test.dart"
+      ]
+    },
+    {
+      "id": "HG-0007",
+      "title": "No digital twin or deterministic fault injection",
+      "status": "CLOSED_SOURCE",
+      "owner": "simulator",
+      "evidence": [
+        "lib/simulator/g1_digital_twin.dart",
+        "test/runtime/dual_leg_coordinator_test.dart"
+      ]
+    },
+    {
+      "id": "HG-0008",
+      "title": "No durable audit or recoverable task lifecycle",
+      "status": "CLOSED_SOURCE",
+      "owner": "runtime",
+      "evidence": [
+        "lib/runtime/audit_journal.dart",
+        "lib/runtime/task_engine.dart",
+        "test/runtime/audit_journal_test.dart",
+        "test/runtime/task_engine_test.dart"
+      ]
+    },
+    {
+      "id": "HG-0009",
+      "title": "No deny-by-default policy or single-use decision lease",
+      "status": "CLOSED_SOURCE",
+      "owner": "security",
+      "evidence": [
+        "lib/runtime/policy_engine.dart",
+        "test/runtime/policy_engine_test.dart"
+      ]
+    },
+    {
+      "id": "HG-0010",
+      "title": "No journal-before-effect tool authority and replay-safe receipt",
+      "status": "CLOSED_SOURCE",
+      "owner": "runtime",
+      "evidence": [
+        "lib/runtime/tool_gateway.dart",
+        "test/runtime/tool_gateway_test.dart"
+      ]
+    },
+    {
+      "id": "HG-0011",
+      "title": "Sensitive transcript and answer logging in current AI flow",
+      "status": "CLOSED_SOURCE",
+      "owner": "privacy",
+      "evidence": [
+        "lib/services/evenai.dart",
+        "lib/runtime/privacy_safe_log.dart",
+        "tools/validate_repository.py"
+      ]
+    },
+    {
+      "id": "HG-0012",
+      "title": "No CI, repository validation, or meaningful tests",
+      "status": "CLOSED_SOURCE",
+      "owner": "repository",
+      "evidence": [
+        ".github/workflows/ci.yml",
+        "tools/validate_repository.py",
+        "test/runtime",
+        "services/model_gateway/test_app.py",
+        "services/codex_worker/test_worker.py",
+        "adapters/mcp/test_mcp_server.py"
+      ]
+    },
+    {
+      "id": "HG-0013",
+      "title": "No source Codex specialist boundary",
+      "status": "CLOSED_SOURCE",
+      "owner": "codex-worker",
+      "evidence": [
+        "services/codex_worker/worker.py",
+        "services/codex_worker/policy.json",
+        "plugins/hepta-glasses-agent-os"
+      ]
+    },
+    {
+      "id": "HG-0014",
+      "title": "No MCP development surface",
+      "status": "CLOSED_SOURCE",
+      "owner": "tooling",
+      "evidence": [
+        "adapters/mcp/hepta_glasses_mcp_server.py",
+        "adapters/mcp/test_mcp_server.py"
+      ]
+    },
+    {
+      "id": "HG-0015",
+      "title": "Physical G1 protocol, latency, power, thermal, and soak evidence absent",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "device-lab",
+      "evidence_required": [
+        "physical Android and iOS devices",
+        "Even G1 hardware",
+        "captured traces",
+        "soak report"
+      ]
+    },
+    {
+      "id": "HG-0016",
+      "title": "Production identity, device attestation, short-lived tokens, and revoke service absent",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "cloud-platform",
+      "evidence_required": [
+        "deployed identity broker",
+        "rotation drill",
+        "revoke drill",
+        "attestation evidence"
+      ]
+    },
+    {
+      "id": "HG-0017",
+      "title": "Main branch protection disabled at baseline",
+      "status": "BLOCKED_ADMIN_SETTING",
+      "owner": "repository-admin",
+      "evidence_required": [
+        "required checks",
+        "review requirement",
+        "force-push protection"
+      ]
+    },
+    {
+      "id": "HG-0018",
+      "title": "G1 firmware, bootloader, and signed OTA development access absent",
+      "status": "BLOCKED_UPSTREAM",
+      "owner": "vendor-integration",
+      "evidence_required": [
+        "firmware SDK/source",
+        "signing path",
+        "vendor permission",
+        "rollback evidence"
+      ]
+    },
+    {
+      "id": "HG-0019",
+      "title": "Production realtime voice, OAuth capability adapters, and external reconciliation absent",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "product-platform",
+      "evidence_required": [
+        "deployed service",
+        "negative tests",
+        "real external-system receipts"
+      ]
+    },
+    {
+      "id": "HG-0020",
+      "title": "Privacy/legal/security review, pilot, staged rollout, and release drill absent",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "release",
+      "evidence_required": [
+        "independent reviews",
+        "pilot telemetry",
+        "kill-switch drill",
+        "rollback drill",
+        "signed release provenance"
+      ]
+    }
+  ]
+}

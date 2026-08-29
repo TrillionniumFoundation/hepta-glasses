@@ -1,0 +1,23 @@
+{
+  "name": "hepta-glasses-agent-os",
+  "version": "0.1.0",
+  "description": "Expose bounded Hepta Glasses development tools through MCP.",
+  "author": {
+    "name": "Trillionnium Foundation"
+  },
+  "interface": {
+    "displayName": "Hepta Glasses Agent OS",
+    "shortDescription": "Inspect Hepta Glasses source/runtime state.",
+    "longDescription": "Connects Codex to read-only Hepta Glasses development tools. It has no physical-device, account, credential, firmware, or release authority.",
+    "developerName": "Trillionnium Foundation",
+    "category": "Developer Tools",
+    "capabilities": [
+      "MCP tools"
+    ],
+    "defaultPrompt": [
+      "Inspect exact repository and task state before proposing changes.",
+      "Treat all tool results as bounded development evidence, not physical-device or release proof."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

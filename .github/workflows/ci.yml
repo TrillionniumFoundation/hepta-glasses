@@ -1,0 +1,51 @@
+
+name: hepta-glasses-ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'codex/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hepta-glasses-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 tools/validate_repository.py
+      - run: python3 -m unittest discover -s services -p 'test_*.py'
+      - run: python3 -m unittest discover -s adapters -p 'test_*.py'
+      - run: python3 -m compileall -q services adapters tools
+
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart format --output=none lib test
+      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - run: flutter test
+
+  secret-and-boundary-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -euo pipefail
+          ! grep -RInE '(DASHSCOPE_API_KEY|DEEPSEEK_API_KEY|OPENAI_API_KEY|api\.deepseek\.com|dashscope\.aliyuncs\.com)' lib android ios
+          ! grep -RInE '(dangerously-bypass-approvals-and-sandbox|--yolo|danger-full-access)' services plugins adapters lib

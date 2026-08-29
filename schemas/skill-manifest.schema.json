@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hepta.invalid/schemas/skill-manifest-v1.json",
+  "title": "SkillManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill_id",
+    "version",
+    "publisher",
+    "entrypoint",
+    "input_schema",
+    "output_schema",
+    "required_capabilities",
+    "risk_tier",
+    "data_classes",
+    "allowed_network_domains",
+    "timeout_ms",
+    "retry_policy",
+    "rollback_strategy",
+    "signature"
+  ],
+  "properties": {
+    "skill_id": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "publisher": {
+      "type": "string"
+    },
+    "entrypoint": {
+      "type": "string"
+    },
+    "input_schema": {
+      "type": "object"
+    },
+    "output_schema": {
+      "type": "object"
+    },
+    "required_capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "risk_tier": {
+      "enum": [
+        "R0",
+        "R1",
+        "R2",
+        "R3",
+        "R4"
+      ]
+    },
+    "data_classes": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "public",
+          "personal",
+          "sensitive",
+          "secret"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "allowed_network_domains": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 300000
+    },
+    "retry_policy": {
+      "type": "object"
+    },
+    "rollback_strategy": {
+      "type": "string"
+    },
+    "signature": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

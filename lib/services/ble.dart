@@ -1,27 +1,37 @@
 import 'dart:typed_data';
 
 class BleReceive {
-  String lr = "";
+  String lr = '';
   Uint8List data = Uint8List(0);
-  String type = "";
+  String type = '';
   bool isTimeout = false;
- 
+
   int getCmd() {
-    return data[0].toInt();
+    if (data.isEmpty) {
+      throw StateError('BLE response has no command byte.');
+    }
+    return data[0];
   }
 
   BleReceive();
-  static BleReceive fromMap(Map map) {
-    var ret = BleReceive();
-    ret.lr = map["lr"];
-    ret.data = map["data"];
-    ret.type = map["type"];
-    return ret;
+
+  static BleReceive fromMap(Map<dynamic, dynamic> map) {
+    final response = BleReceive();
+    response.lr = map['lr']?.toString() ?? '';
+    final rawData = map['data'];
+    if (rawData is Uint8List) {
+      response.data = rawData;
+    } else if (rawData is List) {
+      response.data = Uint8List.fromList(
+        rawData.map((dynamic value) => value as int).toList(),
+      );
+    }
+    response.type = map['type']?.toString() ?? '';
+    return response;
   }
 
-  String hexStringData() {
-    return data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
-  }
+  String hexStringData() =>
+      data.map((int value) => value.toRadixString(16).padLeft(2, '0')).join(' ');
 }
 
 enum BleEvent {
@@ -29,7 +39,7 @@ enum BleEvent {
   nextPageForEvenAI,
   upHeader,
   downHeader,
-  glassesConnectSuccess, // 17、Bluetooth binding successful
-  evenaiStart, // 23 Notify the phone to start Even AI
-  evenaiRecordOver, // 24 Even AI recording ends
+  glassesConnectSuccess,
+  evenaiStart,
+  evenaiRecordOver,
 }

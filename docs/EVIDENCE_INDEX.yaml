@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source_records": [
+    {
+      "id": "EV-SRC-2026-08-30-FOUNDATION",
+      "path": "docs/evidence/2026-08-30-foundation-source-closure.md",
+      "level": "E0-E3",
+      "claim": "repository-side AI-native foundation"
+    }
+  ],
+  "ci_records": [],
+  "device_records": [],
+  "pilot_records": [],
+  "rules": [
+    "CI records must name the exact commit SHA.",
+    "Digital-twin evidence cannot be cited as a physical-device result.",
+    "Production and release claims require their named higher-level evidence."
+  ]
+}
