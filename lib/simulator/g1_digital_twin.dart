@@ -31,6 +31,10 @@ final class G1DigitalTwin implements GlassesTransport {
         _nacks = <GlassesSide, int>{
           GlassesSide.left: 0,
           GlassesSide.right: 0,
+        },
+        _indeterminateAfterWrites = <GlassesSide, int>{
+          GlassesSide.left: 0,
+          GlassesSide.right: 0,
         };
 
   final StreamController<DeviceConnectionSnapshot> _connectionController =
@@ -38,9 +42,12 @@ final class G1DigitalTwin implements GlassesTransport {
   final Map<GlassesSide, bool> _connected;
   final Map<GlassesSide, int> _timeouts;
   final Map<GlassesSide, int> _nacks;
+  final Map<GlassesSide, int> _indeterminateAfterWrites;
   final Map<String, String> _appliedFingerprints = <String, String>{};
   final List<SimulatedWrite> writes = <SimulatedWrite>[];
   int _sequence = 0;
+
+  int get sendAttempts => _sequence;
 
   @override
   Stream<DeviceConnectionSnapshot> get connectionSnapshots =>
@@ -51,6 +58,8 @@ final class G1DigitalTwin implements GlassesTransport {
     _publishConnection();
   }
 
+  /// Injects a timeout before the simulated write reaches the device. This is
+  /// retry-safe and differs from [injectIndeterminateAfterWrites].
   void injectTimeouts(GlassesSide side, int count) {
     if (count < 0) {
       throw ArgumentError.value(count, 'count');
@@ -63,6 +72,15 @@ final class G1DigitalTwin implements GlassesTransport {
       throw ArgumentError.value(count, 'count');
     }
     _nacks[side] = count;
+  }
+
+  /// Applies the write but drops its acknowledgement. A caller must reconcile
+  /// instead of retrying because the physical effect may already exist.
+  void injectIndeterminateAfterWrites(GlassesSide side, int count) {
+    if (count < 0) {
+      throw ArgumentError.value(count, 'count');
+    }
+    _indeterminateAfterWrites[side] = count;
   }
 
   @override
@@ -88,7 +106,7 @@ final class G1DigitalTwin implements GlassesTransport {
         accepted: false,
         timeout: true,
         sequence: _sequence,
-        errorCode: 'simulated_timeout',
+        errorCode: 'simulated_pre_write_timeout',
       );
     }
     final nackCount = _nacks[side] ?? 0;
@@ -120,10 +138,24 @@ final class G1DigitalTwin implements GlassesTransport {
         ),
       );
     }
+
+    final indeterminateCount = _indeterminateAfterWrites[side] ?? 0;
+    if (indeterminateCount > 0) {
+      _indeterminateAfterWrites[side] = indeterminateCount - 1;
+      return TransportAck(
+        accepted: false,
+        timeout: true,
+        sequence: _sequence,
+        errorCode: 'simulated_ack_lost_after_write',
+        effectMayHaveOccurred: true,
+      );
+    }
+
     return TransportAck(
       accepted: true,
       timeout: false,
       sequence: _sequence,
+      effectMayHaveOccurred: true,
     );
   }
 

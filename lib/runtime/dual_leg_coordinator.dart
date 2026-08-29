@@ -4,20 +4,30 @@ import 'package:crypto/crypto.dart';
 
 import 'device_hal.dart';
 
+typedef TransportReconciler = Future<TransportAck> Function(
+  GlassesSide side,
+  TransportAck prior,
+);
+
 final class DualLegReceipt {
   const DualLegReceipt({
     required this.idempotencyKey,
     required this.left,
     required this.right,
     this.replayed = false,
+    this.reconciled = false,
   });
 
   final String idempotencyKey;
   final TransportAck left;
   final TransportAck right;
   final bool replayed;
+  final bool reconciled;
 
   bool get complete => left.accepted && right.accepted;
+
+  bool get requiresReconciliation =>
+      left.requiresReconciliation || right.requiresReconciliation;
 
   bool get degraded => !complete;
 
@@ -26,6 +36,7 @@ final class DualLegReceipt {
         left: left,
         right: right,
         replayed: true,
+        reconciled: reconciled,
       );
 }
 
@@ -84,6 +95,38 @@ final class DualLegCoordinator {
     return receipt;
   }
 
+  /// Resolves only sides whose prior acknowledgement says that an effect may
+  /// already have happened. Reconciliation is an authoritative read/query;
+  /// it is deliberately separate from another write attempt.
+  Future<DualLegReceipt> reconcile({
+    required String idempotencyKey,
+    required TransportReconciler reconciler,
+  }) async {
+    final prior = _receipts[idempotencyKey];
+    if (prior == null) {
+      throw StateError('No dual-leg receipt exists for $idempotencyKey.');
+    }
+
+    Future<TransportAck> resolve(
+      GlassesSide side,
+      TransportAck acknowledgement,
+    ) async {
+      if (!acknowledgement.requiresReconciliation) {
+        return acknowledgement;
+      }
+      return reconciler(side, acknowledgement);
+    }
+
+    final updated = DualLegReceipt(
+      idempotencyKey: idempotencyKey,
+      left: await resolve(GlassesSide.left, prior.left),
+      right: await resolve(GlassesSide.right, prior.right),
+      reconciled: true,
+    );
+    _receipts[idempotencyKey] = updated;
+    return updated;
+  }
+
   Future<TransportAck> _sendWithRetry({
     required GlassesSide side,
     required Uint8List bytes,
@@ -102,7 +145,10 @@ final class DualLegCoordinator {
         timeout: timeout,
         idempotencyKey: idempotencyKey,
       );
-      if (last.accepted) {
+      if (last.accepted || !last.retrySafe) {
+        return last;
+      }
+      if (last.errorCode == 'side_disconnected') {
         return last;
       }
     }

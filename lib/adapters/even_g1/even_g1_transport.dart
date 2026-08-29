@@ -69,8 +69,9 @@ final class EvenG1Transport implements GlassesTransport {
       errorCode: accepted
           ? null
           : response.isTimeout
-              ? 'timeout'
+              ? 'timeout_after_native_write'
               : 'negative_acknowledgement',
+      effectMayHaveOccurred: accepted || response.isTimeout,
     );
     if (accepted) {
       _appliedFingerprints[idempotencyKey] = fingerprint;
