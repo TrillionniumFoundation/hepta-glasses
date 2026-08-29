@@ -254,6 +254,17 @@ def validate_governance_contract() -> None:
         fail("branch protection permits deletion")
 
 
+def validate_exact_head_workflow() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    expression = "${{ github.event.pull_request.head.sha || github.sha }}"
+    if workflow.count(f"ref: {expression}") < 4:
+        fail("all CI jobs must explicitly check out the PR head or push SHA")
+    if f"name: hepta-source-evidence-{expression}" not in workflow:
+        fail("source evidence artifact name is not bound to the exact head SHA")
+    if "Verify artifact is bound to PR head" not in workflow:
+        fail("source evidence workflow lacks an internal exact-head assertion")
+
+
 def validate_evidence_templates() -> None:
     for name in (
         "android-g1-qualification-scenario.json",
@@ -274,6 +285,7 @@ def main() -> int:
         validate_boundaries,
         validate_codex_policy,
         validate_governance_contract,
+        validate_exact_head_workflow,
         validate_evidence_templates,
     ]
     for check in checks:
