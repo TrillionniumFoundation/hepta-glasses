@@ -34,9 +34,21 @@ class Proto {
     int? timeoutMs,
     required int newScreen,
     required int pos,
-    required int currentPageNumber,
-    required int maxPageNumber,
+    int? currentPageNumber,
+    int? maxPageNumber,
+    // ignore: non_constant_identifier_names
+    int? current_page_num,
+    // ignore: non_constant_identifier_names
+    int? max_page_num,
   }) async {
+    final currentPage = currentPageNumber ?? current_page_num;
+    final maximumPage = maxPageNumber ?? max_page_num;
+    if (currentPage == null || maximumPage == null) {
+      throw ArgumentError(
+        'Both current and maximum page numbers must be provided.',
+      );
+    }
+
     final encoded = utf8.encode(text);
     final syncSequence = _evenAiSequence & 0xff;
     final packets = EvenaiProto.evenaiMultiPackListV2(
@@ -45,8 +57,8 @@ class Proto {
       syncSeq: syncSequence,
       newScreen: newScreen,
       pos: pos,
-      current_page_num: currentPageNumber,
-      max_page_num: maxPageNumber,
+      current_page_num: currentPage,
+      max_page_num: maximumPage,
     );
     _evenAiSequence = (_evenAiSequence + 1) & 0xff;
     if (packets.isEmpty) {

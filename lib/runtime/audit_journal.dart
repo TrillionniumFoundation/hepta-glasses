@@ -74,7 +74,7 @@ abstract interface class AuditJournal {
   Future<void> verify();
 }
 
-mixin _AuditVerification on AuditJournal {
+mixin _AuditVerification {
   Future<void> verifyEntries(List<AuditEntry> entries) async {
     var previousHash = '';
     for (var index = 0; index < entries.length; index++) {
