@@ -165,7 +165,7 @@ class MemoryStore:
         self._consents.pop((subject, purpose), None)
         targets = [
             memory_id
-            for memmory_id, record in self._records.items()
+            for memory_id, record in self._records.items()
             if record.subject == subject and record.purpose == purpose
         ]
         for memory_id in targets:
