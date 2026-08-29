@@ -40,8 +40,9 @@ final class UnavailableModelGateway implements ModelGateway {
     required String question,
     String? taskId,
     Map<String, Object?> context = const <String, Object?>{},
-  }) =>
-      throw ModelGatewayException(reason);
+  }) async {
+    throw ModelGatewayException(reason);
+  }
 }
 
 final class DeterministicModelGateway implements ModelGateway {
