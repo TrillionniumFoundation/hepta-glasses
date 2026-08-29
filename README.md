@@ -1,6 +1,18 @@
 
 # Even Demo
 
+## API key configuration
+
+The sample AI clients require a key at build/run time; no key is stored in the
+source tree. Pass it with Flutter's compile-time define, for example:
+
+```bash
+flutter run --dart-define=DASHSCOPE_API_KEY=<your-key>
+```
+
+The same define is used by the DashScope and DeepSeek sample clients. Keep the
+value in your local environment or secret manager and never commit it.
+
 ## Even AI
 The general process of the Even AI function is as follows: After the app and glasses are 
 connected via dual Bluetooth, long press the left-side TouchBar on the glasses to enter the 
@@ -235,7 +247,6 @@ mode.
    - Description: The total number of pages. 
 - data (Data): 
    - Description: The actual data being transmitted in this package.
-
 
 
 

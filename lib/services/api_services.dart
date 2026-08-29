@@ -4,11 +4,18 @@ class ApiService {
   late Dio _dio;
 
   ApiService() {
+    const apiKey = String.fromEnvironment('DASHSCOPE_API_KEY');
+    if (apiKey.isEmpty) {
+      throw StateError(
+        'DASHSCOPE_API_KEY must be provided with --dart-define.',
+      );
+    }
+
     _dio = Dio(
       BaseOptions(
         baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
         headers: {
-          'Authorization': 'Bearer ${const String.fromEnvironment("DASHSCOPE_API_KEY", defaultValue: "REDACTED_API_KEY")}', // replace with your apikey
+          'Authorization': 'Bearer $apiKey',
           'Content-Type': 'application/json',
         },
       ),
