@@ -4,11 +4,18 @@ class ApiDeepSeekService {
   late Dio _dio;
 
   ApiDeepSeekService() {
+    const apiKey = String.fromEnvironment('DASHSCOPE_API_KEY');
+    if (apiKey.isEmpty) {
+      throw StateError(
+        'DASHSCOPE_API_KEY must be provided with --dart-define.',
+      );
+    }
+
     _dio = Dio(
       BaseOptions(
         baseUrl: 'https://api.deepseek.com',
         headers: {
-          'Authorization': 'Bearer ${const String.fromEnvironment("DASHSCOPE_API_KEY", defaultValue: "REDACTED_API_KEY")}', // replace with your apikey
+          'Authorization': 'Bearer $apiKey',
           'Content-Type': 'application/json',
         },
       ),
