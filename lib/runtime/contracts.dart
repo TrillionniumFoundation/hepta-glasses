@@ -107,6 +107,7 @@ final class DecisionLease {
     required this.taskId,
     required this.deviceId,
     required Set<String> allowedActions,
+    required this.argumentDigest,
     required DateTime expiresAt,
     required this.singleUse,
     required this.policyHash,
@@ -118,6 +119,7 @@ final class DecisionLease {
   final String taskId;
   final String deviceId;
   final Set<String> allowedActions;
+  final String argumentDigest;
   final DateTime expiresAt;
   final bool singleUse;
   final String policyHash;
@@ -128,6 +130,7 @@ final class DecisionLease {
         'task_id': taskId,
         'device_id': deviceId,
         'allowed_actions': allowedActions.toList()..sort(),
+        'argument_digest': argumentDigest,
         'expires_at': expiresAt.toIso8601String(),
         'single_use': singleUse,
         'policy_hash': policyHash,
@@ -141,6 +144,7 @@ final class DecisionLease {
         allowedActions: (json['allowed_actions']! as List)
             .map((item) => item.toString())
             .toSet(),
+        argumentDigest: json['argument_digest']! as String,
         expiresAt: DateTime.parse(json['expires_at']! as String),
         singleUse: json['single_use']! as bool,
         policyHash: json['policy_hash']! as String,
