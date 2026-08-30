@@ -10,39 +10,40 @@
     "device_id",
     "task_id",
     "allowed_actions",
-    "argument_constraints",
-    "issued_at",
+    "argument_digest",
     "expires_at",
     "single_use",
     "policy_hash"
   ],
   "properties": {
     "lease_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "subject": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "device_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "task_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "allowed_actions": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       },
       "minItems": 1,
       "uniqueItems": true
     },
-    "argument_constraints": {
-      "type": "object"
-    },
-    "issued_at": {
+    "argument_digest": {
       "type": "string",
-      "format": "date-time"
+      "pattern": "^[0-9a-f]{64}$"
     },
     "expires_at": {
       "type": "string",
@@ -52,7 +53,8 @@
       "type": "boolean"
     },
     "policy_hash": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "approval_proof": {
       "type": [
