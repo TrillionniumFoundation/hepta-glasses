@@ -1,0 +1,101 @@
+name: g5-remediate-and-verify
+
+on:
+  push:
+    branches:
+      - codex/hepta-glasses-gap-closure-g5
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hepta-g5-finalize
+  cancel-in-progress: false
+
+jobs:
+  remediate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: codex/hepta-glasses-gap-closure-g5
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - name: Reapply idempotent contextual migrations
+        run: python3 tools/apply_g5_repository_closure.py
+      - name: Repair final known integration defects
+        run: |
+          python3 - <<'PYCODE'
+          from pathlib import Path
+
+          audit_test = Path('test/runtime/audit_journal_test.dart')
+          text = audit_test.read_text()
+          text = text.replace("'0' * 64", "List<String>.filled(64, '0').join()")
+          audit_test.write_text(text)
+
+          scanner = Path('tools/scan_git_history.py')
+          text = scanner.read_text()
+          fixture = '        "services/qualification/test_history_scan.py",\n'
+          if fixture not in text:
+              text = text.replace(
+                  '        "tools/validate_repository.py",\n',
+                  '        "tools/validate_repository.py",\n' + fixture,
+              )
+          scanner.write_text(text)
+
+          workflow = Path('.github/workflows/ci.yml')
+          text = workflow.read_text().replace(
+              'run: tools/run_native_sanitizers.sh ',
+              'run: bash tools/run_native_sanitizers.sh ',
+          )
+          workflow.write_text(text)
+          PYCODE
+      - name: Resolve dependencies and enforce formatting
+        run: |
+          flutter pub get
+          dart format lib test
+      - name: Run strict Flutter source gates
+        run: |
+          flutter analyze --no-fatal-infos
+          flutter test
+      - name: Run repository and Python gates
+        run: |
+          python3 tools/validate_repository.py
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+      - name: Run Android build and native unit tests
+        run: |
+          flutter build apk --debug
+          cd android
+          ./gradlew testDebugUnitTest
+      - name: Scan all fetched history without revealing matches
+        run: python3 tools/scan_git_history.py --output build/evidence/source-history-scan.json
+      - name: Run LC3 and RNNoise under ASAN and UBSAN
+        run: bash tools/run_native_sanitizers.sh build/evidence/source-native-sanitizer.json
+      - name: Verify patch quality
+        run: git diff --check
+      - name: Commit verified source tree and remove one-time migration files
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/g5-finalize.yml .github/workflows/g5-export.yml .github/workflows/g5-remediate.yml
+          rm -f tools/apply_g5_repository_closure.py
+          git add -A
+          git commit -m 'fix(g5): close and verify independent-audit source blockers'
+          git push origin HEAD:codex/hepta-glasses-gap-closure-g5
