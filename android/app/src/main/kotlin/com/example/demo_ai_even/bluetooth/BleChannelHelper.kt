@@ -33,9 +33,7 @@ object BleChannelHelper {
     }
 
     fun addEventSink(eventTag: String?, eventSink: EventSink?) {
-        if (eventTag == null || eventSink == null) {
-            return
-        }
+        if (eventTag == null || eventSink == null) return
         eventSinks[eventTag] = eventSink
     }
 
@@ -44,9 +42,7 @@ object BleChannelHelper {
     }
 
     fun bleStatus(data: Any) = eventSinks[EVENT_BLE_STATUS]?.success(data)
-
     fun bleReceive(data: Any) = eventSinks[EVENT_BLE_RECEIVE]?.success(data)
-
     fun bleSpeechRecognize(data: Any) =
         eventSinks[EVENT_BLE_SPEECH_RECOGNIZE]?.success(data)
 }
@@ -96,8 +92,7 @@ class BleMethodChannel(
             result.error("InvalidArguments", "send arguments are required", null)
             return
         }
-        BleManager.instance.senData(arguments)
-        result.success(null)
+        result.success(BleManager.instance.sendData(arguments))
     }
 
     fun flutterFoundPairedGlasses(device: BlePairDevice) =
