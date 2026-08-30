@@ -1,4 +1,5 @@
 import 'package:demo_ai_even/runtime/audit_journal.dart';
+import 'package:demo_ai_even/runtime/canonical_json.dart';
 import 'package:demo_ai_even/runtime/clock.dart';
 import 'package:demo_ai_even/runtime/contracts.dart';
 import 'package:demo_ai_even/runtime/policy_engine.dart';
@@ -42,6 +43,7 @@ void main() {
       taskId: 'task-1',
       deviceId: 'device-1',
       allowedActions: const <String>{'display.show_card'},
+      argumentDigest: sha256CanonicalJson(request.arguments),
       expiresAt: now.add(const Duration(minutes: 1)),
       singleUse: true,
       policyHash: 'policy-v1',
@@ -71,7 +73,10 @@ void main() {
     final events = (await journal.readAll())
         .map((AuditEntry entry) => entry.eventType)
         .toList();
-    expect(events.indexOf('tool.prepared'), lessThan(events.indexOf('tool.completed')));
+    expect(
+      events.indexOf('tool.prepared'),
+      lessThan(events.indexOf('tool.completed')),
+    );
   });
 
   test('unknown tool fails closed without invoking an effect', () async {
