@@ -53,6 +53,10 @@ jobs:
           TARGET_BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          # The migration payload contains historical workflow normalization.
+          # Preserve the already-reviewed exact-head CI definitions; the GitHub
+          # Actions token is deliberately not permitted to mutate workflows.
+          git restore --source=HEAD -- .github/workflows
           git add -A
           if git diff --cached --quiet; then
             echo "No source changes were produced."
