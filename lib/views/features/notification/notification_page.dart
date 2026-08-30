@@ -3,7 +3,6 @@ import 'package:demo_ai_even/runtime/contracts.dart';
 import 'package:demo_ai_even/runtime/hepta_runtime.dart';
 import 'package:demo_ai_even/views/features/notification/notify_model.dart';
 import 'package:flutter/material.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 
 class NotificationPage extends StatefulWidget {
   const NotificationPage({super.key});
@@ -131,9 +130,7 @@ class _NotificationState extends State<NotificationPage> {
   Future<void> _setWhitelist() async {
     final whitelist = NotifyWhitelistModel.fromJson(_appWhitelist);
     if (whitelist == null) {
-      await Fluttertoast.showToast(
-        msg: 'JSON conversion error; check the whitelist and retry.',
-      );
+      _showMessage('JSON conversion error; check the whitelist and retry.');
       return;
     }
     setState(() => _setting = true);
@@ -146,15 +143,13 @@ class _NotificationState extends State<NotificationPage> {
       return;
     }
     setState(() => _setting = false);
-    await _report(receipt, 'Whitelist update');
+    _report(receipt, 'Whitelist update');
   }
 
   Future<void> _sendNotification() async {
     final notification = NotifyModel.fromJson(_notificationContent);
     if (notification == null) {
-      await Fluttertoast.showToast(
-        msg: 'JSON conversion error; check the notification and retry.',
-      );
+      _showMessage('JSON conversion error; check the notification and retry.');
       return;
     }
     setState(() => _sending = true);
@@ -172,16 +167,25 @@ class _NotificationState extends State<NotificationPage> {
       return;
     }
     setState(() => _sending = false);
-    await _report(receipt, 'Notification');
+    _report(receipt, 'Notification');
   }
 
-  Future<void> _report(ToolReceipt receipt, String operation) async {
+  void _report(ToolReceipt receipt, String operation) {
     if (receipt.status == ToolReceiptStatus.succeeded) {
       return;
     }
-    await Fluttertoast.showToast(
-      msg: '$operation was ${receipt.status.name}; reconciliation may be required.',
+    _showMessage(
+      '$operation was ${receipt.status.name}; reconciliation may be required.',
     );
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
