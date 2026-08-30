@@ -4,6 +4,7 @@
     "read-only",
     "workspace-write"
   ],
+  "network_access_default": false,
   "require_network_isolation": true,
   "network_isolation_command": [
     "unshare",
