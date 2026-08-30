@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable, Iterable
 
 
@@ -57,10 +57,36 @@ class MemoryStore:
             raise MemoryError("memory_consent_invalid")
         if consent.allowed_data_classes & self.FORBIDDEN_CLASSES:
             raise MemoryError("memory_class_forbidden")
-        self._consents[(consent.subject, consent.purpose)] = consent
+        key = (consent.subject, consent.purpose)
+        previous = self._consents.get(key)
+        self._consents[key] = consent
+
+        deleted_count = 0
+        clamped_count = 0
+        for memory_id, record in list(self._records.items()):
+            if (record.subject, record.purpose) != key:
+                continue
+            if record.data_class not in consent.allowed_data_classes:
+                del self._records[memory_id]
+                deleted_count += 1
+            elif record.expires_at > consent.expires_at:
+                self._records[memory_id] = replace(
+                    record,
+                    expires_at=consent.expires_at,
+                )
+                clamped_count += 1
+        self._purge_ineligible(now)
         self.audit.append(
             {
-                "event": "memory.consent_granted",
+                "allowed_data_classes": sorted(consent.allowed_data_classes),
+                "clamped_count": clamped_count,
+                "deleted_count": deleted_count,
+                "event": (
+                    "memory.consent_updated"
+                    if previous is not None
+                    else "memory.consent_granted"
+                ),
+                "expires_at": consent.expires_at,
                 "purpose": consent.purpose,
                 "subject": consent.subject,
             }
@@ -76,6 +102,7 @@ class MemoryStore:
         ttl_seconds: int,
     ) -> MemoryRecord:
         now = self.clock()
+        self._purge_ineligible(now)
         if not value or ttl_seconds < 1:
             raise MemoryError("memory_value_invalid")
         if data_class in self.FORBIDDEN_CLASSES:
@@ -117,21 +144,25 @@ class MemoryStore:
         data_classes: Iterable[str] = (),
     ) -> list[MemoryRecord]:
         now = self.clock()
+        self._purge_ineligible(now)
+        consent = self._consents.get((subject, purpose))
+        if consent is None or consent.expires_at <= now:
+            return []
         allowed = frozenset(data_classes)
-        self._purge_expired(now)
         return sorted(
             [
                 record
                 for record in self._records.values()
                 if record.subject == subject
                 and record.purpose == purpose
+                and record.data_class in consent.allowed_data_classes
                 and (not allowed or record.data_class in allowed)
             ],
             key=lambda record: (record.created_at, record.memory_id),
         )
 
     def export(self, *, subject: str) -> list[dict[str, object]]:
-        self._purge_expired(self.clock())
+        self._purge_ineligible(self.clock())
         return [
             {
                 "created_at": record.created_at,
@@ -199,10 +230,16 @@ class MemoryStore:
         )
         return len(targets)
 
-    def _purge_expired(self, now: int) -> None:
-        for memory_id in [
-            memory_id
-            for memory_id, record in self._records.items()
-            if record.expires_at <= now
-        ]:
-            del self._records[memory_id]
+    def _purge_ineligible(self, now: int) -> None:
+        for key, consent in list(self._consents.items()):
+            if consent.expires_at <= now:
+                del self._consents[key]
+        for memory_id, record in list(self._records.items()):
+            consent = self._consents.get((record.subject, record.purpose))
+            if (
+                record.expires_at <= now
+                or consent is None
+                or consent.expires_at <= now
+                or record.data_class not in consent.allowed_data_classes
+            ):
+                del self._records[memory_id]
