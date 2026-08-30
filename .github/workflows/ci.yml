@@ -40,9 +40,21 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: dart format --output=none lib test
+      - run: dart format --output=write lib test
       - run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - run: flutter test
+      - name: Capture normalized Flutter source
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hepta-normalized-flutter-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            analysis_options.yaml
+            pubspec.lock
+            lib
+            test
+          if-no-files-found: error
+          retention-days: 7
 
   android-native:
     runs-on: ubuntu-latest
@@ -73,6 +85,24 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      - name: Synchronize CocoaPods sandbox
+        run: |
+          cd ios
+          pod install
+      - name: Capture normalized iOS project
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hepta-normalized-ios-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ios/.gitignore
+            ios/Podfile
+            ios/Podfile.lock
+            ios/Flutter/AppFrameworkInfo.plist
+            ios/Runner.xcodeproj/project.pbxproj
+            ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme
+          if-no-files-found: error
+          retention-days: 7
       - run: flutter build ios --simulator --debug
 
   secret-and-boundary-scan:
