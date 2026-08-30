@@ -1,23 +1,22 @@
 # Repository governance runbook
 
-The canonical protection payload is `contracts/main-branch-protection-v1.json`.
+The canonical `main` protection contract is `contracts/main-branch-protection-v1.json`. Source automation may generate, apply, and verify the request, but the gate remains `BLOCKED_ADMIN_SETTING` until GitHub returns the active protected-branch/ruleset state.
 
-## Apply
+## Required `main` controls
 
-Use a short-lived administrator token that is not stored in GitHub Actions logs or repository secrets unless organization policy explicitly permits it:
+- strict required checks: `repository-contracts`, `flutter`, `android-native`, `ios-native`, `native-sanitizers`, `secret-and-boundary-scan`, and `source-evidence`;
+- at least one independent approval and CODEOWNER review;
+- last-push approval and stale-review dismissal;
+- all conversations resolved;
+- admin enforcement and linear history;
+- force push and branch deletion disabled.
 
-```bash
-HEPTA_REPO_ADMIN_TOKEN='<short-lived-token>' \
-python3 tools/repository_governance.py --apply
-```
+## Apply and verify
 
-The command applies and then verifies strict required checks, one approval, stale-review dismissal, CODEOWNER review, admin enforcement, linear history, no force pushes, no deletion, and conversation resolution.
+Use a short-lived repository-admin token in a controlled environment with `tools/repository_governance.py`. Never store the token or API response containing sensitive headers. Verify the returned configuration against the canonical contract and save a redacted content-addressed response under `evidence/governance/<date>.json`.
 
-## Verify only
+## Merge custody
 
-```bash
-HEPTA_REPO_ADMIN_TOKEN='<read-capable-token>' \
-python3 tools/repository_governance.py
-```
+The implementing agent may prepare and update a PR but may not approve or merge it. The independent maintainer must inspect the exact head, evidence artifact, new dependency inventory, historical credential summary, and unresolved external gates. After merge, rerun exact-head CI on the resulting `main` commit; pre-merge evidence cannot be promoted to post-merge evidence.
 
-Store the redacted GitHub protection response and command result as `evidence/governance/<date>.json`. The source contract alone does not close the admin-setting gate.
+Any temporary weakening must be time-bounded, independently approved, recorded, and automatically restored. A manual statement that protection is enabled is not evidence.
