@@ -1,3 +1,4 @@
+import 'package:demo_ai_even/runtime/canonical_json.dart';
 import 'package:demo_ai_even/runtime/clock.dart';
 import 'package:demo_ai_even/runtime/contracts.dart';
 import 'package:demo_ai_even/runtime/policy_engine.dart';
@@ -63,6 +64,7 @@ void main() {
       taskId: 't-1',
       deviceId: 'g-1',
       allowedActions: const <String>{'reminder.commit'},
+      argumentDigest: sha256CanonicalJson(request.arguments),
       expiresAt: now.add(const Duration(minutes: 1)),
       singleUse: true,
       policyHash: 'policy-v1',
@@ -92,6 +94,44 @@ void main() {
       ).reason,
       'decision_lease_already_consumed',
     );
+  });
+
+  test('mutation lease is rejected when exact arguments drift', () {
+    final request = ToolRequest(
+      requestId: 'r-3',
+      taskId: 't-1',
+      deviceId: 'g-1',
+      action: 'reminder.commit',
+      arguments: const <String, Object?>{'title': 'Different'},
+      riskTier: RiskTier.r2,
+      mutating: true,
+      idempotencyKey: 'mutation-2',
+      deadline: now.add(const Duration(minutes: 1)),
+    );
+    final lease = DecisionLease(
+      leaseId: 'lease-2',
+      subject: 'user-1',
+      taskId: 't-1',
+      deviceId: 'g-1',
+      allowedActions: const <String>{'reminder.commit'},
+      argumentDigest: sha256CanonicalJson(
+        const <String, Object?>{'title': 'Stand up'},
+      ),
+      expiresAt: now.add(const Duration(minutes: 1)),
+      singleUse: true,
+      policyHash: 'policy-v1',
+    );
+    final decision = policy.evaluate(
+      spec: const ToolSpec(
+        action: 'reminder.commit',
+        riskTier: RiskTier.r2,
+        mutating: true,
+      ),
+      request: request,
+      context: context,
+      lease: lease,
+    );
+    expect(decision.reason, 'decision_lease_binding_mismatch');
   });
 
   test('R4 is denied even with a lease', () {
