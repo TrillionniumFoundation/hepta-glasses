@@ -1,0 +1,47 @@
+name: hepta-dart-autofix-diagnostic
+
+on:
+  push:
+    branches:
+      - codex/hepta-glasses-source-closure-g4
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hepta-dart-autofix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - run: flutter pub get
+      - name: Apply SDK-supported fixes and canonical formatting
+        run: |
+          dart fix --apply
+          dart format lib test
+      - name: Package exact modified sources
+        run: |
+          mkdir -p build/autofix
+          git diff --binary -- lib test > build/autofix/dart-autofix.patch
+          cp -R lib build/autofix/lib
+          cp -R test build/autofix/test
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-dart-autofix-${{ github.sha }}
+          path: build/autofix
+          if-no-files-found: error
+          retention-days: 1
+      - name: Verify repaired analysis
+        run: flutter analyze --fatal-warnings
