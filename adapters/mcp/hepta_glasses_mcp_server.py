@@ -6,10 +6,12 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, BinaryIO, Iterator, Mapping
 
 MODERN_PROTOCOL = "2026-07-28"
 LEGACY_PROTOCOL = "2025-11-25"
+SUPPORTED_PROTOCOLS = (MODERN_PROTOCOL, LEGACY_PROTOCOL)
+MAX_REQUEST_BYTES = 64 * 1024
 SERVER_INFO = {"name": "hepta-glasses-development", "version": "0.1.0"}
 
 
@@ -172,7 +174,7 @@ def handle_request(document: Any) -> dict[str, Any] | None:
                 request_id,
                 {
                     "resultType": "complete",
-                    "supportedVersions": [MODERN_PROTOCOL, LEGACY_PROTOCOL],
+                    "supportedVersions": list(SUPPORTED_PROTOCOLS),
                     "capabilities": {"tools": {}},
                     "serverInfo": SERVER_INFO,
                     "instructions": "Read-only development tools; no physical mutation authority.",
@@ -181,7 +183,16 @@ def handle_request(document: Any) -> dict[str, Any] | None:
         if method == "initialize":
             params = _params(document)
             requested = params.get("protocolVersion")
-            selected = requested if requested == LEGACY_PROTOCOL else LEGACY_PROTOCOL
+            if requested is None:
+                selected = MODERN_PROTOCOL
+            elif requested in SUPPORTED_PROTOCOLS:
+                selected = requested
+            else:
+                raise RpcError(
+                    -32602,
+                    "Unsupported protocol version",
+                    {"supportedVersions": list(SUPPORTED_PROTOCOLS)},
+                )
             return response(
                 request_id,
                 {
@@ -206,18 +217,40 @@ def handle_request(document: Any) -> dict[str, Any] | None:
         return error_response(request_id, error)
 
 
-def main() -> int:
-    for line in sys.stdin:
-        line = line.strip()
+def bounded_request_lines(stream: BinaryIO) -> Iterator[bytes | None]:
+    """Yield bounded request bytes; ``None`` denotes one discarded oversized line."""
+
+    while True:
+        line = stream.readline(MAX_REQUEST_BYTES + 2)
         if not line:
+            return
+        has_newline = line.endswith(b"\n")
+        payload_size = len(line) - (1 if has_newline else 0)
+        oversized = payload_size > MAX_REQUEST_BYTES
+        if not has_newline and len(line) == MAX_REQUEST_BYTES + 2:
+            oversized = True
+            while line and not line.endswith(b"\n"):
+                line = stream.readline(MAX_REQUEST_BYTES + 2)
+        if oversized:
+            yield None
             continue
-        try:
-            document = json.loads(line)
-            result = handle_request(document)
-        except json.JSONDecodeError:
-            result = error_response(None, RpcError(-32700, "Parse error"))
-        except Exception:
-            result = error_response(None, RpcError(-32603, "Internal error"))
+        yield line[:-1] if has_newline else line
+
+
+def main() -> int:
+    for raw_line in bounded_request_lines(sys.stdin.buffer):
+        if raw_line is None:
+            result = error_response(None, RpcError(-32600, "Request too large"))
+        elif not raw_line.strip():
+            continue
+        else:
+            try:
+                document = json.loads(raw_line.decode("utf-8"))
+                result = handle_request(document)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                result = error_response(None, RpcError(-32700, "Parse error"))
+            except Exception:
+                result = error_response(None, RpcError(-32603, "Internal error"))
         if result is not None:
             sys.stdout.write(json.dumps(result, separators=(",", ":")) + "\n")
             sys.stdout.flush()
