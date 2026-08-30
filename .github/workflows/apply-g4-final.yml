@@ -36,8 +36,9 @@ jobs:
           from pathlib import Path
 
           payload_path = Path('tools/g4_docs_payload.txt')
+          encoded = payload_path.read_text(encoding='ascii').strip()
           source = zlib.decompress(
-              base64.b64decode(payload_path.read_text(encoding='ascii'), validate=True)
+              base64.b64decode(encoded, validate=True)
           ).decode('utf-8')
           source = source.replace('    Path(__file__).unlink()\n', '', 1)
           namespace = {
