@@ -1,51 +1,57 @@
 # Hepta Glasses OS current state
 
-Last updated: 2026-08-30
-Canonical plan revision: `2026-08-30-g4`
+Last updated: 2026-08-31
+Canonical plan revision: `2026-08-31-g5`
 
 ## Authoritative review stack
 
-The active source stack is:
+G5 is an independent-audit closure stacked on the exact G4 source candidate. The
+authoritative identity is the exact commit and tree recorded by a successful CI
+run and its `hepta-source-evidence-<sha>` artifact. A PR description is not
+evidence and this file deliberately does not claim its own future final SHA.
 
-1. PR #1 — AI-native distributed-OS foundation;
-2. PR #9 — mobile execution-authority and native BLE hardening;
-3. PR #10 — G4 exact-head reproducibility, concurrency, native safety, per-leg state, assistant lifecycle, and test-gate closure.
+## Demonstrated source state
 
-This file deliberately does not embed the current PR-head SHA. A commit cannot truthfully contain its own final SHA. The authoritative source identity is the exact commit and tree recorded by the successful GitHub Actions run and its `hepta-source-evidence-<sha>` artifact.
+The source tree contains the G4 deterministic device/runtime foundation plus:
 
-## Demonstrated repository state
-
-The source tree now contains:
-
-- a Flutter companion and deterministic mobile edge runtime for Even G1-class dual-BLE glasses;
-- packet codecs, per-leg readiness, connection-generation fencing, late-response quarantine, replay-safe receipts, and a deterministic G1 digital twin;
-- strict native LC3 frame validation on Android and iOS, bounded allocation, session-scoped decoder reset, and metadata-only audio diagnostics;
-- a generation-fenced assistant lifecycle that waits for final ASR and reports completion only after the final display acknowledgement;
-- a serialized, file-locked, hash-chained audit journal; recoverable tasks; exact-key in-flight de-duplication; journal-before-effect execution; and authoritative reconciliation contracts;
-- a bounded device-effect scheduler and fail-closed timeout semantics where a write may already have occurred;
-- a provider-neutral model gateway with no permanent provider credential in the mobile product bundle;
-- reference control-plane identity, short-lived token, rotation, revocation, rate-limit, realtime, capability, Skill, Memory, qualification, governance, SBOM, provenance, and release-gate implementations;
-- Flutter tests, Python tests, Android native unit tests, iOS XCTest, Android/iOS build gates, secret/boundary scans, and exact-head source evidence.
-
-Android speech recognition is intentionally reported as unavailable until a real Android ASR adapter is configured; it is not represented as a successful no-op.
+- an OS-file-locked, hash-chained JSONL audit journal with atomic head
+  checkpoints, cross-instance serialization, torn-tail rejection, and recovery
+  after journal flush but before checkpoint replacement;
+- fail-closed durable-storage startup with no silent system-temporary fallback;
+- a deterministic SPDX 2.3 SBOM spanning Dart/Pub, Android/Gradle,
+  iOS/CocoaPods, and vendored native components;
+- a redacted all-fetched-ref Git history scanner;
+- ASAN/UBSAN execution of both vendored LC3 copies and RNNoise, with Android/iOS
+  PCM parity required;
+- source release evaluation that recomputes evidence-file digests and verifies
+  report contents rather than accepting digest-shaped strings;
+- a CI policy where Dart warnings are fatal.
 
 ## Source truth
 
-All repository-actionable gaps in `docs/GAP_LEDGER.yaml` are `CLOSED_SOURCE` or `CLOSED_VERIFIED`. Source closure means the implementation, contract, test, runbook, or validator exists and passes the exact-head source gate. It does not convert external evidence into source evidence.
+Repository-actionable G5 gaps are closed only when the exact-head source gate
+passes. Local tests, a prior G4 artifact, or a source-export workflow do not
+prove the G5 head.
 
 ## External gates that remain open
 
-The following claims still require evidence that cannot be manufactured inside this repository:
+The following still require evidence that cannot be manufactured in this
+repository:
 
-- physical Android/iOS + Even G1 latency, packet-loss, power, thermal, disconnect, reconnect, and soak reports;
-- deployed KMS/HSM identity, Android/Apple attestation, key rotation, revocation, lost-device, and recovery drills;
-- active GitHub protection/ruleset verification for `main`;
-- vendor-authorized firmware, bootloader, secure-boot, signing, OTA, and rollback authority;
-- production model/realtime tenancy, OAuth registrations, external-system receipts, and timeout reconciliation;
-- independent security/privacy/legal/accessibility review, release signing, pilot telemetry, kill-switch, staged rollout, rollback, and store approval.
+- physical Android/iOS + Even G1 qualification, power, thermal, reconnect, and
+  soak reports;
+- deployed KMS/HSM identity, Android/Apple attestation, rotation, revocation,
+  lost-device, and recovery drills;
+- active and API-verified protection/rulesets for `main`;
+- vendor-authorized firmware, bootloader, secure-boot, signing, OTA, and
+  rollback authority;
+- production model/realtime tenancy, OAuth registrations, authoritative
+  external receipts, and timeout reconciliation;
+- independent security, privacy, legal, and accessibility review;
+- Android/iOS release signing, verifiable binary attestation, pilot telemetry,
+  kill-switch, staged rollout, rollback, and store approval;
+- provider-side rotation or revocation evidence for any historically exposed
+  credential.
 
-These remain `BLOCKED_EXTERNAL`, `BLOCKED_ADMIN_SETTING`, or `BLOCKED_UPSTREAM`. A source CI pass must never be cited as proof that one of these gates is complete.
-
-## Release truth
-
-`tools/build_source_evidence.py` emits the exact-head SBOM, provenance, source release bundle, summary, and source gate result. `tools/evaluate_release_gate.py --mode product` additionally requires the external evidence above and has no override path.
+These remain `BLOCKED_EXTERNAL`, `BLOCKED_ADMIN_SETTING`, or
+`BLOCKED_UPSTREAM`. E0-E4 never close E5-E7.
