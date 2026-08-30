@@ -42,6 +42,15 @@ class ReleaseGate:
         {"source-evidence"}
     )
 
+    def __init__(
+        self,
+        *,
+        expected_contracts_version: str = "2026-08-30-g4",
+    ) -> None:
+        if not expected_contracts_version:
+            raise ReleaseGateError("contracts_version_invalid")
+        self.expected_contracts_version = expected_contracts_version
+
     def evaluate(self, bundle: Mapping[str, Any], *, mode: str) -> GateResult:
         if mode not in {"source", "product"}:
             raise ReleaseGateError("release_mode_invalid")
@@ -67,9 +76,10 @@ class ReleaseGate:
             "provenance": self._digest(
                 self._nested(source, "provenance", "sha256"), 64
             ),
-            "contracts_version": isinstance(
-                source.get("contracts_version"), str
-            ) and bool(source.get("contracts_version")),
+            "contracts_version": (
+                source.get("contracts_version")
+                == self.expected_contracts_version
+            ),
         }
         if mode == "product":
             checks.update(self._product_checks(bundle))
