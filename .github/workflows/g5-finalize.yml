@@ -1,0 +1,81 @@
+name: hepta-g5-finalize
+
+on:
+  push:
+    branches:
+      - codex/hepta-glasses-source-closure-g4
+    paths:
+      - tools/g5-final.patch
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hepta-g5-finalize-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.repository == 'TrillionniumFoundation/hepta-glasses'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: true
+      - name: Verify bounded maintenance context
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "codex/hepta-glasses-source-closure-g4"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -f tools/g5-final.patch
+      - name: Apply the reviewed patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check tools/g5-final.patch
+          git apply tools/g5-final.patch
+          mapfile -t changed < <(git diff --name-only | sort)
+          expected=(
+            lib/ble_manager.dart
+            lib/controllers/bmp_update_manager.dart
+            lib/main.dart
+            lib/services/evenai.dart
+            lib/views/even_list_page.dart
+            lib/views/home_page.dart
+          )
+          if [[ "${changed[*]}" != "${expected[*]}" ]]; then
+            printf 'unexpected changed paths: %s\n' "${changed[*]}" >&2
+            exit 1
+          fi
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - run: flutter pub get
+      - name: Verify exact SDK formatting and strict analysis
+        run: |
+          set -euo pipefail
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze --fatal-warnings
+          flutter test
+      - name: Commit the bounded source repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            lib/ble_manager.dart \
+            lib/controllers/bmp_update_manager.dart \
+            lib/main.dart \
+            lib/services/evenai.dart \
+            lib/views/even_list_page.dart \
+            lib/views/home_page.dart
+          git diff --cached --check
+          git commit -m "fix(g5): close strict analysis and resource lifecycle blockers"
+          git push origin HEAD:codex/hepta-glasses-source-closure-g4
