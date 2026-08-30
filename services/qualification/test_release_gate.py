@@ -20,12 +20,19 @@ class ReleaseGateTest(unittest.TestCase):
             ],
             "sbom": {"sha256": "c" * 64},
             "provenance": {"sha256": "d" * 64},
-            "contracts_version": "2026-08-30-g2",
+            "contracts_version": "2026-08-30-g4",
         }
 
     def test_source_mode_passes_without_claiming_product_release(self) -> None:
         result = ReleaseGate().evaluate({"source": self.source()}, mode="source")
         self.assertTrue(result.passed)
+
+    def test_source_mode_rejects_stale_contracts_version(self) -> None:
+        source = self.source()
+        source["contracts_version"] = "2026-08-30-g2"
+        result = ReleaseGate().evaluate({"source": source}, mode="source")
+        self.assertFalse(result.passed)
+        self.assertIn("contracts_version", result.missing)
 
     def test_source_mode_fails_when_native_platform_does_not_build(self) -> None:
         source = self.source()
