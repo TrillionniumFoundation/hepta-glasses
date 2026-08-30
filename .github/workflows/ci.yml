@@ -21,9 +21,10 @@ jobs:
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify exact source identity
         run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
@@ -43,9 +44,10 @@ jobs:
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify exact source identity
         run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
@@ -57,7 +59,8 @@ jobs:
       - run: flutter pub get
       - name: Enforce committed Dart formatting
         run: dart format --output=none --set-exit-if-changed lib test
-      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Treat analyzer warnings as failures
+        run: flutter analyze --no-fatal-infos
       - run: flutter test
       - name: Prove Flutter qualification is read-only
         run: git diff --exit-code
@@ -68,9 +71,10 @@ jobs:
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify exact source identity
         run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
@@ -99,9 +103,10 @@ jobs:
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify exact source identity
         run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
@@ -130,15 +135,34 @@ jobs:
       - name: Prove iOS qualification is read-only
         run: git diff --exit-code
 
-  secret-and-boundary-scan:
+  native-sanitizers:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - name: Run vendored native code under ASAN and UBSAN
+        run: tools/run_native_sanitizers.sh build/evidence/source-native-sanitizer.json
+      - name: Prove native sanitizer gate is read-only
+        run: git diff --exit-code
+
+  secret-and-boundary-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify exact source identity
         run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
@@ -147,37 +171,46 @@ jobs:
           ! grep -RInE '(DASHSCOPE_API_KEY|DEEPSEEK_API_KEY|OPENAI_API_KEY|api\.deepseek\.com|dashscope\.aliyuncs\.com|api\.openai\.com)' lib android ios services adapters plugins
           ! grep -RInE '(dangerously-bypass-approvals-and-sandbox|--yolo|danger-full-access)' services plugins adapters lib
           ! grep -RInE --exclude-dir=.git -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{30,}' lib android ios services adapters plugins evidence
+      - name: Scan every fetched Git ref without emitting secret material
+        run: python3 tools/scan_git_history.py --output build/evidence/source-history-scan.json
 
   source-evidence:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     needs:
       - repository-contracts
       - flutter
       - android-native
       - ios-native
+      - native-sanitizers
       - secret-and-boundary-scan
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify exact source identity
         run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
+      - name: Regenerate exact-head native sanitizer report
+        run: tools/run_native_sanitizers.sh build/evidence/source-native-sanitizer.json
       - name: Generate exact-head SBOM and provenance
         env:
           CI_REPOSITORY_CONTRACTS: ${{ needs.repository-contracts.result }}
           CI_FLUTTER: ${{ needs.flutter.result }}
           CI_ANDROID_NATIVE: ${{ needs.android-native.result }}
           CI_IOS_NATIVE: ${{ needs.ios-native.result }}
+          CI_NATIVE_SANITIZERS: ${{ needs.native-sanitizers.result }}
           CI_SECRET_SCAN: ${{ needs.secret-and-boundary-scan.result }}
-        run: python3 tools/build_source_evidence.py --output-dir build/evidence
+        run: |
+          python3 tools/build_source_evidence.py \
+            --output-dir build/evidence \
+            --native-sanitizer-report build/evidence/source-native-sanitizer.json
       - name: Verify artifact is bound to source head
         run: |
           python3 - <<'PYCODE'
@@ -194,11 +227,12 @@ jobs:
                   f"source evidence commit {summary['commit']} != expected head {expected}"
               )
           PYCODE
-      - name: Evaluate source release gate
+      - name: Evaluate content-verified source release gate
         run: |
           python3 tools/evaluate_release_gate.py \
             --bundle build/evidence/source-release-bundle.json \
             --mode source \
+            --evidence-dir build/evidence \
             --output build/evidence/source-gate-result.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
