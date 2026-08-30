@@ -17,7 +17,7 @@ concurrency:
 jobs:
   repository-contracts:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -39,7 +39,7 @@ jobs:
 
   flutter:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -57,14 +57,14 @@ jobs:
       - run: flutter pub get
       - name: Enforce committed Dart formatting
         run: dart format --output=none --set-exit-if-changed lib test
-      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - run: flutter analyze --fatal-warnings
       - run: flutter test
       - name: Prove Flutter qualification is read-only
         run: git diff --exit-code
 
   android-native:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -86,16 +86,16 @@ jobs:
           cache: false
       - run: flutter pub get
       - run: flutter build apk --debug
-      - name: Run Android native unit tests
+      - name: Build unsigned release and run Android tests and lint
         run: |
           cd android
-          ./gradlew testDebugUnitTest
+          ./gradlew assembleRelease testDebugUnitTest lintDebug
       - name: Prove Android qualification is read-only
         run: git diff --exit-code
 
   ios-native:
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -116,6 +116,8 @@ jobs:
           cd ios
           pod install --deployment
       - run: flutter build ios --simulator --debug
+      - name: Prove no-codesign release configuration builds
+        run: flutter build ios --release --no-codesign
       - name: Run iOS native tests
         run: |
           DEVICE_ID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(device["udid"] for runtime in sorted(devices, reverse=True) for device in devices[runtime] if device.get("isAvailable") and device.get("name", "").startswith("iPhone")))')"
@@ -130,15 +132,33 @@ jobs:
       - name: Prove iOS qualification is read-only
         run: git diff --exit-code
 
-  secret-and-boundary-scan:
+  native-sanitizers:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - name: Run LC3 ASAN/UBSAN regression and bounded fuzzing
+        run: tools/run_native_sanitizer_tests.sh
+      - name: Prove native sanitizer checks are read-only
+        run: git diff --exit-code
+
+  secret-and-boundary-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify exact source identity
         run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
@@ -147,15 +167,23 @@ jobs:
           ! grep -RInE '(DASHSCOPE_API_KEY|DEEPSEEK_API_KEY|OPENAI_API_KEY|api\.deepseek\.com|dashscope\.aliyuncs\.com|api\.openai\.com)' lib android ios services adapters plugins
           ! grep -RInE '(dangerously-bypass-approvals-and-sandbox|--yolo|danger-full-access)' services plugins adapters lib
           ! grep -RInE --exclude-dir=.git -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{30,}' lib android ios services adapters plugins evidence
+      - name: Scan complete Git history without printing credential values
+        run: |
+          python3 tools/scan_repository_history.py \
+            --output build/evidence/credential-history-summary.json \
+            --fail-on-current
+      - name: Prove boundary checks are read-only outside build output
+        run: git diff --exit-code
 
   source-evidence:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     needs:
       - repository-contracts
       - flutter
       - android-native
       - ios-native
+      - native-sanitizers
       - secret-and-boundary-scan
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -163,19 +191,20 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify exact source identity
         run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
-      - name: Generate exact-head SBOM and provenance
+      - name: Generate exact-head multi-ecosystem SBOM and provenance
         env:
           CI_REPOSITORY_CONTRACTS: ${{ needs.repository-contracts.result }}
           CI_FLUTTER: ${{ needs.flutter.result }}
           CI_ANDROID_NATIVE: ${{ needs.android-native.result }}
           CI_IOS_NATIVE: ${{ needs.ios-native.result }}
+          CI_NATIVE_SANITIZERS: ${{ needs.native-sanitizers.result }}
           CI_SECRET_SCAN: ${{ needs.secret-and-boundary-scan.result }}
         run: python3 tools/build_source_evidence.py --output-dir build/evidence
       - name: Verify artifact is bound to source head
@@ -193,6 +222,10 @@ jobs:
               raise SystemExit(
                   f"source evidence commit {summary['commit']} != expected head {expected}"
               )
+          if summary['current_tree_credential_findings'] != 0:
+              raise SystemExit('current source tree contains credential material')
+          if summary['vendored_component_count'] < 2:
+              raise SystemExit('vendored component inventory is incomplete')
           PYCODE
       - name: Evaluate source release gate
         run: |

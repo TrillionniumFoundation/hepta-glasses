@@ -3,9 +3,23 @@
     "commit": "REPLACE_WITH_40_HEX_COMMIT",
     "tree": "REPLACE_WITH_40_HEX_TREE",
     "ci_checks": [],
-    "sbom": {"sha256": "REPLACE_WITH_64_HEX"},
+    "sbom": {
+      "sha256": "REPLACE_WITH_64_HEX",
+      "file_count": 0,
+      "package_count": 0,
+      "relationship_count": 0,
+      "vendored_component_count": 0,
+      "ecosystem_counts": {}
+    },
     "provenance": {"sha256": "REPLACE_WITH_64_HEX"},
-    "contracts_version": "2026-08-30-g2"
+    "credential_history": {
+      "sha256": "REPLACE_WITH_64_HEX",
+      "current_tree_findings": 0,
+      "historical_findings": 0,
+      "historical_unique_fingerprints": 0
+    },
+    "third_party_manifest": {"sha256": "REPLACE_WITH_64_HEX"},
+    "contracts_version": "2026-08-30-g5"
   },
   "branch_protection": {
     "protected": false,
@@ -19,6 +33,10 @@
     "privacy": "pending",
     "legal": "pending"
   },
+  "credential_incident": {
+    "status": "pending",
+    "provider_revocation_receipt_digest": ""
+  },
   "drills": {
     "kill_switch": "pending",
     "rollback": "pending"
@@ -26,7 +44,9 @@
   "signing": {
     "android_digest": "",
     "ios_digest": "",
-    "provenance_digest": ""
+    "provenance_digest": "",
+    "binary_sbom_digest": "",
+    "artifact_attestation_digest": ""
   },
   "pilot": {
     "cohort_size": 0,
