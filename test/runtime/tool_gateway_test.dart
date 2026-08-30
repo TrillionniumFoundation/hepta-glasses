@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:demo_ai_even/runtime/audit_journal.dart';
 import 'package:demo_ai_even/runtime/clock.dart';
 import 'package:demo_ai_even/runtime/contracts.dart';
@@ -8,13 +10,16 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   final now = DateTime.utc(2026, 8, 30);
 
-  ToolRequest displayRequest({String idempotencyKey = 'display-card-1'}) =>
+  ToolRequest displayRequest({
+    String idempotencyKey = 'display-card-1',
+    String cardId = 'card-1',
+  }) =>
       ToolRequest(
         requestId: 'request-1',
         taskId: 'task-1',
         deviceId: 'device-1',
         action: 'display.show_card',
-        arguments: const <String, Object?>{'card_id': 'card-1'},
+        arguments: <String, Object?>{'card_id': cardId},
         riskTier: RiskTier.r1,
         mutating: true,
         idempotencyKey: idempotencyKey,
@@ -80,7 +85,44 @@ void main() {
     final events = (await journal.readAll())
         .map((AuditEntry entry) => entry.eventType)
         .toList();
-    expect(events.indexOf('tool.prepared'), lessThan(events.indexOf('tool.completed')));
+    expect(
+      events.indexOf('tool.prepared'),
+      lessThan(events.indexOf('tool.completed')),
+    );
+  });
+
+  test('audit journal stores digests, not sensitive tool arguments', () async {
+    final clock = MutableClock(now);
+    final journal = InMemoryAuditJournal(clock: clock);
+    final gateway = ToolGateway(
+      journal: journal,
+      policy: PolicyEngine(clock: clock),
+      clock: clock,
+    );
+    gateway.register(
+      const ToolSpec(
+        action: 'display.show_card',
+        riskTier: RiskTier.r1,
+        mutating: true,
+      ),
+      (ToolRequest request) async => <String, Object?>{'displayed': true},
+    );
+
+    const secret = 'private transcript and model answer';
+    final request = displayRequest(cardId: secret);
+    await gateway.execute(
+      request: request,
+      context: context,
+      lease: displayLease(request),
+    );
+
+    final encoded = jsonEncode(
+      (await journal.readAll())
+          .map((AuditEntry entry) => entry.toJson())
+          .toList(),
+    );
+    expect(encoded, isNot(contains(secret)));
+    expect(encoded, contains(request.argumentDigest));
   });
 
   test('terminal receipt survives gateway restart without duplicate effect',
@@ -127,6 +169,7 @@ void main() {
 
     expect(replay.replayed, isTrue);
     expect(replay.status, ToolReceiptStatus.succeeded);
+    expect(replay.result['recovered'], isTrue);
     expect(effects, 1);
   });
 
@@ -188,8 +231,7 @@ void main() {
     final journal = InMemoryAuditJournal(clock: clock);
     final request = displayRequest(idempotencyKey: 'crash-window');
     await journal.append('tool.prepared', <String, Object?>{
-      'request': request.toJson(),
-      'request_fingerprint': request.fingerprint,
+      'request_envelope': ToolAuditEnvelope.fromRequest(request).toJson(),
       'lease_id': 'lease-crash',
       'started_at': now.toIso8601String(),
     });

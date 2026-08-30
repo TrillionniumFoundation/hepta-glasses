@@ -1,4 +1,5 @@
 import 'audit_journal.dart';
+import 'canonical_json.dart';
 import 'clock.dart';
 import 'contracts.dart';
 import 'policy_engine.dart';
@@ -12,6 +13,11 @@ typedef ToolReconciler = Future<Map<String, Object?>> Function(
   String externalId,
 );
 
+typedef ToolRecoveryReconciler = Future<Map<String, Object?>> Function(
+  ToolAuditEnvelope request,
+  String externalId,
+);
+
 final class IndeterminateToolEffect implements Exception {
   const IndeterminateToolEffect(this.externalId);
 
@@ -21,10 +27,85 @@ final class IndeterminateToolEffect implements Exception {
   String toString() => 'IndeterminateToolEffect($externalId)';
 }
 
-final class _PreparedTool {
-  const _PreparedTool({required this.request, required this.startedAt});
+/// Metadata-only request representation. It is sufficient for replay conflict
+/// detection and recovery routing without persisting prompts, notification
+/// bodies, display text, locations, contacts, or other sensitive arguments.
+final class ToolAuditEnvelope {
+  ToolAuditEnvelope({
+    required this.requestId,
+    required this.taskId,
+    required this.deviceId,
+    required this.action,
+    required this.riskTier,
+    required this.mutating,
+    required this.idempotencyKey,
+    required DateTime deadline,
+    required this.origin,
+    required this.argumentDigest,
+    required this.requestFingerprint,
+  }) : deadline = deadline.toUtc();
 
-  final ToolRequest request;
+  factory ToolAuditEnvelope.fromRequest(ToolRequest request) =>
+      ToolAuditEnvelope(
+        requestId: request.requestId,
+        taskId: request.taskId,
+        deviceId: request.deviceId,
+        action: request.action,
+        riskTier: request.riskTier,
+        mutating: request.mutating,
+        idempotencyKey: request.idempotencyKey,
+        deadline: request.deadline,
+        origin: request.origin,
+        argumentDigest: request.argumentDigest,
+        requestFingerprint: request.fingerprint,
+      );
+
+  final String requestId;
+  final String taskId;
+  final String deviceId;
+  final String action;
+  final RiskTier riskTier;
+  final bool mutating;
+  final String idempotencyKey;
+  final DateTime deadline;
+  final TrustClass origin;
+  final String argumentDigest;
+  final String requestFingerprint;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'request_id': requestId,
+        'task_id': taskId,
+        'device_id': deviceId,
+        'action': action,
+        'risk_tier': riskTier.name,
+        'mutating': mutating,
+        'idempotency_key': idempotencyKey,
+        'deadline': deadline.toIso8601String(),
+        'origin': origin.name,
+        'argument_digest': argumentDigest,
+        'request_fingerprint': requestFingerprint,
+      };
+
+  factory ToolAuditEnvelope.fromJson(Map<String, Object?> json) =>
+      ToolAuditEnvelope(
+        requestId: json['request_id']! as String,
+        taskId: json['task_id']! as String,
+        deviceId: json['device_id']! as String,
+        action: json['action']! as String,
+        riskTier: riskTierFromJson(json['risk_tier']! as String),
+        mutating: json['mutating']! as bool,
+        idempotencyKey: json['idempotency_key']! as String,
+        deadline: DateTime.parse(json['deadline']! as String),
+        origin: trustClassFromJson(json['origin'] as String? ?? 'user'),
+        argumentDigest: json['argument_digest']! as String,
+        requestFingerprint: json['request_fingerprint']! as String,
+      );
+}
+
+final class _PreparedTool {
+  const _PreparedTool({required this.envelope, required this.startedAt});
+
+  final ToolAuditEnvelope envelope;
   final DateTime startedAt;
 }
 
@@ -34,6 +115,56 @@ Map<String, Object?> _objectMap(Object? value, String label) {
   }
   return value.map(
     (key, item) => MapEntry(key.toString(), item as Object?),
+  );
+}
+
+bool _isSha256(String value) =>
+    value.length == 64 &&
+    value.toLowerCase().runes.every(
+          (character) =>
+              (character >= 48 && character <= 57) ||
+              (character >= 97 && character <= 102),
+        );
+
+Map<String, Object?> _receiptAuditJson(ToolReceipt receipt) {
+  final externalId = receipt.result['external_id'];
+  return <String, Object?>{
+    'request_id': receipt.requestId,
+    'idempotency_key': receipt.idempotencyKey,
+    'status': receipt.status.name,
+    'policy_reason': receipt.policyReason,
+    'started_at': receipt.startedAt.toIso8601String(),
+    'completed_at': receipt.completedAt.toIso8601String(),
+    'result_digest': sha256CanonicalJson(receipt.result),
+    if (externalId is String && externalId.isNotEmpty)
+      'external_id': externalId,
+  };
+}
+
+ToolReceipt _receiptFromAuditJson(Map<String, Object?> json) {
+  // Backward compatibility for journals produced before metadata-only audit.
+  if (json['result'] is Map) {
+    return ToolReceipt.fromJson(json);
+  }
+  final resultDigest = json['result_digest'];
+  if (resultDigest is! String || !_isSha256(resultDigest)) {
+    throw StateError('Recovered tool receipt has an invalid result digest.');
+  }
+  final externalId = json['external_id'];
+  return ToolReceipt(
+    requestId: json['request_id']! as String,
+    idempotencyKey: json['idempotency_key']! as String,
+    status: toolReceiptStatusFromJson(json['status']! as String),
+    policyReason: json['policy_reason']! as String,
+    result: <String, Object?>{
+      'recovered': true,
+      'result_digest': resultDigest,
+      if (externalId is String && externalId.isNotEmpty)
+        'external_id': externalId,
+    },
+    startedAt: DateTime.parse(json['started_at']! as String),
+    completedAt: DateTime.parse(json['completed_at']! as String),
+    replayed: false,
   );
 }
 
@@ -52,14 +183,19 @@ final class ToolGateway {
   final Map<String, ToolSpec> _specs = <String, ToolSpec>{};
   final Map<String, ToolHandler> _handlers = <String, ToolHandler>{};
   final Map<String, ToolReconciler> _reconcilers = <String, ToolReconciler>{};
+  final Map<String, ToolRecoveryReconciler> _recoveryReconcilers =
+      <String, ToolRecoveryReconciler>{};
   final Map<String, ToolReceipt> _receipts = <String, ToolReceipt>{};
   final Map<String, String> _fingerprints = <String, String>{};
   final Map<String, ToolRequest> _requests = <String, ToolRequest>{};
+  final Map<String, ToolAuditEnvelope> _envelopes =
+      <String, ToolAuditEnvelope>{};
 
   void register(
     ToolSpec spec,
     ToolHandler handler, {
     ToolReconciler? reconciler,
+    ToolRecoveryReconciler? recoveryReconciler,
   }) {
     if (_specs.containsKey(spec.action)) {
       throw StateError('Tool ${spec.action} is already registered.');
@@ -69,6 +205,9 @@ final class ToolGateway {
     if (reconciler != null) {
       _reconcilers[spec.action] = reconciler;
     }
+    if (recoveryReconciler != null) {
+      _recoveryReconcilers[spec.action] = recoveryReconciler;
+    }
   }
 
   List<ToolSpec> get tools => List.unmodifiable(_specs.values);
@@ -76,30 +215,29 @@ final class ToolGateway {
   ToolReceipt? receiptFor(String idempotencyKey) => _receipts[idempotencyKey];
 
   /// Rebuilds replay protection, terminal receipts, prepared-but-uncertain
-  /// effects, and consumed leases from the durable audit journal.
+  /// effects, and consumed leases from the durable metadata-only journal.
   Future<void> recover() async {
     await _journal.verify();
     _receipts.clear();
     _fingerprints.clear();
     _requests.clear();
+    _envelopes.clear();
 
     final prepared = <String, _PreparedTool>{};
     final consumedLeaseIds = <String>{};
     final entries = await _journal.readAll();
     for (final entry in entries) {
       if (entry.eventType == 'tool.prepared') {
-        final request = ToolRequest.fromJson(
-          _objectMap(entry.payload['request'], 'tool.prepared.request'),
+        final envelope = _envelopeFromPayload(
+          entry.payload,
+          'tool.prepared',
         );
-        final fingerprint = entry.payload['request_fingerprint'];
         final startedAt = entry.payload['started_at'];
-        if (fingerprint is! String ||
-            fingerprint != request.fingerprint ||
-            startedAt is! String) {
+        if (startedAt is! String) {
           throw StateError('Malformed tool.prepared entry ${entry.sequence}.');
         }
-        prepared[request.idempotencyKey] = _PreparedTool(
-          request: request,
+        prepared[envelope.idempotencyKey] = _PreparedTool(
+          envelope: envelope,
           startedAt: DateTime.parse(startedAt).toUtc(),
         );
         final leaseId = entry.payload['lease_id'];
@@ -119,17 +257,18 @@ final class ToolGateway {
       }.contains(entry.eventType)) {
         continue;
       }
-      final request = ToolRequest.fromJson(
-        _objectMap(entry.payload['request'], '${entry.eventType}.request'),
+      final envelope = _envelopeFromPayload(
+        entry.payload,
+        entry.eventType,
       );
-      final receipt = ToolReceipt.fromJson(
+      final receipt = _receiptFromAuditJson(
         _objectMap(entry.payload['receipt'], '${entry.eventType}.receipt'),
       );
-      final fingerprint = entry.payload['request_fingerprint'];
-      if (fingerprint is! String || fingerprint != request.fingerprint) {
-        throw StateError('Tool terminal fingerprint mismatch at ${entry.sequence}.');
+      if (receipt.idempotencyKey != envelope.idempotencyKey ||
+          receipt.requestId != envelope.requestId) {
+        throw StateError('Tool terminal identity mismatch at ${entry.sequence}.');
       }
-      _cacheReceipt(request: request, receipt: receipt);
+      _cacheRecovered(envelope: envelope, receipt: receipt);
     }
 
     for (final item in prepared.entries) {
@@ -137,16 +276,16 @@ final class ToolGateway {
         continue;
       }
       final value = item.value;
-      _cacheReceipt(
-        request: value.request,
+      _cacheRecovered(
+        envelope: value.envelope,
         receipt: ToolReceipt(
-          requestId: value.request.requestId,
-          idempotencyKey: value.request.idempotencyKey,
+          requestId: value.envelope.requestId,
+          idempotencyKey: value.envelope.idempotencyKey,
           status: ToolReceiptStatus.indeterminate,
           policyReason: 'recovered_prepared_without_terminal',
           result: <String, Object?>{
             'error': 'authoritative_reconciliation_required',
-            'external_id': value.request.idempotencyKey,
+            'external_id': value.envelope.idempotencyKey,
           },
           startedAt: value.startedAt,
           completedAt: _clock.now(),
@@ -154,6 +293,34 @@ final class ToolGateway {
       );
     }
     _policy.restoreConsumed(consumedLeaseIds);
+  }
+
+  ToolAuditEnvelope _envelopeFromPayload(
+    Map<String, Object?> payload,
+    String label,
+  ) {
+    final rawEnvelope = payload['request_envelope'];
+    if (rawEnvelope != null) {
+      final envelope = ToolAuditEnvelope.fromJson(
+        _objectMap(rawEnvelope, '$label.request_envelope'),
+      );
+      if (!_isSha256(envelope.argumentDigest) ||
+          !_isSha256(envelope.requestFingerprint)) {
+        throw StateError('$label contains an invalid digest.');
+      }
+      return envelope;
+    }
+
+    // Backward compatibility: read legacy full-request records, but never emit
+    // another one. Existing local journals therefore migrate on the next write.
+    final request = ToolRequest.fromJson(
+      _objectMap(payload['request'], '$label.request'),
+    );
+    final fingerprint = payload['request_fingerprint'];
+    if (fingerprint is! String || fingerprint != request.fingerprint) {
+      throw StateError('$label request fingerprint mismatch.');
+    }
+    return ToolAuditEnvelope.fromRequest(request);
   }
 
   Future<ToolReceipt> execute({
@@ -204,6 +371,7 @@ final class ToolGateway {
       'action': request.action,
       'idempotency_key': request.idempotencyKey,
       'request_fingerprint': request.fingerprint,
+      'argument_digest': request.argumentDigest,
       'decision': decision.toJson(),
     });
     if (!decision.allowed) {
@@ -225,8 +393,7 @@ final class ToolGateway {
 
     if (request.mutating) {
       await _journal.append('tool.prepared', <String, Object?>{
-        'request': request.toJson(),
-        'request_fingerprint': request.fingerprint,
+        'request_envelope': ToolAuditEnvelope.fromRequest(request).toJson(),
         'lease_id': lease?.leaseId,
         'started_at': startedAt.toIso8601String(),
       });
@@ -290,24 +457,32 @@ final class ToolGateway {
 
   Future<ToolReceipt> reconcile({required String idempotencyKey}) async {
     final prior = _receipts[idempotencyKey];
-    final request = _requests[idempotencyKey];
-    if (prior == null || request == null) {
+    final envelope = _envelopes[idempotencyKey];
+    if (prior == null || envelope == null) {
       throw StateError('Unknown tool receipt $idempotencyKey.');
     }
     if (prior.status != ToolReceiptStatus.indeterminate) {
       return prior.asReplay();
     }
-    final reconciler = _reconcilers[request.action];
-    if (reconciler == null) {
-      throw StateError('Tool ${request.action} has no reconciler.');
-    }
     final externalId =
-        prior.result['external_id']?.toString() ?? request.idempotencyKey;
-    final result = await reconciler(request, externalId);
+        prior.result['external_id']?.toString() ?? envelope.idempotencyKey;
+    final liveRequest = _requests[idempotencyKey];
+    Map<String, Object?> result;
+    if (liveRequest != null && _reconcilers[envelope.action] != null) {
+      result = await _reconcilers[envelope.action]!(liveRequest, externalId);
+    } else {
+      final recoveryReconciler = _recoveryReconcilers[envelope.action];
+      if (recoveryReconciler == null) {
+        throw StateError(
+          'Tool ${envelope.action} has no recovery-safe reconciler.',
+        );
+      }
+      result = await recoveryReconciler(envelope, externalId);
+    }
     final authoritative = result['authoritative'] == true;
     final receipt = ToolReceipt(
-      requestId: request.requestId,
-      idempotencyKey: request.idempotencyKey,
+      requestId: envelope.requestId,
+      idempotencyKey: envelope.idempotencyKey,
       status: authoritative
           ? ToolReceiptStatus.succeeded
           : ToolReceiptStatus.indeterminate,
@@ -316,11 +491,18 @@ final class ToolGateway {
       startedAt: prior.startedAt,
       completedAt: _clock.now(),
     );
-    return _recordTerminal(
-      eventType: 'tool.reconciled',
-      request: request,
-      receipt: receipt,
-    );
+    if (liveRequest != null) {
+      return _recordTerminal(
+        eventType: 'tool.reconciled',
+        request: liveRequest,
+        receipt: receipt,
+      );
+    }
+    await _journal.append('tool.reconciled', <String, Object?>{
+      'request_envelope': envelope.toJson(),
+      'receipt': _receiptAuditJson(receipt),
+    });
+    return _cacheRecovered(envelope: envelope, receipt: receipt);
   }
 
   Future<ToolReceipt> _finalizeWithoutEffect({
@@ -350,21 +532,37 @@ final class ToolGateway {
     required ToolRequest request,
     required ToolReceipt receipt,
   }) async {
+    final envelope = ToolAuditEnvelope.fromRequest(request);
     await _journal.append(eventType, <String, Object?>{
-      'request': request.toJson(),
-      'request_fingerprint': request.fingerprint,
-      'receipt': receipt.toJson(),
+      'request_envelope': envelope.toJson(),
+      'receipt': _receiptAuditJson(receipt),
     });
-    return _cacheReceipt(request: request, receipt: receipt);
+    return _cacheLive(
+      request: request,
+      envelope: envelope,
+      receipt: receipt,
+    );
   }
 
-  ToolReceipt _cacheReceipt({
+  ToolReceipt _cacheLive({
     required ToolRequest request,
+    required ToolAuditEnvelope envelope,
     required ToolReceipt receipt,
   }) {
     _fingerprints[request.idempotencyKey] = request.fingerprint;
     _requests[request.idempotencyKey] = request;
+    _envelopes[request.idempotencyKey] = envelope;
     _receipts[request.idempotencyKey] = receipt;
+    return receipt;
+  }
+
+  ToolReceipt _cacheRecovered({
+    required ToolAuditEnvelope envelope,
+    required ToolReceipt receipt,
+  }) {
+    _fingerprints[envelope.idempotencyKey] = envelope.requestFingerprint;
+    _envelopes[envelope.idempotencyKey] = envelope;
+    _receipts[envelope.idempotencyKey] = receipt;
     return receipt;
   }
 }
