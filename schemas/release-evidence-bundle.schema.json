@@ -4,24 +4,173 @@
   "title": "ReleaseEvidenceBundle",
   "type": "object",
   "additionalProperties": false,
-  "required": ["source"],
+  "required": [
+    "source"
+  ],
   "properties": {
     "source": {
+      "$ref": "#/$defs/sourceEvidence"
+    },
+    "product_attestations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/productAttestation"
+      },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sourceEvidence": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
+        "repository",
         "commit",
         "tree",
         "ci_checks",
         "sbom",
         "provenance",
         "contracts_version"
-      ]
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "commit": {
+          "$ref": "#/$defs/sha1"
+        },
+        "tree": {
+          "$ref": "#/$defs/sha1"
+        },
+        "ci_checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "conclusion"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "conclusion": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "sbom": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256"
+          ],
+          "properties": {
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256"
+          ],
+          "properties": {
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "contracts_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     },
-    "branch_protection": {"type": "object"},
-    "device_qualification": {"type": "array"},
-    "reviews": {"type": "object"},
-    "drills": {"type": "object"},
-    "signing": {"type": "object"},
-    "pilot": {"type": "object"}
+    "productAttestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "kind",
+        "issuer",
+        "key_id",
+        "repository",
+        "commit",
+        "tree",
+        "issued_at",
+        "expires_at",
+        "payload",
+        "signature"
+      ],
+      "properties": {
+        "schema": {
+          "const": "hepta.product-attestation.v1"
+        },
+        "kind": {
+          "enum": [
+            "branch_protection",
+            "device.android",
+            "device.ios",
+            "drill.kill_switch",
+            "drill.rollback",
+            "pilot",
+            "review.legal",
+            "review.privacy",
+            "review.security",
+            "signing.android",
+            "signing.ios",
+            "signing.provenance"
+          ]
+        },
+        "issuer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "key_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "commit": {
+          "$ref": "#/$defs/sha1"
+        },
+        "tree": {
+          "$ref": "#/$defs/sha1"
+        },
+        "issued_at": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expires_at": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "payload": {
+          "type": "object"
+        },
+        "signature": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
   }
 }
