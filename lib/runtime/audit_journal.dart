@@ -51,15 +51,27 @@ final class AuditEntry {
     if (rawPayload is! Map) {
       throw const FormatException('Audit payload must be an object.');
     }
+    final sequence = json['sequence'];
+    final timestamp = json['timestamp'];
+    final eventType = json['event_type'];
+    final previousHash = json['previous_hash'];
+    final hash = json['hash'];
+    if (sequence is! int ||
+        timestamp is! String ||
+        eventType is! String ||
+        previousHash is! String ||
+        hash is! String) {
+      throw const FormatException('Audit entry has invalid field types.');
+    }
     return AuditEntry(
-      sequence: json['sequence']! as int,
-      timestamp: DateTime.parse(json['timestamp']! as String),
-      eventType: json['event_type']! as String,
+      sequence: sequence,
+      timestamp: DateTime.parse(timestamp),
+      eventType: eventType,
       payload: rawPayload.map(
         (key, value) => MapEntry(key.toString(), value as Object?),
       ),
-      previousHash: json['previous_hash']! as String,
-      hash: json['hash']! as String,
+      previousHash: previousHash,
+      hash: hash,
     );
   }
 }
@@ -148,22 +160,44 @@ final class InMemoryAuditJournal
   Future<void> verify() async => verifyEntries(_entries);
 }
 
-/// A single-writer JSONL journal. All reads, verification, and appends share
-/// one asynchronous critical section, so concurrent callers cannot allocate
-/// duplicate sequence numbers or fork the hash chain.
+final class _AuditHead {
+  const _AuditHead(this.sequence, this.hash);
+
+  final int sequence;
+  final String hash;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'schema_version': 1,
+        'sequence': sequence,
+        'hash': hash,
+      };
+}
+
+/// A process-safe JSONL journal.
+///
+/// Every operation takes an OS advisory lock on a stable sibling lock file.
+/// The journal entry is flushed before an atomically replaced head checkpoint,
+/// so process death between the two writes is repaired without replaying a
+/// physical effect. A checkpoint that is ahead of, or inconsistent with, the
+/// hash chain fails closed.
 final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
   JsonlAuditJournal(this.file, {Clock clock = const SystemClock()})
       : _clock = clock;
+
+  static const String contractVersion = 'file-lock-checkpoint-v1';
 
   final File file;
   final Clock _clock;
   Future<void> _tail = Future<void>.value();
 
+  static File lockFileFor(File file) => File('${file.path}.lock');
+  static File checkpointFileFor(File file) => File('${file.path}.head.json');
+
   Future<T> _exclusive<T>(Future<T> Function() operation) {
     final completer = Completer<T>();
     _tail = _tail.then((_) async {
       try {
-        completer.complete(await operation());
+        completer.complete(await _withFileLock(operation));
       } on Object catch (error, stackTrace) {
         completer.completeError(error, stackTrace);
       }
@@ -171,12 +205,29 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
     return completer.future;
   }
 
+  Future<T> _withFileLock<T>(Future<T> Function() operation) async {
+    final lockFile = lockFileFor(file);
+    await lockFile.parent.create(recursive: true);
+    if (!await lockFile.exists()) {
+      await lockFile.create(recursive: true);
+    }
+    final handle = await lockFile.open(mode: FileMode.append);
+    try {
+      await handle.lock(FileLock.exclusive);
+      return await operation();
+    } finally {
+      try {
+        await handle.unlock();
+      } finally {
+        await handle.close();
+      }
+    }
+  }
+
   Future<void> initialize() => _exclusive(() async {
-        await file.parent.create(recursive: true);
-        if (!await file.exists()) {
-          await file.create();
-        }
-        await verifyEntries(await _readAllUnlocked());
+        await _ensureDataFileUnlocked();
+        final entries = await _readAndVerifyUnlocked();
+        await _verifyOrRepairCheckpointUnlocked(entries);
       });
 
   @override
@@ -187,14 +238,15 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
       _exclusive(() async {
         if (eventType.trim().isEmpty) {
           throw ArgumentError.value(
-              eventType, 'eventType', 'must not be empty');
+            eventType,
+            'eventType',
+            'must not be empty',
+          );
         }
-        await file.parent.create(recursive: true);
-        if (!await file.exists()) {
-          await file.create();
-        }
-        final entries = await _readAllUnlocked();
-        await verifyEntries(entries);
+        await _ensureDataFileUnlocked();
+        final entries = await _readAndVerifyUnlocked();
+        await _verifyOrRepairCheckpointUnlocked(entries);
+
         final sequence = entries.length + 1;
         final previousHash = entries.isEmpty ? '' : entries.last.hash;
         final timestamp = _clock.now().toUtc();
@@ -213,24 +265,56 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
           previousHash: previousHash,
           hash: hash,
         );
-        await file.writeAsString(
-          '${canonicalJson(entry.toJson())}\n',
-          mode: FileMode.append,
-          flush: true,
-        );
+
+        final handle = await file.open(mode: FileMode.append);
+        try {
+          await handle.writeString('${canonicalJson(entry.toJson())}\n');
+          await handle.flush();
+        } finally {
+          await handle.close();
+        }
+        await _writeCheckpointUnlocked(_AuditHead(sequence, hash));
         return entry;
       });
 
   @override
-  Future<List<AuditEntry>> readAll() =>
-      _exclusive(() async => List.unmodifiable(await _readAllUnlocked()));
+  Future<List<AuditEntry>> readAll() => _exclusive(() async {
+        await _ensureDataFileUnlocked();
+        final entries = await _readAndVerifyUnlocked();
+        await _verifyOrRepairCheckpointUnlocked(entries);
+        return List.unmodifiable(entries);
+      });
+
+  @override
+  Future<void> verify() => _exclusive(() async {
+        await _ensureDataFileUnlocked();
+        final entries = await _readAndVerifyUnlocked();
+        await _verifyOrRepairCheckpointUnlocked(entries);
+      });
+
+  Future<void> _ensureDataFileUnlocked() async {
+    await file.parent.create(recursive: true);
+    if (!await file.exists()) {
+      await file.create(recursive: true);
+    }
+  }
+
+  Future<List<AuditEntry>> _readAndVerifyUnlocked() async {
+    final entries = await _readAllUnlocked();
+    await verifyEntries(entries);
+    return entries;
+  }
 
   Future<List<AuditEntry>> _readAllUnlocked() async {
     if (!await file.exists()) {
       return const <AuditEntry>[];
     }
-    final lines = await file.readAsLines();
+    final contents = await file.readAsString();
+    if (contents.isNotEmpty && !contents.endsWith('\n')) {
+      throw StateError('Audit journal has a torn final record.');
+    }
     final entries = <AuditEntry>[];
+    final lines = contents.split('\n');
     for (var index = 0; index < lines.length; index++) {
       final line = lines[index].trim();
       if (line.isEmpty) {
@@ -255,7 +339,66 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
     return entries;
   }
 
-  @override
-  Future<void> verify() =>
-      _exclusive(() async => verifyEntries(await _readAllUnlocked()));
+  Future<void> _verifyOrRepairCheckpointUnlocked(
+    List<AuditEntry> entries,
+  ) async {
+    final checkpointFile = checkpointFileFor(file);
+    final journalHead = entries.isEmpty
+        ? const _AuditHead(0, '')
+        : _AuditHead(entries.length, entries.last.hash);
+    if (!await checkpointFile.exists()) {
+      await _writeCheckpointUnlocked(journalHead);
+      return;
+    }
+
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(await checkpointFile.readAsString());
+    } on Object catch (error) {
+      throw StateError('Audit checkpoint is unreadable: $error');
+    }
+    if (decoded is! Map) {
+      throw StateError('Audit checkpoint is not an object.');
+    }
+    final sequence = decoded['sequence'];
+    final hash = decoded['hash'];
+    final schemaVersion = decoded['schema_version'];
+    if (schemaVersion != 1 || sequence is! int || hash is! String) {
+      throw StateError('Audit checkpoint has invalid fields.');
+    }
+    if (sequence < 0 || sequence > entries.length) {
+      throw StateError('Audit checkpoint sequence is outside the journal.');
+    }
+    if (sequence == 0) {
+      if (hash.isNotEmpty) {
+        throw StateError('Empty audit checkpoint has a non-empty hash.');
+      }
+    } else if (entries[sequence - 1].hash != hash) {
+      throw StateError('Audit checkpoint does not match the hash chain.');
+    }
+
+    if (sequence < journalHead.sequence) {
+      await _writeCheckpointUnlocked(journalHead);
+    }
+  }
+
+  Future<void> _writeCheckpointUnlocked(_AuditHead head) async {
+    final checkpointFile = checkpointFileFor(file);
+    await checkpointFile.parent.create(recursive: true);
+    final temporary = File(
+      '${checkpointFile.path}.tmp.$pid.${DateTime.now().microsecondsSinceEpoch}',
+    );
+    await temporary.writeAsString(
+      '${canonicalJson(head.toJson())}\n',
+      flush: true,
+    );
+    try {
+      await temporary.rename(checkpointFile.path);
+    } on FileSystemException {
+      if (await checkpointFile.exists()) {
+        await checkpointFile.delete();
+      }
+      await temporary.rename(checkpointFile.path);
+    }
+  }
 }
