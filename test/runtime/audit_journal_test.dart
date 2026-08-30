@@ -19,6 +19,36 @@ void main() {
     expect(entries.last.previousHash, entries.first.hash);
   });
 
+  test('file audit journal serializes concurrent appenders', () async {
+    final directory =
+        await Directory.systemTemp.createTemp('hepta-audit-race-');
+    addTearDown(() async {
+      await directory.delete(recursive: true);
+    });
+    final journal = JsonlAuditJournal(
+      File('${directory.path}/audit.jsonl'),
+    );
+    await journal.initialize();
+
+    await Future.wait(
+      List<Future<AuditEntry>>.generate(
+        32,
+        (int index) => journal.append(
+          'concurrent.append',
+          <String, Object?>{'index': index},
+        ),
+      ),
+    );
+
+    await journal.verify();
+    final entries = await journal.readAll();
+    expect(entries, hasLength(32));
+    expect(
+      entries.map((AuditEntry entry) => entry.sequence),
+      orderedEquals(List<int>.generate(32, (int index) => index + 1)),
+    );
+  });
+
   test('file audit journal fails closed after tampering', () async {
     final directory = await Directory.systemTemp.createTemp('hepta-audit-');
     addTearDown(() async {

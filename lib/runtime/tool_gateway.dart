@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'audit_journal.dart';
 import 'canonical_json.dart';
 import 'clock.dart';
@@ -190,6 +192,9 @@ final class ToolGateway {
   final Map<String, ToolRequest> _requests = <String, ToolRequest>{};
   final Map<String, ToolAuditEnvelope> _envelopes =
       <String, ToolAuditEnvelope>{};
+  final Map<String, Future<ToolReceipt>> _inFlight =
+      <String, Future<ToolReceipt>>{};
+  final Map<String, String> _inFlightFingerprints = <String, String>{};
 
   void register(
     ToolSpec spec,
@@ -217,6 +222,10 @@ final class ToolGateway {
   /// Rebuilds replay protection, terminal receipts, prepared-but-uncertain
   /// effects, and consumed leases from the durable metadata-only journal.
   Future<void> recover() async {
+    if (_inFlight.isNotEmpty) {
+      throw StateError(
+          'Cannot recover ToolGateway while effects are in flight.');
+    }
     await _journal.verify();
     _receipts.clear();
     _fingerprints.clear();
@@ -328,7 +337,7 @@ final class ToolGateway {
     required ToolRequest request,
     required PolicyContext context,
     DecisionLease? lease,
-  }) async {
+  }) {
     final existing = _receipts[request.idempotencyKey];
     if (existing != null) {
       if (_fingerprints[request.idempotencyKey] != request.fingerprint) {
@@ -336,9 +345,40 @@ final class ToolGateway {
           'Idempotency key was reused with different tool request data.',
         );
       }
-      return existing.asReplay();
+      return Future<ToolReceipt>.value(existing.asReplay());
     }
 
+    final active = _inFlight[request.idempotencyKey];
+    if (active != null) {
+      if (_inFlightFingerprints[request.idempotencyKey] !=
+          request.fingerprint) {
+        throw StateError(
+          'Idempotency key is in flight with different tool request data.',
+        );
+      }
+      return active.then((ToolReceipt receipt) => receipt.asReplay());
+    }
+
+    final operation = _executeOnce(
+      request: request,
+      context: context,
+      lease: lease,
+    );
+    _inFlight[request.idempotencyKey] = operation;
+    _inFlightFingerprints[request.idempotencyKey] = request.fingerprint;
+    return operation.whenComplete(() {
+      if (identical(_inFlight[request.idempotencyKey], operation)) {
+        _inFlight.remove(request.idempotencyKey);
+        _inFlightFingerprints.remove(request.idempotencyKey);
+      }
+    });
+  }
+
+  Future<ToolReceipt> _executeOnce({
+    required ToolRequest request,
+    required PolicyContext context,
+    DecisionLease? lease,
+  }) async {
     final startedAt = _clock.now();
     if (!startedAt.isBefore(request.deadline)) {
       return _finalizeWithoutEffect(
@@ -402,7 +442,18 @@ final class ToolGateway {
     _policy.consume(lease);
 
     try {
-      final result = await handler(request);
+      final remaining = request.deadline.difference(_clock.now());
+      if (remaining <= Duration.zero) {
+        throw IndeterminateToolEffect(
+          '${request.action}:${request.idempotencyKey}',
+        );
+      }
+      final result = await handler(request).timeout(
+        remaining,
+        onTimeout: () => throw IndeterminateToolEffect(
+          '${request.action}:${request.idempotencyKey}',
+        ),
+      );
       final receipt = ToolReceipt(
         requestId: request.requestId,
         idempotencyKey: request.idempotencyKey,
@@ -534,10 +585,34 @@ final class ToolGateway {
     required ToolReceipt receipt,
   }) async {
     final envelope = ToolAuditEnvelope.fromRequest(request);
-    await _journal.append(eventType, <String, Object?>{
-      'request_envelope': envelope.toJson(),
-      'receipt': _receiptAuditJson(receipt),
-    });
+    try {
+      await _journal.append(eventType, <String, Object?>{
+        'request_envelope': envelope.toJson(),
+        'receipt': _receiptAuditJson(receipt),
+      });
+    } on Object catch (error) {
+      if (!request.mutating) {
+        rethrow;
+      }
+      final uncertain = ToolReceipt(
+        requestId: request.requestId,
+        idempotencyKey: request.idempotencyKey,
+        status: ToolReceiptStatus.indeterminate,
+        policyReason: 'terminal_journal_write_failed',
+        result: <String, Object?>{
+          'error': 'terminal_journal_write_failed',
+          'error_type': error.runtimeType.toString(),
+          'external_id': '${request.action}:${request.idempotencyKey}',
+        },
+        startedAt: receipt.startedAt,
+        completedAt: _clock.now(),
+      );
+      return _cacheLive(
+        request: request,
+        envelope: envelope,
+        receipt: uncertain,
+      );
+    }
     return _cacheLive(
       request: request,
       envelope: envelope,

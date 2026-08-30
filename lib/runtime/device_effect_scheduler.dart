@@ -11,8 +11,16 @@ final class _ScheduledEffect {
 /// display writes, settings mutations, and bulk transfers cannot interleave
 /// through the deterministic runtime authority.
 final class DeviceEffectScheduler {
+  DeviceEffectScheduler({this.maxPending = 64}) {
+    if (maxPending < 1) {
+      throw ArgumentError.value(maxPending, 'maxPending', 'must be positive');
+    }
+  }
+
+  final int maxPending;
   final Queue<_ScheduledEffect> _queue = Queue<_ScheduledEffect>();
   bool _draining = false;
+  bool _closed = false;
 
   int get pending => _queue.length + (_draining ? 1 : 0);
 
@@ -22,6 +30,14 @@ final class DeviceEffectScheduler {
   ) {
     if (operation.trim().isEmpty) {
       throw ArgumentError.value(operation, 'operation', 'must not be empty');
+    }
+    if (_closed) {
+      return Future<T>.error(StateError('Device effect scheduler is closed.'));
+    }
+    if (pending >= maxPending) {
+      return Future<T>.error(
+        StateError('Device effect scheduler capacity exceeded.'),
+      );
     }
     final completer = Completer<T>();
     _queue.add(
@@ -35,6 +51,13 @@ final class DeviceEffectScheduler {
     );
     unawaited(_drain());
     return completer.future;
+  }
+
+  Future<void> close() async {
+    _closed = true;
+    while (_draining || _queue.isNotEmpty) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
   }
 
   Future<void> _drain() async {

@@ -31,4 +31,18 @@ void main() {
       <String>['first-start', 'first-end', 'second-start', 'second-end'],
     );
   });
+
+  test('scheduler rejects work beyond its bounded capacity', () async {
+    final scheduler = DeviceEffectScheduler(maxPending: 1);
+    final release = Completer<void>();
+    final first = scheduler.schedule<void>('first', () => release.future);
+    await Future<void>.delayed(Duration.zero);
+
+    await expectLater(
+      scheduler.schedule<void>('second', () async {}),
+      throwsStateError,
+    );
+    release.complete();
+    await first;
+  });
 }

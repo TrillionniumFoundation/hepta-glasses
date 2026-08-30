@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:demo_ai_even/runtime/audit_journal.dart';
@@ -245,6 +246,50 @@ void main() {
       ToolReceiptStatus.indeterminate,
     );
     expect(policy.isConsumed('lease-crash'), isTrue);
+  });
+
+  test('concurrent identical requests execute the effect once', () async {
+    final clock = MutableClock(now);
+    final journal = InMemoryAuditJournal(clock: clock);
+    final gateway = ToolGateway(
+      journal: journal,
+      policy: PolicyEngine(clock: clock),
+      clock: clock,
+    );
+    var effects = 0;
+    final release = Completer<void>();
+    gateway.register(
+      const ToolSpec(
+        action: 'display.show_card',
+        riskTier: RiskTier.r1,
+        mutating: true,
+      ),
+      (ToolRequest request) async {
+        effects++;
+        await release.future;
+        return <String, Object?>{'displayed': true};
+      },
+    );
+
+    final request = displayRequest(idempotencyKey: 'concurrent-display');
+    final first = gateway.execute(
+      request: request,
+      context: context,
+      lease: displayLease(request, id: 'concurrent-lease'),
+    );
+    final replay = gateway.execute(
+      request: request,
+      context: context,
+      lease: displayLease(request, id: 'unused-concurrent-lease'),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(effects, 1);
+    release.complete();
+
+    final receipts = await Future.wait(<Future<ToolReceipt>>[first, replay]);
+    expect(receipts.first.status, ToolReceiptStatus.succeeded);
+    expect(receipts.last.replayed, isTrue);
+    expect(effects, 1);
   });
 
   test('unknown tool fails closed without invoking an effect', () async {

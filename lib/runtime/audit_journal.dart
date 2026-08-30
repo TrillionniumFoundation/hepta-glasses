@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -147,59 +148,84 @@ final class InMemoryAuditJournal
   Future<void> verify() async => verifyEntries(_entries);
 }
 
+/// A single-writer JSONL journal. All reads, verification, and appends share
+/// one asynchronous critical section, so concurrent callers cannot allocate
+/// duplicate sequence numbers or fork the hash chain.
 final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
   JsonlAuditJournal(this.file, {Clock clock = const SystemClock()})
       : _clock = clock;
 
   final File file;
   final Clock _clock;
+  Future<void> _tail = Future<void>.value();
 
-  Future<void> initialize() async {
-    await file.parent.create(recursive: true);
-    if (!await file.exists()) {
-      await file.create();
-    }
-    await verify();
+  Future<T> _exclusive<T>(Future<T> Function() operation) {
+    final completer = Completer<T>();
+    _tail = _tail.then((_) async {
+      try {
+        completer.complete(await operation());
+      } on Object catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future;
   }
+
+  Future<void> initialize() => _exclusive(() async {
+        await file.parent.create(recursive: true);
+        if (!await file.exists()) {
+          await file.create();
+        }
+        await verifyEntries(await _readAllUnlocked());
+      });
 
   @override
   Future<AuditEntry> append(
     String eventType,
     Map<String, Object?> payload,
-  ) async {
-    if (eventType.trim().isEmpty) {
-      throw ArgumentError.value(eventType, 'eventType', 'must not be empty');
-    }
-    final entries = await readAll();
-    await verifyEntries(entries);
-    final sequence = entries.length + 1;
-    final previousHash = entries.isEmpty ? '' : entries.last.hash;
-    final timestamp = _clock.now().toUtc();
-    final hash = AuditEntry.calculateHash(
-      sequence: sequence,
-      timestamp: timestamp,
-      eventType: eventType,
-      payload: payload,
-      previousHash: previousHash,
-    );
-    final entry = AuditEntry(
-      sequence: sequence,
-      timestamp: timestamp,
-      eventType: eventType,
-      payload: Map.unmodifiable(payload),
-      previousHash: previousHash,
-      hash: hash,
-    );
-    await file.writeAsString(
-      '${canonicalJson(entry.toJson())}\n',
-      mode: FileMode.append,
-      flush: true,
-    );
-    return entry;
-  }
+  ) =>
+      _exclusive(() async {
+        if (eventType.trim().isEmpty) {
+          throw ArgumentError.value(
+              eventType, 'eventType', 'must not be empty');
+        }
+        await file.parent.create(recursive: true);
+        if (!await file.exists()) {
+          await file.create();
+        }
+        final entries = await _readAllUnlocked();
+        await verifyEntries(entries);
+        final sequence = entries.length + 1;
+        final previousHash = entries.isEmpty ? '' : entries.last.hash;
+        final timestamp = _clock.now().toUtc();
+        final hash = AuditEntry.calculateHash(
+          sequence: sequence,
+          timestamp: timestamp,
+          eventType: eventType,
+          payload: payload,
+          previousHash: previousHash,
+        );
+        final entry = AuditEntry(
+          sequence: sequence,
+          timestamp: timestamp,
+          eventType: eventType,
+          payload: Map.unmodifiable(payload),
+          previousHash: previousHash,
+          hash: hash,
+        );
+        await file.writeAsString(
+          '${canonicalJson(entry.toJson())}\n',
+          mode: FileMode.append,
+          flush: true,
+        );
+        return entry;
+      });
 
   @override
-  Future<List<AuditEntry>> readAll() async {
+  Future<List<AuditEntry>> readAll() =>
+      _exclusive(() async => List.unmodifiable(await _readAllUnlocked()));
+
+  Future<List<AuditEntry>> _readAllUnlocked() async {
     if (!await file.exists()) {
       return const <AuditEntry>[];
     }
@@ -226,9 +252,10 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
         throw StateError('Invalid audit journal line ${index + 1}: $error');
       }
     }
-    return List.unmodifiable(entries);
+    return entries;
   }
 
   @override
-  Future<void> verify() async => verifyEntries(await readAll());
+  Future<void> verify() =>
+      _exclusive(() async => verifyEntries(await _readAllUnlocked()));
 }
