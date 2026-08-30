@@ -75,8 +75,13 @@ class DeviceRegistry:
         if not device_id or not subject or len(attestation_digest) != 64:
             raise IdentityError("device_registration_invalid")
         existing = self._records.get(device_id)
-        if existing is not None and existing.subject != subject:
-            raise IdentityError("device_subject_conflict")
+        if existing is not None:
+            if existing.subject != subject:
+                raise IdentityError("device_subject_conflict")
+            if existing.status != "active":
+                raise IdentityError("device_reactivation_requires_recovery")
+            if existing.attestation_digest != attestation_digest:
+                raise IdentityError("device_attestation_conflict")
         record = DeviceRecord(
             device_id=device_id,
             subject=subject,
