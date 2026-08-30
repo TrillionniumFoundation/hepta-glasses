@@ -17,10 +17,11 @@ class IdentityTest(unittest.TestCase):
     def setUp(self) -> None:
         self.now = 1_800_000_000
         self.devices = DeviceRegistry()
+        self.attestation_digest = hashlib.sha256(b"attestation").hexdigest()
         self.devices.register(
             device_id="g1-001",
             subject="user-1",
-            attestation_digest=hashlib.sha256(b"attestation").hexdigest(),
+            attestation_digest=self.attestation_digest,
             now=self.now,
         )
         self.revocations = RevocationLedger()
@@ -55,6 +56,47 @@ class IdentityTest(unittest.TestCase):
         self.assertEqual(claims.subject, "user-1")
         self.assertEqual(claims.device_id, "g1-001")
         self.assertEqual(claims.token_id, "token-1")
+
+    def test_registration_is_idempotent_but_attestation_drift_is_rejected(self) -> None:
+        repeated = self.devices.register(
+            device_id="g1-001",
+            subject="user-1",
+            attestation_digest=self.attestation_digest,
+            now=self.now + 10,
+        )
+        self.assertEqual(repeated.registered_at, self.now)
+        with self.assertRaises(IdentityError) as drift:
+            self.devices.register(
+                device_id="g1-001",
+                subject="user-1",
+                attestation_digest=hashlib.sha256(b"different").hexdigest(),
+                now=self.now + 20,
+            )
+        self.assertEqual(drift.exception.code, "device_attestation_conflict")
+
+    def test_lost_or_revoked_device_cannot_self_reactivate_by_registering(self) -> None:
+        for status in ("lost", "revoked"):
+            with self.subTest(status=status):
+                devices = DeviceRegistry()
+                devices.register(
+                    device_id="g1-001",
+                    subject="user-1",
+                    attestation_digest=self.attestation_digest,
+                    now=self.now,
+                )
+                devices.set_status("g1-001", status)
+                with self.assertRaises(IdentityError) as raised:
+                    devices.register(
+                        device_id="g1-001",
+                        subject="user-1",
+                        attestation_digest=self.attestation_digest,
+                        now=self.now + 1,
+                    )
+                self.assertEqual(
+                    raised.exception.code,
+                    "device_reactivation_requires_recovery",
+                )
+                self.assertEqual(devices.get("g1-001").status, status)
 
     def test_rotation_keeps_old_key_until_retired(self) -> None:
         old = self.issue()
