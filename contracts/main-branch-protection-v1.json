@@ -4,6 +4,8 @@
     "contexts": [
       "repository-contracts",
       "flutter",
+      "android-native",
+      "ios-native",
       "secret-and-boundary-scan",
       "source-evidence"
     ]

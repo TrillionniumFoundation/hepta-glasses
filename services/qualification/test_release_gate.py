@@ -11,7 +11,9 @@ class ReleaseGateTest(unittest.TestCase):
             "commit": "a" * 40,
             "tree": "b" * 40,
             "ci_checks": [
+                {"name": "android-native", "conclusion": "success"},
                 {"name": "flutter", "conclusion": "success"},
+                {"name": "ios-native", "conclusion": "success"},
                 {"name": "repository-contracts", "conclusion": "success"},
                 {"name": "secret-and-boundary-scan", "conclusion": "success"},
                 {"name": "source-evidence", "conclusion": "success"},
@@ -24,6 +26,17 @@ class ReleaseGateTest(unittest.TestCase):
     def test_source_mode_passes_without_claiming_product_release(self) -> None:
         result = ReleaseGate().evaluate({"source": self.source()}, mode="source")
         self.assertTrue(result.passed)
+
+    def test_source_mode_fails_when_native_platform_does_not_build(self) -> None:
+        source = self.source()
+        source["ci_checks"] = [
+            item
+            for item in source["ci_checks"]
+            if isinstance(item, dict) and item["name"] != "ios-native"
+        ]
+        result = ReleaseGate().evaluate({"source": source}, mode="source")
+        self.assertFalse(result.passed)
+        self.assertIn("required_ci", result.missing)
 
     def test_product_mode_requires_every_external_evidence_class(self) -> None:
         result = ReleaseGate().evaluate({"source": self.source()}, mode="product")
@@ -40,7 +53,9 @@ class ReleaseGateTest(unittest.TestCase):
                 "required_approvals": 1,
                 "force_pushes_allowed": False,
                 "required_checks": [
+                    "android-native",
                     "flutter",
+                    "ios-native",
                     "repository-contracts",
                     "secret-and-boundary-scan",
                     "source-evidence",

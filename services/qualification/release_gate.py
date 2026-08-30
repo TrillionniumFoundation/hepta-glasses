@@ -31,12 +31,16 @@ class GateResult:
 class ReleaseGate:
     SOURCE_REQUIRED_CI_CHECKS = frozenset(
         {
+            "android-native",
             "flutter",
+            "ios-native",
             "repository-contracts",
             "secret-and-boundary-scan",
         }
     )
-    PRODUCT_REQUIRED_CI_CHECKS = SOURCE_REQUIRED_CI_CHECKS | frozenset({"source-evidence"})
+    PRODUCT_REQUIRED_CI_CHECKS = SOURCE_REQUIRED_CI_CHECKS | frozenset(
+        {"source-evidence"}
+    )
 
     def evaluate(self, bundle: Mapping[str, Any], *, mode: str) -> GateResult:
         if mode not in {"source", "product"}:
@@ -54,7 +58,8 @@ class ReleaseGate:
             "exact_commit": self._digest(source.get("commit"), 40),
             "exact_tree": self._digest(source.get("tree"), 40),
             "required_ci": all(
-                ci_map.get(name) == "success" for name in self.SOURCE_REQUIRED_CI_CHECKS
+                ci_map.get(name) == "success"
+                for name in self.SOURCE_REQUIRED_CI_CHECKS
             ),
             "sbom": self._digest(
                 self._nested(source, "sbom", "sha256"), 64

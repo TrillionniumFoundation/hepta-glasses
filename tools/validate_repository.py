@@ -45,6 +45,9 @@ REQUIRED = {
     "lib/runtime/packet_codec.dart",
     "lib/runtime/dual_leg_coordinator.dart",
     "lib/runtime/model_gateway.dart",
+    "lib/runtime/assistant_session.dart",
+    "lib/runtime/device_effect_scheduler.dart",
+    "lib/runtime/hepta_runtime.dart",
     "lib/simulator/g1_digital_twin.dart",
     "services/control_plane/identity.py",
     "services/control_plane/realtime.py",
@@ -77,7 +80,9 @@ FORBIDDEN_PATTERNS = {
     "Codex sandbox bypass": re.compile(
         r"dangerously-bypass-approvals-and-sandbox|--yolo|danger-full-access"
     ),
-    "private key material": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    "private key material": re.compile(
+        r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"
+    ),
     "GitHub token material": re.compile(r"gh[pousr]_[A-Za-z0-9]{30,}"),
 }
 
@@ -98,8 +103,10 @@ ALLOWED_GAP_STATUSES = {
     "OPEN",
 }
 EXPECTED_CHECKS = {
-    "repository-contracts",
+    "android-native",
     "flutter",
+    "ios-native",
+    "repository-contracts",
     "secret-and-boundary-scan",
     "source-evidence",
 }
@@ -257,8 +264,11 @@ def validate_governance_contract() -> None:
 def validate_exact_head_workflow() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     expression = "${{ github.event.pull_request.head.sha || github.sha }}"
-    if workflow.count(f"ref: {expression}") < 4:
+    if workflow.count(f"ref: {expression}") < 6:
         fail("all CI jobs must explicitly check out the PR head or push SHA")
+    for required_job in EXPECTED_CHECKS:
+        if required_job not in workflow:
+            fail(f"workflow is missing required job {required_job}")
     if f"name: hepta-source-evidence-{expression}" not in workflow:
         fail("source evidence artifact name is not bound to the exact head SHA")
     if "Verify artifact is bound to PR head" not in workflow:

@@ -44,6 +44,37 @@ jobs:
       - run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - run: flutter test
 
+  android-native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build apk --debug
+
+  ios-native:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build ios --simulator --debug
+
   secret-and-boundary-scan:
     runs-on: ubuntu-latest
     steps:
@@ -61,6 +92,8 @@ jobs:
     needs:
       - repository-contracts
       - flutter
+      - android-native
+      - ios-native
       - secret-and-boundary-scan
     steps:
       - uses: actions/checkout@v4
@@ -74,6 +107,8 @@ jobs:
         env:
           CI_REPOSITORY_CONTRACTS: ${{ needs.repository-contracts.result }}
           CI_FLUTTER: ${{ needs.flutter.result }}
+          CI_ANDROID_NATIVE: ${{ needs.android-native.result }}
+          CI_IOS_NATIVE: ${{ needs.ios-native.result }}
           CI_SECRET_SCAN: ${{ needs.secret-and-boundary-scan.result }}
         run: python3 tools/build_source_evidence.py --output-dir build/evidence
       - name: Verify artifact is bound to PR head

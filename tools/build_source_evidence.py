@@ -53,7 +53,7 @@ def main() -> int:
     )
     sbom_digest = write_json(output / "source-sbom.spdx.json", sbom)
     provenance = {
-        "builder": "github-actions/hepta-source-evidence-v1",
+        "builder": "github-actions/hepta-source-evidence-v2",
         "commit": commit,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "repository": repository,
@@ -69,6 +69,14 @@ def main() -> int:
         {
             "name": "flutter",
             "conclusion": os.environ.get("CI_FLUTTER", "unknown"),
+        },
+        {
+            "name": "android-native",
+            "conclusion": os.environ.get("CI_ANDROID_NATIVE", "unknown"),
+        },
+        {
+            "name": "ios-native",
+            "conclusion": os.environ.get("CI_IOS_NATIVE", "unknown"),
         },
         {
             "name": "secret-and-boundary-scan",
