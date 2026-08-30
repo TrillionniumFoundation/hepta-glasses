@@ -9,41 +9,29 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 object BleChannelHelper {
-
-    /// METHOD TAG
     private const val METHOD_CHANNEL_BLE_TAG = "method.bluetooth"
-
-    /// EVENT TAG
     private const val EVENT_BLE_STATUS = "eventBleStatus"
     private const val EVENT_BLE_RECEIVE = "eventBleReceive"
     private const val EVENT_BLE_SPEECH_RECOGNIZE = "eventSpeechRecognize"
 
-    /// Save EventSink
     private val eventSinks: MutableMap<String, EventSink> = mutableMapOf()
-    ///
     private lateinit var bleMethodChannel: BleMethodChannel
+
     val bleMC: BleMethodChannel
         get() = bleMethodChannel
 
-
-    //*================ Method - Public ================*//
-
-    /**
-     *
-     */
     fun initChannel(context: MainActivity, flutterEngine: FlutterEngine) {
         val binaryMessenger = flutterEngine.dartExecutor.binaryMessenger
-        //  Method
-        bleMethodChannel = BleMethodChannel(MethodChannel(binaryMessenger, METHOD_CHANNEL_BLE_TAG))
-        //  Event
+        bleMethodChannel = BleMethodChannel(
+            context,
+            MethodChannel(binaryMessenger, METHOD_CHANNEL_BLE_TAG),
+        )
         EventChannel(binaryMessenger, EVENT_BLE_STATUS).setStreamHandler(context)
         EventChannel(binaryMessenger, EVENT_BLE_RECEIVE).setStreamHandler(context)
-        EventChannel(binaryMessenger, EVENT_BLE_SPEECH_RECOGNIZE).setStreamHandler(context)
+        EventChannel(binaryMessenger, EVENT_BLE_SPEECH_RECOGNIZE)
+            .setStreamHandler(context)
     }
 
-    /**
-     *
-     */
     fun addEventSink(eventTag: String?, eventSink: EventSink?) {
         if (eventTag == null || eventSink == null) {
             return
@@ -51,74 +39,76 @@ object BleChannelHelper {
         eventSinks[eventTag] = eventSink
     }
 
-    /**
-     *
-     */
     fun removeEventSink(eventTag: String?) {
-        eventTag?.let {
-            eventSinks.remove(it)
-        }
+        eventTag?.let(eventSinks::remove)
     }
-
-    //*================ Method - Event Channel ================*//
 
     fun bleStatus(data: Any) = eventSinks[EVENT_BLE_STATUS]?.success(data)
 
     fun bleReceive(data: Any) = eventSinks[EVENT_BLE_RECEIVE]?.success(data)
 
-    fun bleSpeechRecognize(data: Any) = eventSinks[EVENT_BLE_SPEECH_RECOGNIZE]?.success(data)
-
+    fun bleSpeechRecognize(data: Any) =
+        eventSinks[EVENT_BLE_SPEECH_RECOGNIZE]?.success(data)
 }
 
-///
 class BleMethodChannel(
-   private val methodChannel: MethodChannel
+    private val context: MainActivity,
+    private val methodChannel: MethodChannel,
 ) {
-
     init {
-        methodChannel.setMethodCallHandler { call, result ->
-            this::class.members.find { it.name == call.method }?.call(this, call, result)
+        methodChannel.setMethodCallHandler(::handle)
+    }
+
+    private fun handle(call: MethodCall, result: MethodChannel.Result) {
+        when (call.method) {
+            "startScan" -> BleManager.instance.startScan(result)
+            "stopScan" -> BleManager.instance.stopScan(result)
+            "connectToGlasses" -> connectToGlasses(call, result)
+            "disconnectFromGlasses" ->
+                BleManager.instance.disconnectFromGlasses(result)
+            "send" -> send(call, result)
+            "startEvenAI", "stopEvenAI" -> result.success(null)
+            "getApplicationSupportPath" ->
+                result.success(context.filesDir.absolutePath)
+            else -> result.notImplemented()
         }
     }
 
-    //* =================== Native Call Flutter =================== *//
-
-    fun startScan(call: MethodCall, result: MethodChannel.Result) = BleManager.instance.startScan(result)
-
-    fun stopScan(call: MethodCall, result: MethodChannel.Result) = BleManager.instance.stopScan(result)
-
-    fun connectToGlasses(call: MethodCall, result: MethodChannel.Result) {
-        val deviceChannel: String = (call.arguments as? Map<*, *>)?.get("deviceName") as? String ?: ""
+    private fun connectToGlasses(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
+        val deviceChannel =
+            (call.arguments as? Map<*, *>)?.get("deviceName") as? String ?: ""
         if (deviceChannel.isEmpty()) {
-            result.error("InvalidArguments", "Invalid arguments", null)
+            result.error("InvalidArguments", "deviceName is required", null)
             return
         }
-        BleManager.instance.connectToGlass(deviceChannel.replace("Pair_", ""), result)
+        BleManager.instance.connectToGlass(
+            deviceChannel.replace("Pair_", ""),
+            result,
+        )
     }
 
-    fun disconnectFromGlasses(call: MethodCall, result: MethodChannel.Result) = BleManager.instance.disconnectFromGlasses(result)
-
-    fun send(call: MethodCall, result: MethodChannel.Result) {
-        BleManager.instance.senData(call.arguments as? Map<*, *>)
+    private fun send(call: MethodCall, result: MethodChannel.Result) {
+        val arguments = call.arguments as? Map<*, *>
+        if (arguments == null) {
+            result.error("InvalidArguments", "send arguments are required", null)
+            return
+        }
+        BleManager.instance.senData(arguments)
         result.success(null)
     }
 
-    fun startEvenAI(call: MethodCall, result: MethodChannel.Result) {
-        result.success(null)
-    }
+    fun flutterFoundPairedGlasses(device: BlePairDevice) =
+        methodChannel.invokeMethod("foundPairedGlasses", device.toInfoJson())
 
-    fun stopEvenAI(call: MethodCall, result: MethodChannel.Result) {
-        result.success(null)
-    }
+    fun flutterGlassesConnected(deviceInfo: Map<String, Any>) =
+        methodChannel.invokeMethod("glassesConnected", deviceInfo)
 
-    //* =================== Flutter Call Native =================== *//
+    fun flutterGlassesConnecting(deviceInfo: Map<String, Any>) =
+        methodChannel.invokeMethod("glassesConnecting", deviceInfo)
 
-    fun flutterFoundPairedGlasses(device: BlePairDevice) = methodChannel.invokeMethod("foundPairedGlasses", device.toInfoJson())
-
-    fun flutterGlassesConnected(deviceInfo: Map<String, Any>) = methodChannel.invokeMethod("glassesConnected", deviceInfo)
-
-    fun flutterGlassesConnecting(deviceInfo: Map<String, Any>) = methodChannel.invokeMethod("glassesConnecting", deviceInfo)
-
-    fun flutterGlassesDisconnected(deviceInfo: Map<String, Any>) = methodChannel.invokeMethod("glassesDisconnected", deviceInfo)
-
+    fun flutterGlassesDisconnected(deviceInfo: Map<String, Any>) =
+        methodChannel.invokeMethod("glassesDisconnected", deviceInfo)
 }
