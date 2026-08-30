@@ -81,6 +81,7 @@ def main() -> int:
             "commit": commit,
             "contracts_version": args.contracts_version,
             "provenance": {"sha256": provenance_digest},
+            "repository": repository,
             "sbom": {"sha256": sbom_digest},
             "tree": tree,
         }
@@ -91,6 +92,7 @@ def main() -> int:
         "file_count": len(sbom["files"]),
         "package_count": len(sbom["packages"]),
         "provenance_digest": provenance_digest,
+        "repository": repository,
         "sbom_digest": sbom_digest,
         "tree": tree,
     }
