@@ -3,6 +3,7 @@
   "version": 1,
   "source_gate": {
     "required": [
+      "exact_repository",
       "exact_commit",
       "exact_tree",
       "repository-contracts",
@@ -14,6 +15,31 @@
     ]
   },
   "product_gate": {
+    "evidence_authority": "signed_exact_head_attestations",
+    "attestation_binding": [
+      "repository",
+      "commit",
+      "tree",
+      "issuer",
+      "key_id",
+      "kind",
+      "issued_at",
+      "expires_at"
+    ],
+    "required_attestation_kinds": [
+      "branch_protection",
+      "device.android",
+      "device.ios",
+      "drill.kill_switch",
+      "drill.rollback",
+      "pilot",
+      "review.legal",
+      "review.privacy",
+      "review.security",
+      "signing.android",
+      "signing.ios",
+      "signing.provenance"
+    ],
     "required": [
       "protected_main",
       "independent_review",
@@ -26,12 +52,14 @@
       "rollback_drill",
       "android_signing_evidence",
       "ios_signing_evidence",
+      "release_provenance",
       "pilot_cohort",
       "pilot_crash_free_rate",
       "zero_duplicate_effects"
     ]
   },
   "forbidden_substitutions": [
+    "caller_authored_json_for_signed_attestation",
     "digital_twin_for_physical_device",
     "source_test_for_production_credentials",
     "self_review_for_independent_review",
