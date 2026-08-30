@@ -1,169 +1,120 @@
 import 'dart:async';
 import 'dart:math';
+
+import 'package:demo_ai_even/runtime/contracts.dart';
+import 'package:demo_ai_even/runtime/hepta_runtime.dart';
 import 'package:demo_ai_even/services/evenai.dart';
-import 'package:demo_ai_even/services/proto.dart';
 
 class TextService {
+  TextService._();
+
   static TextService? _instance;
   static TextService get get => _instance ??= TextService._();
+
+  static const int _linesPerPage = 5;
+  static const Duration _pageInterval = Duration(seconds: 8);
+
   static bool isRunning = false;
-  static int maxRetry = 5;
   static int _currentLine = 0;
   static Timer? _timer;
-  static List<String> list = [];
-  static List<String> sendReplys = [];
+  static List<String> list = <String>[];
+  static List<String> sendReplys = <String>[];
 
-  TextService._(); 
+  RuntimeEffectScope? _scope;
+  bool _sendInFlight = false;
 
-  Future startSendText(String text) async {
-    isRunning = true;
-
-    _currentLine = 0;
+  Future<bool> startSendText(String text) async {
+    clear();
     list = EvenAIDataMethod.measureStringList(text);
-   
-    if (list.length < 4) {
-      String startScreenWords =
-          list.sublist(0, min(3, list.length)).map((str) => '$str\n').join();
-      String headString = '\n\n';
-      startScreenWords = headString + startScreenWords;
-
-      await doSendText(startScreenWords, 0x01, 0x70, 0);
-      return;
-    }
-
-    if (list.length == 4) {
-      String startScreenWords =
-          list.sublist(0, 4).map((str) => '$str\n').join();
-      String headString = '\n';
-      startScreenWords = headString + startScreenWords;
-      await doSendText(startScreenWords, 0x01, 0x70, 0);
-      return;
-    }
-
-    if (list.length == 5) {
-      String startScreenWords =
-          list.sublist(0, 5).map((str) => '$str\n').join();
-      await doSendText(startScreenWords, 0x01, 0x70, 0);
-      return;
-    }
-
-    String startScreenWords = list.sublist(0, 5).map((str) => '$str\n').join();
-    bool isSuccess = await doSendText(startScreenWords, 0x01, 0x70, 0);
-    if (isSuccess) {
-      _currentLine = 0;
-      await updateReplyToOSByTimer();
-    } else {
-      clear(); 
-    }
-  }
-
-  int retryCount = 0;
-  Future<bool> doSendText(String text, int type, int status, int pos) async {
-   
-    print('${DateTime.now()} doSendText--currentPage---${getCurrentPage()}-----text----$text-----type---$type---status---$status----pos---$pos-');
-    if (!isRunning) {
+    if (list.isEmpty) {
       return false;
     }
 
-    bool isSuccess = await Proto.sendEvenAIData(text,
-        newScreen: EvenAIDataMethod.transferToNewScreen(type, status),
-        pos: pos,
-        current_page_num: getCurrentPage(),
-        max_page_num: getTotalPages()); // todo pos
-    if (!isSuccess) {
-      if (retryCount < maxRetry) {
-        retryCount++;
-        await doSendText(text, type, status, pos);
-      } else {
-        retryCount = 0;
-        return false;
-      }
+    isRunning = true;
+    _scope = HeptaRuntime.current.beginEffectScope('manual-text');
+    _currentLine = 0;
+    final success = await _sendCurrentPage();
+    if (!success) {
+      clear();
+      return false;
     }
-    retryCount = 0;
+    if (getTotalPages() > 1) {
+      _timer = Timer.periodic(_pageInterval, (_) {
+        unawaited(_advancePage());
+      });
+    }
     return true;
   }
 
-  Future updateReplyToOSByTimer() async {
-    if (!isRunning) return;
-    int interval = 8; // The paging interval can be customized
-   
-    _timer?.cancel();
-    _timer = Timer.periodic(Duration(seconds: interval), (timer) async {
-
-      _currentLine = min(_currentLine + 5, list.length - 1);
-      sendReplys = list.sublist(_currentLine);
-
-      if (_currentLine > list.length - 1) {
-        _timer?.cancel();
-        _timer = null;
-
-        clear();
-      } else {
-        if (sendReplys.length < 4) {
-          var mergedStr = sendReplys
-              .sublist(0, sendReplys.length)
-              .map((str) => '$str\n')
-              .join();
-
-          if (_currentLine >= list.length - 5) {
-            await doSendText(mergedStr, 0x01, 0x70, 0);
-            _timer?.cancel();
-            _timer = null;
-          } else {
-            await doSendText(mergedStr, 0x01, 0x70, 0);
-          }
-        } else {
-          var mergedStr = sendReplys
-              .sublist(0, min(5, sendReplys.length))
-              .map((str) => '$str\n')
-              .join();
-
-          if (_currentLine >= list.length - 5) {
-            await doSendText(mergedStr, 0x01, 0x70, 0);
-            _timer?.cancel();
-            _timer = null;
-          } else {
-            await doSendText(mergedStr, 0x01, 0x70, 0);
-          }
-        }
-      }
-    });
+  Future<bool> doSendText(
+    String text,
+    int type,
+    int status,
+    int position,
+  ) async {
+    final scope = _scope;
+    if (!isRunning || scope == null || _sendInFlight) {
+      return false;
+    }
+    _sendInFlight = true;
+    try {
+      final receipt = await HeptaRuntime.current.displayTextInScope(
+        scope: scope,
+        text: text,
+        newScreen: EvenAIDataMethod.transferToNewScreen(type, status),
+        position: position,
+        currentPageNumber: getCurrentPage(),
+        maxPageNumber: getTotalPages(),
+      );
+      return receipt.status == ToolReceiptStatus.succeeded;
+    } finally {
+      _sendInFlight = false;
+    }
   }
 
-  int getTotalPages() {
-    if (list.isEmpty) {
-      return 0;
+  Future<void> _advancePage() async {
+    if (!isRunning || _sendInFlight) {
+      return;
     }
-    if (list.length < 6) {
-      return 1;
+    final next = _currentLine + _linesPerPage;
+    if (next >= list.length) {
+      _timer?.cancel();
+      _timer = null;
+      isRunning = false;
+      return;
     }
-    int pages = 0;
-    int div = list.length ~/ 5;
-    int rest = list.length % 5;
-    pages = div;
-    if (rest != 0) {
-      pages++;
+    _currentLine = next;
+    final success = await _sendCurrentPage();
+    if (!success || _currentLine + _linesPerPage >= list.length) {
+      _timer?.cancel();
+      _timer = null;
+      isRunning = false;
     }
-    return pages;
   }
 
-  int getCurrentPage() {
-    if (_currentLine == 0) {
-      return 1;
-    }
-    int currentPage = 1;
-    int div = _currentLine ~/ 5;
-    int rest = _currentLine % 5;
-    currentPage = 1 + div;
-    if (rest != 0) {
-      currentPage++;
-    }
-    return currentPage;
+  Future<bool> _sendCurrentPage() {
+    final text = _pageText(_currentLine);
+    return doSendText(text, 0x01, 0x70, 0);
   }
 
-  Future stopTextSendingByOS() async {
-    print("stopTextSendingByOS---------------");
-    isRunning = false;
+  String _pageText(int start) {
+    if (start < 0 || start >= list.length) {
+      return '';
+    }
+    final end = min(start + _linesPerPage, list.length);
+    final lines = list.sublist(start, end);
+    final leadingBlankLines = max(0, (_linesPerPage - lines.length) ~/ 2);
+    final prefix = List<String>.filled(leadingBlankLines, '').join('\n');
+    return '${prefix.isEmpty ? '' : '$prefix\n'}${lines.join('\n')}\n';
+  }
+
+  int getTotalPages() =>
+      list.isEmpty ? 0 : (list.length + _linesPerPage - 1) ~/ _linesPerPage;
+
+  int getCurrentPage() =>
+      list.isEmpty ? 0 : (_currentLine ~/ _linesPerPage) + 1;
+
+  Future<void> stopTextSendingByOS() async {
     clear();
   }
 
@@ -172,8 +123,9 @@ class TextService {
     _currentLine = 0;
     _timer?.cancel();
     _timer = null;
-    list = [];
-    sendReplys = [];
-    retryCount = 0;
+    list = <String>[];
+    sendReplys = <String>[];
+    _scope = null;
+    _sendInFlight = false;
   }
 }
