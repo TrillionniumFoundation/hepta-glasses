@@ -70,11 +70,54 @@ import UIKit
                 }
                 result(self.blueInstance.sendData(params: parameters))
             case "startEvenAI":
-                SpeechStreamRecognizer.shared.startRecognition(identifier: "EN")
-                result(nil)
+                guard
+                    let arguments = call.arguments as? [String: Any],
+                    let generation = arguments["generation"] as? Int,
+                    generation > 0
+                else {
+                    result(
+                        FlutterError(
+                            code: "InvalidArguments",
+                            message: "assistant generation is required",
+                            details: nil
+                        )
+                    )
+                    return
+                }
+                guard SpeechStreamRecognizer.shared.startRecognition(
+                    identifier: "EN",
+                    generation: generation
+                ) else {
+                    result(
+                        FlutterError(
+                            code: "SpeechRecognitionUnavailable",
+                            message: "On-device speech recognition is unavailable",
+                            details: nil
+                        )
+                    )
+                    return
+                }
+                result(true)
             case "stopEvenAI":
-                SpeechStreamRecognizer.shared.stopRecognition()
-                result(nil)
+                guard
+                    let arguments = call.arguments as? [String: Any],
+                    let generation = arguments["generation"] as? Int,
+                    generation > 0
+                else {
+                    result(
+                        FlutterError(
+                            code: "InvalidArguments",
+                            message: "assistant generation is required",
+                            details: nil
+                        )
+                    )
+                    return
+                }
+                result(
+                    SpeechStreamRecognizer.shared.stopRecognition(
+                        generation: generation
+                    )
+                )
             case "getApplicationSupportPath":
                 do {
                     let root = try FileManager.default.url(

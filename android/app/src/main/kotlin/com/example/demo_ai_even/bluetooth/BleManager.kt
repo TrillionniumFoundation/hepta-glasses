@@ -48,6 +48,7 @@ class BleManager private constructor() {
     private val discoveredDevices: MutableList<BleDevice> = mutableListOf()
     private var connectedDevice: BlePairDevice? = null
     private val readyAddresses: MutableSet<String> = mutableSetOf()
+    private val intentionalDisconnectAddresses: MutableSet<String> = mutableSetOf()
     private var connectionGeneration = 0
     private val mainScope: CoroutineScope = MainScope()
 
@@ -145,10 +146,11 @@ class BleManager private constructor() {
             result.error("ActivityUnavailable", "Activity is unavailable", null)
             return
         }
+        val generation = connectionGeneration
         bluetoothAdapter.getRemoteDevice(left.address)
-            .connectGatt(activity, false, gattCallback)
+            .connectGatt(activity, false, gattCallback(generation))
         bluetoothAdapter.getRemoteDevice(right.address)
-            .connectGatt(activity, false, gattCallback)
+            .connectGatt(activity, false, gattCallback(generation))
         result.success("Connecting to G1_$deviceChannel ...")
     }
 
@@ -186,12 +188,26 @@ class BleManager private constructor() {
         return BlePermissionUtil.checkBluetoothPermission(activity)
     }
 
-    private val gattCallback = object : BluetoothGattCallback() {
+    private fun gattCallback(generation: Int): BluetoothGattCallback =
+        object : BluetoothGattCallback() {
+        private fun current(gatt: BluetoothGatt): Boolean {
+            if (generation == connectionGeneration) {
+                return true
+            }
+            intentionalDisconnectAddresses.remove(gatt.device.address)
+            try {
+                gatt.close()
+            } catch (error: Exception) {
+                Log.w(LOG_TAG, "Stale GATT close failed", error)
+            }
+            return false
+        }
         override fun onConnectionStateChange(
             gatt: BluetoothGatt,
             status: Int,
             newState: Int,
         ) {
+            if (!current(gatt)) return
             when {
                 status != BluetoothGatt.GATT_SUCCESS -> {
                     handleDisconnected(gatt, "gatt_status_$status")
@@ -208,6 +224,7 @@ class BleManager private constructor() {
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+            if (!current(gatt)) return
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 handleDisconnected(gatt, "service_discovery_failed_$status")
                 return
@@ -265,6 +282,7 @@ class BleManager private constructor() {
             descriptor: BluetoothGattDescriptor,
             status: Int,
         ) {
+            if (!current(gatt)) return
             if (descriptor.uuid != UUID.fromString(CLIENT_CONFIGURATION_UUID)) {
                 return
             }
@@ -280,6 +298,7 @@ class BleManager private constructor() {
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic,
         ) {
+            if (!current(gatt)) return
             @Suppress("DEPRECATION")
             handleCharacteristic(gatt, characteristic.value ?: return)
         }
@@ -289,6 +308,7 @@ class BleManager private constructor() {
             characteristic: BluetoothGattCharacteristic,
             value: ByteArray,
         ) {
+            if (!current(gatt)) return
             handleCharacteristic(gatt, value)
         }
     }
@@ -314,7 +334,11 @@ class BleManager private constructor() {
             weakActivity.get()?.runOnUiThread {
                 BleChannelHelper.bleMC.flutterGlassesConnected(
                     pair.toConnectedJson() +
-                        mapOf("generation" to connectionGeneration),
+                        mapOf(
+                            "left_connected" to true,
+                            "right_connected" to true,
+                            "generation" to connectionGeneration,
+                        ),
                 )
             }
         }
@@ -355,6 +379,14 @@ class BleManager private constructor() {
     }
 
     private fun handleDisconnected(gatt: BluetoothGatt, reason: String) {
+        if (intentionalDisconnectAddresses.remove(gatt.device.address)) {
+            try {
+                gatt.close()
+            } catch (error: Exception) {
+                Log.w(LOG_TAG, "GATT close failed", error)
+            }
+            return
+        }
         val pair = connectedDevice
         readyAddresses.remove(gatt.device.address)
         when (gatt.device.address) {
@@ -366,26 +398,42 @@ class BleManager private constructor() {
         } catch (error: Exception) {
             Log.w(LOG_TAG, "GATT close failed", error)
         }
-        notifyDisconnected(reason)
+        notifyDisconnected(
+            reason,
+            when (gatt.device.address) {
+                pair?.leftDevice?.address -> "L"
+                pair?.rightDevice?.address -> "R"
+                else -> "unknown"
+            },
+        )
     }
 
     private fun disconnectCurrent(notifyFlutter: Boolean) {
         val pair = connectedDevice ?: return
+        pair.leftDevice?.address?.let(intentionalDisconnectAddresses::add)
+        pair.rightDevice?.address?.let(intentionalDisconnectAddresses::add)
         pair.leftDevice?.disconnectAndClose()
         pair.rightDevice?.disconnectAndClose()
         readyAddresses.clear()
         connectedDevice = null
-        if (notifyFlutter) notifyDisconnected("user_requested")
+        if (notifyFlutter) notifyDisconnected("user_requested", "both", pair)
     }
 
-    private fun notifyDisconnected(reason: String) {
-        val pair = connectedDevice
+    private fun notifyDisconnected(
+        reason: String,
+        side: String,
+        snapshot: BlePairDevice? = connectedDevice,
+    ) {
+        val pair = snapshot
         weakActivity.get()?.runOnUiThread {
             BleChannelHelper.bleMC.flutterGlassesDisconnected(
                 mapOf(
                     "leftDeviceName" to (pair?.leftDevice?.name ?: ""),
                     "rightDeviceName" to (pair?.rightDevice?.name ?: ""),
                     "reason" to reason,
+                    "side" to side,
+                    "left_connected" to (pair?.leftDevice?.isConnect == true),
+                    "right_connected" to (pair?.rightDevice?.isConnect == true),
                     "generation" to connectionGeneration,
                 ),
             )

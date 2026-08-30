@@ -46,8 +46,25 @@ class BleManager {
   String connectionStatus = 'Not connected';
   int tryTime = 0;
   int _connectionGeneration = 0;
+  bool isLeftConnected = false;
+  bool isRightConnected = false;
+  final StreamController<BleConnectionSnapshot> _connectionController =
+      StreamController<BleConnectionSnapshot>.broadcast();
 
   int get connectionGeneration => _connectionGeneration;
+  Stream<BleConnectionSnapshot> get connectionSnapshots =>
+      _connectionController.stream;
+  BleConnectionSnapshot get connectionSnapshot => BleConnectionSnapshot(
+        leftConnected: isLeftConnected,
+        rightConnected: isRightConnected,
+        generation: _connectionGeneration,
+      );
+
+  void _publishConnectionSnapshot() {
+    if (!_connectionController.isClosed) {
+      _connectionController.add(connectionSnapshot);
+    }
+  }
 
   void startListening() {
     if (_receiveSubscription != null) {
@@ -181,7 +198,10 @@ class BleManager {
     final leftName = values['leftDeviceName']?.toString() ?? 'left';
     final rightName = values['rightDeviceName']?.toString() ?? 'right';
     connectionStatus = 'Connected: \n$leftName \n$rightName';
-    isConnected = true;
+    isLeftConnected = values['left_connected'] != false;
+    isRightConnected = values['right_connected'] != false;
+    isConnected = isLeftConnected && isRightConnected;
+    _publishConnectionSnapshot();
     onStatusChanged?.call();
     startSendBeatHeart();
     PrivacySafeLog.event(
@@ -213,7 +233,10 @@ class BleManager {
     }
     _adoptGeneration(generation);
     connectionStatus = 'Connecting...';
+    isLeftConnected = false;
+    isRightConnected = false;
     isConnected = false;
+    _publishConnectionSnapshot();
     onStatusChanged?.call();
   }
 
@@ -223,8 +246,16 @@ class BleManager {
       return;
     }
     _adoptGeneration(generation);
-    connectionStatus = 'Not connected';
-    isConnected = false;
+    final values = arguments is Map ? arguments : const <Object?, Object?>{};
+    isLeftConnected = values['left_connected'] == true;
+    isRightConnected = values['right_connected'] == true;
+    isConnected = isLeftConnected && isRightConnected;
+    connectionStatus = isConnected
+        ? 'Connected'
+        : (isLeftConnected || isRightConnected
+            ? 'Degraded connection'
+            : 'Not connected');
+    _publishConnectionSnapshot();
     beatHeartTimer?.cancel();
     beatHeartTimer = null;
     _failPendingRequests(
@@ -331,7 +362,7 @@ class BleManager {
     }
 
     final next = _nextReceive;
-    if (next != null && !next.completer.isCompleted) {
+    if (_nextReceiveKey == key && next != null && !next.completer.isCompleted) {
       if (next.generation == _connectionGeneration ||
           _connectionGeneration == 0) {
         next.completer.complete(response);
@@ -656,7 +687,8 @@ class BleManager {
     return response;
   }
 
-  static bool isBothConnected() => get().isConnected;
+  static bool isBothConnected() =>
+      get().isLeftConnected && get().isRightConnected;
 
   static Future<bool> requestList(
     List<Uint8List> sendList, {
@@ -706,6 +738,7 @@ class BleManager {
     );
     await _receiveSubscription?.cancel();
     _receiveSubscription = null;
+    await _connectionController.close();
   }
 }
 

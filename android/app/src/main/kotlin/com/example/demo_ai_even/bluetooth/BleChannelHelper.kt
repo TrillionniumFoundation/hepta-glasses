@@ -63,7 +63,12 @@ class BleMethodChannel(
             "disconnectFromGlasses" ->
                 BleManager.instance.disconnectFromGlasses(result)
             "send" -> send(call, result)
-            "startEvenAI", "stopEvenAI" -> result.success(null)
+            "startEvenAI" -> result.error(
+                "SpeechRecognitionUnavailable",
+                "Android PCM speech adapter is not configured",
+                null,
+            )
+            "stopEvenAI" -> result.success(true)
             "getApplicationSupportPath" ->
                 result.success(context.filesDir.absolutePath)
             else -> result.notImplemented()

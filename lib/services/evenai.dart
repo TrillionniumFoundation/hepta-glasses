@@ -87,7 +87,10 @@ class EvenAI {
         if (!_isCurrent(session)) {
           return;
         }
-        if (event is Map && event['script'] is String) {
+        if (event is Map &&
+            event['script'] is String &&
+            event['is_final'] == true &&
+            event['generation'] == session.generation) {
           combinedText = (event['script']! as String).trim();
           final completer = _finalTranscript;
           if (completer != null && !completer.isCompleted) {
@@ -121,7 +124,10 @@ class EvenAI {
     _currentLine = 0;
 
     try {
-      await BleManager.invokeMethod<void>('startEvenAI');
+      await BleManager.invokeMethod<void>(
+        'startEvenAI',
+        <String, Object?>{'generation': session.generation},
+      );
       final micOpened = await openEvenAIMic(session);
       if (!_isCurrent(session)) {
         return;
@@ -146,6 +152,9 @@ class EvenAI {
         session,
         'assistant_start_failed',
       );
+      clear(cancelSession: false);
+      isEvenAISyncing.value = false;
+      updateDynamicText('Voice assistant is unavailable on this platform.');
       PrivacySafeLog.event(
         'even_ai_start_failed',
         fields: <String, Object?>{'error_type': error.runtimeType.toString()},
@@ -185,7 +194,10 @@ class EvenAI {
     } on StateError {
       return;
     }
-    await BleManager.invokeMethod<void>('stopEvenAI');
+    await BleManager.invokeMethod<void>(
+      'stopEvenAI',
+      <String, Object?>{'generation': session.generation},
+    );
     final transcript = await _awaitFinalTranscript(session);
     if (!_isCurrent(session)) {
       return;
@@ -205,9 +217,6 @@ class EvenAI {
       updateDynamicText(message);
       isEvenAISyncing.value = false;
       await startSendReply(message, session: session);
-      if (_isCurrent(session)) {
-        HeptaRuntime.current.sessions.complete(session);
-      }
       return;
     }
 
@@ -239,9 +248,6 @@ class EvenAI {
     isEvenAISyncing.value = false;
     saveQuestionItem(combinedText, answer);
     await startSendReply(answer, session: session);
-    if (_isCurrent(session)) {
-      HeptaRuntime.current.sessions.complete(session);
-    }
     PrivacySafeLog.event(
       'even_ai_answer_ready',
       fields: <String, Object?>{
@@ -314,19 +320,33 @@ class EvenAI {
       session: active,
     );
     if (!started || !_isCurrent(active)) {
+      if (_isCurrent(active)) {
+        HeptaRuntime.current.sessions.fail(
+          active,
+          'initial_display_not_acknowledged',
+        );
+      }
       return;
     }
 
     if (getTotalPages() == 1) {
       await Future<void>.delayed(_singlePageFinalizeDelay);
       if (!_isManual && isRunning && _isCurrent(active)) {
-        await sendEvenAIReply(
+        final completed = await sendEvenAIReply(
           firstPage,
           0x01,
           0x40,
           0,
           session: active,
         );
+        if (completed && _isCurrent(active)) {
+          HeptaRuntime.current.sessions.complete(active);
+        } else if (_isCurrent(active)) {
+          HeptaRuntime.current.sessions.fail(
+            active,
+            'final_display_not_acknowledged',
+          );
+        }
       }
       return;
     }
@@ -358,16 +378,26 @@ class EvenAI {
     try {
       _currentLine = next;
       final finalPage = _currentLine + _linesPerPage >= list.length;
-      await sendEvenAIReply(
+      final delivered = await sendEvenAIReply(
         _pageText(_currentLine),
         0x01,
         finalPage ? 0x40 : 0x30,
         0,
         session: session,
       );
-      if (finalPage) {
+      if (!delivered && _isCurrent(session)) {
+        HeptaRuntime.current.sessions.fail(
+          session,
+          'page_display_not_acknowledged',
+        );
         _timer?.cancel();
         _timer = null;
+      } else if (finalPage) {
+        _timer?.cancel();
+        _timer = null;
+        if (_isCurrent(session)) {
+          HeptaRuntime.current.sessions.complete(session);
+        }
       }
     } finally {
       _pageSendInFlight = false;
@@ -464,7 +494,12 @@ class EvenAI {
       HeptaRuntime.current.sessions.cancel(session, reason: reason);
     }
     clear(cancelSession: false);
-    await BleManager.invokeMethod<void>('stopEvenAI');
+    if (session != null) {
+      await BleManager.invokeMethod<void>(
+        'stopEvenAI',
+        <String, Object?>{'generation': session.generation},
+      );
+    }
   }
 
   void clear({bool cancelSession = true}) {

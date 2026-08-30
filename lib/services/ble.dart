@@ -1,5 +1,19 @@
 import 'dart:typed_data';
 
+final class BleConnectionSnapshot {
+  const BleConnectionSnapshot({
+    required this.leftConnected,
+    required this.rightConnected,
+    required this.generation,
+  });
+
+  final bool leftConnected;
+  final bool rightConnected;
+  final int generation;
+
+  bool get bothConnected => leftConnected && rightConnected;
+}
+
 class BleReceive {
   String lr = '';
   Uint8List data = Uint8List(0);

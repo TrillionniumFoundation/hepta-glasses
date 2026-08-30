@@ -18,6 +18,7 @@ final class BluetoothManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     private var intentionalDisconnects: Set<UUID> = []
     private var pendingWrites: [UUID: [Data]] = [:]
     private var connectionGeneration = 0
+    private let pcmConverter = PcmConverter()
 
     private let uartServiceUUID = CBUUID(
         string: ServiceIdentifiers.uartServiceUUIDString
@@ -325,6 +326,8 @@ final class BluetoothManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
                 "leftDeviceName": left.name ?? "",
                 "rightDeviceName": right.name ?? "",
                 "status": "ready",
+                "left_connected": true,
+                "right_connected": true,
                 "generation": connectionGeneration,
             ]
         )
@@ -409,9 +412,14 @@ final class BluetoothManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     private func handleCommand(data: Data, peripheral: CBPeripheral) {
         let command = AG_BLE_REQ(rawValue: data[0])
         if command == .BLE_REQ_TRANSFER_MIC_DATA {
-            guard data.count > 2 else { return }
+            guard data.count == 202 else { return }
+            if data[1] == 0 {
+                pcmConverter.reset()
+            }
             let compressed = data.subdata(in: 2..<data.count)
-            let pcm = PcmConverter().decode(compressed) as Data
+            guard compressed.count == 200 else { return }
+            let pcm = pcmConverter.decode(compressed) as Data
+            guard pcm.count == 3_200 else { return }
             SpeechStreamRecognizer.shared.appendPCMData(pcm)
             return
         }
@@ -442,6 +450,13 @@ final class BluetoothManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
                 "leftDeviceName": leftPeripheral?.name ?? "",
                 "rightDeviceName": rightPeripheral?.name ?? "",
                 "reason": reason,
+                "side": peripheral === leftPeripheral ? "L" : "R",
+                "left_connected": leftPeripheral.map {
+                    readyIdentifiers.contains($0.identifier)
+                } ?? false,
+                "right_connected": rightPeripheral.map {
+                    readyIdentifiers.contains($0.identifier)
+                } ?? false,
                 "generation": connectionGeneration,
             ]
         )
@@ -466,6 +481,9 @@ final class BluetoothManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
                     "leftDeviceName": leftPeripheral?.name ?? "",
                     "rightDeviceName": rightPeripheral?.name ?? "",
                     "reason": reason,
+                    "side": "both",
+                    "left_connected": false,
+                    "right_connected": false,
                     "generation": connectionGeneration,
                 ]
             )
