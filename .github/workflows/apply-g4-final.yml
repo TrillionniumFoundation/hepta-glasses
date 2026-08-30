@@ -41,6 +41,11 @@ jobs:
               base64.b64decode(encoded, validate=True)
           ).decode('utf-8')
           source = source.replace('    Path(__file__).unlink()\n', '', 1)
+          source = source.replace(
+              '"dependencies {\\n    implementation \'org.jetbrains.kotlin:kotlin-reflect:1.9.23\'\\n}\\n",',
+              '"dependencies {\\n    implementation \'org.jetbrains.kotlin:kotlin-reflect:1.9.23\'\\n}",',
+              1,
+          )
           namespace = {
               '__name__': '__main__',
               '__file__': str(Path('tools/apply_g4_docs.py').resolve()),
