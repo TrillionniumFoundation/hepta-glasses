@@ -283,10 +283,9 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
           }));
 
   @override
-  Future<void> verify() =>
-      _exclusive(() => _withLockedHandle((handle) async {
-            await verifyEntries(await _readAllFromHandle(handle));
-          }));
+  Future<void> verify() => _exclusive(() => _withLockedHandle((handle) async {
+        await verifyEntries(await _readAllFromHandle(handle));
+      }));
 
   Future<T> _withLockedHandle<T>(
     Future<T> Function(RandomAccessFile handle) operation,

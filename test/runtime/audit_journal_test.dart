@@ -98,7 +98,8 @@ void main() {
     );
   });
 
-  test('file audit journal serializes writers from separate isolates', () async {
+  test('file audit journal serializes writers from separate isolates',
+      () async {
     final directory =
         await Directory.systemTemp.createTemp('hepta-audit-isolates-');
     addTearDown(() async {
@@ -120,9 +121,7 @@ void main() {
       orderedEquals(List<int>.generate(24, (int index) => index + 1)),
     );
     expect(
-      entries
-          .map((AuditEntry entry) => entry.payload['index'])
-          .toSet(),
+      entries.map((AuditEntry entry) => entry.payload['index']).toSet(),
       equals(<Object?>{for (var index = 0; index < 24; index++) index}),
     );
   });
