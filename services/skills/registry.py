@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import re
 from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any, Mapping
@@ -20,6 +21,16 @@ def _canonical(value: Mapping[str, Any]) -> bytes:
     return json.dumps(
         value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
     ).encode("utf-8")
+
+
+_VERSION_RE = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+
+
+def _version_tuple(value: str) -> tuple[int, int, int]:
+    match = _VERSION_RE.fullmatch(value)
+    if match is None:
+        raise SkillError("skill_version_invalid")
+    return tuple(int(part) for part in match.groups())  # type: ignore[return-value]
 
 
 class SkillState(str, Enum):
@@ -121,31 +132,49 @@ class SkillRegistry:
         *,
         consented_capabilities: frozenset[str],
         consented_data_classes: frozenset[str],
+        consented_network_domains: frozenset[str],
         now: int,
     ) -> InstalledSkill:
         self._validate_manifest(manifest)
+        manifest_version = _version_tuple(manifest.version)
         if not manifest.required_capabilities.issubset(consented_capabilities):
             raise SkillError("skill_capability_consent_missing")
         if not manifest.data_classes.issubset(consented_data_classes):
             raise SkillError("skill_data_consent_missing")
+        if not manifest.allowed_network_domains.issubset(consented_network_domains):
+            raise SkillError("skill_network_domain_consent_missing")
         existing = self._skills.get(manifest.skill_id)
         if existing is not None:
             if existing.state is SkillState.REVOKED:
                 raise SkillError("skill_revoked")
+            existing_version = _version_tuple(existing.manifest.version)
+            if manifest_version < existing_version:
+                raise SkillError("skill_version_downgrade_forbidden")
+            if manifest_version == existing_version:
+                if manifest.manifest_digest != existing.manifest.manifest_digest:
+                    raise SkillError("skill_version_manifest_conflict")
+                return existing
             added_capabilities = (
                 manifest.required_capabilities
                 - existing.manifest.required_capabilities
             )
             added_data = manifest.data_classes - existing.manifest.data_classes
+            added_domains = (
+                manifest.allowed_network_domains
+                - existing.manifest.allowed_network_domains
+            )
             if not added_capabilities.issubset(consented_capabilities):
                 raise SkillError("skill_upgrade_capability_reconsent_required")
             if not added_data.issubset(consented_data_classes):
                 raise SkillError("skill_upgrade_data_reconsent_required")
+            if not added_domains.issubset(consented_network_domains):
+                raise SkillError("skill_upgrade_network_reconsent_required")
         consent_digest = hashlib.sha256(
             _canonical(
                 {
                     "capabilities": sorted(consented_capabilities),
                     "data_classes": sorted(consented_data_classes),
+                    "network_domains": sorted(consented_network_domains),
                     "manifest_digest": manifest.manifest_digest,
                 }
             )
@@ -177,6 +206,7 @@ class SkillRegistry:
 
     def _validate_manifest(self, manifest: SkillManifest) -> None:
         self.trust_store.verify(manifest)
+        _version_tuple(manifest.version)
         if manifest.publisher not in self.allowed_publishers:
             raise SkillError("skill_publisher_not_allowed")
         if manifest.risk_tier == "R4":
