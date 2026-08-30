@@ -76,24 +76,65 @@ void main() {
     );
 
     expect(
-      policy.evaluate(
-        spec: spec,
-        request: request,
-        context: context,
-        lease: lease,
-      ).allowed,
+      policy
+          .evaluate(
+            spec: spec,
+            request: request,
+            context: context,
+            lease: lease,
+          )
+          .allowed,
       isTrue,
     );
     policy.consume(lease);
     expect(
-      policy.evaluate(
-        spec: spec,
-        request: request,
-        context: context,
-        lease: lease,
-      ).reason,
+      policy
+          .evaluate(
+            spec: spec,
+            request: request,
+            context: context,
+            lease: lease,
+          )
+          .reason,
       'decision_lease_already_consumed',
     );
+  });
+
+  test('mutating actions reject reusable leases', () {
+    final request = ToolRequest(
+      requestId: 'r-reusable',
+      taskId: 't-1',
+      deviceId: 'g-1',
+      action: 'reminder.commit',
+      arguments: const <String, Object?>{'title': 'Stand up'},
+      riskTier: RiskTier.r2,
+      mutating: true,
+      idempotencyKey: 'mutation-reusable',
+      deadline: now.add(const Duration(minutes: 1)),
+    );
+    final lease = DecisionLease(
+      leaseId: 'lease-reusable',
+      subject: 'user-1',
+      taskId: 't-1',
+      deviceId: 'g-1',
+      allowedActions: const <String>{'reminder.commit'},
+      argumentConstraints: request.arguments,
+      issuedAt: now,
+      expiresAt: now.add(const Duration(minutes: 1)),
+      singleUse: false,
+      policyHash: 'policy-v1',
+    );
+    final decision = policy.evaluate(
+      spec: const ToolSpec(
+        action: 'reminder.commit',
+        riskTier: RiskTier.r2,
+        mutating: true,
+      ),
+      request: request,
+      context: context,
+      lease: lease,
+    );
+    expect(decision.reason, 'decision_lease_must_be_single_use');
   });
 
   test('argument drift is rejected even when action binding matches', () {
@@ -165,12 +206,14 @@ void main() {
     );
 
     expect(
-      policy.evaluate(
-        spec: spec,
-        request: provisional,
-        context: context,
-        lease: lease,
-      ).reason,
+      policy
+          .evaluate(
+            spec: spec,
+            request: provisional,
+            context: context,
+            lease: lease,
+          )
+          .reason,
       'untrusted_content_cannot_authorize_mutation',
     );
 
@@ -188,12 +231,14 @@ void main() {
       humanConfirmationDigest: provisional.argumentDigest,
     );
     expect(
-      policy.evaluate(
-        spec: spec,
-        request: confirmed,
-        context: context,
-        lease: lease,
-      ).allowed,
+      policy
+          .evaluate(
+            spec: spec,
+            request: confirmed,
+            context: context,
+            lease: lease,
+          )
+          .allowed,
       isTrue,
     );
   });

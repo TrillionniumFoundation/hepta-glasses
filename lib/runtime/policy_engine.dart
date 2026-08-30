@@ -43,6 +43,12 @@ final class PolicyEngine {
         reason: 'decision_lease_required',
       );
     }
+    if (request.mutating && !lease.singleUse) {
+      return const PolicyDecision(
+        allowed: false,
+        reason: 'decision_lease_must_be_single_use',
+      );
+    }
     if (_consumedLeaseIds.contains(lease.leaseId)) {
       return const PolicyDecision(
         allowed: false,

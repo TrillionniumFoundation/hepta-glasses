@@ -11,106 +11,122 @@ permissions:
   contents: read
 
 concurrency:
-  group: hepta-glasses-${{ github.workflow }}-${{ github.ref }}
+  group: hepta-glasses-${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
   repository-contracts:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
       - run: python3 tools/validate_repository.py
       - run: python3 -m unittest discover -s services -p 'test_*.py'
       - run: python3 -m unittest discover -s adapters -p 'test_*.py'
       - run: python3 -m compileall -q services adapters tools
+      - name: Prove repository checks are read-only
+        run: git diff --exit-code
 
   flutter:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: subosito/flutter-action@v2
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
+          flutter-version: '3.47.2'
           channel: stable
-          cache: true
+          cache: false
       - run: flutter pub get
-      - run: dart format --output=write lib test
+      - name: Enforce committed Dart formatting
+        run: dart format --output=none --set-exit-if-changed lib test
       - run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - run: flutter test
-      - name: Capture normalized Flutter source
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: hepta-normalized-flutter-${{ github.event.pull_request.head.sha || github.sha }}
-          path: |
-            analysis_options.yaml
-            pubspec.lock
-            lib
-            test
-          if-no-files-found: error
-          retention-days: 7
+      - name: Prove Flutter qualification is read-only
+        run: git diff --exit-code
 
   android-native:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-java@v5
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
+          flutter-version: '3.47.2'
           channel: stable
-          cache: true
+          cache: false
       - run: flutter pub get
       - run: flutter build apk --debug
+      - name: Prove Android qualification is read-only
+        run: git diff --exit-code
 
   ios-native:
     runs-on: macos-latest
+    timeout-minutes: 50
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: subosito/flutter-action@v2
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
+          flutter-version: '3.47.2'
           channel: stable
-          cache: true
+          cache: false
       - run: flutter pub get
-      - name: Synchronize CocoaPods sandbox
+      - name: Install locked CocoaPods dependencies
         run: |
           cd ios
-          pod install
-      - name: Capture normalized iOS project
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: hepta-normalized-ios-${{ github.event.pull_request.head.sha || github.sha }}
-          path: |
-            ios/.gitignore
-            ios/Podfile
-            ios/Podfile.lock
-            ios/Flutter/AppFrameworkInfo.plist
-            ios/Runner.xcodeproj/project.pbxproj
-            ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme
-          if-no-files-found: error
-          retention-days: 7
+          pod install --deployment
       - run: flutter build ios --simulator --debug
+      - name: Prove iOS qualification is read-only
+        run: git diff --exit-code
 
   secret-and-boundary-scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
       - run: |
           set -euo pipefail
           ! grep -RInE '(DASHSCOPE_API_KEY|DEEPSEEK_API_KEY|OPENAI_API_KEY|api\.deepseek\.com|dashscope\.aliyuncs\.com|api\.openai\.com)' lib android ios services adapters plugins
@@ -119,18 +135,24 @@ jobs:
 
   source-evidence:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs:
       - repository-contracts
       - flutter
       - android-native
       - ios-native
       - secret-and-boundary-scan
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
       - name: Generate exact-head SBOM and provenance
@@ -141,29 +163,29 @@ jobs:
           CI_IOS_NATIVE: ${{ needs.ios-native.result }}
           CI_SECRET_SCAN: ${{ needs.secret-and-boundary-scan.result }}
         run: python3 tools/build_source_evidence.py --output-dir build/evidence
-      - name: Verify artifact is bound to PR head
-        env:
-          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify artifact is bound to source head
         run: |
-          python3 - <<'PY'
+          python3 - <<'PYCODE'
           import json
           import os
           from pathlib import Path
 
-          summary = json.loads(Path('build/evidence/source-evidence-summary.json').read_text())
-          expected = os.environ['EXPECTED_HEAD_SHA']
+          summary = json.loads(
+              Path('build/evidence/source-evidence-summary.json').read_text()
+          )
+          expected = os.environ['SOURCE_HEAD_SHA']
           if summary['commit'] != expected:
               raise SystemExit(
                   f"source evidence commit {summary['commit']} != expected head {expected}"
               )
-          PY
+          PYCODE
       - name: Evaluate source release gate
         run: |
           python3 tools/evaluate_release_gate.py \
             --bundle build/evidence/source-release-bundle.json \
             --mode source \
             --output build/evidence/source-gate-result.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: hepta-source-evidence-${{ github.event.pull_request.head.sha || github.sha }}
           path: build/evidence
