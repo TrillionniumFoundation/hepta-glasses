@@ -1,4 +1,4 @@
-name: hepta-g4-final-source-applier
+name: hepta-g4-documentation-applier
 
 on:
   push:
@@ -9,14 +9,14 @@ permissions:
   contents: write
 
 concurrency:
-  group: hepta-g4-final-source-${{ github.ref }}
+  group: hepta-g4-documentation-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   apply:
-    if: ${{ contains(github.event.head_commit.message, '[apply-g4-final]') }}
+    if: ${{ contains(github.event.head_commit.message, '[apply-g4-docs]') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -28,26 +28,46 @@ jobs:
           flutter-version: '3.47.2'
           channel: stable
           cache: false
-      - name: Apply final source fixes
-        run: python3 tools/apply_g4_final_source.py
-      - name: Format and validate
+      - name: Apply canonical G4 documents and gates
+        run: |
+          python3 - <<'PYCODE'
+          import base64
+          import zlib
+          from pathlib import Path
+
+          payload_path = Path('tools/g4_docs_payload.txt')
+          source = zlib.decompress(
+              base64.b64decode(payload_path.read_text(encoding='ascii'), validate=True)
+          ).decode('utf-8')
+          source = source.replace('    Path(__file__).unlink()\n', '', 1)
+          namespace = {
+              '__name__': '__main__',
+              '__file__': str(Path('tools/apply_g4_docs.py').resolve()),
+          }
+          exec(compile(source, namespace['__file__'], 'exec'), namespace)
+          payload_path.unlink()
+          PYCODE
+      - name: Normalize and validate canonical state
         run: |
           flutter pub get
           dart format lib test
+          python3 tools/validate_repository.py
           python3 -m compileall -q services adapters tools
           git diff --check
-      - name: Commit final source fixes
+      - name: Commit canonical G4 state
         env:
           TARGET_BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          # Workflow mutations are committed separately by the trusted GitHub
+          # connector; the ephemeral GITHUB_TOKEN cannot widen workflow authority.
           git restore --source=HEAD -- .github/workflows
           git add -A
           if git diff --cached --quiet; then
-            echo "No source changes were produced."
+            echo "No canonical changes were produced."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "fix(native): close decoder session and transport cleanup gaps [normalize-g4]"
+          git commit -m "docs(g4): bind canonical plan, ledger, evidence, and native tests [normalize-g4]"
           git push origin "HEAD:${TARGET_BRANCH}"
