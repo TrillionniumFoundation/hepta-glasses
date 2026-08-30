@@ -1,0 +1,50 @@
+name: g5-remove-one-time-workflows
+
+on:
+  push:
+    branches:
+      - codex/hepta-glasses-gap-closure-g5
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hepta-g5-final-fixes
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: codex/hepta-glasses-gap-closure-g5
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Fast-forward to the current branch tip
+        run: |
+          git fetch origin codex/hepta-glasses-gap-closure-g5
+          git merge --ff-only origin/codex/hepta-glasses-gap-closure-g5
+      - name: Remove every one-time migration surface
+        run: |
+          rm -f \
+            .github/workflows/g5-cleanup-once.yml \
+            .github/workflows/g5-export.yml \
+            .github/workflows/g5-finalize.yml \
+            .github/workflows/g5-remediate.yml \
+            .github/workflows/g5-ios-preflight.yml \
+            .github/workflows/g5-audit-lock-fix.yml \
+            .github/workflows/g5-audit-lock-fix-v2.yml \
+            .github/workflows/g5-history-scan-fix.yml
+          rm -f tools/apply_g5_repository_closure.py
+          test -f .github/workflows/ci.yml
+          test -f .github/workflows/g5-closeout.yml
+      - name: Commit cleanup without changing product logic
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'chore(g5): remove one-time migration workflows'
+          git push origin HEAD:codex/hepta-glasses-gap-closure-g5
