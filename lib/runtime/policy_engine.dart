@@ -1,3 +1,4 @@
+import 'canonical_json.dart';
 import 'clock.dart';
 import 'contracts.dart';
 
@@ -59,6 +60,7 @@ final class PolicyEngine {
         lease.taskId != request.taskId ||
         lease.deviceId != request.deviceId ||
         !lease.allowedActions.contains(request.action) ||
+        lease.argumentDigest != sha256CanonicalJson(request.arguments) ||
         lease.policyHash != context.policyHash) {
       return const PolicyDecision(
         allowed: false,
