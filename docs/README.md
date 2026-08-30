@@ -14,6 +14,7 @@
 
 ## Development
 
+- `development/G4_SOURCE_CLOSURE.md`
 - `development/G3_G8_SOURCE_CLOSURE.md`
 - `G1_BLE_CONNECTION.md`
 - `G1_BLE_CONNECTION.en.md`

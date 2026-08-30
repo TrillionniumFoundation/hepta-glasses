@@ -1,18 +1,37 @@
 {
-  "schema_version": 2,
-  "plan_revision": "2026-08-30-g2",
+  "schema_version": 3,
+  "plan_revision": "2026-08-30-g4",
   "source_records": [
     {
       "id": "EV-SRC-FOUNDATION-V1",
       "path": "docs/evidence/2026-08-30-foundation-source-closure.md",
-      "levels": ["E0", "E1", "E2"],
+      "levels": [
+        "E0",
+        "E1",
+        "E2"
+      ],
       "claim": "G0, G1/G2 substrate, model boundary, Codex and MCP source foundation"
     },
     {
       "id": "EV-SRC-G3-G8-V1",
       "path": "docs/development/G3_G8_SOURCE_CLOSURE.md",
-      "levels": ["E0", "E1"],
+      "levels": [
+        "E0",
+        "E1"
+      ],
       "claim": "G3-G8 repository-side contracts, reference implementations, tests and evidence harness"
+    },
+    {
+      "id": "EV-SRC-G4-V1",
+      "path": "docs/development/G4_SOURCE_CLOSURE.md",
+      "levels": [
+        "E0",
+        "E1",
+        "E2",
+        "E3",
+        "E4"
+      ],
+      "claim": "G4 exact-head, concurrency, BLE, native-audio, assistant-lifecycle, native-test, and release-configuration source closure"
     }
   ],
   "ci_records": {

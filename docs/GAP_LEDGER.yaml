@@ -1,6 +1,6 @@
 {
-  "schema_version": 2,
-  "plan_revision": "2026-08-30-g2",
+  "schema_version": 3,
+  "plan_revision": "2026-08-30-g4",
   "audited_base_commit": "32178d3cb4ae38c2ef91db05bde836838c274259",
   "audited_base_tree": "f01ea2e305f5c1d54e8328c9028940e28519cb6e",
   "allowed_statuses": [
@@ -17,7 +17,10 @@
       "title": "Empty product README and no canonical entry point",
       "status": "CLOSED_SOURCE",
       "owner": "repository",
-      "evidence": ["README.md", "docs/README.md"]
+      "evidence": [
+        "README.md",
+        "docs/README.md"
+      ]
     },
     {
       "id": "HG-0002",
@@ -46,14 +49,21 @@
       "title": "No typed Agent, task, lease, tool, display, or skill contracts",
       "status": "CLOSED_SOURCE",
       "owner": "runtime",
-      "evidence": ["lib/runtime/contracts.dart", "schemas", "contracts"]
+      "evidence": [
+        "lib/runtime/contracts.dart",
+        "schemas",
+        "contracts"
+      ]
     },
     {
       "id": "HG-0005",
       "title": "Protocol framing mixed with global BLE state",
       "status": "CLOSED_SOURCE",
       "owner": "device-hal",
-      "evidence": ["lib/runtime/packet_codec.dart", "test/runtime/packet_codec_test.dart"]
+      "evidence": [
+        "lib/runtime/packet_codec.dart",
+        "test/runtime/packet_codec_test.dart"
+      ]
     },
     {
       "id": "HG-0006",
@@ -70,7 +80,10 @@
       "title": "No digital twin or deterministic fault injection",
       "status": "CLOSED_SOURCE",
       "owner": "simulator",
-      "evidence": ["lib/simulator/g1_digital_twin.dart", "test/runtime"]
+      "evidence": [
+        "lib/simulator/g1_digital_twin.dart",
+        "test/runtime"
+      ]
     },
     {
       "id": "HG-0008",
@@ -89,14 +102,20 @@
       "title": "No deny-by-default policy or single-use decision lease",
       "status": "CLOSED_SOURCE",
       "owner": "security",
-      "evidence": ["lib/runtime/policy_engine.dart", "test/runtime/policy_engine_test.dart"]
+      "evidence": [
+        "lib/runtime/policy_engine.dart",
+        "test/runtime/policy_engine_test.dart"
+      ]
     },
     {
       "id": "HG-0010",
       "title": "No journal-before-effect tool authority and replay-safe receipt",
       "status": "CLOSED_SOURCE",
       "owner": "runtime",
-      "evidence": ["lib/runtime/tool_gateway.dart", "test/runtime/tool_gateway_test.dart"]
+      "evidence": [
+        "lib/runtime/tool_gateway.dart",
+        "test/runtime/tool_gateway_test.dart"
+      ]
     },
     {
       "id": "HG-0011",
@@ -350,6 +369,95 @@
         "services/qualification/governance.py",
         "services/qualification/test_governance.py",
         "tools/repository_governance.py"
+      ]
+    },
+    {
+      "id": "HG-0028",
+      "title": "Exact-head CI, formatting, Gradle migration, and CocoaPods locks were inconsistent",
+      "status": "CLOSED_SOURCE",
+      "owner": "repository",
+      "evidence": [
+        ".github/workflows/ci.yml",
+        "android/gradle.properties",
+        "ios/Podfile",
+        "ios/Podfile.lock",
+        "tools/validate_repository.py"
+      ]
+    },
+    {
+      "id": "HG-0029",
+      "title": "Control-plane audience mismatch escaped the stable identity error contract",
+      "status": "CLOSED_SOURCE",
+      "owner": "cloud-platform",
+      "evidence": [
+        "services/control_plane/identity.py",
+        "services/control_plane/test_identity.py"
+      ]
+    },
+    {
+      "id": "HG-0030",
+      "title": "Audit append, ToolGateway idempotency, and physical-effect scheduling had concurrency windows",
+      "status": "CLOSED_SOURCE",
+      "owner": "runtime",
+      "evidence": [
+        "lib/runtime/audit_journal.dart",
+        "lib/runtime/tool_gateway.dart",
+        "lib/runtime/device_effect_scheduler.dart",
+        "test/runtime/audit_journal_test.dart",
+        "test/runtime/tool_gateway_test.dart",
+        "test/runtime/device_effect_scheduler_test.dart"
+      ]
+    },
+    {
+      "id": "HG-0031",
+      "title": "Native LC3 decoders lacked strict frame, allocation, and session-boundary safety",
+      "status": "CLOSED_SOURCE",
+      "owner": "native-audio",
+      "evidence": [
+        "android/app/src/main/cpp/liblc3.cpp",
+        "ios/Runner/PcmConverter.m",
+        "ios/Runner/BluetoothManager.swift",
+        "ios/RunnerTests/RunnerTests.swift"
+      ]
+    },
+    {
+      "id": "HG-0032",
+      "title": "Dual-leg readiness and stale callback truth were collapsed or weakly correlated",
+      "status": "CLOSED_SOURCE",
+      "owner": "device-hal",
+      "evidence": [
+        "lib/services/ble.dart",
+        "lib/ble_manager.dart",
+        "lib/adapters/even_g1/even_g1_transport.dart",
+        "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt",
+        "ios/Runner/BluetoothManager.swift",
+        "test/runtime/dual_leg_coordinator_test.dart"
+      ]
+    },
+    {
+      "id": "HG-0033",
+      "title": "Assistant completion could precede final ASR or final display acknowledgement",
+      "status": "CLOSED_SOURCE",
+      "owner": "assistant-runtime",
+      "evidence": [
+        "lib/runtime/assistant_session.dart",
+        "lib/services/evenai.dart",
+        "ios/Runner/SpeechStreamRecognizer.swift",
+        "ios/Runner/AppDelegate.swift",
+        "test/runtime/assistant_session_test.dart"
+      ]
+    },
+    {
+      "id": "HG-0034",
+      "title": "Native tests and release-safe mobile configuration were not enforced by CI",
+      "status": "CLOSED_SOURCE",
+      "owner": "release",
+      "evidence": [
+        ".github/workflows/ci.yml",
+        "android/app/build.gradle",
+        "android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt",
+        "ios/RunnerTests/RunnerTests.swift",
+        "ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme"
       ]
     }
   ]

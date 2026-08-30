@@ -1,83 +1,104 @@
 # Hepta Glasses canonical development plan
 
-Revision: `2026-08-30-g2`
-Supersedes: `2026-08-30-g1`
+Revision: `2026-08-30-g4`
+Supersedes: `2026-08-30-g3`, `2026-08-30-g2`, and `2026-08-30-g1`
 
-## 1. Mission
+## 1. Mission and product boundary
 
-Convert the imported G1 companion demo into the edge component of a distributed AI-native glasses OS. The system must preserve the working device protocol while making identity, context, model use, tools, memory, Codex, physical qualification, and release evidence explicit and fail closed.
+Convert the imported Even G1 companion demo into the deterministic mobile edge of a distributed AI-native glasses OS. The product boundary is the G1 device plane, the mobile edge runtime, a cloud control plane, capability adapters, and isolated Codex workers.
 
-The current repository does not contain the G1 bootloader or firmware source. Consequently, â€œOSâ€ means a distributed product boundary until vendor firmware access exists: G1 device plane, mobile edge runtime, cloud control plane, capability adapters, and isolated Codex workers.
+The repository does not contain vendor G1 firmware or bootloader source. â€œOSâ€ therefore does not imply firmware ownership until vendor-authorized firmware, secure-boot, signing, OTA, recovery, and rollback access exists.
 
 ## 2. Non-negotiable invariants
 
-1. Model, realtime model, MCP, Skill, and Codex output are proposals, never final execution authority.
-2. The mobile bundle contains no permanent provider, OAuth, signing, or account credential.
-3. Every mutation is journaled before effect and bound to an idempotency fingerprint.
-4. Timeout, process death, or disconnect is indeterminate and requires authoritative reconciliation.
-5. A decision lease is subject/device/task/action/exact-argument bound, short-lived, and normally single-use.
-6. R4 capabilities remain unavailable in the consumer profile.
-7. Untrusted notification, document, webpage, transcript, or tool content cannot grant authority.
-8. Codex runs in isolated read-only or workspace-write workers; it does not own BLE, production credentials, release signing, or self-merge authority.
-9. Memory requires explicit purpose and data-class consent; raw audio, credentials, and secrets are never long-term memory classes.
-10. Source tests and digital twins cannot substitute for physical-device, production-credential, independent-review, pilot, or release evidence.
+1. Model, realtime model, MCP, Skill, and Codex output are proposals, never final mutation authority.
+2. The mobile bundle contains no permanent provider, OAuth, release-signing, or account credential.
+3. Every mutation is schema-validated, policy-admitted, exact-argument bound, journaled before effect, idempotency-keyed, and reconciled when completion is uncertain.
+4. Timeout, disconnect, process death, or missing acknowledgement is not proof of failure after a native write.
+5. Decision leases are subject/device/task/action/argument/policy/time bound and single-use for mutations.
+6. Untrusted notification, document, webpage, transcript, model, or tool content cannot grant authority.
+7. Left and right glasses legs retain independent readiness and receipts; pair-level success requires both legs.
+8. Connection, assistant, realtime, and callback generations fence stale asynchronous work.
+9. Raw audio, credentials, secrets, and sensitive transcript content are not long-term Memory or audit payload classes.
+10. R4 capabilities, unrestricted shell, credential reads, firmware flashing, payment, and account mutation are unavailable in the consumer profile.
+11. Exact-head CI and digital twins are source evidence only; they cannot substitute for physical-device, deployed-infrastructure, independent-review, pilot, signing, or release evidence.
+12. The implementing agent does not self-approve or self-merge its own change.
 
 ## 3. Gate sequence
 
-### G0 â€” truth and governance
+### G0 â€” canonical truth and governance
 
-Deliver canonical truth, ADRs, Gap Ledger, evidence index, schemas, validators, CI, CODEOWNERS, PR controls, and an enforceable branch-protection contract.
+Maintain the product boundary, architecture, threat/privacy/capability models, canonical plan, current state, Gap Ledger, Evidence Index, schemas, CODEOWNERS, CI, and branch-protection contract.
 
-Source gate: canonical files and validators pass. Product gate: GitHub reports the `main` protection contract as active.
+Source exit: validators pass and no actionable source gap is `OPEN`. Product exit: GitHub verifies the canonical `main` protection contract.
 
 ### G1 â€” deterministic device substrate
 
-Deliver HAL, packet codec, dual-leg coordinator, capability/version negotiation, digital twin, golden vectors, disconnect/NACK/timeout injection, and per-leg receipts.
+Maintain protocol codecs, native transport adapters, independent per-leg readiness, connection generations, bounded write queues, exact response correlation, dual-leg receipts, retry safety, late-response quarantine, reconciliation, and deterministic fault injection.
 
-Source gate: replay produces no duplicate logical write and partial success is explicit. Product gate: both Android and iOS physical traces pass the qualification scenario.
+Source exit: malformed packets fail closed; an uncertain write is never blindly replayed; partial pair completion is explicit. Product exit: physical Android/iOS G1 qualification passes.
 
 ### G2 â€” edge execution authority
 
-Deliver hash-chained audit, durable task state, restart recovery, cancellation, deadlines, idempotency, policy, exact leases, tool registry, journal-before-effect execution, and receipts.
+Maintain durable tasks, serialized hash-chained audit, exact-key in-flight de-duplication, bounded physical-effect scheduling, policy, exact leases, Tool Gateway recovery, journal-before-effect execution, receipts, deadlines, cancellation, and reconciliation.
 
-Gate: corrupt journal, stale generation, mismatched replay, unknown tool, expired lease, and argument drift fail closed.
+Source exit: corrupt journals, duplicate concurrent requests, stale generations, argument drift, expired/consumed leases, unknown tools, and crash windows fail closed.
 
 ### G3 â€” identity and cloud control
 
-Deliver device registration, attestation-verifier interface, key-ID signing ring, short-lived subject/device/session-bound tokens, rate limits, token/session/device/subject revocation, account recovery contract, and production deployment runbook.
+Maintain reference device registration, attestation-verifier interfaces, key-ID signing, short-lived subject/device/session-bound tokens, rotation, rate limits, revocation, recovery contracts, and deployment runbooks.
 
-Source gate: reference control-plane tests pass. Product gate: deployed KMS-backed issuer, platform attestation, key rotation, revoke, lost-device, and recovery drills produce signed evidence.
+Source exit: deterministic identity tests pass. Product exit: deployed KMS/HSM, platform attestation, rotation, revoke, lost-device, and recovery drills pass.
 
-### G4 â€” realtime interaction
+### G4 â€” realtime and assistant lifecycle
 
-Deliver one-time realtime bootstrap tickets, server-side provider exchange boundary, bounded scopes, session state machine, privacy indicator truth, cancellation, barge-in generation fencing, network fallback, and physical SLO evaluator.
+Maintain one-time realtime bootstrap, bounded scopes/provider profiles, privacy indicators, cancellation, barge-in fencing, final-ASR waiting, model cancellation boundaries, and delivery-truth state transitions.
 
-Source gate: ticket replay, stale generation, disallowed scope, and unauthorized provider profile fail closed. Product gate: physical Android and iOS traces meet wake, display, packet-loss, temperature, battery, and fault thresholds.
+Source exit: replay, stale generation, unavailable ASR, late transcript, and unacknowledged final display fail closed. Product exit: physical latency, loss, battery, thermal, cancellation, and barge-in thresholds pass.
 
 ### G5 â€” capability tool OS
 
-Deliver opaque OAuth credential handles, typed adapters, exact-argument lease admission, untrusted-content separation, schema validation, journal-before-effect, idempotency, authoritative reconciliation, approval UI contract, and mutation receipts.
+Maintain opaque OAuth handles, typed adapters, schema validation, untrusted-content separation, exact approvals, idempotency, external receipts, and authoritative reconciliation.
 
-Source gate: deterministic adapter and negative tests pass. Product gate: real calendar/reminder/notification/location adapters produce external receipts and timeout reconciliation evidence.
+Source exit: negative and deterministic adapter tests pass. Product exit: real provider/OAuth adapters return authoritative receipts and reconcile timeouts.
 
 ### G6 â€” Codex specialist lane
 
-Deliver one-task/one-workspace/one-identity workers, fixed non-interactive invocation or supported SDK/App Server integration, bounded output/runtime/network, no device credentials, patch/test custody, maintainer review, and no self-merge.
+Maintain one-task/one-workspace/one-identity workers, bounded runtime/output/network, no BLE or production credentials, patch/test custody, maintainer review, and no self-merge.
 
-Source gate: launcher and policy tests pass. Product gate: deployed worker isolation, short-lived identity, egress policy, credential boundary, and compromise-containment exercises pass.
+Source exit: policy and launcher tests pass. Product exit: deployed isolation, short-lived identity, egress, secret-boundary, and compromise-containment exercises pass.
 
-### G7 â€” skills and memory
+### G7 â€” Skills and Memory
 
-Deliver signed manifests, publisher trust roots, package digests, domain/capability/data-class admission, upgrade re-consent, revoke, purpose-bound memory, TTL, export, individual delete, purpose revoke, subject delete, and encrypted production storage contract.
+Maintain signed manifests, trust roots, package digests, domain/capability/data-class admission, upgrade re-consent, revoke, purpose-bound Memory, TTL, export, and deletion.
 
-Source gate: signature tampering, R4 manifest, unauthorized domains, missing consent, and revoked Skill fail closed. Product gate: production signing roots and encrypted storage complete independent review and deletion drills.
+Source exit: tampering, R4 admission, missing consent, unauthorized domain, and revoked package fail closed. Product exit: production signing roots, encrypted storage, independent review, and deletion drills pass.
 
 ### G8 â€” qualification, pilot, and release
 
-Deliver physical trace evaluator, fault matrix, source SBOM, provenance, release evidence bundle, product release gate, branch-protection verifier/applier, security/privacy/legal review templates, staged rollout, kill switch, rollback drill, signing evidence, and pilot telemetry.
+Maintain physical trace evaluators, fault matrices, Android/iOS native tests, exact-head source SBOM/provenance, source/product release gates, governance automation, signing/review templates, rollout, kill-switch, and rollback runbooks.
 
-Source gate: exact-head evidence artifact and source release gate pass. Product gate: the product release bundle passes without overrides.
+Source exit: exact-head repository, Flutter, Android, iOS, boundary, and source-evidence checks pass. Product exit: a signed product release bundle passes without overrides.
 
 ## 4. Evidence levels
 
-- E0 â€” \ÚYÛ‹ØÚ[XKÜˆİ]XÈÛÛ˜Xİ‚‹HLH8 %[š][™™YØ]]™H\İË‚‹HLˆ8 %YÚ][Ú[‹™\^K[™]\›Z[š\İXÈ˜][[š™Xİ[Û‹‚‹HLÈ8 %ØØ[[YÜ˜][Ûˆ[™^XİZXYÙ[™\˜]Y\Y˜XİË‚‹HM8 %^XİÚ]Xˆ‹ZXYÒH[™Ûİ\˜ÙH]šY[˜ÙH[™K‚‹HMH8 %\ÚXØ[Û™H\ÈÌH˜XÙH[™]]Üš]]]™H^\›˜[\Ş\İ[H™XÙZ\Ë‚‹HMˆ8 %[İ[[Y]KÚ[\İÚ]Ú^\˜Ú\ÙK›Û˜XÚÈš[İYÙY›Ûİ]‚‹HMÈ8 %Z[™\[™[ÙXİ\š]Kš]˜XŞKYØ[XØÙ\ÜÚXš[]KÜˆ™[™Üˆ™]šY]Ë‚‚“İÙ\ˆ]šY[˜ÙH™]™\ˆØ]\ÙšY\ÈHYÚ\ˆ]šY[˜ÙH™\]Z\™[Y[‚‚ˆÈÈKˆİ\œ™[XÚØYÙHØÛÜB‚˜K[˜]]™KY›İ[™][Û‹]ŒX\ÈÌËYÎ\Ûİ\˜ÙKXÛÜİ\™K]ŒX›İÈ›İšY\ÈH™\ÜÚ]ÜK\ÚYH[\[Y[][Ûˆ[™XØÙ\[˜ÙH\›™\ÜÈ›ÜˆÌ8 $Òˆ]Ù\È›İÛÛZ[ˆ›ÙXİ[Ûˆ[˜[˜ŞK]›Ü›H]\İ][ÛˆÜ™Y[X[Ë›İšY\ˆÜ™Y[X[Ë\ÚXØ[\™Ø\™H˜XÙ\Ë™[™Üˆš\›]Ø\™H]]Üš]K[Øš[HÚYÛš[™ÈY[]Y\Ë[™\[™[\›İ˜[ËÜˆ[İ[[Y]K‚‚ˆÈÈ‹ˆÛÜÙ[İ]İ]\Â‚‹HÓÔÑQÔÓÕTÑX8 %Ûİ\˜ÙHXØÙ\[˜ÙHÜš]\šXH[™^XİZXY\İÈ^\İ‚‹HÓÔÑQÕ‘T’Q’QQ8 %[™\]Z\™Y^\›˜[Ù]šXÙH]šY[˜ÙH^\İË‚‹H“ĞÒÑQÑVT“S8 %H˜[YY\™Ø\™KÜ™Y[X[\Ş[Y[™]šY]ËÜˆ[İ[œ]\ÈXœÙ[‚‹H“ĞÒÑQĞQRS—ÔÑUS‘8 %[ˆYZ[š\İ˜]Ü‹[Û›H™\ÜÚ]ÜHÙ][™È\ÈXœÙ[‚‹H“ĞÒÑQÕTÕ‘PST8 %™[™Üˆš\›]Ø\™KÚYÛš[™ËÜˆ›İØÛÛ]]Üš]H\ÈXœÙ[‚‹HÔS˜8 %Xİ[Û˜X›HÛİ\˜ÙHÛÜšÈ™[XZ[œË‚‚HXÚØYÙH\ÈÛİ\˜ÙKXÛÜÙYÛ›HÚ[ˆ›ÈÔS˜Ûİ\˜ÙH][H™[XZ[œËˆH›ÙXİ\È™[X\ÙKXÛÜÙYÛ›HÚ[ˆ]™\H™\]Z\™Y›ØÚÙ\ˆ\ÈÓÔÑQÕ‘T’Q’QQ[™ÛÛËÙ]˜[X]WÜ™[X\ÙWÙØ]KœHK[[ÙH›ÙXİ\ÜÙ\Ë‚
+- **E0 â€” Contract evidence:** plans, ADRs, schemas, policies, runbooks, and machine-readable ledgers.
+- **E1 â€” Static source evidence:** formatting, compilation, static analysis, boundary scans, and deterministic validators.
+- **E2 â€” Deterministic test evidence:** unit, negative, property, replay, crash-window, and digital-twin tests.
+- **E3 â€” Platform build/test evidence:** Android native unit tests, iOS XCTest, simulator builds, and reproducible dependency locks.
+- **E4 â€” Exact-head CI evidence:** a successful CI run and content-addressed SBOM/provenance/source-gate artifact bound to one commit and tree.
+- **E5 â€” Physical/deployed evidence:** real device traces, deployed services, KMS/HSM, attestation, OAuth/provider receipts, and operational telemetry.
+- **E6 â€” Independent assurance:** external security, privacy, legal, accessibility, safety, and vendor reviews plus witnessed drills.
+- **E7 â€” Release evidence:** signed artifacts, pilot outcomes, staged rollout, kill-switch, rollback, store approval, and a passing product release bundle.
+
+Evidence cannot be promoted by renaming it. E0â€“E4 never close a gate that explicitly requires E5â€“E7.
+
+## 5. G4 closure order
+
+1. Preserve the working G1 protocol while separating proposal authority from physical-effect authority.
+2. Close deterministic concurrency, replay, timeout, and restart windows.
+3. Close native decoder length/allocation/session boundaries and remove sensitive diagnostics.
+4. Preserve independent leg and generation truth through native, Dart, HAL, and receipt layers.
+5. Make assistant completion depend on final ASR and final display acknowledgement.
+6. Execute Flutter, Python, Android native, iOS native, and source-evidence checks on the exact PR head.
+7. Leave physical, deployed, administrative, vendor, independent-review, pilot, signing, and release gates explicitly blocked until their real evidence exists.

@@ -23,6 +23,7 @@ REQUIRED = {
     "docs/CAPABILITY_MODEL.md",
     "docs/HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md",
     "docs/development/G3_G8_SOURCE_CLOSURE.md",
+    "docs/development/G4_SOURCE_CLOSURE.md",
     "docs/operations/PRODUCTION_CONTROL_PLANE_RUNBOOK.md",
     "docs/operations/REALTIME_AND_CAPABILITY_RUNBOOK.md",
     "docs/operations/DEVICE_QUALIFICATION_RUNBOOK.md",
@@ -68,6 +69,8 @@ REQUIRED = {
     "evidence/templates/ios-g1-qualification-scenario.json",
     "evidence/templates/product-release-bundle.template.json",
     ".github/workflows/ci.yml",
+    "android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt",
+    "ios/RunnerTests/RunnerTests.swift",
 }
 
 FORBIDDEN_PATTERNS = {
@@ -153,10 +156,10 @@ def validate_json_contracts() -> None:
 
 def validate_gap_ledger() -> None:
     ledger = read_json(ROOT / "docs/GAP_LEDGER.yaml")
-    if ledger.get("plan_revision") != "2026-08-30-g2":
-        fail("Gap Ledger is not bound to the canonical g2 plan")
+    if ledger.get("plan_revision") != "2026-08-30-g4":
+        fail("Gap Ledger is not bound to the canonical g4 plan")
     gaps = ledger.get("gaps")
-    if not isinstance(gaps, list) or len(gaps) < 27:
+    if not isinstance(gaps, list) or len(gaps) < 34:
         fail("Gap Ledger does not contain the complete source/external gate set")
     seen = set()
     for gap in gaps:
@@ -278,6 +281,13 @@ def validate_exact_head_workflow() -> None:
     )
     if any(fragment not in workflow for fragment in exact_head_fragments):
         fail("source evidence workflow lacks an internal exact-head assertion")
+    native_test_fragments = (
+        "./gradlew testDebugUnitTest",
+        "xcodebuild test",
+        "Run iOS native tests",
+    )
+    if any(fragment not in workflow for fragment in native_test_fragments):
+        fail("workflow does not execute Android and iOS native tests")
 
 
 def validate_evidence_templates() -> None:
@@ -288,8 +298,8 @@ def validate_evidence_templates() -> None:
     ):
         read_json(ROOT / "evidence" / "templates" / name)
     index = read_json(ROOT / "docs/EVIDENCE_INDEX.yaml")
-    if index.get("plan_revision") != "2026-08-30-g2":
-        fail("Evidence Index is not bound to the canonical g2 plan")
+    if index.get("plan_revision") != "2026-08-30-g4":
+        fail("Evidence Index is not bound to the canonical g4 plan")
 
 
 def main() -> int:
