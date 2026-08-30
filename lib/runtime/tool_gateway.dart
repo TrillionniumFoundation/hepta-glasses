@@ -266,7 +266,8 @@ final class ToolGateway {
       );
       if (receipt.idempotencyKey != envelope.idempotencyKey ||
           receipt.requestId != envelope.requestId) {
-        throw StateError('Tool terminal identity mismatch at ${entry.sequence}.');
+        throw StateError(
+            'Tool terminal identity mismatch at ${entry.sequence}.');
       }
       _cacheRecovered(envelope: envelope, receipt: receipt);
     }

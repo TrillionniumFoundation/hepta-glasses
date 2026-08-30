@@ -6,7 +6,8 @@ class EvenaiModelController extends GetxController {
   var selectedIndex = Rxn<int>();
 
   void addItem(String title, String content) {
-    final newItem = EvenaiModel(title: title, content: content, createdTime: DateTime.now());
+    final newItem = EvenaiModel(
+        title: title, content: content, createdTime: DateTime.now());
     items.insert(0, newItem);
   }
 

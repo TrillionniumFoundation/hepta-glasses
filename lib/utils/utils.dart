@@ -1,6 +1,4 @@
-
 import 'package:flutter/services.dart';
-
 
 class Utils {
   Utils._();

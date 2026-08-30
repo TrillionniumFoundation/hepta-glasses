@@ -402,9 +402,7 @@ class BleManager {
       );
     }
     final next = _nextReceive;
-    if (_nextReceiveKey == key &&
-        next != null &&
-        !next.completer.isCompleted) {
+    if (_nextReceiveKey == key && next != null && !next.completer.isCompleted) {
       _quarantinedRequestKeys.add(key);
       next.completer.complete(
         _timeoutResponse(

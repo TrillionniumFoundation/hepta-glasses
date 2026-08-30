@@ -271,7 +271,12 @@ def validate_exact_head_workflow() -> None:
             fail(f"workflow is missing required job {required_job}")
     if f"name: hepta-source-evidence-{expression}" not in workflow:
         fail("source evidence artifact name is not bound to the exact head SHA")
-    if "Verify artifact is bound to PR head" not in workflow:
+    exact_head_fragments = (
+        "source-evidence-summary.json",
+        "summary['commit'] != expected",
+        "SOURCE_HEAD_SHA",
+    )
+    if any(fragment not in workflow for fragment in exact_head_fragments):
         fail("source evidence workflow lacks an internal exact-head assertion")
 
 

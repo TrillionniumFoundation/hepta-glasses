@@ -3,5 +3,6 @@ class EvenaiModel {
   String content;
   DateTime createdTime;
 
-  EvenaiModel({required this.title, required this.content, required this.createdTime});
+  EvenaiModel(
+      {required this.title, required this.content, required this.createdTime});
 }

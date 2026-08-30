@@ -27,10 +27,12 @@ void main() {
     final file = File('${directory.path}/audit.jsonl');
     final journal = JsonlAuditJournal(file);
     await journal.initialize();
-    await journal.append('tool.prepared', <String, Object?>{'request_id': 'r-1'});
+    await journal
+        .append('tool.prepared', <String, Object?>{'request_id': 'r-1'});
     await journal.verify();
 
-    final line = jsonDecode((await file.readAsLines()).single) as Map<String, dynamic>;
+    final line =
+        jsonDecode((await file.readAsLines()).single) as Map<String, dynamic>;
     line['hash'] = 'tampered';
     await file.writeAsString('${jsonEncode(line)}\n', flush: true);
 

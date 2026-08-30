@@ -37,8 +37,9 @@ class BleReceive {
     return response;
   }
 
-  String hexStringData() =>
-      data.map((int value) => value.toRadixString(16).padLeft(2, '0')).join(' ');
+  String hexStringData() => data
+      .map((int value) => value.toRadixString(16).padLeft(2, '0'))
+      .join(' ');
 }
 
 enum BleEvent {

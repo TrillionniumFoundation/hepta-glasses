@@ -126,7 +126,8 @@ final class HttpModelGateway implements ModelGateway {
   }
 
   static Uri _validatedUri(Uri uri, bool allowInsecureLoopback) {
-    final loopback = <String>{'127.0.0.1', 'localhost', '::1'}.contains(uri.host);
+    final loopback =
+        <String>{'127.0.0.1', 'localhost', '::1'}.contains(uri.host);
     if (uri.scheme == 'https') {
       return uri;
     }
@@ -186,7 +187,8 @@ final class ModelGatewayBootstrap {
       ModelGatewayRegistry.configure(
         HttpModelGateway(
           baseUri: uri,
-          tokenProvider: StaticRuntimeTokenProvider(token.isEmpty ? null : token),
+          tokenProvider:
+              StaticRuntimeTokenProvider(token.isEmpty ? null : token),
           allowInsecureLoopback: !product,
         ),
       );

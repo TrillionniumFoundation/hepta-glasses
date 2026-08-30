@@ -204,6 +204,12 @@ class IdentityTest(unittest.TestCase):
             limiter.consume("key", now=102)
         limiter.consume("key", now=111)
 
+    def test_wrong_audience_returns_stable_identity_error(self) -> None:
+        token = self.issue()
+        with self.assertRaises(IdentityError) as raised:
+            self.tokens.verify(token, audience="wrong-audience")
+        self.assertEqual(raised.exception.code, "token_audience_invalid")
+
 
 if __name__ == "__main__":
     unittest.main()

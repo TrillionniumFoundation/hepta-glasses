@@ -15,7 +15,8 @@ void main() {
     expect(coordinator.isCurrent(first), isFalse);
     expect(coordinator.isCurrent(second), isTrue);
     expect(
-      () => coordinator.transition(first, AssistantSessionState.finalizingSpeech),
+      () =>
+          coordinator.transition(first, AssistantSessionState.finalizingSpeech),
       throwsStateError,
     );
   });

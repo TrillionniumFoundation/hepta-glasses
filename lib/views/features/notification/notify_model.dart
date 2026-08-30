@@ -66,7 +66,8 @@ class NotifyWhitelistModel {
     }
   }
 
-  List<Map<String, dynamic>> toShowMap() => apps.map((app) => app.toMap()).toList();
+  List<Map<String, dynamic>> toShowMap() =>
+      apps.map((app) => app.toMap()).toList();
 
   Map<String, dynamic> toMap() => {
         "calendar_enable": false,

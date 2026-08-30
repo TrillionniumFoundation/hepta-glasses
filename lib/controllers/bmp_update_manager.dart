@@ -6,11 +6,9 @@ import 'package:demo_ai_even/ble_manager.dart';
 import 'package:demo_ai_even/utils/utils.dart';
 
 class BmpUpdateManager {
-  
   static bool isTransfering = false;
 
   Future<bool> updateBmp(String lr, Uint8List image, {int? seq}) async {
-
     // check if has error sending package
     bool isOldSendPackError(int? currentSeq) {
       bool oldSendError = (seq == null && currentSeq != null);
@@ -22,7 +20,7 @@ class BmpUpdateManager {
 
     const int packLen = 194; //198;
     List<Uint8List> multiPacks = [];
-    for (int i = 0; i < image.length; i += packLen) { 
+    for (int i = 0; i < image.length; i += packLen) {
       int end = (i + packLen < image.length) ? i + packLen : image.length;
       final singlePack = image.sublist(i, end);
       multiPacks.add(singlePack);
@@ -30,24 +28,25 @@ class BmpUpdateManager {
 
     print("BmpUpdate -> updateBmp: start sending ${multiPacks.length} packs");
 
-    for (int index = 0; index < multiPacks.length; index++) { 
+    for (int index = 0; index < multiPacks.length; index++) {
       if (isOldSendPackError(seq)) return false;
       if (seq != null && index < seq) continue;
 
-      
-      final pack = multiPacks[index];  
+      final pack = multiPacks[index];
       // address in glasses [0x00, 0x1c, 0x00, 0x00] , taken in the first package
-      Uint8List data = index == 0 ? Utils.addPrefixToUint8List([0x15, index & 0xff, 0x00, 0x1c, 0x00, 0x00],  pack) : Utils.addPrefixToUint8List([0x15, index & 0xff], pack);
-      print("${DateTime.now()} updateBmp----data---*${data.length}---*$data----------");
+      Uint8List data = index == 0
+          ? Utils.addPrefixToUint8List(
+              [0x15, index & 0xff, 0x00, 0x1c, 0x00, 0x00], pack)
+          : Utils.addPrefixToUint8List([0x15, index & 0xff], pack);
+      print(
+          "${DateTime.now()} updateBmp----data---*${data.length}---*$data----------");
 
-      await BleManager.sendData(
-          data,
-          lr: lr);
+      await BleManager.sendData(data, lr: lr);
 
       if (Platform.isIOS) {
         await Future.delayed(Duration(milliseconds: 8)); // 4 6 10 14  30
       } else {
-        await Future.delayed(Duration(milliseconds: 5));  // 5
+        await Future.delayed(Duration(milliseconds: 5)); // 5
       }
 
       var offset = index * packLen;
@@ -62,18 +61,20 @@ class BmpUpdateManager {
     const maxRetryTime = 10;
     int currentRetryTime = 0;
     Future<bool> finishUpdate() async {
-      print("${DateTime.now()} finishUpdate----currentRetryTime-----$currentRetryTime-----maxRetryTime-----$maxRetryTime--");
+      print(
+          "${DateTime.now()} finishUpdate----currentRetryTime-----$currentRetryTime-----maxRetryTime-----$maxRetryTime--");
       if (currentRetryTime >= maxRetryTime) {
         return false;
       }
-      
+
       // notice the finish sending
       var ret = await BleManager.request(
         Uint8List.fromList([0x20, 0x0d, 0x0e]),
         lr: lr,
         timeoutMs: 3000,
       );
-      print("${DateTime.now()} finishUpdate---lr---$lr--ret----${ret.data}-----");
+      print(
+          "${DateTime.now()} finishUpdate---lr---$lr--ret----${ret.data}-----");
       if (ret.isTimeout) {
         currentRetryTime++;
         await Future.delayed(Duration(seconds: 1));
@@ -83,13 +84,13 @@ class BmpUpdateManager {
     }
 
     print("${DateTime.now()} updateBmp-------------over------");
-    
+
     var isSuccess = await finishUpdate();
 
     print("${DateTime.now()} finishUpdate--isSuccess----*$isSuccess-");
     if (!isSuccess) {
       print("finishUpdate result error lr: $lr");
-      
+
       return false;
     } else {
       print("finishUpdate result success lr: $lr");
@@ -97,7 +98,7 @@ class BmpUpdateManager {
 
     // take address in the first package
     Uint8List result = prependAddress(image);
-    var crc32 = Crc32Xz().convert(result); 
+    var crc32 = Crc32Xz().convert(result);
     var val = crc32.toBigInt().toInt();
     var crc = Uint8List.fromList([
       val >> 8 * 3 & 0xff,
@@ -105,12 +106,13 @@ class BmpUpdateManager {
       val >> 8 & 0xff,
       val & 0xff,
     ]);
-    
+
     final ret = await BleManager.request(
         Utils.addPrefixToUint8List([0x16], crc),
         lr: lr);
 
-    print("${DateTime.now()} Crc32Xz---lr---$lr---ret--------${ret.data}------crc----$crc--");
+    print(
+        "${DateTime.now()} Crc32Xz---lr---$lr---ret--------${ret.data}------crc----$crc--");
 
     if (ret.data.length > 4 && ret.data[5] != 0xc9) {
       print("CRC checks failed...");
@@ -122,12 +124,11 @@ class BmpUpdateManager {
 
   void _onProgressCall(String lr, int offset, int index, int total) {
     double progress = (offset / total) * 100;
-    print("${DateTime.now()} BmpUpdate -> Progress: $lr ${progress.toStringAsFixed(2)}%, index: $index");
+    print(
+        "${DateTime.now()} BmpUpdate -> Progress: $lr ${progress.toStringAsFixed(2)}%, index: $index");
   }
 
-
   Uint8List prependAddress(Uint8List image) {
-
     List<int> addressBytes = [0x00, 0x1c, 0x00, 0x00];
     Uint8List newImage = Uint8List(addressBytes.length + image.length);
     newImage.setRange(0, addressBytes.length, addressBytes);

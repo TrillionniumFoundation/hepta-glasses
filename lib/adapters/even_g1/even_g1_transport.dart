@@ -8,7 +8,8 @@ import 'package:demo_ai_even/runtime/device_hal.dart';
 /// Production-side adapter for the native BLE channel. Protocol and Agent code
 /// depend on [GlassesTransport], not on the global platform-channel facade.
 final class EvenG1Transport implements GlassesTransport {
-  EvenG1Transport({BleManager? manager}) : _manager = manager ?? BleManager.get();
+  EvenG1Transport({BleManager? manager})
+      : _manager = manager ?? BleManager.get();
 
   final BleManager _manager;
   final StreamController<DeviceConnectionSnapshot> _connectionController =
@@ -71,8 +72,7 @@ final class EvenG1Transport implements GlassesTransport {
               (response.isTimeout
                   ? 'timeout_after_native_write'
                   : 'negative_acknowledgement'),
-      effectMayHaveOccurred:
-          accepted || response.effectMayHaveOccurred,
+      effectMayHaveOccurred: accepted || response.effectMayHaveOccurred,
     );
     if (accepted) {
       _appliedFingerprints[idempotencyKey] = fingerprint;

@@ -380,7 +380,7 @@ class TokenService:
         if set(payload) != required:
             raise IdentityError("token_claims_invalid")
         if payload["iss"] != self.issuer or payload["aud"] != audience:
-            raise IdentityEror("token_audience_invalid")
+            raise IdentityError("token_audience_invalid")
         if not isinstance(payload["iat"], int) or not isinstance(payload["exp"], int):
             raise IdentityError("token_time_invalid")
         if payload["iat"] > timestamp + maximum_clock_skew_seconds:

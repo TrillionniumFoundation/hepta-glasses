@@ -6,7 +6,8 @@ import 'package:demo_ai_even/simulator/g1_digital_twin.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('dual-leg coordinator retries only a proven pre-write timeout', () async {
+  test('dual-leg coordinator retries only a proven pre-write timeout',
+      () async {
     final twin = G1DigitalTwin();
     addTearDown(twin.dispose);
     twin.injectTimeouts(GlassesSide.left, 1);

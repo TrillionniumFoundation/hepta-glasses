@@ -12,7 +12,6 @@ class EvenaiProto {
     required int current_page_num,
     required int max_page_num,
   }) {
-    
     List<Uint8List> send = [];
     int maxSeq = data.length ~/ len;
     if (data.length % len > 0) {

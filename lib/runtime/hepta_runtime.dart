@@ -280,7 +280,8 @@ final class HeptaRuntime {
 
   RuntimeEffectScope beginEffectScope(String prefix) {
     if (!RegExp(r'^[a-z][a-z0-9-]{1,31}$').hasMatch(prefix)) {
-      throw ArgumentError.value(prefix, 'prefix', 'is not a bounded scope name');
+      throw ArgumentError.value(
+          prefix, 'prefix', 'is not a bounded scope name');
     }
     _scopeGeneration++;
     return RuntimeEffectScope(

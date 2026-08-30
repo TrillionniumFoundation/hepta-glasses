@@ -22,9 +22,8 @@ final class PacketCodec {
       );
     }
     final chunkBytes = maxPacketBytes - headerBytes;
-    final frameCount = payload.isEmpty
-        ? 1
-        : (payload.length + chunkBytes - 1) ~/ chunkBytes;
+    final frameCount =
+        payload.isEmpty ? 1 : (payload.length + chunkBytes - 1) ~/ chunkBytes;
     if (frameCount > 255) {
       throw StateError('Payload requires more than 255 protocol frames.');
     }
@@ -77,7 +76,9 @@ final class PacketCodec {
 
     final ordered = List<Uint8List?>.filled(total, null);
     for (final frame in frames) {
-      if (frame.length < headerBytes || frame[0] != command || frame[1] != total) {
+      if (frame.length < headerBytes ||
+          frame[0] != command ||
+          frame[1] != total) {
         throw const FormatException('Inconsistent frame header.');
       }
       final sequence = frame[2];

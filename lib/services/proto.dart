@@ -180,7 +180,8 @@ class Proto {
       throw ArgumentError.value(count, 'count', 'must exceed header size');
     }
     final payloadBytes = count - 3;
-    final packetCount = max(1, (data.length + payloadBytes - 1) ~/ payloadBytes);
+    final packetCount =
+        max(1, (data.length + payloadBytes - 1) ~/ payloadBytes);
     if (packetCount > 255) {
       throw StateError('Payload exceeds protocol packet limit.');
     }
@@ -190,9 +191,8 @@ class Proto {
       final end = start + payloadBytes < data.length
           ? start + payloadBytes
           : data.length;
-      final itemData = start < data.length
-          ? data.sublist(start, end)
-          : Uint8List(0);
+      final itemData =
+          start < data.length ? data.sublist(start, end) : Uint8List(0);
       packets.add(
         Utils.addPrefixToUint8List(
           <int>[command, packetCount, sequence],
@@ -253,7 +253,8 @@ class Proto {
     Uint8List data,
   ) {
     const payloadBytes = 176;
-    final packetCount = max(1, (data.length + payloadBytes - 1) ~/ payloadBytes);
+    final packetCount =
+        max(1, (data.length + payloadBytes - 1) ~/ payloadBytes);
     if (packetCount > 255) {
       throw StateError('Notification exceeds protocol packet limit.');
     }
@@ -263,9 +264,8 @@ class Proto {
       final end = start + payloadBytes < data.length
           ? start + payloadBytes
           : data.length;
-      final itemData = start < data.length
-          ? data.sublist(start, end)
-          : Uint8List(0);
+      final itemData =
+          start < data.length ? data.sublist(start, end) : Uint8List(0);
       packets.add(
         Utils.addPrefixToUint8List(
           <int>[command, messageId, packetCount, sequence],

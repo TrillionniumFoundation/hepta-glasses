@@ -54,7 +54,8 @@ class _BmpState extends State<BmpPage> {
         alignment: Alignment.center,
         child: Text(
           _busy ? 'Working…' : label,
-          style: TextStyle(color: enabled || _busy ? Colors.black : Colors.grey),
+          style:
+              TextStyle(color: enabled || _busy ? Colors.black : Colors.grey),
         ),
       ),
     );
@@ -70,7 +71,8 @@ class _BmpState extends State<BmpPage> {
     if (receipt.status != ToolReceiptStatus.succeeded) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Device effect requires attention: ${receipt.status.name}'),
+          content:
+              Text('Device effect requires attention: ${receipt.status.name}'),
         ),
       );
     }

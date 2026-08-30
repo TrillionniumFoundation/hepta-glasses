@@ -276,7 +276,8 @@ class EvenAI {
   int getTotalPages() =>
       list.isEmpty ? 0 : (list.length + _linesPerPage - 1) ~/ _linesPerPage;
 
-  int getCurrentPage() => list.isEmpty ? 0 : (_currentLine ~/ _linesPerPage) + 1;
+  int getCurrentPage() =>
+      list.isEmpty ? 0 : (_currentLine ~/ _linesPerPage) + 1;
 
   Future<void> sendNetworkErrorReply(String text) async {
     final session = _session;
@@ -340,10 +341,7 @@ class EvenAI {
   }
 
   Future<void> _advanceAutomaticPage(AssistantSessionToken session) async {
-    if (_pageSendInFlight ||
-        _isManual ||
-        !isRunning ||
-        !_isCurrent(session)) {
+    if (_pageSendInFlight || _isManual || !isRunning || !_isCurrent(session)) {
       if (_isManual || !isRunning || !_isCurrent(session)) {
         _timer?.cancel();
         _timer = null;
@@ -593,8 +591,11 @@ extension EvenAIDataMethod on EvenAI {
       )..layout(maxWidth: maxWidth);
       final lineCount = textPainter.computeLineMetrics().length;
       var start = 0;
-      for (var index = 0; index < lineCount && start < paragraph.length; index++) {
-        final boundary = textPainter.getLineBoundary(TextPosition(offset: start));
+      for (var index = 0;
+          index < lineCount && start < paragraph.length;
+          index++) {
+        final boundary =
+            textPainter.getLineBoundary(TextPosition(offset: start));
         if (boundary.end <= start) {
           break;
         }

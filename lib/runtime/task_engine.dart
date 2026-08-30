@@ -91,7 +91,8 @@ final class TaskEngine {
     final existingTaskId = _idempotency[idempotencyKey];
     if (existingTaskId != null) {
       if (_creationFingerprints[idempotencyKey] != fingerprint) {
-        throw StateError('Idempotency key was reused with different task data.');
+        throw StateError(
+            'Idempotency key was reused with different task data.');
       }
       return _tasks[existingTaskId]!;
     }
@@ -137,7 +138,8 @@ final class TaskEngine {
       );
     }
 
-    final updated = current.transitionTo(next, _clock.now(), transitionReason: reason);
+    final updated =
+        current.transitionTo(next, _clock.now(), transitionReason: reason);
     await _journal.append('task.transition', <String, Object?>{
       'task_id': taskId,
       'from': current.state.name,
@@ -161,7 +163,8 @@ final class TaskEngine {
     }.contains(current.state)) {
       return current;
     }
-    return transition(taskId, TaskState.cancelled, reason: reason ?? 'cancelled');
+    return transition(taskId, TaskState.cancelled,
+        reason: reason ?? 'cancelled');
   }
 
   Future<void> recover() async {
@@ -211,7 +214,8 @@ final class TaskEngine {
           throw StateError('Task transition replay diverged for $taskId.');
         }
         final next = taskStateFromJson(to);
-        final allowed = _allowedTransitions[current.state] ?? const <TaskState>{};
+        final allowed =
+            _allowedTransitions[current.state] ?? const <TaskState>{};
         if (!allowed.contains(next)) {
           throw StateError('Invalid transition in audit journal for $taskId.');
         }

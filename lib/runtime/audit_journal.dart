@@ -102,7 +102,9 @@ mixin _AuditVerification {
   }
 }
 
-final class InMemoryAuditJournal with _AuditVerification implements AuditJournal {
+final class InMemoryAuditJournal
+    with _AuditVerification
+    implements AuditJournal {
   InMemoryAuditJournal({Clock clock = const SystemClock()}) : _clock = clock;
 
   final Clock _clock;
