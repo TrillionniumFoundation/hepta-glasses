@@ -3,7 +3,7 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
-    private var blueInstance = BluetoothManager.shared
+    private let blueInstance = BluetoothManager.shared
 
     override func application(
         _ application: UIApplication,
@@ -18,7 +18,7 @@ import UIKit
             name: "method.bluetooth",
             binaryMessenger: messenger
         )
-        blueInstance = BluetoothManager(channel: channel)
+        blueInstance.attach(channel: channel)
 
         channel.setMethodCallHandler { [weak self] call, result in
             guard let self else {
@@ -68,8 +68,7 @@ import UIKit
                     )
                     return
                 }
-                self.blueInstance.sendData(params: parameters)
-                result(nil)
+                result(self.blueInstance.sendData(params: parameters))
             case "startEvenAI":
                 SpeechStreamRecognizer.shared.startRecognition(identifier: "EN")
                 result(nil)
@@ -124,7 +123,7 @@ extension AppDelegate: FlutterStreamHandler {
         case "eventBleReceive":
             blueInstance.blueInfoSink = events
         case "eventSpeechRecognize":
-            BluetoothManager.shared.blueSpeechSink = events
+            blueInstance.blueSpeechSink = events
         default:
             return FlutterError(
                 code: "UnknownEventChannel",
@@ -140,7 +139,7 @@ extension AppDelegate: FlutterStreamHandler {
         case "eventBleReceive":
             blueInstance.blueInfoSink = nil
         case "eventSpeechRecognize":
-            BluetoothManager.shared.blueSpeechSink = nil
+            blueInstance.blueSpeechSink = nil
         default:
             break
         }
