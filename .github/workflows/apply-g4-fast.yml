@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: hepta-g4-source-normalization-${{ github.ref }}
-  cancel-in-progress: true
+  group: hepta-g4-fast-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   apply:
