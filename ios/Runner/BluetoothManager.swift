@@ -42,6 +42,10 @@ final class BluetoothManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         self.channel = channel
     }
 
+    func beginAudioSession() {
+        pcmConverter.reset()
+    }
+
     func startScan(result: @escaping FlutterResult) {
         guard centralManager.state == .poweredOn else {
             result(
@@ -413,9 +417,6 @@ final class BluetoothManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         let command = AG_BLE_REQ(rawValue: data[0])
         if command == .BLE_REQ_TRANSFER_MIC_DATA {
             guard data.count == 202 else { return }
-            if data[1] == 0 {
-                pcmConverter.reset()
-            }
             let compressed = data.subdata(in: 2..<data.count)
             guard compressed.count == 200 else { return }
             let pcm = pcmConverter.decode(compressed) as Data

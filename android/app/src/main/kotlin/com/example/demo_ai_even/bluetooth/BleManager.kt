@@ -132,6 +132,7 @@ class BleManager private constructor() {
         }
         disconnectCurrent(notifyFlutter = false)
         connectionGeneration += 1
+        intentionalDisconnectAddresses.clear()
         readyAddresses.clear()
         connectedDevice = BlePairDevice(left, right)
         BleChannelHelper.bleMC.flutterGlassesConnecting(

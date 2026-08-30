@@ -80,22 +80,23 @@ final class EvenG1Transport implements GlassesTransport {
       return inFlight;
     }
 
-    final future = _sendOnce(
+    final operation = _sendOnce(
       side: side,
       bytes: bytes,
       timeout: timeout,
       idempotencyKey: idempotencyKey,
       fingerprint: fingerprint,
     );
-    _attemptFingerprints[idempotencyKey] = fingerprint;
-    _inFlight[idempotencyKey] = future;
-    future.whenComplete(() {
-      if (identical(_inFlight[idempotencyKey], future)) {
+    late final Future<TransportAck> tracked;
+    tracked = operation.whenComplete(() {
+      if (identical(_inFlight[idempotencyKey], tracked)) {
         _inFlight.remove(idempotencyKey);
         _attemptFingerprints.remove(idempotencyKey);
       }
     });
-    return future;
+    _attemptFingerprints[idempotencyKey] = fingerprint;
+    _inFlight[idempotencyKey] = tracked;
+    return tracked;
   }
 
   Future<TransportAck> _sendOnce({

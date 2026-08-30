@@ -84,6 +84,7 @@ import UIKit
                     )
                     return
                 }
+                self.blueInstance.beginAudioSession()
                 guard SpeechStreamRecognizer.shared.startRecognition(
                     identifier: "EN",
                     generation: generation
