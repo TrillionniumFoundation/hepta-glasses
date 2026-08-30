@@ -5,10 +5,13 @@ class BleReceive {
   Uint8List data = Uint8List(0);
   String type = '';
   bool isTimeout = false;
+  bool effectMayHaveOccurred = false;
+  int generation = 0;
+  String? errorCode;
 
   int getCmd() {
     if (data.isEmpty) {
-      throw StateError('BLE response has no command byte.');
+      throw StateError('BLE response does not contain a command byte.');
     }
     return data[0];
   }
@@ -23,10 +26,14 @@ class BleReceive {
       response.data = rawData;
     } else if (rawData is List) {
       response.data = Uint8List.fromList(
-        rawData.map((dynamic value) => value as int).toList(),
+        rawData.map((dynamic value) => value as int).toList(growable: false),
       );
     }
     response.type = map['type']?.toString() ?? '';
+    final rawGeneration = map['generation'];
+    if (rawGeneration is int) {
+      response.generation = rawGeneration;
+    }
     return response;
   }
 

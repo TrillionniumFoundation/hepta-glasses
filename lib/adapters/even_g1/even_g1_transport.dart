@@ -5,9 +5,8 @@ import 'package:crypto/crypto.dart';
 import 'package:demo_ai_even/ble_manager.dart';
 import 'package:demo_ai_even/runtime/device_hal.dart';
 
-/// Production-side adapter for the existing native BLE channel. It is kept
-/// behind [GlassesTransport] so protocol and Agent code do not depend on the
-/// global platform-channel implementation.
+/// Production-side adapter for the native BLE channel. Protocol and Agent code
+/// depend on [GlassesTransport], not on the global platform-channel facade.
 final class EvenG1Transport implements GlassesTransport {
   EvenG1Transport({BleManager? manager}) : _manager = manager ?? BleManager.get();
 
@@ -68,10 +67,12 @@ final class EvenG1Transport implements GlassesTransport {
       sequence: _sequence,
       errorCode: accepted
           ? null
-          : response.isTimeout
-              ? 'timeout_after_native_write'
-              : 'negative_acknowledgement',
-      effectMayHaveOccurred: accepted || response.isTimeout,
+          : response.errorCode ??
+              (response.isTimeout
+                  ? 'timeout_after_native_write'
+                  : 'negative_acknowledgement'),
+      effectMayHaveOccurred:
+          accepted || response.effectMayHaveOccurred,
     );
     if (accepted) {
       _appliedFingerprints[idempotencyKey] = fingerprint;
