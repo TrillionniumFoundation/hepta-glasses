@@ -29,7 +29,19 @@ jobs:
           channel: stable
           cache: false
       - name: Apply deterministic G4 source closure
-        run: python3 tools/apply_g4_ci_unblock.py
+        run: |
+          python3 - <<'PYCODE'
+          from pathlib import Path
+
+          path = Path('tools/apply_g4_ci_unblock.py')
+          source = path.read_text(encoding='utf-8')
+          source = source.replace(
+              '{"__name__": "__main__"},',
+              '{"__name__": "__main__", "__file__": __file__},',
+          )
+          namespace = {'__name__': '__main__', '__file__': str(path.resolve())}
+          exec(compile(source, str(path), 'exec'), namespace)
+          PYCODE
       - name: Normalize and validate
         run: |
           flutter pub get
