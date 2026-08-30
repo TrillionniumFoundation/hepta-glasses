@@ -56,7 +56,9 @@ jobs:
           cache: false
       - run: flutter pub get
       - name: Enforce committed Dart formatting
-        run: dart format --output=none --set-exit-if-changed lib test
+        run: |
+          dart format lib test
+          git diff --exit-code
       - run: flutter analyze --fatal-warnings
       - run: flutter test
       - name: Prove Flutter qualification is read-only
