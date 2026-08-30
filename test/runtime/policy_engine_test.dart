@@ -76,22 +76,26 @@ void main() {
     );
 
     expect(
-      policy.evaluate(
-        spec: spec,
-        request: request,
-        context: context,
-        lease: lease,
-      ).allowed,
+      policy
+          .evaluate(
+            spec: spec,
+            request: request,
+            context: context,
+            lease: lease,
+          )
+          .allowed,
       isTrue,
     );
     policy.consume(lease);
     expect(
-      policy.evaluate(
-        spec: spec,
-        request: request,
-        context: context,
-        lease: lease,
-      ).reason,
+      policy
+          .evaluate(
+            spec: spec,
+            request: request,
+            context: context,
+            lease: lease,
+          )
+          .reason,
       'decision_lease_already_consumed',
     );
   });
