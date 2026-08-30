@@ -15,6 +15,19 @@ if str(ROOT) not in sys.path:
 from services.qualification.release_gate import ReleaseGate, ReleaseGateError
 
 
+def canonical_contracts_version() -> str:
+    try:
+        ledger = json.loads(
+            (ROOT / "docs/GAP_LEDGER.yaml").read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError) as error:
+        raise ReleaseGateError("canonical_gap_ledger_invalid") from error
+    version = ledger.get("plan_revision") if isinstance(ledger, dict) else None
+    if not isinstance(version, str) or not version:
+        raise ReleaseGateError("canonical_contracts_version_missing")
+    return version
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bundle", type=Path, required=True)
@@ -25,7 +38,9 @@ def main() -> int:
         document = json.loads(args.bundle.read_text(encoding="utf-8"))
         if not isinstance(document, dict):
             raise ReleaseGateError("release_bundle_invalid")
-        result = ReleaseGate().evaluate(document, mode=args.mode)
+        result = ReleaseGate(
+            expected_contracts_version=canonical_contracts_version()
+        ).evaluate(document, mode=args.mode)
     except (OSError, json.JSONDecodeError, ReleaseGateError) as error:
         code = error.code if isinstance(error, ReleaseGateError) else "release_bundle_invalid"
         print(json.dumps({"ok": False, "error": code}, separators=(",", ":")))
