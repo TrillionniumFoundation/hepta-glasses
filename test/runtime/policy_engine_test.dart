@@ -97,6 +97,7 @@ void main() {
   });
 
   test('mutation lease is rejected when exact arguments drift', () {
+    const approvedArguments = <String, Object?>{'title': 'Stand up'};
     final request = ToolRequest(
       requestId: 'r-3',
       taskId: 't-1',
@@ -114,9 +115,7 @@ void main() {
       taskId: 't-1',
       deviceId: 'g-1',
       allowedActions: const <String>{'reminder.commit'},
-      argumentDigest: sha256CanonicalJson(
-        const <String, Object?>{'title': 'Stand up'},
-      ),
+      argumentDigest: sha256CanonicalJson(approvedArguments),
       expiresAt: now.add(const Duration(minutes: 1)),
       singleUse: true,
       policyHash: 'policy-v1',
