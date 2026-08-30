@@ -17,53 +17,87 @@ Future<void> main() async {
   ModelGatewayBootstrap.configureFromDevelopmentEnvironment();
   BleManager.get();
 
-  String supportPath;
+  late final String supportPath;
   try {
-    supportPath =
-        await BleManager.invokeMethod<String>('getApplicationSupportPath') ??
-            Directory.systemTemp.path;
+    final resolved =
+        await BleManager.invokeMethod<String>('getApplicationSupportPath');
+    if (resolved == null || resolved.trim().isEmpty) {
+      throw StateError('Application support path is unavailable.');
+    }
+    supportPath = resolved;
   } on Object {
-    supportPath = Directory.systemTemp.path;
+    runApp(const _FailClosedStartupApp());
+    return;
   }
+
   final auditJournal = JsonlAuditJournal(
     File('$supportPath/hepta-glasses-runtime/audit.jsonl'),
   );
-
   final bitmapManager = BmpUpdateManager();
-  await HeptaRuntime.initialize(
-    journal: auditJournal,
-    displayTextEffect: (DisplayTextCommand command) => Proto.sendEvenAIData(
-      command.text,
-      newScreen: command.newScreen,
-      pos: command.position,
-      currentPageNumber: command.currentPageNumber,
-      maxPageNumber: command.maxPageNumber,
-    ),
-    microphoneEffect: (String side) async {
-      final (_, success) = await Proto.micOnDirect(lr: side);
-      return success;
-    },
-    exitDeviceModeEffect: Proto.exit,
-    notificationWhitelistEffect: Proto.sendNewAppWhiteListJson,
-    notificationEffect: (
-      Map<String, Object?> notification,
-      int notificationId,
-    ) =>
-        Proto.sendNotify(notification, notificationId),
-    bitmapAssetEffect: (String assetPath) async {
-      final bytes = await Utils.loadBmpImage(assetPath);
-      if (bytes.isEmpty) {
-        return false;
-      }
-      final results = await Future.wait<bool>(<Future<bool>>[
-        bitmapManager.updateBmp('L', bytes, seq: 0),
-        bitmapManager.updateBmp('R', bytes, seq: 0),
-      ]);
-      return results.every((bool result) => result);
-    },
-  );
+
+  try {
+    await HeptaRuntime.initialize(
+      journal: auditJournal,
+      displayTextEffect: (DisplayTextCommand command) => Proto.sendEvenAIData(
+        command.text,
+        newScreen: command.newScreen,
+        pos: command.position,
+        currentPageNumber: command.currentPageNumber,
+        maxPageNumber: command.maxPageNumber,
+      ),
+      microphoneEffect: (String side) async {
+        final (_, success) = await Proto.micOnDirect(lr: side);
+        return success;
+      },
+      exitDeviceModeEffect: Proto.exit,
+      notificationWhitelistEffect: Proto.sendNewAppWhiteListJson,
+      notificationEffect: (
+        Map<String, Object?> notification,
+        int notificationId,
+      ) =>
+          Proto.sendNotify(notification, notificationId),
+      bitmapAssetEffect: (String assetPath) async {
+        final bytes = await Utils.loadBmpImage(assetPath);
+        if (bytes.isEmpty) {
+          return false;
+        }
+        final results = await Future.wait<bool>(<Future<bool>>[
+          bitmapManager.updateBmp('L', bytes, seq: 0),
+          bitmapManager.updateBmp('R', bytes, seq: 0),
+        ]);
+        return results.every((bool result) => result);
+      },
+    );
+  } on Object {
+    runApp(const _FailClosedStartupApp());
+    return;
+  }
+
   Get.put(EvenaiModelController());
   runApp(const MyApp());
+}
+
+class _FailClosedStartupApp extends StatelessWidget {
+  const _FailClosedStartupApp();
+
+  @override
+  Widget build(BuildContext context) => const MaterialApp(
+        home: Scaffold(
+          body: SafeArea(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'Hepta Glasses could not establish durable local state. '
+                  'Device and assistant actions remain disabled. Restart the '
+                  'application or contact support.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class MyApp extends StatelessWidget {
