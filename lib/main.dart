@@ -40,7 +40,7 @@ Future<void> main() async {
       maxPageNumber: command.maxPageNumber,
     ),
     microphoneEffect: (String side) async {
-      final (_, success) = await Proto.micOn(lr: side);
+      final (_, success) = await Proto.micOnDirect(lr: side);
       return success;
     },
     exitDeviceModeEffect: Proto.exit,

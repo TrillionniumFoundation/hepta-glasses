@@ -3,6 +3,8 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:demo_ai_even/ble_manager.dart';
+import 'package:demo_ai_even/runtime/contracts.dart';
+import 'package:demo_ai_even/runtime/hepta_runtime.dart';
 import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
 import 'package:demo_ai_even/services/ble.dart';
 import 'package:demo_ai_even/services/evenai_proto.dart';
@@ -13,7 +15,32 @@ class Proto {
 
   static String lR() => BleManager.isBothConnected() ? 'R' : 'L';
 
+  /// Public microphone admission path. Once the deterministic runtime is
+  /// initialized, microphone activation cannot bypass PolicyEngine and
+  /// ToolGateway. The injected low-level effect uses [micOnDirect] to avoid a
+  /// recursive gateway call.
   static Future<(int, bool)> micOn({String? lr}) async {
+    final startedAt = Utils.getTimestampMs();
+    if (!HeptaRuntime.isInitialized) {
+      return micOnDirect(lr: lr);
+    }
+    final session = HeptaRuntime.current.sessions.current;
+    if (session == null || session.terminal) {
+      PrivacySafeLog.event('microphone_command_rejected_without_session');
+      return (startedAt, false);
+    }
+    final receipt = await HeptaRuntime.current.openMicrophone(
+      session: session.token,
+      side: lr ?? 'R',
+    );
+    return (
+      startedAt,
+      receipt.status == ToolReceiptStatus.succeeded,
+    );
+  }
+
+  /// Native protocol effect used only by the runtime capability adapter.
+  static Future<(int, bool)> micOnDirect({String? lr}) async {
     final begin = Utils.getTimestampMs();
     final data = Uint8List.fromList(<int>[0x0E, 0x01]);
     final receive = await BleManager.request(data, lr: lr);
