@@ -22,6 +22,11 @@ new_guard = '''    if count != 1 and not (
 if source.count(old_guard) != 1:
     raise RuntimeError("G4 payload replace_once guard did not match")
 source = source.replace(old_guard, new_guard, 1)
+old_constructor = '''"  EvenG1Transport({BleManager? manager}) : _manager = manager ?? BleManager.get();\\n\\n  final BleManager _manager;\\n",'''
+formatted_constructor = '''"  EvenG1Transport({BleManager? manager})\\n      : _manager = manager ?? BleManager.get();\\n\\n  final BleManager _manager;\\n",'''
+if source.count(old_constructor) != 1:
+    raise RuntimeError("G4 transport constructor pre-image did not match payload")
+source = source.replace(old_constructor, formatted_constructor, 1)
 exec(compile(source, __file__, "exec"), {"__name__": "__main__", "__file__": __file__})
 for part in PARTS:
     part.unlink()
