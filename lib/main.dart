@@ -17,13 +17,10 @@ Future<void> main() async {
   ModelGatewayBootstrap.configureFromDevelopmentEnvironment();
   BleManager.get();
 
-  String supportPath;
-  try {
-    supportPath =
-        await BleManager.invokeMethod<String>('getApplicationSupportPath') ??
-            Directory.systemTemp.path;
-  } on Object {
-    supportPath = Directory.systemTemp.path;
+  final supportPath =
+      await BleManager.invokeMethod<String>('getApplicationSupportPath');
+  if (supportPath == null || supportPath.trim().isEmpty) {
+    throw StateError('durable_application_support_path_unavailable');
   }
   final auditJournal = JsonlAuditJournal(
     File('$supportPath/hepta-glasses-runtime/audit.jsonl'),
