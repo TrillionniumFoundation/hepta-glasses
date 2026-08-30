@@ -1,51 +1,58 @@
 import CoreBluetooth
 import Flutter
 
-class BluetoothManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
-    static let shared = BluetoothManager(channel: FlutterMethodChannel())
-    
-    var centralManager: CBCentralManager!
-    var pairedDevices: [String: (CBPeripheral?, CBPeripheral?)] = [:]
-    var connectedDevices: [String: (CBPeripheral?, CBPeripheral?)] = [:]
-    var currentConnectingDeviceName: String? // Save the name of the currently connecting device
-    
-    var channel: FlutterMethodChannel!
-    
-    var blueInfoSink:FlutterEventSink!
-    var blueSpeechSink:FlutterEventSink!
-    
-    var leftPeripheral:CBPeripheral?
-    var leftUUIDStr:String?
-    var rightPeripheral:CBPeripheral?
-    var rightUUIDStr:String?
-    
-    var UARTServiceUUID:CBUUID
-    var UARTRXCharacteristicUUID:CBUUID
-    var UARTTXCharacteristicUUID:CBUUID
-    
-    var leftWChar:CBCharacteristic?
-    var rightWChar:CBCharacteristic?
-    var leftRChar:CBCharacteristic?
-    var rightRChar:CBCharacteristic?
-    
-    var hasStartedSpeech = false
+final class BluetoothManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
+    static let shared = BluetoothManager()
 
-    init(channel: FlutterMethodChannel) {
-        UARTServiceUUID          = CBUUID(string: ServiceIdentifiers.uartServiceUUIDString)
-        UARTTXCharacteristicUUID = CBUUID(string: ServiceIdentifiers.uartTXCharacteristicUUIDString)
-        UARTRXCharacteristicUUID = CBUUID(string: ServiceIdentifiers.uartRXCharacteristicUUIDString)
-        
+    private var centralManager: CBCentralManager!
+    private var channel: FlutterMethodChannel?
+    private var pairedDevices: [String: (CBPeripheral?, CBPeripheral?)] = [:]
+    private var currentDeviceName: String?
+    private var leftPeripheral: CBPeripheral?
+    private var rightPeripheral: CBPeripheral?
+    private var leftReadCharacteristic: CBCharacteristic?
+    private var rightReadCharacteristic: CBCharacteristic?
+    private var leftWriteCharacteristic: CBCharacteristic?
+    private var rightWriteCharacteristic: CBCharacteristic?
+    private var readyIdentifiers: Set<UUID> = []
+    private var intentionalDisconnects: Set<UUID> = []
+    private var pendingWrites: [UUID: [Data]] = [:]
+    private var connectionGeneration = 0
+
+    private let uartServiceUUID = CBUUID(
+        string: ServiceIdentifiers.uartServiceUUIDString
+    )
+    private let uartReceiveUUID = CBUUID(
+        string: ServiceIdentifiers.uartRXCharacteristicUUIDString
+    )
+    private let uartWriteUUID = CBUUID(
+        string: ServiceIdentifiers.uartTXCharacteristicUUIDString
+    )
+
+    var blueInfoSink: FlutterEventSink?
+    var blueSpeechSink: FlutterEventSink?
+
+    private override init() {
         super.init()
+        centralManager = CBCentralManager(delegate: self, queue: nil)
+    }
+
+    func attach(channel: FlutterMethodChannel) {
         self.channel = channel
-        self.centralManager = CBCentralManager(delegate: self, queue: nil)
     }
 
     func startScan(result: @escaping FlutterResult) {
         guard centralManager.state == .poweredOn else {
-            result(FlutterError(code: "BluetoothOff", message: "Bluetooth is not powered on.", details: nil))
+            result(
+                FlutterError(
+                    code: "BluetoothOff",
+                    message: "Bluetooth is not powered on",
+                    details: nil
+                )
+            )
             return
         }
-
+        pairedDevices.removeAll()
         centralManager.scanForPeripherals(withServices: nil, options: nil)
         result("Scanning for devices...")
     }
@@ -57,267 +64,424 @@ class BluetoothManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate
 
     func connectToDevice(deviceName: String, result: @escaping FlutterResult) {
         centralManager.stopScan()
-
-        guard let peripheralPair = pairedDevices[deviceName] else {
-            result(FlutterError(code: "DeviceNotFound", message: "Device not found", details: nil))
+        guard let pair = pairedDevices[deviceName] else {
+            result(
+                FlutterError(
+                    code: "DeviceNotFound",
+                    message: "Device not found",
+                    details: nil
+                )
+            )
+            return
+        }
+        guard let left = pair.0, let right = pair.1 else {
+            result(
+                FlutterError(
+                    code: "PeripheralNotFound",
+                    message: "One or both peripherals were not found",
+                    details: nil
+                )
+            )
             return
         }
 
-        guard let leftPeripheral = peripheralPair.0, let rightPeripheral = peripheralPair.1 else {
-            result(FlutterError(code: "PeripheralNotFound", message: "One or both peripherals are not found", details: nil))
-            return
-        }
-
-        currentConnectingDeviceName = deviceName // Save the current device being connected
-
-        centralManager.connect(leftPeripheral, options: [CBConnectPeripheralOptionNotifyOnDisconnectionKey: true]) //   options nil
-        centralManager.connect(rightPeripheral, options: [CBConnectPeripheralOptionNotifyOnDisconnectionKey: true]) //   options nil
-
+        clearConnection(cancelLinks: true, notify: false, reason: "superseded")
+        connectionGeneration += 1
+        currentDeviceName = deviceName
+        leftPeripheral = left
+        rightPeripheral = right
+        left.delegate = self
+        right.delegate = self
+        channel?.invokeMethod(
+            "glassesConnecting",
+            arguments: [
+                "leftDeviceName": left.name ?? "",
+                "rightDeviceName": right.name ?? "",
+                "generation": connectionGeneration,
+            ]
+        )
+        centralManager.connect(
+            left,
+            options: [CBConnectPeripheralOptionNotifyOnDisconnectionKey: true]
+        )
+        centralManager.connect(
+            right,
+            options: [CBConnectPeripheralOptionNotifyOnDisconnectionKey: true]
+        )
         result("Connecting to \(deviceName)...")
     }
 
     func disconnectFromGlasses(result: @escaping FlutterResult) {
-        for (_, devices) in connectedDevices {
-            if let leftPeripheral = devices.0 {
-                centralManager.cancelPeripheralConnection(leftPeripheral)
-            }
-            if let rightPeripheral = devices.1 {
-                centralManager.cancelPeripheralConnection(rightPeripheral)
-            }
-        }
-        connectedDevices.removeAll()
+        clearConnection(cancelLinks: true, notify: true, reason: "user_requested")
         result("Disconnected all devices.")
     }
 
-    // MARK: - CBCentralManagerDelegate Methods
-    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
+    func sendData(params: [String: Any]) -> Bool {
+        guard
+            let typedData = params["data"] as? FlutterStandardTypedData,
+            !typedData.data.isEmpty
+        else {
+            return false
+        }
+        return writeData(
+            writeData: typedData.data,
+            side: params["lr"] as? String
+        )
+    }
+
+    func centralManager(
+        _ central: CBCentralManager,
+        didDiscover peripheral: CBPeripheral,
+        advertisementData: [String: Any],
+        rssi RSSI: NSNumber
+    ) {
         guard let name = peripheral.name else { return }
         let components = name.components(separatedBy: "_")
-        guard components.count > 1, let channelNumber = components[safe: 1] else { return }
-
+        guard components.count == 4, name.hasPrefix("G") else { return }
+        let channelNumber = components[1]
+        let key = "Pair_\(channelNumber)"
+        var pair = pairedDevices[key] ?? (nil, nil)
         if name.contains("_L_") {
-            pairedDevices["Pair_\(channelNumber)", default: (nil, nil)].0 = peripheral // Left device
+            pair.0 = peripheral
         } else if name.contains("_R_") {
-            pairedDevices["Pair_\(channelNumber)", default: (nil, nil)].1 = peripheral // Right device
-        }
-
-        if let leftPeripheral = pairedDevices["Pair_\(channelNumber)"]?.0, let rightPeripheral = pairedDevices["Pair_\(channelNumber)"]?.1 {
-            let deviceInfo: [String: String] = [
-                "leftDeviceName": leftPeripheral.name ?? "",
-                "rightDeviceName": rightPeripheral.name ?? "",
-                "channelNumber": channelNumber
-            ]
-            channel.invokeMethod("foundPairedGlasses", arguments: deviceInfo)
-        }
-    }
-
-    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        guard let deviceName = currentConnectingDeviceName else { return }
-        guard let peripheralPair = pairedDevices[deviceName] else { return }
-
-        if connectedDevices[deviceName] == nil {
-            connectedDevices[deviceName] = (nil, nil)
-        }
-
-        if peripheralPair.0 === peripheral {
-            connectedDevices[deviceName]?.0 = peripheral // Left device connected
-            
-            self.leftPeripheral = peripheral
-            self.leftPeripheral?.delegate = self
-            self.leftPeripheral?.discoverServices([UARTServiceUUID])
-            
-            self.leftUUIDStr = peripheral.identifier.uuidString;
-            
-            print("didConnect----self.leftPeripheral---------\(self.leftPeripheral)--self.leftUUIDStr----\(self.leftUUIDStr)----")
-        } else if peripheralPair.1 === peripheral {
-            connectedDevices[deviceName]?.1 = peripheral // Right device connected
-            
-            self.rightPeripheral = peripheral
-            self.rightPeripheral?.delegate = self
-            self.rightPeripheral?.discoverServices([UARTServiceUUID])
-            
-            self.rightUUIDStr = peripheral.identifier.uuidString
-            
-            print("didConnect----self.rightPeripheral---------\(self.rightPeripheral)---self.rightUUIDStr----\(self.rightUUIDStr)-----")
-        }
-
-        if let leftPeripheral = connectedDevices[deviceName]?.0, let rightPeripheral = connectedDevices[deviceName]?.1 {
-            let connectedInfo: [String: String] = [
-                "leftDeviceName": leftPeripheral.name ?? "",
-                "rightDeviceName": rightPeripheral.name ?? "",
-                "status": "connected"
-            ]
-            channel.invokeMethod("glassesConnected", arguments: connectedInfo)
-
-            currentConnectingDeviceName = nil
-        }
-    }
-    
-    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?){
-        print("\(Date()) didDisconnectPeripheral-----peripheral-----\(peripheral)--")
-        
-        if let error = error {
-            print("Disconnect error: \(error.localizedDescription)")
+            pair.1 = peripheral
         } else {
-            print("Disconnected without error.")
-        }
-        
-        central.connect(peripheral, options: nil)
-    }
-    
-    func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        print("peripheral------\(peripheral)-----didDiscoverServices--------")
-        guard let services = peripheral.services else { return }
-        
-        for service in services {
-            if service.uuid .isEqual(UARTServiceUUID){
-                peripheral.discoverCharacteristics(nil, for: service)
-            }
-        }
-    }
-    
-    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
-        print("peripheral------\(peripheral)-----didDiscoverCharacteristicsFor----service----\(service)----")
-        guard let characteristics = service.characteristics else { return }
-
-        if service.uuid.isEqual(UARTServiceUUID){
-            for characteristic in characteristics {
-                if characteristic.uuid.isEqual(UARTRXCharacteristicUUID){
-                    if(peripheral.identifier.uuidString == self.leftUUIDStr){
-                        self.leftRChar = characteristic
-                    }else if(peripheral.identifier.uuidString == self.rightUUIDStr){
-                        self.rightRChar = characteristic
-                    }
-                } else if characteristic.uuid.isEqual(UARTTXCharacteristicUUID){
-                    if(peripheral.identifier.uuidString == self.leftUUIDStr){
-                        self.leftWChar = characteristic
-                    }else if(peripheral.identifier.uuidString == self.rightUUIDStr){
-                        self.rightWChar = characteristic
-                    }
-                }
-            }
-            
-            if(peripheral.identifier.uuidString == self.leftUUIDStr){
-                if(self.leftRChar != nil && self.leftWChar != nil){
-                    self.leftPeripheral?.setNotifyValue(true, for: self.leftRChar!)
-                  
-                    self.writeData(writeData: Data([0x4d, 0x01]), lr: "L")
-                }
-            }else if(peripheral.identifier.uuidString == self.rightUUIDStr){
-                if(self.rightRChar != nil && self.rightWChar != nil){
-                    self.rightPeripheral?.setNotifyValue(true, for: self.rightRChar!)
-                    self.writeData(writeData: Data([0x4d, 0x01]), lr: "R")
-                }
-            }
-        }
-    }
-        
-    func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
-        if let error = error {
-            print("subscribe fail: \(error)")
             return
         }
-        if characteristic.isNotifying {
-            print("subscribe success")
-        } else {
-            print("subscribe cancel")
+        pairedDevices[key] = pair
+        guard let left = pair.0, let right = pair.1 else { return }
+        channel?.invokeMethod(
+            "foundPairedGlasses",
+            arguments: [
+                "leftDeviceName": left.name ?? "",
+                "rightDeviceName": right.name ?? "",
+                "channelNumber": channelNumber,
+            ]
+        )
+    }
+
+    func centralManager(
+        _ central: CBCentralManager,
+        didConnect peripheral: CBPeripheral
+    ) {
+        guard isSelected(peripheral) else {
+            central.cancelPeripheralConnection(peripheral)
+            return
         }
+        peripheral.delegate = self
+        peripheral.discoverServices([uartServiceUUID])
+    }
+
+    func centralManager(
+        _ central: CBCentralManager,
+        didFailToConnect peripheral: CBPeripheral,
+        error: Error?
+    ) {
+        handleUnexpectedDisconnect(
+            peripheral,
+            reason: error?.localizedDescription ?? "connect_failed"
+        )
+    }
+
+    func centralManager(
+        _ central: CBCentralManager,
+        didDisconnectPeripheral peripheral: CBPeripheral,
+        error: Error?
+    ) {
+        pendingWrites[peripheral.identifier] = nil
+        readyIdentifiers.remove(peripheral.identifier)
+        if intentionalDisconnects.remove(peripheral.identifier) != nil {
+            return
+        }
+        handleUnexpectedDisconnect(
+            peripheral,
+            reason: error?.localizedDescription ?? "link_disconnected"
+        )
     }
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        switch central.state {
-        case .poweredOn:
-            print("Bluetooth is powered on.")
-        case .poweredOff:
-            print("Bluetooth is powered off.")
+        if central.state != .poweredOn {
+            clearConnection(
+                cancelLinks: false,
+                notify: true,
+                reason: "bluetooth_\(central.state.rawValue)"
+            )
+        }
+    }
+
+    func peripheral(
+        _ peripheral: CBPeripheral,
+        didDiscoverServices error: Error?
+    ) {
+        guard error == nil else {
+            handleUnexpectedDisconnect(
+                peripheral,
+                reason: error!.localizedDescription
+            )
+            return
+        }
+        guard let service = peripheral.services?.first(where: {
+            $0.uuid == uartServiceUUID
+        }) else {
+            handleUnexpectedDisconnect(peripheral, reason: "uart_service_missing")
+            return
+        }
+        peripheral.discoverCharacteristics(
+            [uartReceiveUUID, uartWriteUUID],
+            for: service
+        )
+    }
+
+    func peripheral(
+        _ peripheral: CBPeripheral,
+        didDiscoverCharacteristicsFor service: CBService,
+        error: Error?
+    ) {
+        guard error == nil else {
+            handleUnexpectedDisconnect(
+                peripheral,
+                reason: error!.localizedDescription
+            )
+            return
+        }
+        guard let characteristics = service.characteristics else {
+            handleUnexpectedDisconnect(
+                peripheral,
+                reason: "uart_characteristics_missing"
+            )
+            return
+        }
+        let read = characteristics.first { $0.uuid == uartReceiveUUID }
+        let write = characteristics.first { $0.uuid == uartWriteUUID }
+        guard let read, let write else {
+            handleUnexpectedDisconnect(
+                peripheral,
+                reason: "uart_characteristics_incomplete"
+            )
+            return
+        }
+        if peripheral === leftPeripheral {
+            leftReadCharacteristic = read
+            leftWriteCharacteristic = write
+        } else if peripheral === rightPeripheral {
+            rightReadCharacteristic = read
+            rightWriteCharacteristic = write
+        } else {
+            return
+        }
+        peripheral.setNotifyValue(true, for: read)
+    }
+
+    func peripheral(
+        _ peripheral: CBPeripheral,
+        didUpdateNotificationStateFor characteristic: CBCharacteristic,
+        error: Error?
+    ) {
+        guard error == nil, characteristic.isNotifying else {
+            handleUnexpectedDisconnect(
+                peripheral,
+                reason: error?.localizedDescription ?? "notify_not_enabled"
+            )
+            return
+        }
+        markReady(peripheral)
+    }
+
+    func peripheral(
+        _ peripheral: CBPeripheral,
+        didUpdateValueFor characteristic: CBCharacteristic,
+        error: Error?
+    ) {
+        guard error == nil, let data = characteristic.value, !data.isEmpty else {
+            return
+        }
+        handleCommand(data: data, peripheral: peripheral)
+    }
+
+    func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {
+        drainWrites(peripheral)
+    }
+
+    private func markReady(_ peripheral: CBPeripheral) {
+        guard isSelected(peripheral) else { return }
+        let inserted = readyIdentifiers.insert(peripheral.identifier).inserted
+        if inserted {
+            _ = writeData(
+                writeData: Data([0x4d, 0x01]),
+                side: peripheral === leftPeripheral ? "L" : "R"
+            )
+        }
+        guard
+            let left = leftPeripheral,
+            let right = rightPeripheral,
+            readyIdentifiers.contains(left.identifier),
+            readyIdentifiers.contains(right.identifier)
+        else {
+            return
+        }
+        channel?.invokeMethod(
+            "glassesConnected",
+            arguments: [
+                "leftDeviceName": left.name ?? "",
+                "rightDeviceName": right.name ?? "",
+                "status": "ready",
+                "generation": connectionGeneration,
+            ]
+        )
+    }
+
+    private func writeData(writeData: Data, side: String?) -> Bool {
+        switch side {
+        case "L":
+            return enqueueWrite(
+                writeData,
+                peripheral: leftPeripheral,
+                characteristic: leftWriteCharacteristic
+            )
+        case "R":
+            return enqueueWrite(
+                writeData,
+                peripheral: rightPeripheral,
+                characteristic: rightWriteCharacteristic
+            )
+        case nil:
+            let left = enqueueWrite(
+                writeData,
+                peripheral: leftPeripheral,
+                characteristic: leftWriteCharacteristic
+            )
+            let right = enqueueWrite(
+                writeData,
+                peripheral: rightPeripheral,
+                characteristic: rightWriteCharacteristic
+            )
+            return left && right
         default:
-            print("Bluetooth state is unknown or unsupported.")
+            return false
         }
     }
-    
-    
-    func sendData(params:[String:Any]) {
-        let flutterData = params["data"] as! FlutterStandardTypedData
-        writeData(writeData: flutterData.data, lr: params["lr"] as? String)
+
+    private func enqueueWrite(
+        _ data: Data,
+        peripheral: CBPeripheral?,
+        characteristic: CBCharacteristic?
+    ) -> Bool {
+        guard
+            let peripheral,
+            let characteristic,
+            readyIdentifiers.contains(peripheral.identifier)
+        else {
+            return false
+        }
+        if peripheral.canSendWriteWithoutResponse {
+            peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+            return true
+        }
+        var queue = pendingWrites[peripheral.identifier] ?? []
+        guard queue.count < 128 else { return false }
+        queue.append(data)
+        pendingWrites[peripheral.identifier] = queue
+        return true
     }
-    
-    func writeData(writeData: Data, cbPeripheral: CBPeripheral? = nil, lr: String? = nil) {
-        if lr == "L" {
-            if self.leftWChar != nil {
-                self.leftPeripheral?.writeValue(writeData, for: self.leftWChar!, type: .withoutResponse)
+
+    private func drainWrites(_ peripheral: CBPeripheral) {
+        guard
+            let characteristic = writeCharacteristic(for: peripheral),
+            var queue = pendingWrites[peripheral.identifier]
+        else {
+            return
+        }
+        while peripheral.canSendWriteWithoutResponse, !queue.isEmpty {
+            let data = queue.removeFirst()
+            peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+        }
+        pendingWrites[peripheral.identifier] = queue.isEmpty ? nil : queue
+    }
+
+    private func writeCharacteristic(
+        for peripheral: CBPeripheral
+    ) -> CBCharacteristic? {
+        if peripheral === leftPeripheral { return leftWriteCharacteristic }
+        if peripheral === rightPeripheral { return rightWriteCharacteristic }
+        return nil
+    }
+
+    private func handleCommand(data: Data, peripheral: CBPeripheral) {
+        let command = AG_BLE_REQ(rawValue: data[0])
+        if command == .BLE_REQ_TRANSFER_MIC_DATA {
+            guard data.count > 2 else { return }
+            let compressed = data.subdata(in: 2..<data.count)
+            let pcm = PcmConverter().decode(compressed) as Data
+            SpeechStreamRecognizer.shared.appendPCMData(pcm)
+            return
+        }
+        blueInfoSink?([
+            "type": "Receive",
+            "lr": peripheral === leftPeripheral ? "L" : "R",
+            "data": data,
+            "generation": connectionGeneration,
+        ])
+    }
+
+    private func handleUnexpectedDisconnect(
+        _ peripheral: CBPeripheral,
+        reason: String
+    ) {
+        readyIdentifiers.remove(peripheral.identifier)
+        pendingWrites[peripheral.identifier] = nil
+        if peripheral === leftPeripheral {
+            leftReadCharacteristic = nil
+            leftWriteCharacteristic = nil
+        } else if peripheral === rightPeripheral {
+            rightReadCharacteristic = nil
+            rightWriteCharacteristic = nil
+        }
+        channel?.invokeMethod(
+            "glassesDisconnected",
+            arguments: [
+                "leftDeviceName": leftPeripheral?.name ?? "",
+                "rightDeviceName": rightPeripheral?.name ?? "",
+                "reason": reason,
+                "generation": connectionGeneration,
+            ]
+        )
+    }
+
+    private func clearConnection(
+        cancelLinks: Bool,
+        notify: Bool,
+        reason: String
+    ) {
+        let peripherals = [leftPeripheral, rightPeripheral].compactMap { $0 }
+        if cancelLinks {
+            for peripheral in peripherals {
+                intentionalDisconnects.insert(peripheral.identifier)
+                centralManager.cancelPeripheralConnection(peripheral)
             }
-            return
         }
-        if lr == "R" {
-            if self.rightWChar != nil {
-                self.rightPeripheral?.writeValue(writeData, for: self.rightWChar!, type: .withoutResponse)
-            }
-            return
+        if notify, !peripherals.isEmpty {
+            channel?.invokeMethod(
+                "glassesDisconnected",
+                arguments: [
+                    "leftDeviceName": leftPeripheral?.name ?? "",
+                    "rightDeviceName": rightPeripheral?.name ?? "",
+                    "reason": reason,
+                    "generation": connectionGeneration,
+                ]
+            )
         }
-        
-        if let leftWChar = self.leftWChar {
-            self.leftPeripheral?.writeValue(writeData, for: leftWChar, type: .withoutResponse)
-        } else {
-            print("writeData leftWChar is nil, cannot write data to right peripheral.")
-        }
-
-        if let rightWChar = self.rightWChar {
-            self.rightPeripheral?.writeValue(writeData, for: rightWChar, type: .withoutResponse)
-        } else {
-            print("writeData rightWChar is nil, cannot write data to right peripheral.")
-        }
-    }
-    
-    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
-        guard error == nil else {
-            print("\(Date()) didWriteValueFor----characteristic---\(characteristic)---- \(error!)")
-            return
-        }
-    }
-    
-    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor descriptor: CBDescriptor, error: Error?) {
-        guard error == nil else {
-            print("\(Date()) didWriteValueFor----------- \(error!)")
-            return
-        }
+        readyIdentifiers.removeAll()
+        pendingWrites.removeAll()
+        leftReadCharacteristic = nil
+        rightReadCharacteristic = nil
+        leftWriteCharacteristic = nil
+        rightWriteCharacteristic = nil
+        leftPeripheral = nil
+        rightPeripheral = nil
+        currentDeviceName = nil
     }
 
-    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        //print("\(Date()) didUpdateValueFor------\(peripheral.identifier.uuidString)----\(peripheral.name)-----\(characteristic.value)--")
-        let data = characteristic.value
-        self.getCommandValue(data: data!,cbPeripheral: peripheral)
-    }
-    
-    func getCommandValue(data:Data,cbPeripheral:CBPeripheral? = nil){
-        let rspCommand = AG_BLE_REQ(rawValue: (data[0]))
-        switch rspCommand{
-            case .BLE_REQ_TRANSFER_MIC_DATA:
-                 let hexString = data.map { String(format: "%02hhx", $0) }.joined()
-                 let effectiveData = data.subdata(in: 2..<data.count)
-                 let pcmConverter = PcmConverter()
-                 var pcmData = pcmConverter.decode(effectiveData)
-               
-                 let inputData = pcmData as Data
-                 SpeechStreamRecognizer.shared.appendPCMData(inputData)
-            
-                 break
-            default:
-                let isLeft = cbPeripheral?.identifier.uuidString == self.leftUUIDStr
-                let legStr = isLeft ? "L" : "R"
-                var dictionary = [String: Any]()
-                dictionary["type"] = "type" // todo
-                dictionary["lr"] = legStr
-                dictionary["data"] = data
-
-                self.blueInfoSink(dictionary)
-                break
-        }
-    }
-}
-
-// Extension for safe array indexing
-extension Array {
-    subscript(safe index: Int) -> Element? {
-        return indices.contains(index) ? self[index] : nil
+    private func isSelected(_ peripheral: CBPeripheral) -> Bool {
+        peripheral === leftPeripheral || peripheral === rightPeripheral
     }
 }
