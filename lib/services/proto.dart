@@ -176,27 +176,27 @@ class Proto {
     return packets;
   }
 
-  static Future<void> sendNewAppWhiteListJson(String whitelistJson) async {
+  static Future<bool> sendNewAppWhiteListJson(String whitelistJson) async {
     final packets = _getPackList(
       0x04,
       Uint8List.fromList(utf8.encode(whitelistJson)),
       count: 180,
     );
-    for (var attempt = 0; attempt < 3; attempt++) {
-      if (await BleManager.requestList(packets, timeoutMs: 300, lr: 'L')) {
-        return;
-      }
+    final success =
+        await BleManager.requestList(packets, timeoutMs: 300, lr: 'L');
+    if (!success) {
+      PrivacySafeLog.event(
+        'whitelist_send_failed',
+        fields: <String, Object?>{'packets': packets.length},
+      );
     }
-    PrivacySafeLog.event(
-      'whitelist_send_failed',
-      fields: <String, Object?>{'packets': packets.length},
-    );
+    return success;
   }
 
-  static Future<void> sendNotify(
+  static Future<bool> sendNotify(
     Map<Object?, Object?> appData,
     int notifyId, {
-    int retry = 6,
+    int retry = 0,
   }) async {
     final notifyJson = jsonEncode(<String, Object?>{
       'ncs_notification': appData,
@@ -206,18 +206,18 @@ class Proto {
       notifyId,
       Uint8List.fromList(utf8.encode(notifyJson)),
     );
-    for (var attempt = 0; attempt < retry; attempt++) {
-      if (await BleManager.requestList(packets, timeoutMs: 1000, lr: 'L')) {
-        return;
-      }
+    final success =
+        await BleManager.requestList(packets, timeoutMs: 1000, lr: 'L');
+    if (!success) {
+      PrivacySafeLog.event(
+        'notification_send_failed',
+        fields: <String, Object?>{
+          'notification_id': notifyId,
+          'packets': packets.length,
+        },
+      );
     }
-    PrivacySafeLog.event(
-      'notification_send_failed',
-      fields: <String, Object?>{
-        'notification_id': notifyId,
-        'packets': packets.length,
-      },
-    );
+    return success;
   }
 
   static List<Uint8List> _getNotifyPackList(
