@@ -2,6 +2,8 @@ import 'canonical_json.dart';
 
 enum RiskTier { r0, r1, r2, r3, r4 }
 
+enum TrustClass { system, user, untrusted }
+
 enum TaskState {
   created,
   validating,
@@ -32,6 +34,9 @@ enum DisplayCardKind {
 RiskTier riskTierFromJson(String value) =>
     RiskTier.values.firstWhere((item) => item.name == value);
 
+TrustClass trustClassFromJson(String value) =>
+    TrustClass.values.firstWhere((item) => item.name == value);
+
 TaskState taskStateFromJson(String value) =>
     TaskState.values.firstWhere((item) => item.name == value);
 
@@ -61,6 +66,8 @@ final class ToolRequest {
     required this.mutating,
     required this.idempotencyKey,
     required DateTime deadline,
+    this.origin = TrustClass.user,
+    this.humanConfirmationDigest,
   }) : deadline = deadline.toUtc();
 
   final String requestId;
@@ -72,6 +79,10 @@ final class ToolRequest {
   final bool mutating;
   final String idempotencyKey;
   final DateTime deadline;
+  final TrustClass origin;
+  final String? humanConfirmationDigest;
+
+  String get argumentDigest => sha256CanonicalJson(arguments);
 
   String get fingerprint => sha256CanonicalJson(toJson());
 
@@ -85,6 +96,8 @@ final class ToolRequest {
         'mutating': mutating,
         'idempotency_key': idempotencyKey,
         'deadline': deadline.toIso8601String(),
+        'origin': origin.name,
+        'human_confirmation_digest': humanConfirmationDigest,
       };
 
   factory ToolRequest.fromJson(Map<String, Object?> json) => ToolRequest(
@@ -97,6 +110,8 @@ final class ToolRequest {
         mutating: json['mutating']! as bool,
         idempotencyKey: json['idempotency_key']! as String,
         deadline: DateTime.parse(json['deadline']! as String),
+        origin: trustClassFromJson(json['origin'] as String? ?? 'user'),
+        humanConfirmationDigest: json['human_confirmation_digest'] as String?,
       );
 }
 
@@ -107,20 +122,34 @@ final class DecisionLease {
     required this.taskId,
     required this.deviceId,
     required Set<String> allowedActions,
+    required Map<String, Object?> argumentConstraints,
+    required DateTime issuedAt,
     required DateTime expiresAt,
     required this.singleUse,
     required this.policyHash,
+    this.approvalProof,
   })  : allowedActions = Set.unmodifiable(allowedActions),
-        expiresAt = expiresAt.toUtc();
+        argumentConstraints = Map.unmodifiable(argumentConstraints),
+        issuedAt = issuedAt.toUtc(),
+        expiresAt = expiresAt.toUtc() {
+    if (!this.issuedAt.isBefore(this.expiresAt)) {
+      throw ArgumentError('Decision lease must expire after it is issued.');
+    }
+  }
 
   final String leaseId;
   final String subject;
   final String taskId;
   final String deviceId;
   final Set<String> allowedActions;
+  final Map<String, Object?> argumentConstraints;
+  final DateTime issuedAt;
   final DateTime expiresAt;
   final bool singleUse;
   final String policyHash;
+  final String? approvalProof;
+
+  String get argumentDigest => sha256CanonicalJson(argumentConstraints);
 
   Map<String, Object?> toJson() => <String, Object?>{
         'lease_id': leaseId,
@@ -128,9 +157,12 @@ final class DecisionLease {
         'task_id': taskId,
         'device_id': deviceId,
         'allowed_actions': allowedActions.toList()..sort(),
+        'argument_constraints': argumentConstraints,
+        'issued_at': issuedAt.toIso8601String(),
         'expires_at': expiresAt.toIso8601String(),
         'single_use': singleUse,
         'policy_hash': policyHash,
+        'approval_proof': approvalProof,
       };
 
   factory DecisionLease.fromJson(Map<String, Object?> json) => DecisionLease(
@@ -141,9 +173,12 @@ final class DecisionLease {
         allowedActions: (json['allowed_actions']! as List)
             .map((item) => item.toString())
             .toSet(),
+        argumentConstraints: _stringObjectMap(json['argument_constraints']),
+        issuedAt: DateTime.parse(json['issued_at']! as String),
         expiresAt: DateTime.parse(json['expires_at']! as String),
         singleUse: json['single_use']! as bool,
         policyHash: json['policy_hash']! as String,
+        approvalProof: json['approval_proof'] as String?,
       );
 }
 

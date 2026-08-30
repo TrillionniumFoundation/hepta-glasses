@@ -49,7 +49,14 @@ final class PolicyEngine {
         reason: 'decision_lease_already_consumed',
       );
     }
-    if (!_clock.now().isBefore(lease.expiresAt)) {
+    final now = _clock.now();
+    if (lease.issuedAt.isAfter(now)) {
+      return const PolicyDecision(
+        allowed: false,
+        reason: 'decision_lease_not_yet_valid',
+      );
+    }
+    if (!now.isBefore(lease.expiresAt)) {
       return const PolicyDecision(
         allowed: false,
         reason: 'decision_lease_expired',
@@ -64,6 +71,26 @@ final class PolicyEngine {
         allowed: false,
         reason: 'decision_lease_binding_mismatch',
       );
+    }
+    if (lease.argumentDigest != request.argumentDigest) {
+      return const PolicyDecision(
+        allowed: false,
+        reason: 'decision_lease_argument_mismatch',
+      );
+    }
+    if (request.origin == TrustClass.untrusted) {
+      if (request.humanConfirmationDigest == null) {
+        return const PolicyDecision(
+          allowed: false,
+          reason: 'untrusted_content_cannot_authorize_mutation',
+        );
+      }
+      if (request.humanConfirmationDigest != request.argumentDigest) {
+        return const PolicyDecision(
+          allowed: false,
+          reason: 'confirmation_digest_mismatch',
+        );
+      }
     }
     if (spec.riskTier == RiskTier.r2 && !context.userPresent) {
       return const PolicyDecision(
@@ -85,6 +112,10 @@ final class PolicyEngine {
     if (lease != null && lease.singleUse) {
       _consumedLeaseIds.add(lease.leaseId);
     }
+  }
+
+  void restoreConsumed(Iterable<String> leaseIds) {
+    _consumedLeaseIds.addAll(leaseIds);
   }
 
   bool isConsumed(String leaseId) => _consumedLeaseIds.contains(leaseId);
