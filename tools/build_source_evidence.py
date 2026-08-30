@@ -32,14 +32,35 @@ def write_json(path: Path, value: object) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def canonical_contracts_version(root: Path) -> str:
+    ledger_path = root / "docs/GAP_LEDGER.yaml"
+    try:
+        ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise SystemExit(f"canonical Gap Ledger is unreadable: {error}") from error
+    version = ledger.get("plan_revision") if isinstance(ledger, dict) else None
+    if not isinstance(version, str) or not version:
+        raise SystemExit("canonical Gap Ledger has no plan_revision")
+    return version
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--output-dir", type=Path, default=Path("build/evidence"))
-    parser.add_argument("--contracts-version", default="2026-08-30-g2")
+    parser.add_argument("--contracts-version")
     args = parser.parse_args()
     root = args.root.resolve()
     output = (root / args.output_dir).resolve()
+    contracts_version = canonical_contracts_version(root)
+    if (
+        args.contracts_version is not None
+        and args.contracts_version != contracts_version
+    ):
+        raise SystemExit(
+            "requested contracts version does not match the canonical Gap Ledger"
+        )
+
     commit = git(root, "rev-parse", "HEAD")
     tree = git(root, "rev-parse", "HEAD^{tree}")
     repository = os.environ.get(
@@ -55,6 +76,7 @@ def main() -> int:
     provenance = {
         "builder": "github-actions/hepta-source-evidence-v2",
         "commit": commit,
+        "contracts_version": contracts_version,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "repository": repository,
         "sbom_digest": sbom_digest,
@@ -87,7 +109,7 @@ def main() -> int:
         "source": {
             "ci_checks": checks,
             "commit": commit,
-            "contracts_version": args.contracts_version,
+            "contracts_version": contracts_version,
             "provenance": {"sha256": provenance_digest},
             "sbom": {"sha256": sbom_digest},
             "tree": tree,
@@ -96,6 +118,7 @@ def main() -> int:
     write_json(output / "source-release-bundle.json", bundle)
     summary = {
         "commit": commit,
+        "contracts_version": contracts_version,
         "file_count": len(sbom["files"]),
         "package_count": len(sbom["packages"]),
         "provenance_digest": provenance_digest,
