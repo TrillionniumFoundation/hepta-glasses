@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import json
 import secrets
+import threading
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -47,6 +48,12 @@ def _canonical_json(value: Mapping[str, object]) -> bytes:
     ).encode("utf-8")
 
 
+def _is_sha256(value: str) -> bool:
+    return len(value) == 64 and value == value.lower() and all(
+        character in "0123456789abcdef" for character in value
+    )
+
+
 @dataclass(frozen=True)
 class DeviceRecord:
     device_id: str
@@ -57,12 +64,14 @@ class DeviceRecord:
 
 
 class DeviceRegistry:
-    """Authoritative user/device binding with explicit revoke and lost modes."""
+    """Authoritative binding with terminal lost/revoked state transitions."""
 
     VALID_STATUSES = {"active", "revoked", "lost"}
+    TERMINAL_STATUSES = {"revoked", "lost"}
 
     def __init__(self) -> None:
         self._records: dict[str, DeviceRecord] = {}
+        self._lock = threading.RLock()
 
     def register(
         self,
@@ -72,54 +81,67 @@ class DeviceRegistry:
         attestation_digest: str,
         now: int,
     ) -> DeviceRecord:
-        if not device_id or not subject or len(attestation_digest) != 64:
+        if not device_id or not subject or not _is_sha256(attestation_digest):
             raise IdentityError("device_registration_invalid")
-        existing = self._records.get(device_id)
-        if existing is not None:
-            if existing.subject != subject:
-                raise IdentityError("device_subject_conflict")
-            if existing.status != "active":
-                raise IdentityError("device_reactivation_requires_recovery")
-            if existing.attestation_digest != attestation_digest:
-                raise IdentityError("device_attestation_conflict")
-        record = DeviceRecord(
-            device_id=device_id,
-            subject=subject,
-            attestation_digest=attestation_digest,
-            status="active",
-            registered_at=existing.registered_at if existing else now,
-        )
-        self._records[device_id] = record
-        return record
+        with self._lock:
+            existing = self._records.get(device_id)
+            if existing is not None:
+                if existing.subject != subject:
+                    raise IdentityError("device_subject_conflict")
+                if existing.status != "active":
+                    raise IdentityError("device_reactivation_requires_recovery")
+                if not hmac.compare_digest(
+                    existing.attestation_digest, attestation_digest
+                ):
+                    raise IdentityError("device_attestation_conflict")
+                return existing
+            record = DeviceRecord(
+                device_id=device_id,
+                subject=subject,
+                attestation_digest=attestation_digest,
+                status="active",
+                registered_at=now,
+            )
+            self._records[device_id] = record
+            return record
 
     def set_status(self, device_id: str, status: str) -> DeviceRecord:
         if status not in self.VALID_STATUSES:
             raise IdentityError("device_status_invalid")
-        current = self._records.get(device_id)
-        if current is None:
-            raise IdentityError("device_unknown")
-        updated = DeviceRecord(
-            device_id=current.device_id,
-            subject=current.subject,
-            attestation_digest=current.attestation_digest,
-            status=status,
-            registered_at=current.registered_at,
-        )
-        self._records[device_id] = updated
-        return updated
+        with self._lock:
+            current = self._records.get(device_id)
+            if current is None:
+                raise IdentityError("device_unknown")
+            if current.status == status:
+                return current
+            if current.status in self.TERMINAL_STATUSES and status == "active":
+                raise IdentityError("device_reactivation_requires_recovery")
+            if current.status == "revoked":
+                raise IdentityError("device_revocation_terminal")
+            updated = DeviceRecord(
+                device_id=current.device_id,
+                subject=current.subject,
+                attestation_digest=current.attestation_digest,
+                status=status,
+                registered_at=current.registered_at,
+            )
+            self._records[device_id] = updated
+            return updated
 
     def require_active(self, *, device_id: str, subject: str) -> DeviceRecord:
-        record = self._records.get(device_id)
-        if record is None:
-            raise IdentityError("device_unknown")
-        if record.subject != subject:
-            raise IdentityError("device_subject_mismatch")
-        if record.status != "active":
-            raise IdentityError(f"device_{record.status}")
-        return record
+        with self._lock:
+            record = self._records.get(device_id)
+            if record is None:
+                raise IdentityError("device_unknown")
+            if record.subject != subject:
+                raise IdentityError("device_subject_mismatch")
+            if record.status != "active":
+                raise IdentityError(f"device_{record.status}")
+            return record
 
     def get(self, device_id: str) -> DeviceRecord | None:
-        return self._records.get(device_id)
+        with self._lock:
+            return self._records.get(device_id)
 
 
 @dataclass(frozen=True)
@@ -146,61 +168,78 @@ class KeyRing:
             raise IdentityError("signing_key_too_short")
         self._keys = dict(keys)
         self._active_key_id = active_key_id
+        self._lock = threading.RLock()
 
     @property
     def active_key_id(self) -> str:
-        return self._active_key_id
+        with self._lock:
+            return self._active_key_id
 
     def active_secret(self) -> bytes:
-        return self._keys[self._active_key_id]
+        with self._lock:
+            return self._keys[self._active_key_id]
+
+    def active_signer(self) -> tuple[str, bytes]:
+        """Return one atomic key-id/secret snapshot for a signing operation."""
+        with self._lock:
+            return self._active_key_id, self._keys[self._active_key_id]
 
     def secret_for(self, key_id: str) -> bytes:
-        try:
-            return self._keys[key_id]
-        except KeyError as error:
-            raise IdentityError("signing_key_unknown") from error
+        with self._lock:
+            try:
+                return self._keys[key_id]
+            except KeyError as error:
+                raise IdentityError("signing_key_unknown") from error
 
     def rotate(self, *, key_id: str, secret: bytes, activate: bool = True) -> None:
         if not key_id or len(secret) < 32:
             raise IdentityError("signing_key_invalid")
-        self._keys[key_id] = secret
-        if activate:
-            self._active_key_id = key_id
+        with self._lock:
+            self._keys[key_id] = secret
+            if activate:
+                self._active_key_id = key_id
 
     def retire(self, key_id: str) -> None:
-        if key_id == self._active_key_id:
-            raise IdentityError("active_signing_key_cannot_retire")
-        self._keys.pop(key_id, None)
+        with self._lock:
+            if key_id == self._active_key_id:
+                raise IdentityError("active_signing_key_cannot_retire")
+            self._keys.pop(key_id, None)
 
 
 class RevocationLedger:
-    """Revokes token IDs, sessions, devices, or complete subjects."""
+    """Thread-safe token/session/device/subject revocation ledger."""
 
     def __init__(self) -> None:
         self._token_ids: set[str] = set()
         self._session_ids: set[str] = set()
         self._device_ids: set[str] = set()
         self._subjects: set[str] = set()
+        self._lock = threading.RLock()
 
     def revoke_token(self, token_id: str) -> None:
-        self._token_ids.add(token_id)
+        with self._lock:
+            self._token_ids.add(token_id)
 
     def revoke_session(self, session_id: str) -> None:
-        self._session_ids.add(session_id)
+        with self._lock:
+            self._session_ids.add(session_id)
 
     def revoke_device(self, device_id: str) -> None:
-        self._device_ids.add(device_id)
+        with self._lock:
+            self._device_ids.add(device_id)
 
     def revoke_subject(self, subject: str) -> None:
-        self._subjects.add(subject)
+        with self._lock:
+            self._subjects.add(subject)
 
     def is_revoked(self, claims: AccessClaims) -> bool:
-        return (
-            claims.token_id in self._token_ids
-            or claims.session_id in self._session_ids
-            or claims.device_id in self._device_ids
-            or claims.subject in self._subjects
-        )
+        with self._lock:
+            return (
+                claims.token_id in self._token_ids
+                or claims.session_id in self._session_ids
+                or claims.device_id in self._device_ids
+                or claims.subject in self._subjects
+            )
 
 
 class SlidingWindowRateLimiter:
@@ -212,15 +251,17 @@ class SlidingWindowRateLimiter:
         self.limit = limit
         self.window_seconds = window_seconds
         self._events: dict[str, deque[int]] = defaultdict(deque)
+        self._lock = threading.RLock()
 
     def consume(self, key: str, *, now: int) -> None:
-        events = self._events[key]
-        cutoff = now - self.window_seconds
-        while events and events[0] <= cutoff:
-            events.popleft()
-        if len(events) >= self.limit:
-            raise IdentityError("rate_limit_exceeded")
-        events.append(now)
+        with self._lock:
+            events = self._events[key]
+            cutoff = now - self.window_seconds
+            while events and events[0] <= cutoff:
+                events.popleft()
+            if len(events) >= self.limit:
+                raise IdentityError("rate_limit_exceeded")
+            events.append(now)
 
 
 class TokenService:
@@ -269,9 +310,10 @@ class TokenService:
         normalized_scopes = sorted({scope for scope in scopes if scope})
         if not normalized_scopes:
             raise IdentityError("token_scope_empty")
+        key_id, signing_secret = self.key_ring.active_signer()
         header = {
             "alg": "HS256",
-            "kid": self.key_ring.active_key_id,
+            "kid": key_id,
             "typ": self.TOKEN_TYPE,
         }
         payload = {
@@ -288,9 +330,7 @@ class TokenService:
         encoded_header = _b64url_encode(_canonical_json(header))
         encoded_payload = _b64url_encode(_canonical_json(payload))
         signing_input = f"{encoded_header}.{encoded_payload}".encode("ascii")
-        signature = hmac.new(
-            self.key_ring.active_secret(), signing_input, hashlib.sha256
-        ).digest()
+        signature = hmac.new(signing_secret, signing_input, hashlib.sha256).digest()
         return f"{encoded_header}.{encoded_payload}.{_b64url_encode(signature)}"
 
     def verify(
@@ -340,7 +380,7 @@ class TokenService:
         if set(payload) != required:
             raise IdentityError("token_claims_invalid")
         if payload["iss"] != self.issuer or payload["aud"] != audience:
-            raise IdentityError("token_audience_invalid")
+            raise IdentityEror("token_audience_invalid")
         if not isinstance(payload["iat"], int) or not isinstance(payload["exp"], int):
             raise IdentityError("token_time_invalid")
         if payload["iat"] > timestamp + maximum_clock_skew_seconds:

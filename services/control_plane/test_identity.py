@@ -98,12 +98,61 @@ class IdentityTest(unittest.TestCase):
                 )
                 self.assertEqual(devices.get("g1-001").status, status)
 
+
+    def test_terminal_status_cannot_be_reactivated_by_status_update(self) -> None:
+        for status in ("lost", "revoked"):
+            with self.subTest(status=status):
+                devices = DeviceRegistry()
+                devices.register(
+                    device_id="g1-001",
+                    subject="user-1",
+                    attestation_digest=self.attestation_digest,
+                    now=self.now,
+                )
+                devices.set_status("g1-001", status)
+                with self.assertRaises(IdentityError) as raised:
+                    devices.set_status("g1-001", "active")
+                self.assertEqual(
+                    raised.exception.code,
+                    "device_reactivation_requires_recovery",
+                )
+                self.assertEqual(devices.get("g1-001").status, status)
+
+    def test_revoked_status_is_terminal_but_lost_can_escalate(self) -> None:
+        devices = DeviceRegistry()
+        devices.register(
+            device_id="g1-001",
+            subject="user-1",
+            attestation_digest=self.attestation_digest,
+            now=self.now,
+        )
+        devices.set_status("g1-001", "lost")
+        self.assertEqual(devices.set_status("g1-001", "revoked").status, "revoked")
+        with self.assertRaises(IdentityError) as raised:
+            devices.set_status("g1-001", "lost")
+        self.assertEqual(raised.exception.code, "device_revocation_terminal")
+
+    def test_registration_rejects_noncanonical_attestation_digest(self) -> None:
+        devices = DeviceRegistry()
+        with self.assertRaises(IdentityError) as raised:
+            devices.register(
+                device_id="g1-002",
+                subject="user-1",
+                attestation_digest="z" * 64,
+                now=self.now,
+            )
+        self.assertEqual(raised.exception.code, "device_registration_invalid")
+
     def test_rotation_keeps_old_key_until_retired(self) -> None:
         old = self.issue()
         self.keys.rotate(key_id="k2", secret=b"b" * 32)
         new = self.issue()
-        self.assertEqual(self.tokens.verify(old, audience="hepta-control-plane").key_id, "k1")
-        self.assertEqual(self.tokens.verify(new, audience="hepta-control-plane").key_id, "k2")
+        self.assertEqual(
+            self.tokens.verify(old, audience="hepta-control-plane").key_id, "k1"
+        )
+        self.assertEqual(
+            self.tokens.verify(new, audience="hepta-control-plane").key_id, "k2"
+        )
         self.keys.retire("k1")
         with self.assertRaises(IdentityError) as raised:
             self.tokens.verify(old, audience="hepta-control-plane")
