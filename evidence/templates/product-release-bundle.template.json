@@ -1,36 +1,210 @@
 {
   "source": {
+    "repository": "TrillionniumFoundation/hepta-glasses",
     "commit": "REPLACE_WITH_40_HEX_COMMIT",
     "tree": "REPLACE_WITH_40_HEX_TREE",
     "ci_checks": [],
-    "sbom": {"sha256": "REPLACE_WITH_64_HEX"},
-    "provenance": {"sha256": "REPLACE_WITH_64_HEX"},
+    "sbom": {
+      "sha256": "REPLACE_WITH_64_HEX"
+    },
+    "provenance": {
+      "sha256": "REPLACE_WITH_64_HEX"
+    },
     "contracts_version": "2026-08-30-g2"
   },
-  "branch_protection": {
-    "protected": false,
-    "required_approvals": 0,
-    "force_pushes_allowed": true,
-    "required_checks": []
-  },
-  "device_qualification": [],
-  "reviews": {
-    "security": "pending",
-    "privacy": "pending",
-    "legal": "pending"
-  },
-  "drills": {
-    "kill_switch": "pending",
-    "rollback": "pending"
-  },
-  "signing": {
-    "android_digest": "",
-    "ios_digest": "",
-    "provenance_digest": ""
-  },
-  "pilot": {
-    "cohort_size": 0,
-    "crash_free_rate": 0,
-    "duplicate_effects": 0
-  }
+  "product_attestations": [
+    {
+      "schema": "hepta.product-attestation.v1",
+      "kind": "branch_protection",
+      "issuer": "REPLACE_WITH_GOVERNANCE_ISSUER",
+      "key_id": "REPLACE_WITH_KEY_ID",
+      "repository": "TrillionniumFoundation/hepta-glasses",
+      "commit": "REPLACE_WITH_40_HEX_COMMIT",
+      "tree": "REPLACE_WITH_40_HEX_TREE",
+      "issued_at": 0,
+      "expires_at": 0,
+      "payload": {
+        "protected": false,
+        "required_approvals": 0,
+        "force_pushes_allowed": true,
+        "required_checks": []
+      },
+      "signature": "REPLACE_WITH_64_HEX_HMAC"
+    },
+    {
+      "schema": "hepta.product-attestation.v1",
+      "kind": "device.android",
+      "issuer": "REPLACE_WITH_ANDROID_QUALIFICATION_ISSUER",
+      "key_id": "REPLACE_WITH_KEY_ID",
+      "repository": "TrillionniumFoundation/hepta-glasses",
+      "commit": "REPLACE_WITH_40_HEX_COMMIT",
+      "tree": "REPLACE_WITH_40_HEX_TREE",
+      "issued_at": 0,
+      "expires_at": 0,
+      "payload": {
+        "passed": false,
+        "report_digest": "REPLACE_WITH_64_HEX"
+      },
+      "signature": "REPLACE_WITH_64_HEX_HMAC"
+    },
+    {
+      "schema": "hepta.product-attestation.v1",
+      "kind": "device.ios",
+      "issuer": "REPLACE_WITH_IOS_QUALIFICATION_ISSUER",
+      "key_id": "REPLACE_WITH_KEY_ID",
+      "repository": "TrillionniumFoundation/hepta-glasses",
+      "commit": "REPLACE_WITH_40_HEX_COMMIT",
+      "tree": "REPLACE_WITH_40_HEX_TREE",
+      "issued_at": 0,
+      "expires_at": 0,
+      "payload": {
+        "passed": false,
+        "report_digest": "REPLACE_WITH_64_HEX"
+      },
+      "signature": "REPLACE_WITH_64_HEX_HMAC"
+    },
+    {
+      "schema": "hepta.product-attestation.v1",
+      "kind": "review.security",
+      "issuer": "REPLACE_WITH_SECURITY_REVIEW_ISSUER",
+      "key_id": "REPLACE_WITH_KEY_ID",
+      "repository": "TrillionniumFoundation/hepta-glasses",
+      "commit": "REPLACE_WITH_40_HEX_COMMIT",
+      "tree": "REPLACE_WITH_40_HEX_TREE",
+      "issued_at": 0,
+      "expires_at": 0,
+      "payload": {
+        "decision": "pending",
+        "review_digest": "REPLACE_WITH_64_HEX"
+      },
+      "signature": "REPLACE_WITH_64_HEX_HMAC"
+    },
+    {
+      "schema": "hepta.product-attestation.v1",
+      "kind": "review.privacy",
+      "issuer": "REPLACE_WITH_PRIVACY_REVIEW_ISSUER",
+      "key_id": "REPLACE_WITH_KEY_ID",
+      "repository": "TrillionniumFoundation/hepta-glasses",
+      "commit": "REPLACE_WITH_40_HEX_COMMIT",
+      "tree": "REPLACE_WITH_40_HEX_TREE",
+      "issued_at": 0,
+      "expires_at": 0,
+      "payload": {
+        "decision": "pending",
+        "review_digest": "REPLACE_WITH_64_HEX"
+      },
+      "signature": "REPLACE_WITH_64_HEX_HMAC"
+    },
+    {
+      "schema": "hepta.product-attestation.v1",
+      "kind": "review.legal",
+      "issuer": "REPLACE_WITH_LEGAL_REVIEW_ISSUER",
+      "key_id": "REPLACE_WITH_KEY_ID",
+      "repository": "TrillionniumFoundation/hepta-glasses",
+      "commit": "REPLACE_WITH_40_HEX_COMMIT",
+      "tree": "REPLACE_WITH_40_HEX_TREE",
+      "issued_at": 0,
+      "expires_at": 0,
+      "payload": {
+        "decision": "pending",
+        "review_digest": "REPLACE_WITH_64_HEX"
+      },
+      "signature": "REPLACE_WITH_64_HEX_HMAC"
+    },
+    {
+      "schema": "hepta.product-attestation.v1",
+      "kind": "drill.kill_switch",
+      "issuer": "REPLACE_WITH_OPERATIONS_ISSUER",
+      "key_id": "REPLACE_WITH_KEY_ID",
+      "repository": "TrillionniumFoundation/hepta-glasses",
+      "commit": "REPLACE_WITH_40_HEX_COMMIT",
+      "tree": "REPLACE_WITH_40_HEX_TREE",
+      "issued_at": 0,
+      "expires_at": 0,
+      "payload": {
+        "passed": false,
+        "report_digest": "REPLACE_WITH_64_HEX"
+      },
+      "signature": "REPLACE_WITH_64_HEX_HMAC"
+    },
+    {
+      "schema": "hepta.product-attestation.v1",
+      "kind": "drill.rollback",
+      "issuer": "REPLACE_WITH_OPERATIONS_ISSUER",
+      "key_id": "REPLACE_WITH_KEY_ID",
+      "repository": "TrillionniumFoundation/hepta-glasses",
+      "commit": "REPLACE_WITH_40_HEX_COMMIT",
+      "tree": "REPLACE_WITH_40_HEX_TREE",
+      "issued_at": 0,
+      "expires_at": 0,
+      "payload": {
+        "passed": false,
+        "report_digest": "REPLACE_WITH_64_HEX"
+      },
+      "signature": "REPLACE_WITH_64_HEX_HMAC"
+    },
+    {
+      "schema": "hepta.product-attestation.v1",
+      "kind": "signing.android",
+      "issuer": "REPLACE_WITH_ANDROID_SIGNING_ISSUER",
+      "key_id": "REPLACE_WITH_KEY_ID",
+      "repository": "TrillionniumFoundation/hepta-glasses",
+      "commit": "REPLACE_WITH_40_HEX_COMMIT",
+      "tree": "REPLACE_WITH_40_HEX_TREE",
+      "issued_at": 0,
+      "expires_at": 0,
+      "payload": {
+        "artifact_digest": "REPLACE_WITH_64_HEX"
+      },
+      "signature": "REPLACE_WITH_64_HEX_HMAC"
+    },
+    {
+      "schema": "hepta.product-attestation.v1",
+      "kind": "signing.ios",
+      "issuer": "REPLACE_WITH_IOS_SIGNING_ISSUER",
+      "key_id": "REPLACE_WITH_KEY_ID",
+      "repository": "TrillionniumFoundation/hepta-glasses",
+      "commit": "REPLACE_WITH_40_HEX_COMMIT",
+      "tree": "REPLACE_WITH_40_HEX_TREE",
+      "issued_at": 0,
+      "expires_at": 0,
+      "payload": {
+        "artifact_digest": "REPLACE_WITH_64_HEX"
+      },
+      "signature": "REPLACE_WITH_64_HEX_HMAC"
+    },
+    {
+      "schema": "hepta.product-attestation.v1",
+      "kind": "signing.provenance",
+      "issuer": "REPLACE_WITH_RELEASE_PROVENANCE_ISSUER",
+      "key_id": "REPLACE_WITH_KEY_ID",
+      "repository": "TrillionniumFoundation/hepta-glasses",
+      "commit": "REPLACE_WITH_40_HEX_COMMIT",
+      "tree": "REPLACE_WITH_40_HEX_TREE",
+      "issued_at": 0,
+      "expires_at": 0,
+      "payload": {
+        "provenance_digest": "REPLACE_WITH_64_HEX"
+      },
+      "signature": "REPLACE_WITH_64_HEX_HMAC"
+    },
+    {
+      "schema": "hepta.product-attestation.v1",
+      "kind": "pilot",
+      "issuer": "REPLACE_WITH_PILOT_EVIDENCE_ISSUER",
+      "key_id": "REPLACE_WITH_KEY_ID",
+      "repository": "TrillionniumFoundation/hepta-glasses",
+      "commit": "REPLACE_WITH_40_HEX_COMMIT",
+      "tree": "REPLACE_WITH_40_HEX_TREE",
+      "issued_at": 0,
+      "expires_at": 0,
+      "payload": {
+        "cohort_size": 0,
+        "crash_free_rate": 0,
+        "duplicate_effects": 0,
+        "report_digest": "REPLACE_WITH_64_HEX"
+      },
+      "signature": "REPLACE_WITH_64_HEX_HMAC"
+    }
+  ]
 }
