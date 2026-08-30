@@ -86,12 +86,16 @@ jobs:
           cache: false
       - run: flutter pub get
       - run: flutter build apk --debug
+      - name: Run Android native unit tests
+        run: |
+          cd android
+          ./gradlew testDebugUnitTest
       - name: Prove Android qualification is read-only
         run: git diff --exit-code
 
   ios-native:
     runs-on: macos-latest
-    timeout-minutes: 50
+    timeout-minutes: 60
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -112,6 +116,17 @@ jobs:
           cd ios
           pod install --deployment
       - run: flutter build ios --simulator --debug
+      - name: Run iOS native tests
+        run: |
+          DEVICE_ID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(device["udid"] for runtime in sorted(devices, reverse=True) for device in devices[runtime] if device.get("isAvailable") and device.get("name", "").startswith("iPhone")))')"
+          xcrun simctl boot "$DEVICE_ID" || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcodebuild test \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            CODE_SIGNING_ALLOWED=NO
       - name: Prove iOS qualification is read-only
         run: git diff --exit-code
 
