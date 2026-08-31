@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "tools" / "validate_repository.py"
 SURFACE_VALIDATOR = ROOT / "tools" / "validate_product_surface.py"
 ANDROID_BUILD = ROOT / "android" / "app" / "build.gradle"
+ANDROID_MANIFEST = ROOT / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
 
 PATH_REPLACEMENTS = (
     (
@@ -97,9 +98,7 @@ elif legacy_check not in surface:
 SURFACE_VALIDATOR.write_text(surface, encoding="utf-8")
 
 # Remove Kotlin reflection regardless of whether an older branch pinned the
-# version directly or interpolated it from a Gradle variable. This app does not
-# use reflection, and leaving the runtime in release builds violates the G8
-# product-surface contract.
+# version directly or interpolated it from a Gradle variable.
 android_build = ANDROID_BUILD.read_text(encoding="utf-8")
 android_build = re.sub(
     r"(?m)^\s*(?:implementation|api)\s+[\"']org\.jetbrains\.kotlin:kotlin-reflect:[^\"']+[\"']\s*$\n?",
@@ -109,6 +108,14 @@ android_build = re.sub(
 if "kotlin-reflect" in android_build:
     raise SystemExit("unable to remove every Kotlin reflection dependency")
 ANDROID_BUILD.write_text(android_build, encoding="utf-8")
+
+# Remove the unrelated package-visibility query structurally. Older transforms
+# depended on a generated comment that is not present in every Flutter tree.
+manifest = ANDROID_MANIFEST.read_text(encoding="utf-8")
+manifest = re.sub(r"\n\s*<queries\b[^>]*>.*?</queries>\s*", "\n", manifest, flags=re.S)
+if "PROCESS_TEXT" in manifest or "<queries" in manifest:
+    raise SystemExit("unable to remove Android PROCESS_TEXT query surface")
+ANDROID_MANIFEST.write_text(manifest, encoding="utf-8")
 
 # Machine truth must never reference files removed by the package migration.
 for relative in ("docs/GAP_LEDGER.json", "docs/EVIDENCE_INDEX.json"):
