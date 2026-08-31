@@ -1,0 +1,240 @@
+name: g8-ci-orchestrator
+
+on:
+  push:
+    branches:
+      - work/hepta-g8-ci-orchestrator-20260901
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  bind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Wait for one stable exact-head formal matrix
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          repository = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          api = 'https://api.github.com'
+          expected_jobs = {
+              'repository-contracts',
+              'flutter',
+              'android-native',
+              'ios-native',
+              'native-sanitizers',
+              'secret-and-boundary-scan',
+              'source-evidence',
+          }
+
+          def request(method: str, path: str, payload=None):
+              data = None
+              if payload is not None:
+                  data = json.dumps(payload).encode()
+              req = urllib.request.Request(
+                  api + path,
+                  data=data,
+                  method=method,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'Content-Type': 'application/json',
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  body = response.read()
+                  return json.loads(body) if body else None
+
+          stable_head = None
+          selected = None
+          jobs = []
+          for _ in range(150):
+              pr = request('GET', f'/repos/{repository}/pulls/23')
+              current_head = pr['head']['sha']
+              if stable_head != current_head:
+                  stable_head = current_head
+                  selected = None
+              runs = request(
+                  'GET',
+                  f'/repos/{repository}/actions/runs?branch=codex%2Fhepta-glasses-gap-closure-g8&per_page=40',
+              )['workflow_runs']
+              candidates = [
+                  run for run in runs
+                  if run.get('head_sha') == current_head
+                  and run.get('path') == '.github/workflows/ci.yml'
+                  and run.get('status') == 'completed'
+                  and run.get('conclusion') != 'cancelled'
+              ]
+              if candidates:
+                  selected = sorted(
+                      candidates,
+                      key=lambda run: (run.get('run_started_at') or '', run['id']),
+                      reverse=True,
+                  )[0]
+                  jobs = request(
+                      'GET',
+                      f"/repos/{repository}/actions/runs/{selected['id']}/jobs?per_page=100",
+                  )['jobs']
+                  names = {job['name'] for job in jobs}
+                  complete = names == expected_jobs and all(
+                      job.get('status') == 'completed' for job in jobs
+                  )
+                  if complete:
+                      break
+              time.sleep(10)
+          else:
+              raise SystemExit('No complete exact-head formal CI matrix became available')
+
+          assert selected is not None
+          job_results = {
+              job['name']: job.get('conclusion') for job in jobs
+          }
+          all_success = (
+              set(job_results) == expected_jobs
+              and all(value == 'success' for value in job_results.values())
+          )
+          artifacts = request(
+              'GET',
+              f"/repos/{repository}/actions/runs/{selected['id']}/artifacts?per_page=100",
+          )['artifacts']
+          artifact_name = f'hepta-source-evidence-{stable_head}'
+          source_artifacts = [
+              artifact for artifact in artifacts
+              if artifact.get('name') == artifact_name
+              and not artifact.get('expired')
+          ]
+          artifact_ok = len(source_artifacts) == 1
+          all_success = all_success and artifact_ok
+
+          result = {
+              'schema_version': 1,
+              'pull_request': 23,
+              'head_sha': stable_head,
+              'run_id': selected['id'],
+              'run_event': selected.get('event'),
+              'run_conclusion': selected.get('conclusion'),
+              'jobs': job_results,
+              'all_required_jobs_successful': all(
+                  value == 'success' for value in job_results.values()
+              ) and set(job_results) == expected_jobs,
+              'source_evidence_artifact_count': len(source_artifacts),
+              'source_evidence_artifact': (
+                  {
+                      'id': source_artifacts[0]['id'],
+                      'name': source_artifacts[0]['name'],
+                      'digest': source_artifacts[0].get('digest'),
+                      'size_in_bytes': source_artifacts[0].get('size_in_bytes'),
+                  }
+                  if artifact_ok else None
+              ),
+              'ready_for_independent_review': all_success,
+          }
+          Path('g8-ci-binding.json').write_text(
+              json.dumps(result, indent=2, sort_keys=True) + '\n'
+          )
+
+          marker = '<!-- hepta-g8-ci-binding -->'
+          lines = [
+              marker,
+              '## G8 exact-head CI binding',
+              '',
+              f"- Head: `{stable_head}`",
+              f"- Formal run: `{selected['id']}` ({selected.get('event')})",
+              f"- Matrix: `{'PASS' if all_success else 'FAIL'}`",
+              f"- Source evidence artifact: `{'present' if artifact_ok else 'missing'}`",
+              '',
+              '| Check | Conclusion |',
+              '|---|---|',
+          ]
+          for name in sorted(expected_jobs):
+              lines.append(f"| `{name}` | `{job_results.get(name, 'missing')}` |")
+          lines.extend([
+              '',
+              'Any subsequent push invalidates this binding. Independent approval must target the same head.',
+          ])
+          body = '\n'.join(lines)
+
+          comments = request(
+              'GET', f'/repos/{repository}/issues/23/comments?per_page=100'
+          )
+          existing = next(
+              (comment for comment in comments if marker in comment.get('body', '')),
+              None,
+          )
+          if existing:
+              request(
+                  'PATCH',
+                  f"/repos/{repository}/issues/comments/{existing['id']}",
+                  {'body': body},
+              )
+          else:
+              request(
+                  'POST',
+                  f'/repos/{repository}/issues/23/comments',
+                  {'body': body},
+              )
+
+          if not all_success:
+              raise SystemExit('Exact-head CI matrix or source-evidence artifact is not successful')
+
+          # Ready-for-review is a governance transition, not an approval.
+          node_id = pr['node_id']
+          try:
+              request(
+                  'POST',
+                  '/graphql',
+                  {
+                      'query': (
+                          'mutation($id:ID!){markPullRequestReadyForReview('
+                          'input:{pullRequestId:$id}){pullRequest{isDraft}}}'
+                      ),
+                      'variables': {'id': node_id},
+                  },
+              )
+          except urllib.error.HTTPError as error:
+              if error.code not in (409, 422):
+                  raise
+
+          reviewer_result = 'requested'
+          try:
+              request(
+                  'POST',
+                  f'/repos/{repository}/pulls/23/requested_reviewers',
+                  {'reviewers': ['ProfHepta']},
+              )
+          except urllib.error.HTTPError as error:
+              reviewer_result = f'unavailable_http_{error.code}'
+          result['independent_reviewer_request'] = reviewer_result
+          Path('g8-ci-binding.json').write_text(
+              json.dumps(result, indent=2, sort_keys=True) + '\n'
+          )
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-g8-ci-binding-${{ github.sha }}
+          path: g8-ci-binding.json
+          if-no-files-found: error
+          retention-days: 30
