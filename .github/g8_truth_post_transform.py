@@ -8,6 +8,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "tools" / "validate_repository.py"
+SURFACE_VALIDATOR = ROOT / "tools" / "validate_product_surface.py"
 
 PATH_REPLACEMENTS = (
     (
@@ -72,20 +73,26 @@ if import_line not in validator:
     validator = validator.replace(anchor, f"{anchor}\n{import_line}\n", 1)
 VALIDATOR.write_text(validator, encoding="utf-8")
 
-# Remove duplicate YAML-named JSON ledgers only after verifying that the
-# canonical JSON forms exist and every duplicate remains parseable.
-for old_relative, new_relative in (
-    ("docs/GAP_LEDGER.yaml", "docs/GAP_LEDGER.json"),
-    ("docs/EVIDENCE_INDEX.yaml", "docs/EVIDENCE_INDEX.json"),
-):
-    old_path = ROOT / old_relative
-    new_path = ROOT / new_relative
-    if not new_path.is_file():
-        raise SystemExit(f"canonical ledger missing: {new_relative}")
-    json.loads(new_path.read_text(encoding="utf-8"))
-    if old_path.exists():
-        json.loads(old_path.read_text(encoding="utf-8"))
-        old_path.unlink()
+# The broad filename migration also rewrote the negative legacy-file check in
+# the product validator. Restore that check after the one-shot transform. The
+# legacy suffix is assembled dynamically so the transform cannot rewrite this
+# helper before it runs.
+legacy_gap = "docs/GAP_LEDGER." + "yaml"
+legacy_index = "docs/EVIDENCE_INDEX." + "yaml"
+transformed_check = (
+    '    if (root / "docs/GAP_LEDGER.json").exists() or '
+    '(root / "docs/EVIDENCE_INDEX.json").exists():\n'
+)
+legacy_check = (
+    f'    if (root / "{legacy_gap}").exists() or '
+    f'(root / "{legacy_index}").exists():\n'
+)
+surface = SURFACE_VALIDATOR.read_text(encoding="utf-8")
+if transformed_check in surface:
+    surface = surface.replace(transformed_check, legacy_check, 1)
+elif legacy_check not in surface:
+    raise SystemExit("product-surface legacy-ledger check cannot be reconciled")
+SURFACE_VALIDATOR.write_text(surface, encoding="utf-8")
 
 # Machine truth must never reference files removed by the package migration.
 for relative in ("docs/GAP_LEDGER.json", "docs/EVIDENCE_INDEX.json"):
