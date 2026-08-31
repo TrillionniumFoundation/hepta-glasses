@@ -4,11 +4,12 @@ import 'package:demo_ai_even/controllers/bmp_update_manager.dart';
 import 'package:demo_ai_even/services/ble.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-BleReceive response(List<int> data) => BleReceive()
-  ..data = Uint8List.fromList(data);
+BleReceive response(List<int> data) =>
+    BleReceive()..data = Uint8List.fromList(data);
 
 void main() {
-  test('BMP transfer rejects invalid input before touching transport', () async {
+  test('BMP transfer rejects invalid input before touching transport',
+      () async {
     var sends = 0;
     final manager = BmpUpdateManager(
       sendPacket: (Uint8List _, String _) async {

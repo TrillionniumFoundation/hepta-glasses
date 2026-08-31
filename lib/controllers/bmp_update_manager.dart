@@ -1,209 +1,158 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crclib/catalog.dart';
 import 'package:demo_ai_even/ble_manager.dart';
 import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
-import 'package:demo_ai_even/services/ble.dart';
 import 'package:demo_ai_even/utils/utils.dart';
 
-typedef BmpPacketSender = Future<bool> Function(
-  Uint8List packet,
-  String side,
-);
-typedef BmpRequester = Future<BleReceive> Function(
-  Uint8List packet,
-  String side,
-  int timeoutMs,
-);
-typedef BmpDelay = Future<void> Function(Duration duration);
+final class BmpTransferCodec {
+  const BmpTransferCodec._();
 
-final class BmpUpdateManager {
-  BmpUpdateManager({
-    BmpPacketSender? sendPacket,
-    BmpRequester? request,
-    BmpDelay? delay,
-  })  : _sendPacket = sendPacket ?? _defaultSendPacket,
-        _request = request ?? _defaultRequest,
-        _delay = delay ?? _defaultDelay;
-
-  static const int packetPayloadLength = 194;
+  static const int packetPayloadBytes = 194;
   static const int maximumPacketCount = 256;
-  static const int maximumImageBytes =
-      packetPayloadLength * maximumPacketCount;
-  static const List<int> _storageAddress = <int>[0x00, 0x1c, 0x00, 0x00];
+  static const int maximumImageBytes = packetPayloadBytes * maximumPacketCount;
+  static const List<int> storageAddress = <int>[0x00, 0x1c, 0x00, 0x00];
 
-  final BmpPacketSender _sendPacket;
-  final BmpRequester _request;
-  final BmpDelay _delay;
+  static List<Uint8List> buildPackets(Uint8List image) {
+    if (image.isEmpty || image.length > maximumImageBytes) {
+      throw ArgumentError.value(image.length, 'image',
+          'BMP payload must be between 1 and $maximumImageBytes bytes');
+    }
+    final packets = <Uint8List>[];
+    for (var offset = 0; offset < image.length; offset += packetPayloadBytes) {
+      final end = min(offset + packetPayloadBytes, image.length);
+      final sequence = packets.length;
+      if (sequence >= maximumPacketCount) {
+        throw StateError(
+            'BMP packet sequence exceeds one-byte protocol range.');
+      }
+      final payload = image.sublist(offset, end);
+      final prefix = sequence == 0
+          ? <int>[0x15, sequence, ...storageAddress]
+          : <int>[0x15, sequence];
+      packets.add(Utils.addPrefixToUint8List(prefix, payload));
+    }
+    return List<Uint8List>.unmodifiable(packets);
+  }
 
-  Future<bool> updateBmp(String side, Uint8List image, {int? seq}) async {
-    if (!_isValidSide(side) ||
-        image.isEmpty ||
-        image.length > maximumImageBytes) {
+  static Uint8List crcPayload(Uint8List image) =>
+      Utils.addPrefixToUint8List(storageAddress, image);
+
+  static int? responseStatus(Uint8List response) {
+    if (response.length > 5 && response.first == 0x16) {
+      return response[5];
+    }
+    return response.length > 1 ? response[1] : null;
+  }
+
+  static bool isSuccessResponse(Uint8List response) {
+    final status = responseStatus(response);
+    return status == 0xc9 || status == 0xcb;
+  }
+}
+
+class BmpUpdateManager {
+  static bool isTransfering = false;
+  static final Set<String> _activeSides = <String>{};
+
+  Future<bool> updateBmp(String lr, Uint8List image, {int? seq}) async {
+    if (lr != 'L' && lr != 'R') {
+      throw ArgumentError.value(lr, 'lr', 'must be L or R');
+    }
+    if (_activeSides.contains(lr)) {
+      PrivacySafeLog.event('bmp_transfer_rejected',
+          fields: <String, Object?>{'side': lr, 'reason': 'already_running'});
       return false;
     }
-
-    final packets = _splitPackets(image);
+    final List<Uint8List> packets;
+    try {
+      packets = BmpTransferCodec.buildPackets(image);
+    } on Object catch (error) {
+      PrivacySafeLog.event('bmp_transfer_rejected', fields: <String, Object?>{
+        'side': lr,
+        'reason': 'invalid_payload',
+        'error_type': error.runtimeType.toString()
+      });
+      return false;
+    }
     final startSequence = seq ?? 0;
     if (startSequence < 0 || startSequence >= packets.length) {
       return false;
     }
-
-    for (var index = startSequence; index < packets.length; index++) {
-      final packet = buildDataPacket(index, packets[index]);
-      final accepted = await _sendPacket(packet, side);
-      if (!accepted) {
-        PrivacySafeLog.event(
-          'bmp_packet_rejected',
-          fields: <String, Object?>{
-            'side': side,
-            'sequence': index,
-            'packet_count': packets.length,
-          },
-        );
+    _activeSides.add(lr);
+    isTransfering = true;
+    try {
+      PrivacySafeLog.event('bmp_transfer_started', fields: <String, Object?>{
+        'side': lr,
+        'bytes': image.length,
+        'packets': packets.length,
+        'start_sequence': startSequence
+      });
+      for (var index = startSequence; index < packets.length; index++) {
+        final queued = await BleManager.sendData(packets[index], lr: lr);
+        if (queued == false) {
+          PrivacySafeLog.event('bmp_packet_rejected',
+              fields: <String, Object?>{'side': lr, 'sequence': index});
+          return false;
+        }
+        await Future<void>.delayed(
+            Duration(milliseconds: Platform.isIOS ? 8 : 5));
+      }
+      final finish = await BleManager.request(
+          Uint8List.fromList(<int>[0x20, 0x0d, 0x0e]),
+          lr: lr,
+          timeoutMs: 3000);
+      if (finish.isTimeout ||
+          !BmpTransferCodec.isSuccessResponse(finish.data)) {
+        PrivacySafeLog.event('bmp_finish_unacknowledged',
+            fields: <String, Object?>{
+              'side': lr,
+              'effect_may_have_occurred': finish.effectMayHaveOccurred
+            });
         return false;
       }
-      _reportProgress(side, index + 1, packets.length);
-      if (index + 1 < packets.length) {
-        await _delay(
-          Duration(milliseconds: Platform.isIOS ? 8 : 5),
-        );
-      }
-    }
-
-    final finished = await _request(
-      Uint8List.fromList(const <int>[0x20, 0x0d, 0x0e]),
-      side,
-      3000,
-    );
-    if (!isSuccessfulStatusResponse(finished, expectedCommand: 0x20)) {
+      final checksum = Crc32Xz()
+          .convert(BmpTransferCodec.crcPayload(image))
+          .toBigInt()
+          .toInt();
+      final crc = Uint8List.fromList(<int>[
+        checksum >> 24 & 0xff,
+        checksum >> 16 & 0xff,
+        checksum >> 8 & 0xff,
+        checksum & 0xff
+      ]);
+      final checked = await BleManager.request(
+          Utils.addPrefixToUint8List(<int>[0x16], crc),
+          lr: lr,
+          timeoutMs: 3000);
+      final success = !checked.isTimeout &&
+          BmpTransferCodec.isSuccessResponse(checked.data);
       PrivacySafeLog.event(
-        'bmp_finish_not_acknowledged',
-        fields: <String, Object?>{
-          'side': side,
-          'indeterminate': finished.effectMayHaveOccurred,
-          'error_code': finished.errorCode,
-        },
-      );
+          success ? 'bmp_transfer_completed' : 'bmp_crc_unacknowledged',
+          fields: <String, Object?>{
+            'side': lr,
+            'bytes': image.length,
+            'packets': packets.length,
+            if (!success)
+              'effect_may_have_occurred': checked.effectMayHaveOccurred
+          });
+      return success;
+    } on TimeoutException {
+      PrivacySafeLog.event('bmp_transfer_timeout',
+          fields: <String, Object?>{'side': lr});
       return false;
+    } on Object catch (error) {
+      PrivacySafeLog.event('bmp_transfer_failed', fields: <String, Object?>{
+        'side': lr,
+        'error_type': error.runtimeType.toString()
+      });
+      return false;
+    } finally {
+      _activeSides.remove(lr);
+      isTransfering = _activeSides.isNotEmpty;
     }
-
-    final crcResponse = await _request(
-      buildCrcCommand(image),
-      side,
-      1000,
-    );
-    final crcAccepted = isSuccessfulCrcResponse(crcResponse);
-    if (!crcAccepted) {
-      PrivacySafeLog.event(
-        'bmp_crc_not_acknowledged',
-        fields: <String, Object?>{
-          'side': side,
-          'indeterminate': crcResponse.effectMayHaveOccurred,
-          'error_code': crcResponse.errorCode,
-        },
-      );
-    }
-    return crcAccepted;
   }
-
-  static Uint8List buildDataPacket(int sequence, Uint8List payload) {
-    if (sequence < 0 || sequence >= maximumPacketCount) {
-      throw RangeError.range(
-        sequence,
-        0,
-        maximumPacketCount - 1,
-        'sequence',
-      );
-    }
-    if (payload.isEmpty || payload.length > packetPayloadLength) {
-      throw ArgumentError.value(
-        payload.length,
-        'payload',
-        'must contain 1 to $packetPayloadLength bytes',
-      );
-    }
-    final prefix = sequence == 0
-        ? <int>[0x15, sequence, ..._storageAddress]
-        : <int>[0x15, sequence];
-    return Utils.addPrefixToUint8List(prefix, payload);
-  }
-
-  static Uint8List buildCrcCommand(Uint8List image) {
-    if (image.isEmpty || image.length > maximumImageBytes) {
-      throw ArgumentError.value(
-        image.length,
-        'image',
-        'must contain 1 to $maximumImageBytes bytes',
-      );
-    }
-    final crcInput = Uint8List(_storageAddress.length + image.length)
-      ..setRange(0, _storageAddress.length, _storageAddress)
-      ..setRange(_storageAddress.length, _storageAddress.length + image.length,
-          image);
-    final value = Crc32Xz().convert(crcInput).toBigInt().toInt();
-    return Uint8List.fromList(<int>[
-      0x16,
-      value >> 24 & 0xff,
-      value >> 16 & 0xff,
-      value >> 8 & 0xff,
-      value & 0xff,
-    ]);
-  }
-
-  static bool isSuccessfulStatusResponse(
-    BleReceive response, {
-    required int expectedCommand,
-  }) =>
-      !response.isTimeout &&
-      response.data.length >= 2 &&
-      response.data[0] == expectedCommand &&
-      response.data[1] == 0xc9;
-
-  static bool isSuccessfulCrcResponse(BleReceive response) =>
-      !response.isTimeout &&
-      response.data.length >= 6 &&
-      response.data[0] == 0x16 &&
-      response.data[5] == 0xc9;
-
-  static List<Uint8List> _splitPackets(Uint8List image) {
-    final packets = <Uint8List>[];
-    for (var offset = 0; offset < image.length; offset += packetPayloadLength) {
-      final end = offset + packetPayloadLength < image.length
-          ? offset + packetPayloadLength
-          : image.length;
-      packets.add(Uint8List.fromList(image.sublist(offset, end)));
-    }
-    return packets;
-  }
-
-  static bool _isValidSide(String side) => side == 'L' || side == 'R';
-
-  void _reportProgress(String side, int sent, int total) {
-    PrivacySafeLog.event(
-      'bmp_transfer_progress',
-      fields: <String, Object?>{
-        'side': side,
-        'sent_packets': sent,
-        'packet_count': total,
-      },
-    );
-  }
-
-  static Future<bool> _defaultSendPacket(
-    Uint8List packet,
-    String side,
-  ) =>
-      BleManager.sendData(packet, lr: side);
-
-  static Future<BleReceive> _defaultRequest(
-    Uint8List packet,
-    String side,
-    int timeoutMs,
-  ) =>
-      BleManager.request(packet, lr: side, timeoutMs: timeoutMs);
-
-  static Future<void> _defaultDelay(Duration duration) =>
-      Future<void>.delayed(duration);
 }

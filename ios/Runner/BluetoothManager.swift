@@ -68,6 +68,7 @@ final class BluetoothManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     }
 
     func connectToDevice(deviceName: String, result: @escaping FlutterResult) {
+        reconnectSuppressed = false
         centralManager.stopScan()
         guard let pair = pairedDevices[deviceName] else {
             result(
@@ -117,6 +118,7 @@ final class BluetoothManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     }
 
     func disconnectFromGlasses(result: @escaping FlutterResult) {
+        reconnectSuppressed = true
         clearConnection(cancelLinks: true, notify: true, reason: "user_requested")
         result("Disconnected all devices.")
     }

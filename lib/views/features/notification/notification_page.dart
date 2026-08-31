@@ -46,6 +46,15 @@ class _NotificationState extends State<NotificationPage> {
   }
 
   @override
+  void dispose() {
+    identifierFn.dispose();
+    contentFn.dispose();
+    identifierCtl.dispose();
+    contentCtl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Notification')),
         body: Padding(

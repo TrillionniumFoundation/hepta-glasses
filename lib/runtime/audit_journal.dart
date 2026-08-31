@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'canonical_json.dart';
 import 'clock.dart';
@@ -51,27 +52,15 @@ final class AuditEntry {
     if (rawPayload is! Map) {
       throw const FormatException('Audit payload must be an object.');
     }
-    final sequence = json['sequence'];
-    final timestamp = json['timestamp'];
-    final eventType = json['event_type'];
-    final previousHash = json['previous_hash'];
-    final hash = json['hash'];
-    if (sequence is! int ||
-        timestamp is! String ||
-        eventType is! String ||
-        previousHash is! String ||
-        hash is! String) {
-      throw const FormatException('Audit entry has invalid field types.');
-    }
     return AuditEntry(
-      sequence: sequence,
-      timestamp: DateTime.parse(timestamp),
-      eventType: eventType,
+      sequence: json['sequence']! as int,
+      timestamp: DateTime.parse(json['timestamp']! as String),
+      eventType: json['event_type']! as String,
       payload: rawPayload.map(
         (key, value) => MapEntry(key.toString(), value as Object?),
       ),
-      previousHash: previousHash,
-      hash: hash,
+      previousHash: json['previous_hash']! as String,
+      hash: json['hash']! as String,
     );
   }
 }
@@ -160,44 +149,59 @@ final class InMemoryAuditJournal
   Future<void> verify() async => verifyEntries(_entries);
 }
 
-final class _AuditHead {
-  const _AuditHead(this.sequence, this.hash);
-
-  final int sequence;
-  final String hash;
-
-  Map<String, Object?> toJson() => <String, Object?>{
-        'schema_version': 1,
-        'sequence': sequence,
-        'hash': hash,
-      };
-}
-
-/// A process-safe JSONL journal.
+/// A bounded, fail-closed JSONL audit journal.
 ///
-/// Every operation takes an OS advisory lock on a stable sibling lock file.
-/// The journal entry is flushed before an atomically replaced head checkpoint,
-/// so process death between the two writes is repaired without replaying a
-/// physical effect. A checkpoint that is ahead of, or inconsistent with, the
-/// hash chain fails closed.
+/// The per-instance queue protects callers sharing one object. A short-lived,
+/// atomically-created marker protects cooperating writers across Dart isolates
+/// and processes, including platforms where advisory file locks are
+/// process-scoped. The journal file itself is also locked and all reads and
+/// writes use the same [RandomAccessFile] handle for Windows compatibility.
+///
+/// A torn tail, malformed record, forked hash chain, oversized record, or
+/// exhausted journal fails closed. Recovery never silently truncates evidence.
 final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
-  JsonlAuditJournal(this.file, {Clock clock = const SystemClock()})
-      : _clock = clock;
-
-  static const String contractVersion = 'file-lock-checkpoint-v1';
+  JsonlAuditJournal(
+    File file, {
+    Clock clock = const SystemClock(),
+    this.maxBytes = 8 * 1024 * 1024,
+    this.maxEntries = 50000,
+    this.maxEntryBytes = 64 * 1024,
+    this.lockAcquireTimeout = const Duration(seconds: 10),
+    this.staleLockAge = const Duration(minutes: 2),
+    this.lockRetryDelay = const Duration(milliseconds: 10),
+  })  : file = File(file.absolute.path),
+        _lockFile = File('${file.absolute.path}.lock'),
+        _clock = clock {
+    if (maxBytes <= 0 || maxEntries <= 0 || maxEntryBytes <= 0) {
+      throw ArgumentError('Audit journal bounds must be positive.');
+    }
+    if (maxEntryBytes > maxBytes) {
+      throw ArgumentError('maxEntryBytes cannot exceed maxBytes.');
+    }
+    if (lockAcquireTimeout <= Duration.zero ||
+        staleLockAge <= lockAcquireTimeout ||
+        lockRetryDelay <= Duration.zero) {
+      throw ArgumentError('Audit journal lock durations are invalid.');
+    }
+  }
 
   final File file;
+  final File _lockFile;
   final Clock _clock;
-  Future<void> _tail = Future<void>.value();
+  final int maxBytes;
+  final int maxEntries;
+  final int maxEntryBytes;
+  final Duration lockAcquireTimeout;
+  final Duration staleLockAge;
+  final Duration lockRetryDelay;
 
-  static File lockFileFor(File file) => File('${file.path}.lock');
-  static File checkpointFileFor(File file) => File('${file.path}.head.json');
+  Future<void> _tail = Future<void>.value();
 
   Future<T> _exclusive<T>(Future<T> Function() operation) {
     final completer = Completer<T>();
     _tail = _tail.then((_) async {
       try {
-        completer.complete(await _withFileLock(operation));
+        completer.complete(await operation());
       } on Object catch (error, stackTrace) {
         completer.completeError(error, stackTrace);
       }
@@ -205,120 +209,144 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
     return completer.future;
   }
 
-  Future<T> _withFileLock<T>(Future<T> Function() operation) async {
-    final lockFile = lockFileFor(file);
-    await lockFile.parent.create(recursive: true);
-    if (!await lockFile.exists()) {
-      await lockFile.create(recursive: true);
-    }
-    final handle = await lockFile.open(mode: FileMode.append);
-    try {
-      await handle.lock(FileLock.exclusive);
-      return await operation();
-    } finally {
-      try {
-        await handle.unlock();
-      } finally {
-        await handle.close();
-      }
-    }
-  }
-
-  Future<void> initialize() => _exclusive(() async {
-        await _ensureDataFileUnlocked();
-        final entries = await _readAndVerifyUnlocked();
-        await _verifyOrRepairCheckpointUnlocked(entries);
-      });
+  Future<void> initialize() =>
+      _exclusive(() => _withLockedHandle((handle) async {
+            await verifyEntries(await _readAllFromHandle(handle));
+          }));
 
   @override
   Future<AuditEntry> append(
     String eventType,
     Map<String, Object?> payload,
   ) =>
-      _exclusive(() async {
-        if (eventType.trim().isEmpty) {
-          throw ArgumentError.value(
-            eventType,
-            'eventType',
-            'must not be empty',
-          );
-        }
-        await _ensureDataFileUnlocked();
-        final entries = await _readAndVerifyUnlocked();
-        await _verifyOrRepairCheckpointUnlocked(entries);
+      _exclusive(() => _withLockedHandle((handle) async {
+            if (eventType.trim().isEmpty) {
+              throw ArgumentError.value(
+                eventType,
+                'eventType',
+                'must not be empty',
+              );
+            }
 
-        final sequence = entries.length + 1;
-        final previousHash = entries.isEmpty ? '' : entries.last.hash;
-        final timestamp = _clock.now().toUtc();
-        final hash = AuditEntry.calculateHash(
-          sequence: sequence,
-          timestamp: timestamp,
-          eventType: eventType,
-          payload: payload,
-          previousHash: previousHash,
-        );
-        final entry = AuditEntry(
-          sequence: sequence,
-          timestamp: timestamp,
-          eventType: eventType,
-          payload: Map.unmodifiable(payload),
-          previousHash: previousHash,
-          hash: hash,
-        );
+            final entries = await _readAllFromHandle(handle);
+            await verifyEntries(entries);
+            if (entries.length >= maxEntries) {
+              throw StateError(
+                'Audit journal reached its configured entry limit.',
+              );
+            }
 
-        final handle = await file.open(mode: FileMode.append);
+            final sequence = entries.length + 1;
+            final previousHash = entries.isEmpty ? '' : entries.last.hash;
+            final timestamp = _clock.now().toUtc();
+            final immutablePayload = Map<String, Object?>.unmodifiable(payload);
+            final hash = AuditEntry.calculateHash(
+              sequence: sequence,
+              timestamp: timestamp,
+              eventType: eventType,
+              payload: immutablePayload,
+              previousHash: previousHash,
+            );
+            final entry = AuditEntry(
+              sequence: sequence,
+              timestamp: timestamp,
+              eventType: eventType,
+              payload: immutablePayload,
+              previousHash: previousHash,
+              hash: hash,
+            );
+            final encoded = utf8.encode('${canonicalJson(entry.toJson())}\n');
+            if (encoded.length > maxEntryBytes) {
+              throw StateError(
+                'Audit entry exceeds the configured byte limit.',
+              );
+            }
+
+            final currentLength = await handle.length();
+            if (currentLength + encoded.length > maxBytes) {
+              throw StateError(
+                'Audit journal reached its configured byte limit.',
+              );
+            }
+            await handle.setPosition(currentLength);
+            await handle.writeFrom(encoded);
+            await handle.flush();
+            return entry;
+          }));
+
+  @override
+  Future<List<AuditEntry>> readAll() =>
+      _exclusive(() => _withLockedHandle((handle) async {
+            final entries = await _readAllFromHandle(handle);
+            await verifyEntries(entries);
+            return List<AuditEntry>.unmodifiable(entries);
+          }));
+
+  @override
+  Future<void> verify() => _exclusive(() => _withLockedHandle((handle) async {
+        await verifyEntries(await _readAllFromHandle(handle));
+      }));
+
+  Future<T> _withLockedHandle<T>(
+    Future<T> Function(RandomAccessFile handle) operation,
+  ) async {
+    await file.parent.create(recursive: true);
+    final markerToken = await _acquireMarker();
+    RandomAccessFile? handle;
+    var fileLocked = false;
+    try {
+      handle = await file.open(mode: FileMode.append);
+      await handle.lock(FileLock.blockingExclusive);
+      fileLocked = true;
+      return await operation(handle);
+    } finally {
+      if (handle != null) {
         try {
-          await handle.writeString('${canonicalJson(entry.toJson())}\n');
-          await handle.flush();
+          if (fileLocked) {
+            await handle.unlock();
+          }
         } finally {
           await handle.close();
         }
-        await _writeCheckpointUnlocked(_AuditHead(sequence, hash));
-        return entry;
-      });
-
-  @override
-  Future<List<AuditEntry>> readAll() => _exclusive(() async {
-        await _ensureDataFileUnlocked();
-        final entries = await _readAndVerifyUnlocked();
-        await _verifyOrRepairCheckpointUnlocked(entries);
-        return List.unmodifiable(entries);
-      });
-
-  @override
-  Future<void> verify() => _exclusive(() async {
-        await _ensureDataFileUnlocked();
-        final entries = await _readAndVerifyUnlocked();
-        await _verifyOrRepairCheckpointUnlocked(entries);
-      });
-
-  Future<void> _ensureDataFileUnlocked() async {
-    await file.parent.create(recursive: true);
-    if (!await file.exists()) {
-      await file.create(recursive: true);
+      }
+      await _releaseMarker(markerToken);
     }
   }
 
-  Future<List<AuditEntry>> _readAndVerifyUnlocked() async {
-    final entries = await _readAllUnlocked();
-    await verifyEntries(entries);
-    return entries;
-  }
-
-  Future<List<AuditEntry>> _readAllUnlocked() async {
-    if (!await file.exists()) {
+  Future<List<AuditEntry>> _readAllFromHandle(
+    RandomAccessFile handle,
+  ) async {
+    final length = await handle.length();
+    if (length > maxBytes) {
+      throw StateError('Audit journal exceeds its configured byte limit.');
+    }
+    if (length == 0) {
       return const <AuditEntry>[];
     }
-    final contents = await file.readAsString();
-    if (contents.isNotEmpty && !contents.endsWith('\n')) {
+
+    await handle.setPosition(0);
+    final bytes = await handle.read(length);
+    late final String text;
+    try {
+      text = utf8.decode(bytes, allowMalformed: false);
+    } on FormatException catch (error) {
+      throw StateError('Audit journal is not valid UTF-8: $error');
+    }
+    if (!text.endsWith('\n')) {
       throw StateError('Audit journal has a torn final record.');
     }
+
     final entries = <AuditEntry>[];
-    final lines = contents.split('\n');
-    for (var index = 0; index < lines.length; index++) {
-      final line = lines[index].trim();
+    final lines = text.split('\n');
+    for (var index = 0; index < lines.length - 1; index++) {
+      final line = lines[index];
       if (line.isEmpty) {
-        continue;
+        throw StateError('Audit journal contains an empty record.');
+      }
+      if (utf8.encode(line).length + 1 > maxEntryBytes) {
+        throw StateError(
+          'Audit journal line ${index + 1} exceeds the configured byte limit.',
+        );
       }
       try {
         final decoded = jsonDecode(line);
@@ -335,70 +363,77 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
       } on Object catch (error) {
         throw StateError('Invalid audit journal line ${index + 1}: $error');
       }
+      if (entries.length > maxEntries) {
+        throw StateError('Audit journal exceeds its configured entry limit.');
+      }
     }
     return entries;
   }
 
-  Future<void> _verifyOrRepairCheckpointUnlocked(
-    List<AuditEntry> entries,
-  ) async {
-    final checkpointFile = checkpointFileFor(file);
-    final journalHead = entries.isEmpty
-        ? const _AuditHead(0, '')
-        : _AuditHead(entries.length, entries.last.hash);
-    if (!await checkpointFile.exists()) {
-      await _writeCheckpointUnlocked(journalHead);
-      return;
-    }
-
-    final Object? decoded;
-    try {
-      decoded = jsonDecode(await checkpointFile.readAsString());
-    } on Object catch (error) {
-      throw StateError('Audit checkpoint is unreadable: $error');
-    }
-    if (decoded is! Map) {
-      throw StateError('Audit checkpoint is not an object.');
-    }
-    final sequence = decoded['sequence'];
-    final hash = decoded['hash'];
-    final schemaVersion = decoded['schema_version'];
-    if (schemaVersion != 1 || sequence is! int || hash is! String) {
-      throw StateError('Audit checkpoint has invalid fields.');
-    }
-    if (sequence < 0 || sequence > entries.length) {
-      throw StateError('Audit checkpoint sequence is outside the journal.');
-    }
-    if (sequence == 0) {
-      if (hash.isNotEmpty) {
-        throw StateError('Empty audit checkpoint has a non-empty hash.');
+  Future<String> _acquireMarker() async {
+    final deadline = DateTime.now().toUtc().add(lockAcquireTimeout);
+    while (true) {
+      final now = DateTime.now().toUtc();
+      final token = _newMarkerToken(now);
+      try {
+        await _lockFile.create(exclusive: true);
+        await _lockFile.writeAsString('$token\n', flush: true);
+        return token;
+      } on FileSystemException {
+        if (await _breakStaleMarker(now)) {
+          continue;
+        }
+        if (!DateTime.now().toUtc().isBefore(deadline)) {
+          throw StateError(
+            'Timed out acquiring the durable audit journal lock.',
+          );
+        }
+        await Future<void>.delayed(lockRetryDelay);
       }
-    } else if (entries[sequence - 1].hash != hash) {
-      throw StateError('Audit checkpoint does not match the hash chain.');
-    }
-
-    if (sequence < journalHead.sequence) {
-      await _writeCheckpointUnlocked(journalHead);
     }
   }
 
-  Future<void> _writeCheckpointUnlocked(_AuditHead head) async {
-    final checkpointFile = checkpointFileFor(file);
-    await checkpointFile.parent.create(recursive: true);
-    final temporary = File(
-      '${checkpointFile.path}.tmp.$pid.${DateTime.now().microsecondsSinceEpoch}',
-    );
-    await temporary.writeAsString(
-      '${canonicalJson(head.toJson())}\n',
-      flush: true,
+  String _newMarkerToken(DateTime now) {
+    final random = Random.secure().nextInt(1 << 32);
+    return '$pid:${now.microsecondsSinceEpoch}:$random';
+  }
+
+  Future<bool> _breakStaleMarker(DateTime now) async {
+    FileStat stat;
+    try {
+      stat = await _lockFile.stat();
+    } on FileSystemException {
+      return false;
+    }
+    if (stat.type == FileSystemEntityType.notFound ||
+        now.difference(stat.modified.toUtc()) < staleLockAge) {
+      return stat.type == FileSystemEntityType.notFound;
+    }
+
+    final stale = File(
+      '${_lockFile.path}.stale.$pid.${now.microsecondsSinceEpoch}',
     );
     try {
-      await temporary.rename(checkpointFile.path);
+      await _lockFile.rename(stale.path);
+      await stale.delete();
+      return true;
     } on FileSystemException {
-      if (await checkpointFile.exists()) {
-        await checkpointFile.delete();
+      return false;
+    }
+  }
+
+  Future<void> _releaseMarker(String token) async {
+    try {
+      if (!await _lockFile.exists()) {
+        return;
       }
-      await temporary.rename(checkpointFile.path);
+      final stored = (await _lockFile.readAsString()).trim();
+      if (stored == token) {
+        await _lockFile.delete();
+      }
+    } on FileSystemException {
+      // The journal write has already been flushed. A stale marker is safe:
+      // the bounded takeover path will recover it without altering evidence.
     }
   }
 }
