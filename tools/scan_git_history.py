@@ -143,8 +143,10 @@ def main() -> int:
             {
                 "head": report["head"],
                 "finding_count": report["finding_count"],
+                "findings": report["findings"],
                 "scanned_blob_count": report["scanned_blob_count"],
                 "unscanned_blob_count": report["unscanned_blob_count"],
+                "unscanned_blobs": report["unscanned_blobs"],
             },
             separators=(",", ":"),
         )
