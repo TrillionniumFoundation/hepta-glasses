@@ -1,0 +1,40 @@
+name: g6-export-source
+
+on:
+  push:
+    branches:
+      - codex/hepta-glasses-gap-closure-g6
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - name: Create content-addressed source snapshot
+        run: |
+          set -euo pipefail
+          tar --exclude=.git -czf /tmp/hepta-g6-source.tar.gz .
+          sha256sum /tmp/hepta-g6-source.tar.gz > /tmp/hepta-g6-source.tar.gz.sha256
+          printf '%s\n' "${{ github.sha }}" > /tmp/hepta-g6-source.commit
+          git rev-parse 'HEAD^{tree}' > /tmp/hepta-g6-source.tree
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-g6-source-${{ github.sha }}
+          path: |
+            /tmp/hepta-g6-source.tar.gz
+            /tmp/hepta-g6-source.tar.gz.sha256
+            /tmp/hepta-g6-source.commit
+            /tmp/hepta-g6-source.tree
+          if-no-files-found: error
+          retention-days: 1
