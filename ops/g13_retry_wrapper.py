@@ -8,7 +8,12 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from ops import g13_controller as controller
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPOSITORY_ROOT = SCRIPT_DIR.parent
+sys.path.insert(0, str(SCRIPT_DIR))
+(REPOSITORY_ROOT / "build" / "g13").mkdir(parents=True, exist_ok=True)
+
+import g13_controller as controller  # noqa: E402
 
 _ORIGINAL_RUN = controller.run
 _MAX_RATE_LIMIT_ATTEMPTS = 90
