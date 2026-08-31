@@ -1,0 +1,63 @@
+name: g7-wave3
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/hepta-glasses-g7-synthesis
+    paths:
+      - .github/workflows/g7-wave3.yml
+      - tools/apply_g7_wave3_fixed.py
+      - tools/g7-wave3.trigger
+
+permissions:
+  contents: write
+
+concurrency:
+  group: g7-wave3-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: codex/hepta-glasses-g7-synthesis
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Configure bounded test identity
+        run: |
+          git config user.name 'hepta-g7-wave3[bot]'
+          git config user.email 'hepta-g7-wave3[bot]@users.noreply.github.com'
+      - name: Install regression closure tests
+        run: python3 tools/apply_g7_wave3_fixed.py
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - name: Run deterministic regression preflight
+        run: |
+          flutter pub get
+          dart format lib test
+          python3 -m compileall -q services adapters tools
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          flutter analyze --no-fatal-infos
+          flutter test
+          git add -A
+          git diff --cached --check
+      - name: Commit tested candidate
+        run: |
+          if git diff --cached --quiet; then
+            echo 'No regression-test changes.'
+            exit 0
+          fi
+          git commit -m 'test(g7): prove source blocker closure'
+          git push origin HEAD:codex/hepta-glasses-g7-synthesis
