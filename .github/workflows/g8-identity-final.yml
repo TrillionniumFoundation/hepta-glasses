@@ -1,0 +1,157 @@
+name: g8-identity-final
+
+on:
+  push:
+    branches:
+      - work/hepta-g8-identity-final-20260901
+
+permissions:
+  contents: write
+
+concurrency:
+  group: g8-identity-final
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: codex/hepta-glasses-gap-closure-g8
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - run: flutter pub get
+      - name: Apply canonical package migration
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+
+          moves = (
+              (
+                  Path('android/app/src/main/kotlin/com/example/demo_ai_even'),
+                  Path('android/app/src/main/kotlin/org/trillionnium/heptaglasses'),
+              ),
+              (
+                  Path('android/app/src/test/kotlin/com/example/demo_ai_even'),
+                  Path('android/app/src/test/kotlin/org/trillionnium/heptaglasses'),
+              ),
+          )
+          for old, new in moves:
+              if old.exists() and new.exists():
+                  raise SystemExit(f'duplicate package trees: {old} and {new}')
+              if old.exists():
+                  new.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.move(str(old), str(new))
+
+          replacements = (
+              ('com.example.demo_ai_even', 'org.trillionnium.heptaglasses'),
+              ('com/example/demo_ai_even', 'org/trillionnium/heptaglasses'),
+              ('Java_com_example_demo_1ai_1even', 'Java_org_trillionnium_heptaglasses'),
+              ('package:demo_ai_even/', 'package:hepta_glasses/'),
+              ('com.example.demoAiEven', 'org.trillionnium.heptaglasses'),
+              ('com.example.demo-ai-even', 'org.trillionnium.heptaglasses'),
+          )
+          for base in (Path('android'), Path('lib'), Path('test'), Path('ios')):
+              if not base.exists():
+                  continue
+              for path in base.rglob('*'):
+                  if not path.is_file() or path.stat().st_size > 2_000_000:
+                      continue
+                  try:
+                      original = path.read_text(encoding='utf-8')
+                  except (UnicodeDecodeError, OSError):
+                      continue
+                  updated = original
+                  for old, new in replacements:
+                      updated = updated.replace(old, new)
+                  if path == Path('ios/Runner/Info.plist'):
+                      updated = updated.replace(
+                          '<string>Demo Ai Even</string>',
+                          '<string>Hepta Glasses</string>',
+                      ).replace(
+                          '<string>demo_ai_even</string>',
+                          '<string>hepta_glasses</string>',
+                      )
+                  if updated != original:
+                      path.write_text(updated, encoding='utf-8')
+
+          pubspec = Path('pubspec.yaml')
+          text = pubspec.read_text(encoding='utf-8')
+          if text.startswith('name: demo_ai_even\n'):
+              pubspec.write_text(
+                  text.replace('name: demo_ai_even\n', 'name: hepta_glasses\n', 1),
+                  encoding='utf-8',
+              )
+          PY
+      - name: Prove legacy identity is absent
+        run: |
+          set -euo pipefail
+          ! grep -RInE --exclude-dir=build --exclude-dir=.dart_tool \
+            '(com\.example\.demo_ai_even|com/example/demo_ai_even|Java_com_example_demo_1ai_1even|package:demo_ai_even/)' \
+            android lib test ios
+          test -d android/app/src/main/kotlin/org/trillionnium/heptaglasses
+          test -d android/app/src/test/kotlin/org/trillionnium/heptaglasses
+      - name: Format and qualify application
+        run: |
+          dart format lib test
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze --no-fatal-infos
+          flutter test
+          flutter build apk --debug
+          cd android
+          ./gradlew lintDebug testDebugUnitTest
+      - name: Qualify repository and evidence contracts
+        env:
+          CI_REPOSITORY_CONTRACTS: success
+          CI_FLUTTER: success
+          CI_ANDROID_NATIVE: success
+          CI_IOS_NATIVE: success
+          CI_NATIVE_SANITIZERS: success
+          CI_SECRET_SCAN: success
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          mkdir -p build/evidence
+          python3 tools/scan_git_history.py --output build/evidence/source-history-scan.json
+          python3 tools/validate_repository.py
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          tools/run_native_sanitizers.sh build/evidence/source-native-sanitizer.json
+          python3 tools/build_source_evidence.py \
+            --output-dir build/evidence \
+            --native-sanitizer-report build/evidence/source-native-sanitizer.json
+          python3 tools/evaluate_release_gate.py \
+            --bundle build/evidence/source-release-bundle.json \
+            --mode source \
+            --evidence-dir build/evidence \
+            --output build/evidence/source-gate-result.json
+      - name: Commit migration only after all gates pass
+        run: |
+          git diff --exit-code -- .github/workflows
+          git diff --check
+          git config user.name 'hepta-g8-automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git reset -- build || true
+          if git diff --cached --quiet; then
+            echo 'Canonical package identity already verified.'
+            exit 0
+          fi
+          git commit -m 'refactor(g8): complete canonical product package migration'
+          git push origin HEAD:codex/hepta-glasses-gap-closure-g8
