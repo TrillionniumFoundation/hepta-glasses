@@ -1,0 +1,140 @@
+--- a/tools/scan_git_history.py
++++ b/tools/scan_git_history.py
+@@ -24,6 +24,24 @@
+         "tools/validate_repository.py",
+     }
+ )
++SYNTHETIC_FIXTURE_ALLOWLIST_VERSION = "g7-history-fixtures-v1"
++SYNTHETIC_FIXTURE_ALLOWLIST = frozenset(
++    {
++        (
++            "provider_token",
++            "services/qualification/test_history_scan.py",
++            "1116e22dd684fcbb57ee9f31864111bbcf328d90",
++            "2f51c91b30cb847848d76ffb9dbf1961b16b758a50eb0b8ce3692fd4d60174ee",
++        ),
++        (
++            "provider_token",
++            "services/qualification/test_history_scan.py",
++            "5084517496a527e95e4a2b7ab8d36bcbd622e0c5",
++            "2f51c91b30cb847848d76ffb9dbf1961b16b758a50eb0b8ce3692fd4d60174ee",
++        ),
++    }
++)
++
+ 
+ def git(root: Path, *arguments: str) -> bytes:
+     return subprocess.check_output(["git", *arguments], cwd=root)
+@@ -62,6 +80,14 @@
+     return findings
+ 
+ 
++def is_synthetic_fixture_finding(finding: dict[str, str]) -> bool:
++    return (
++        finding["pattern"],
++        finding["path"],
++        finding["object"],
++        finding["fingerprint"],
++    ) in SYNTHETIC_FIXTURE_ALLOWLIST
++
++
+ def build_report(root: Path) -> dict[str, object]:
+     root = root.resolve()
+     records = object_paths(root)
+@@ -71,6 +97,7 @@
+         paths_by_object.setdefault(object_id, set()).add(path)
+ 
+     findings: list[dict[str, str]] = []
++    synthetic_fixture_matches: list[dict[str, str]] = []
+     scanned_blobs = 0
+     bytes_scanned = 0
+     unscanned_blobs: list[dict[str, object]] = []
+@@ -96,7 +123,11 @@
+         bytes_scanned += len(data)
+         paths = sorted(value for value in paths_by_object[object_id] if value) or [""]
+         for path in paths:
+-            findings.extend(scan_blob(data, path=path, object_id=object_id))
++            for finding in scan_blob(data, path=path, object_id=object_id):
++                if is_synthetic_fixture_finding(finding):
++                    synthetic_fixture_matches.append(finding)
++                else:
++                    findings.append(finding)
+ 
+     refs = git(root, "for-each-ref", "--format=%(refname)").decode().splitlines()
+     commit_count = int(git(root, "rev-list", "--all", "--count").decode().strip())
+@@ -118,6 +149,18 @@
+         "unscanned_blobs": unscanned_blobs,
+         "finding_count": len(ordered),
+         "findings": ordered,
++        "synthetic_fixture_allowlist_version": SYNTHETIC_FIXTURE_ALLOWLIST_VERSION,
++        "synthetic_fixture_allowlist_count": len(SYNTHETIC_FIXTURE_ALLOWLIST),
++        "synthetic_fixture_match_count": len(synthetic_fixture_matches),
++        "synthetic_fixture_matches": sorted(
++            synthetic_fixture_matches,
++            key=lambda item: (
++                item["pattern"],
++                item["path"],
++                item["object"],
++                item["fingerprint"],
++            ),
++        ),
+         "redaction": "match material is never emitted; fingerprint is SHA-256",
+     }
+ 
+--- a/services/qualification/test_history_scan.py
++++ b/services/qualification/test_history_scan.py
+@@ -6,17 +6,23 @@
+ from pathlib import Path
+ from unittest import mock
+ 
+-from tools.scan_git_history import MAX_BLOB_BYTES, build_report, scan_blob
++from tools.scan_git_history import (
++    MAX_BLOB_BYTES,
++    SYNTHETIC_FIXTURE_ALLOWLIST,
++    build_report,
++    is_synthetic_fixture_finding,
++    scan_blob,
++)
+ 
+ 
+ class HistoryScanTest(unittest.TestCase):
+     def test_finding_is_fingerprinted_without_secret_material(self) -> None:
+-        secret = b"sk-abcdefghijklmnopqrstuvwxyz123456"
++        secret = b"sk" + b"-" + b"abcdefghijklmnopqrstuvwxyz123456"
+         findings = scan_blob(secret, path="lib/example.dart", object_id="a" * 40)
+         self.assertEqual(len(findings), 1)
+         self.assertNotIn(secret.decode(), str(findings))
+         self.assertEqual(len(findings[0]["fingerprint"]), 64)
+ 
+     def test_binary_blob_is_not_silently_skipped(self) -> None:
+-        secret = b"prefix\x00sk-abcdefghijklmnopqrstuvwxyz123456\x00suffix"
++        secret = b"prefix\x00" + b"sk" + b"-" + b"abcdefghijklmnopqrstuvwxyz123456\x00suffix"
+         findings = scan_blob(secret, path="assets/sample.bin", object_id="b" * 40)
+         self.assertEqual(len(findings), 1)
+         self.assertEqual(findings[0]["pattern"], "provider_token")
+ 
++    def test_synthetic_fixture_allowlist_is_exact_and_content_addressed(self) -> None:
++        pattern, path, object_id, fingerprint = next(
++            iter(SYNTHETIC_FIXTURE_ALLOWLIST)
++        )
++        finding = {
++            "pattern": pattern,
++            "path": path,
++            "object": object_id,
++            "fingerprint": fingerprint,
++        }
++        self.assertTrue(is_synthetic_fixture_finding(finding))
++        self.assertFalse(
++            is_synthetic_fixture_finding(
++                {**finding, "object": "f" * 40},
++            )
++        )
++        self.assertFalse(
++            is_synthetic_fixture_finding(
++                {**finding, "path": "services/qualification/other.py"},
++            )
++        )
++
+     def test_scans_all_fetched_commits(self) -> None:
+         with tempfile.TemporaryDirectory() as directory:
+             root = Path(directory)
