@@ -1,0 +1,48 @@
+name: g8-format-macos
+
+on:
+  push:
+    branches:
+      - work/hepta-glasses-g8-format-macos
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - run: flutter pub get
+      - name: Format and capture source
+        run: |
+          set -euo pipefail
+          dart format lib test
+          mkdir -p build/format
+          git diff --name-only -- lib test > build/format/formatted-files.txt
+          git diff --no-ext-diff --binary -- lib test > build/format/dart-format.patch
+          git archive --format=tar.gz --output=build/format/source-before-format.tar.gz HEAD
+          tar -czf build/format/source-after-format.tar.gz \
+            --exclude=.git \
+            --exclude=build/format \
+            .
+      - name: Run analyzer and tests after formatting
+        run: |
+          flutter analyze --no-fatal-infos
+          flutter test
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-g8-format-${{ github.sha }}
+          path: build/format
+          if-no-files-found: error
+          retention-days: 3
