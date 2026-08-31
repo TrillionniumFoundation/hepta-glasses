@@ -1,6 +1,7 @@
 name: g13-terminal-source-convergence
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - ops/hepta-g13-terminal-source-convergence
@@ -13,7 +14,7 @@ permissions:
 
 concurrency:
   group: hepta-g13-terminal-source-convergence
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   converge:
@@ -41,7 +42,7 @@ jobs:
           cache: false
 
       - name: Execute the single-authority terminal convergence controller
-        run: python3 ops/g13_controller.py
+        run: python3 ops/g13_retry_wrapper.py
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
