@@ -1,0 +1,203 @@
+name: g8-gap-sync
+
+on:
+  push:
+    branches:
+      - work/hepta-g8-gap-sync-20260901
+    paths:
+      - .github/workflows/g8-gap-sync.yml
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: codex/hepta-glasses-gap-closure-g8
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Synchronize non-closed Gap Ledger entries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          repository = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          api = 'https://api.github.com'
+
+          def request(method: str, path: str, payload=None):
+              data = None if payload is None else json.dumps(payload).encode()
+              req = urllib.request.Request(
+                  api + path,
+                  data=data,
+                  method=method,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'Content-Type': 'application/json',
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  body = response.read()
+                  return json.loads(body) if body else None
+
+          ledger_path = Path('docs/GAP_LEDGER.yaml')
+          ledger = json.loads(ledger_path.read_text(encoding='utf-8'))
+          entries = None
+          for key in ('gaps', 'items', 'entries'):
+              if isinstance(ledger.get(key), list):
+                  entries = ledger[key]
+                  break
+          if entries is None:
+              raise SystemExit('Gap Ledger does not expose a supported list')
+
+          issues = request(
+              'GET',
+              f'/repos/{repository}/issues?state=all&per_page=100&sort=created&direction=asc',
+          )
+          issue_by_marker = {}
+          for issue in issues:
+              if 'pull_request' in issue:
+                  continue
+              body = issue.get('body') or ''
+              for entry in entries:
+                  gap_id = str(entry.get('id', ''))
+                  marker = f'<!-- hepta-gap:{gap_id} -->'
+                  if gap_id and marker in body:
+                      issue_by_marker[gap_id] = issue
+
+          non_closed = []
+          for entry in entries:
+              if not isinstance(entry, dict):
+                  continue
+              gap_id = str(entry.get('id', '')).strip()
+              status = str(entry.get('status', 'MISSING')).strip()
+              if not gap_id or status in {
+                  'CLOSED',
+                  'MERGED',
+                  'RELEASED',
+                  'SUPERSEDED',
+                  'REJECTED',
+              }:
+                  continue
+              non_closed.append(entry)
+              title_text = str(
+                  entry.get('title')
+                  or entry.get('summary')
+                  or entry.get('description')
+                  or 'Evidence gate'
+              ).strip().replace('\n', ' ')
+              title = f'[{gap_id}] {title_text}'[:240]
+              marker = f'<!-- hepta-gap:{gap_id} -->'
+              owner = entry.get('owner', 'unassigned')
+              evidence = entry.get('required_evidence') or entry.get('evidence') or []
+              unlock = entry.get('unlock_condition') or entry.get('exit_criteria') or []
+              dependencies = entry.get('dependencies') or []
+              body_lines = [
+                  marker,
+                  f'# {gap_id} evidence contract',
+                  '',
+                  f'- Ledger status: `{status}`',
+                  f'- Responsible boundary: `{owner}`',
+                  f'- Source baseline: PR #23 current head; any source push requires rebinding.',
+                  '',
+                  '## Required evidence',
+                  '',
+                  '```json',
+                  json.dumps(evidence, indent=2, sort_keys=True, ensure_ascii=False),
+                  '```',
+                  '',
+                  '## Unlock / exit criteria',
+                  '',
+                  '```json',
+                  json.dumps(unlock, indent=2, sort_keys=True, ensure_ascii=False),
+                  '```',
+                  '',
+                  '## Dependencies',
+                  '',
+                  '```json',
+                  json.dumps(dependencies, indent=2, sort_keys=True, ensure_ascii=False),
+                  '```',
+                  '',
+                  '## Evidence integrity rules',
+                  '',
+                  '- Evidence must identify the exact source commit and relevant device, tenant, provider, reviewer, or release identity.',
+                  '- Simulation, source tests, screenshots without provenance, or self-authored approval cannot substitute for the requested external evidence.',
+                  '- Any superseding source push invalidates commit-bound evidence unless the contract explicitly permits reuse.',
+                  '- The issue remains open until an eligible evidence owner attaches verifiable artifacts and an independent verifier accepts them.',
+              ]
+              body = '\n'.join(body_lines)
+              existing = issue_by_marker.get(gap_id)
+              if existing:
+                  request(
+                      'PATCH',
+                      f"/repos/{repository}/issues/{existing['number']}",
+                      {'title': title, 'body': body, 'state': 'open'},
+                  )
+              else:
+                  created = request(
+                      'POST',
+                      f'/repos/{repository}/issues',
+                      {'title': title, 'body': body},
+                  )
+                  issue_by_marker[gap_id] = created
+
+          summary_marker = '<!-- hepta-g8-gap-sync -->'
+          lines = [
+              summary_marker,
+              '## G8 non-closed evidence gates',
+              '',
+              f'Gap contracts synchronized: `{len(non_closed)}`.',
+              '',
+          ]
+          for entry in non_closed:
+              gap_id = str(entry['id'])
+              issue = issue_by_marker[gap_id]
+              lines.append(
+                  f"- `{gap_id}` — `{entry.get('status', 'MISSING')}` — issue #{issue['number']}"
+              )
+          lines.extend([
+              '',
+              'These issues are evidence gates, not hidden source TODOs. They must not be closed by simulation or by the implementing agent self-certifying the outcome.',
+          ])
+          body = '\n'.join(lines)
+          comments = request(
+              'GET', f'/repos/{repository}/issues/23/comments?per_page=100'
+          )
+          existing_comment = next(
+              (
+                  comment
+                  for comment in comments
+                  if summary_marker in (comment.get('body') or '')
+              ),
+              None,
+          )
+          if existing_comment:
+              request(
+                  'PATCH',
+                  f"/repos/{repository}/issues/comments/{existing_comment['id']}",
+                  {'body': body},
+              )
+          else:
+              request(
+                  'POST',
+                  f'/repos/{repository}/issues/23/comments',
+                  {'body': body},
+              )
+          PY
