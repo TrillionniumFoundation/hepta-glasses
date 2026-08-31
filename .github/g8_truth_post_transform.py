@@ -60,6 +60,16 @@ if old_required in validator:
     validator = validator.replace(old_required, new_required)
 elif new_required not in validator:
     raise SystemExit("repository validator has neither legacy nor canonical Android test path")
+
+# The transform introduced an external product-surface validator but its
+# original import anchor did not exist in the base file. Install the import
+# deterministically rather than allowing a late NameError.
+import_line = "from validate_product_surface import validate_product_surface"
+if import_line not in validator:
+    anchor = "from pathlib import Path\n"
+    if anchor not in validator:
+        raise SystemExit("repository validator import anchor is missing")
+    validator = validator.replace(anchor, f"{anchor}\n{import_line}\n", 1)
 VALIDATOR.write_text(validator, encoding="utf-8")
 
 # Machine truth must never reference files removed by the package migration.
