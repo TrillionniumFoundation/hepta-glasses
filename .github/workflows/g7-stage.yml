@@ -1,0 +1,52 @@
+name: g7-stage
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/hepta-glasses-g7-synthesis
+    paths:
+      - .github/workflows/g7-stage.yml
+      - tools/g7-stage.trigger
+
+permissions:
+  contents: write
+
+concurrency:
+  group: g7-stage-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: codex/hepta-glasses-g7-synthesis
+          fetch-depth: 0
+          persist-credentials: true
+      - run: |
+          git config user.name 'hepta-g7-stage[bot]'
+          git config user.email 'hepta-g7-stage[bot]@users.noreply.github.com'
+      - run: python3 tools/apply_g7_synthesis.py
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - name: Normalize generated source
+        run: |
+          flutter pub get
+          dart format lib test
+          git add -A
+          git diff --cached --check
+      - name: Commit staged candidate
+        run: |
+          if git diff --cached --quiet; then
+            echo 'No staged changes.'
+            exit 0
+          fi
+          git commit -m 'fix(g7): stage converged source candidate'
+          git push origin HEAD:codex/hepta-glasses-g7-synthesis
