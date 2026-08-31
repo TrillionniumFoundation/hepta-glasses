@@ -1,0 +1,240 @@
+name: g8-final-bind
+
+on:
+  push:
+    branches:
+      - work/hepta-g8-final-bind-20260901
+    paths:
+      - .github/workflows/g8-final-bind.yml
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  bind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Dispatch and bind one fresh exact-head matrix
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          repository = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          api = 'https://api.github.com'
+          branch = 'codex/hepta-glasses-gap-closure-g8'
+          expected_jobs = {
+              'repository-contracts',
+              'flutter',
+              'android-native',
+              'ios-native',
+              'native-sanitizers',
+              'secret-and-boundary-scan',
+              'source-evidence',
+          }
+
+          def request(method: str, path: str, payload=None):
+              data = None if payload is None else json.dumps(payload).encode()
+              req = urllib.request.Request(
+                  api + path,
+                  data=data,
+                  method=method,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'Content-Type': 'application/json',
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  body = response.read()
+                  return json.loads(body) if body else None
+
+          pr = request('GET', f'/repos/{repository}/pulls/23')
+          head = pr['head']['sha']
+          dispatched_after = time.time()
+          request(
+              'POST',
+              f'/repos/{repository}/actions/workflows/ci.yml/dispatches',
+              {'ref': branch},
+          )
+
+          selected = None
+          jobs = []
+          for _ in range(180):
+              current_pr = request('GET', f'/repos/{repository}/pulls/23')
+              if current_pr['head']['sha'] != head:
+                  raise SystemExit(
+                      'Candidate head changed after final dispatch; binding aborted'
+                  )
+              encoded_branch = urllib.parse.quote(branch, safe='')
+              runs = request(
+                  'GET',
+                  f'/repos/{repository}/actions/runs?branch={encoded_branch}&event=workflow_dispatch&per_page=30',
+              )['workflow_runs']
+              candidates = [
+                  run for run in runs
+                  if run.get('head_sha') == head
+                  and run.get('path') == '.github/workflows/ci.yml'
+                  and run.get('created_at')
+              ]
+              if candidates:
+                  selected = sorted(candidates, key=lambda run: run['id'], reverse=True)[0]
+                  if selected.get('status') == 'completed':
+                      jobs = request(
+                          'GET',
+                          f"/repos/{repository}/actions/runs/{selected['id']}/jobs?per_page=100",
+                      )['jobs']
+                      names = {job['name'] for job in jobs}
+                      if names == expected_jobs and all(
+                          job.get('status') == 'completed' for job in jobs
+                      ):
+                          break
+              time.sleep(10)
+          else:
+              raise SystemExit('Fresh exact-head formal matrix did not complete')
+
+          assert selected is not None
+          job_results = {job['name']: job.get('conclusion') for job in jobs}
+          jobs_success = (
+              set(job_results) == expected_jobs
+              and all(value == 'success' for value in job_results.values())
+          )
+          artifacts = request(
+              'GET',
+              f"/repos/{repository}/actions/runs/{selected['id']}/artifacts?per_page=100",
+          )['artifacts']
+          expected_name = f'hepta-source-evidence-{head}'
+          evidence = [
+              item for item in artifacts
+              if item.get('name') == expected_name and not item.get('expired')
+          ]
+          passed = jobs_success and len(evidence) == 1
+
+          binding = {
+              'schema_version': 1,
+              'pull_request': 23,
+              'head_sha': head,
+              'formal_run_id': selected['id'],
+              'formal_run_event': selected.get('event'),
+              'formal_run_conclusion': selected.get('conclusion'),
+              'jobs': job_results,
+              'all_required_jobs_successful': jobs_success,
+              'source_evidence_artifact_count': len(evidence),
+              'source_evidence_artifact': (
+                  {
+                      'id': evidence[0].get('id'),
+                      'name': evidence[0].get('name'),
+                      'digest': evidence[0].get('digest'),
+                      'size_in_bytes': evidence[0].get('size_in_bytes'),
+                  }
+                  if len(evidence) == 1 else None
+              ),
+              'repository_actionable_gate': 'PASS' if passed else 'FAIL',
+          }
+          Path('g8-final-binding.json').write_text(
+              json.dumps(binding, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+
+          marker = '<!-- hepta-g8-final-binding -->'
+          lines = [
+              marker,
+              '## Final G8 exact-head binding',
+              '',
+              f'- Head: `{head}`',
+              f"- Fresh workflow-dispatch run: `{selected['id']}`",
+              f"- Repository-actionable gate: `{'PASS' if passed else 'FAIL'}`",
+              f"- Source Evidence artifact count: `{len(evidence)}`",
+              '',
+              '| Required check | Conclusion |',
+              '|---|---|',
+          ]
+          for name in sorted(expected_jobs):
+              lines.append(f"| `{name}` | `{job_results.get(name, 'missing')}` |")
+          lines.extend([
+              '',
+              'This binding is invalidated by any subsequent push. It is not an independent approval, physical-device qualification, deployment receipt, signature, or release authorization.',
+          ])
+          comment_body = '\n'.join(lines)
+          comments = request(
+              'GET', f'/repos/{repository}/issues/23/comments?per_page=100'
+          )
+          existing = next(
+              (item for item in comments if marker in (item.get('body') or '')),
+              None,
+          )
+          if existing:
+              request(
+                  'PATCH',
+                  f"/repos/{repository}/issues/comments/{existing['id']}",
+                  {'body': comment_body},
+              )
+          else:
+              request(
+                  'POST',
+                  f'/repos/{repository}/issues/23/comments',
+                  {'body': comment_body},
+              )
+
+          if not passed:
+              raise SystemExit('Final exact-head repository-actionable gate failed')
+
+          # Transition out of Draft without approving or merging.
+          try:
+              request(
+                  'POST',
+                  '/graphql',
+                  {
+                      'query': (
+                          'mutation($id:ID!){markPullRequestReadyForReview('
+                          'input:{pullRequestId:$id}){pullRequest{isDraft}}}'
+                      ),
+                      'variables': {'id': pr['node_id']},
+                  },
+              )
+          except urllib.error.HTTPError as error:
+              if error.code not in (409, 422):
+                  raise
+
+          try:
+              request(
+                  'POST',
+                  f'/repos/{repository}/pulls/23/requested_reviewers',
+                  {'reviewers': ['ProfHepta']},
+              )
+              binding['independent_reviewer_request'] = 'ProfHepta'
+          except urllib.error.HTTPError as error:
+              binding['independent_reviewer_request'] = f'unavailable_http_{error.code}'
+          Path('g8-final-binding.json').write_text(
+              json.dumps(binding, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: hepta-g8-final-binding-${{ github.sha }}
+          path: g8-final-binding.json
+          if-no-files-found: warn
+          retention-days: 30
