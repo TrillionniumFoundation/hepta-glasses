@@ -28,11 +28,6 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: true
-      - name: Decode formatted source bundle
-        run: |
-          set -euo pipefail
-          base64 -d tools/g7-six-files.tar.gz.b64 > /tmp/g7-six-files.tar.gz
-          tar -tzf /tmp/g7-six-files.tar.gz
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: '3.47.2'
@@ -41,29 +36,364 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
-      - name: Restore exact files and run full source qualification
+      - name: Restore exact scanner and fixture tests
         run: |
           set -euo pipefail
           git checkout --detach "$TARGET_SHA"
-          tar -xzf /tmp/g7-six-files.tar.gz
-          cat > /tmp/g7-file-sha256 <<'SHAS'
-          55d75241975372ee2662b203b7ee1f8472bd554bb6f4dc7c3ef27ac3c793b176  tools/scan_git_history.py
-          aeecf4f2b0e2f74f2f102a825aafdd97321c217b6b057a50d1ce9c4ed3a10a80  services/qualification/test_history_scan.py
-          3bcf1fb30d2370f9237227b9ea9a76783b0312100a5d253a4d7ebbf98fc3a113  lib/controllers/bmp_update_manager.dart
-          77bbaa888bce65309c155d946ca7eb76f8b44ddd7f2402757b86d037b5eb911b  lib/services/evenai.dart
-          eefbbc1d526c9d7d1c4508ca07c052ea6db1f39e8e791a519b222f2cc0e15860  test/runtime/audit_journal_test.dart
-          9d6c4bbfbe6c619548daaa0cbb7b00b891e0de7eecb2447611efbae0d14176c7  test/runtime/bmp_update_manager_test.dart
-          SHAS
-          sha256sum -c /tmp/g7-file-sha256
+          cat > tools/scan_git_history.py <<'PYSCAN'
+          #!/usr/bin/env python3
+          """Scan every fetched Git object without printing possible secret material."""
+
+          from __future__ import annotations
+
+          import argparse
+          import hashlib
+          import json
+          import re
+          import subprocess
+          from pathlib import Path
+
+          MAX_BLOB_BYTES = 16 * 1024 * 1024
+          PATTERNS = {
+              "github_token": re.compile(rb"gh[pousr]_[A-Za-z0-9]{30,}"),
+              "private_key": re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+              "provider_token": re.compile(rb"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}"),
+              "aws_access_key": re.compile(rb"(?<![A-Z0-9])AKIA[0-9A-Z]{16}(?![A-Z0-9])"),
+          }
+          PATTERN_DEFINITION_PATHS = frozenset(
+              {
+                  ".github/workflows/ci.yml",
+                  "tools/scan_git_history.py",
+                  "tools/validate_repository.py",
+              }
+          )
+          SYNTHETIC_FIXTURE_ALLOWLIST_VERSION = "g7-history-fixtures-v1"
+          SYNTHETIC_FIXTURE_ALLOWLIST = frozenset(
+              {
+                  (
+                      "provider_token",
+                      "services/qualification/test_history_scan.py",
+                      "1116e22dd684fcbb57ee9f31864111bbcf328d90",
+                      "2f51c91b30cb847848d76ffb9dbf1961b16b758a50eb0b8ce3692fd4d60174ee",
+                  ),
+                  (
+                      "provider_token",
+                      "services/qualification/test_history_scan.py",
+                      "5084517496a527e95e4a2b7ab8d36bcbd622e0c5",
+                      "2f51c91b30cb847848d76ffb9dbf1961b16b758a50eb0b8ce3692fd4d60174ee",
+                  ),
+              }
+          )
+
+
+          def git(root: Path, *arguments: str) -> bytes:
+              return subprocess.check_output(["git", *arguments], cwd=root)
+
+
+          def object_paths(root: Path) -> list[tuple[str, str]]:
+              records: list[tuple[str, str]] = []
+              for raw in git(root, "rev-list", "--objects", "--all").decode(
+                  "utf-8", errors="replace"
+              ).splitlines():
+                  if not raw.strip():
+                      continue
+                  parts = raw.split(" ", 1)
+                  records.append((parts[0], parts[1] if len(parts) == 2 else ""))
+              return records
+
+
+          def _fingerprint(value: bytes) -> str:
+              return hashlib.sha256(value).hexdigest()
+
+
+          def scan_blob(data: bytes, *, path: str, object_id: str) -> list[dict[str, str]]:
+              if path in PATTERN_DEFINITION_PATHS:
+                  return []
+              findings: list[dict[str, str]] = []
+              for name, pattern in PATTERNS.items():
+                  for match in pattern.finditer(data):
+                      findings.append(
+                          {
+                              "pattern": name,
+                              "path": path or "<unpathed-blob>",
+                              "object": object_id,
+                              "fingerprint": _fingerprint(match.group(0)),
+                          }
+                      )
+              return findings
+
+
+          def is_synthetic_fixture_finding(finding: dict[str, str]) -> bool:
+              return (
+                  finding["pattern"],
+                  finding["path"],
+                  finding["object"],
+                  finding["fingerprint"],
+              ) in SYNTHETIC_FIXTURE_ALLOWLIST
+
+
+          def build_report(root: Path) -> dict[str, object]:
+              root = root.resolve()
+              records = object_paths(root)
+              paths_by_object: dict[str, set[str]] = {}
+              for object_id, path in records:
+                  paths_by_object.setdefault(object_id, set()).add(path)
+
+              findings: list[dict[str, str]] = []
+              synthetic_fixture_matches: list[dict[str, str]] = []
+              scanned_blobs = 0
+              bytes_scanned = 0
+              unscanned_blobs: list[dict[str, object]] = []
+              for object_id in sorted(paths_by_object):
+                  object_type = git(root, "cat-file", "-t", object_id).decode().strip()
+                  if object_type != "blob":
+                      continue
+                  size = int(git(root, "cat-file", "-s", object_id).decode().strip())
+                  if size > MAX_BLOB_BYTES:
+                      paths = sorted(
+                          value for value in paths_by_object[object_id] if value
+                      ) or [""]
+                      unscanned_blobs.append(
+                          {
+                              "object": object_id,
+                              "paths": paths,
+                              "size": size,
+                          }
+                      )
+                      continue
+                  data = git(root, "cat-file", "blob", object_id)
+                  scanned_blobs += 1
+                  bytes_scanned += len(data)
+                  paths = sorted(value for value in paths_by_object[object_id] if value) or [""]
+                  for path in paths:
+                      for finding in scan_blob(data, path=path, object_id=object_id):
+                          if is_synthetic_fixture_finding(finding):
+                              synthetic_fixture_matches.append(finding)
+                          else:
+                              findings.append(finding)
+
+              refs = git(root, "for-each-ref", "--format=%(refname)").decode().splitlines()
+              commit_count = int(git(root, "rev-list", "--all", "--count").decode().strip())
+              head = git(root, "rev-parse", "HEAD").decode().strip()
+              unique_findings = {
+                  (item["pattern"], item["path"], item["object"], item["fingerprint"]): item
+                  for item in findings
+              }
+              ordered = [unique_findings[key] for key in sorted(unique_findings)]
+              return {
+                  "schema_version": 1,
+                  "head": head,
+                  "scope": "all-fetched-refs-and-deduplicated-blobs",
+                  "ref_count": len(refs),
+                  "commit_count": commit_count,
+                  "scanned_blob_count": scanned_blobs,
+                  "bytes_scanned": bytes_scanned,
+                  "unscanned_blob_count": len(unscanned_blobs),
+                  "unscanned_blobs": unscanned_blobs,
+                  "finding_count": len(ordered),
+                  "findings": ordered,
+                  "synthetic_fixture_allowlist_version": SYNTHETIC_FIXTURE_ALLOWLIST_VERSION,
+                  "synthetic_fixture_allowlist_count": len(SYNTHETIC_FIXTURE_ALLOWLIST),
+                  "synthetic_fixture_match_count": len(synthetic_fixture_matches),
+                  "synthetic_fixture_matches": sorted(
+                      synthetic_fixture_matches,
+                      key=lambda item: (
+                          item["pattern"],
+                          item["path"],
+                          item["object"],
+                          item["fingerprint"],
+                      ),
+                  ),
+                  "redaction": "match material is never emitted; fingerprint is SHA-256",
+              }
+
+
+          def write_report(path: Path, report: dict[str, object]) -> None:
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_text(
+                  json.dumps(report, indent=2, sort_keys=True) + "\n",
+                  encoding="utf-8",
+              )
+
+
+          def main() -> int:
+              parser = argparse.ArgumentParser()
+              parser.add_argument("--root", type=Path, default=Path.cwd())
+              parser.add_argument("--output", type=Path, required=True)
+              parser.add_argument("--report-only", action="store_true")
+              args = parser.parse_args()
+              report = build_report(args.root)
+              write_report(args.output, report)
+              print(
+                  json.dumps(
+                      {
+                          "head": report["head"],
+                          "finding_count": report["finding_count"],
+                          "scanned_blob_count": report["scanned_blob_count"],
+                          "unscanned_blob_count": report["unscanned_blob_count"],
+                      },
+                      separators=(",", ":"),
+                  )
+              )
+              if (report["finding_count"] or report["unscanned_blob_count"]) and not args.report_only:
+                  return 1
+              return 0
+
+
+          if __name__ == "__main__":
+              raise SystemExit(main())
+          PYSCAN
+          cat > services/qualification/test_history_scan.py <<'PYTEST'
+          import subprocess
+          import tempfile
+          import unittest
+          from pathlib import Path
+          from unittest import mock
+
+          from tools.scan_git_history import (
+              MAX_BLOB_BYTES,
+              SYNTHETIC_FIXTURE_ALLOWLIST,
+              build_report,
+              is_synthetic_fixture_finding,
+              scan_blob,
+          )
+
+
+          class HistoryScanTest(unittest.TestCase):
+              def test_finding_is_fingerprinted_without_secret_material(self) -> None:
+                  secret = b"sk" + b"-" + b"abcdefghijklmnopqrstuvwxyz123456"
+                  findings = scan_blob(secret, path="lib/example.dart", object_id="a" * 40)
+                  self.assertEqual(len(findings), 1)
+                  self.assertNotIn(secret.decode(), str(findings))
+                  self.assertEqual(len(findings[0]["fingerprint"]), 64)
+
+              def test_binary_blob_is_not_silently_skipped(self) -> None:
+                  secret = (
+                      b"prefix\x00"
+                      + b"sk"
+                      + b"-"
+                      + b"abcdefghijklmnopqrstuvwxyz123456\x00suffix"
+                  )
+                  findings = scan_blob(
+                      secret,
+                      path="assets/sample.bin",
+                      object_id="b" * 40,
+                  )
+                  self.assertEqual(len(findings), 1)
+                  self.assertEqual(findings[0]["pattern"], "provider_token")
+
+              def test_synthetic_fixture_allowlist_is_exact_and_content_addressed(self) -> None:
+                  pattern, path, object_id, fingerprint = next(
+                      iter(SYNTHETIC_FIXTURE_ALLOWLIST)
+                  )
+                  finding = {
+                      "pattern": pattern,
+                      "path": path,
+                      "object": object_id,
+                      "fingerprint": fingerprint,
+                  }
+                  self.assertTrue(is_synthetic_fixture_finding(finding))
+                  self.assertFalse(
+                      is_synthetic_fixture_finding(
+                          {**finding, "object": "f" * 40},
+                      )
+                  )
+                  self.assertFalse(
+                      is_synthetic_fixture_finding(
+                          {**finding, "path": "services/qualification/other.py"},
+                      )
+                  )
+
+              def test_scans_all_fetched_commits(self) -> None:
+                  with tempfile.TemporaryDirectory() as directory:
+                      root = Path(directory)
+                      subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+                      subprocess.run(
+                          ["git", "config", "user.email", "test@example.com"],
+                          cwd=root,
+                          check=True,
+                      )
+                      subprocess.run(
+                          ["git", "config", "user.name", "Test"], cwd=root, check=True
+                      )
+                      tracked = root / "tracked.txt"
+                      tracked.write_text("safe\n", encoding="utf-8")
+                      subprocess.run(["git", "add", "."], cwd=root, check=True)
+                      subprocess.run(["git", "commit", "-qm", "safe"], cwd=root, check=True)
+                      tracked.write_text("sk" + "-" + "abcdefghijklmnopqrstuvwxyz123456\n")
+                      subprocess.run(["git", "add", "."], cwd=root, check=True)
+                      subprocess.run(["git", "commit", "-qm", "secret"], cwd=root, check=True)
+                      tracked.write_text("safe again\n", encoding="utf-8")
+                      subprocess.run(["git", "add", "."], cwd=root, check=True)
+                      subprocess.run(["git", "commit", "-qm", "clean"], cwd=root, check=True)
+
+                      report = build_report(root)
+                      self.assertEqual(report["finding_count"], 1)
+                      finding = report["findings"][0]
+                      self.assertEqual(finding["path"], "tracked.txt")
+                      self.assertEqual(report["unscanned_blob_count"], 0)
+                      self.assertNotIn(
+                          "sk" + "-" + "abcdefghijklmnopqrstuvwxyz123456",
+                          str(report),
+                      )
+
+              def test_reports_unscanned_large_blob_instead_of_silently_skipping(self) -> None:
+                  with tempfile.TemporaryDirectory() as directory:
+                      root = Path(directory)
+                      subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+                      subprocess.run(
+                          ["git", "config", "user.email", "test@example.com"],
+                          cwd=root,
+                          check=True,
+                      )
+                      subprocess.run(
+                          ["git", "config", "user.name", "Test"], cwd=root, check=True
+                      )
+                      tracked = root / "large.bin"
+                      tracked.write_bytes(b"x")
+                      subprocess.run(["git", "add", "."], cwd=root, check=True)
+                      subprocess.run(["git", "commit", "-qm", "large"], cwd=root, check=True)
+                      blob = subprocess.check_output(
+                          ["git", "rev-parse", "HEAD:large.bin"],
+                          cwd=root,
+                          text=True,
+                      ).strip()
+                      real_check_output = subprocess.check_output
+
+                      def fake_check_output(command, *args, **kwargs):
+                          if command[-3:] == ["cat-file", "-s", blob]:
+                              return str(MAX_BLOB_BYTES + 1).encode()
+                          return real_check_output(command, *args, **kwargs)
+
+                      with mock.patch(
+                          "tools.scan_git_history.subprocess.check_output",
+                          side_effect=fake_check_output,
+                      ):
+                          report = build_report(root)
+                      self.assertEqual(report["unscanned_blob_count"], 1)
+                      self.assertEqual(report["unscanned_blobs"][0]["object"], blob)
+
+
+          if __name__ == "__main__":
+              unittest.main()
+          PYTEST
+          chmod +x tools/scan_git_history.py
+          git add tools/scan_git_history.py services/qualification/test_history_scan.py
+      - name: Format and run full source qualification
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart format \
+            lib/controllers/bmp_update_manager.dart \
+            lib/services/evenai.dart \
+            test/runtime/audit_journal_test.dart \
+            test/runtime/bmp_update_manager_test.dart
           git add \
-            tools/scan_git_history.py \
-            services/qualification/test_history_scan.py \
             lib/controllers/bmp_update_manager.dart \
             lib/services/evenai.dart \
             test/runtime/audit_journal_test.dart \
             test/runtime/bmp_update_manager_test.dart
           git diff --cached --check
-          flutter pub get
           dart format --output=none --set-exit-if-changed lib test
           flutter analyze --no-fatal-infos
           flutter test
@@ -80,7 +410,7 @@ jobs:
           tree="$(git write-tree)"
           commit="$(printf '%s\n\n%s\n' \
             'fix(g7): close format and synthetic-history blockers' \
-            'Restores Flutter 3.47.2-formatted files and an exact object/path/fingerprint fixture allowlist.' \
+            'Uses Flutter 3.47.2 formatting and an exact object/path/fingerprint fixture allowlist.' \
             | git commit-tree "$tree" -p "$TARGET_SHA")"
           git push \
             --force-with-lease="refs/heads/${TARGET_BRANCH}:${TARGET_SHA}" \
