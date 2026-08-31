@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "canonical_revision": "2026-08-31-g8",
+  "product_stage": "pre_alpha_qualification",
+  "claim_ceiling": "source_candidate",
+  "supported_product_platforms": [
+    "android",
+    "ios"
+  ],
+  "source_authority": {
+    "repository": "TrillionniumFoundation/hepta-glasses",
+    "candidate_branch": "codex/hepta-glasses-gap-closure-g8",
+    "pull_request": 23,
+    "exact_head_identity": "github_pull_request_head",
+    "exact_head_evidence": "github_actions_artifact",
+    "self_attested_commit_sha": false,
+    "required_checks": [
+      "repository-contracts",
+      "flutter",
+      "android-native",
+      "ios-native",
+      "native-sanitizers",
+      "secret-and-boundary-scan",
+      "source-evidence"
+    ]
+  },
+  "declared_repository_actionable_open_gaps": [],
+  "open_external_gates": [
+    "HG-0015",
+    "HG-0016",
+    "HG-0017",
+    "HG-0018",
+    "HG-0019",
+    "HG-0020"
+  ],
+  "capabilities": {
+    "g1_ble_transport": "source_implemented_ci_pending",
+    "dual_leg_delivery_truth": "source_implemented_ci_pending",
+    "ios_speech_to_text": "source_implemented_physical_pending",
+    "android_speech_to_text": "unsupported_no_production_pcm_asr_adapter",
+    "model_gateway": "development_reference_only",
+    "production_identity_and_attestation": "blocked_external",
+    "vendor_firmware_ota": "blocked_upstream",
+    "product_release": "blocked_external"
+  },
+  "evidence_rules": {
+    "source_implementation_does_not_imply_physical_verification": true,
+    "source_implementation_does_not_imply_production_deployment": true,
+    "any_new_push_invalidates_prior_exact_head_ci_and_review": true,
+    "implementer_must_not_self_approve_or_self_merge": true
+  },
+  "source_contracts": {
+    "audit_journal": "hepta-jsonl-audit-v2",
+    "history_scan_acknowledgements": "exact-fixture-fingerprint-v1",
+    "source_release_gate": "release-gates-v1",
+    "gap_ledger": "docs/GAP_LEDGER.json",
+    "evidence_index": "docs/EVIDENCE_INDEX.json"
+  }
+}
