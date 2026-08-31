@@ -21,7 +21,7 @@ jobs:
     env:
       TARGET_SHA: 1be0adc5bb738b2dcd87eefe0c3d67276575131d
       TARGET_BRANCH: codex/hepta-glasses-gap-closure-g7
-      HISTORY_PATCH_SHA256: 2b5b9f663803cf821df42e07a50164e606bf318a34b125b496219579d4487fea
+      HISTORY_PATCH_BLOB: 7412b7ea661385621aaae76dc789133d8dd64a89
     steps:
       - name: Check out exact bootstrap source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -32,8 +32,8 @@ jobs:
       - name: Capture and verify bounded history patch
         run: |
           set -euo pipefail
+          test "$(git hash-object tools/g7-history-fixture.patch)" = "$HISTORY_PATCH_BLOB"
           cp tools/g7-history-fixture.patch /tmp/g7-history-fixture.patch
-          printf '%s  %s\n' "$HISTORY_PATCH_SHA256" /tmp/g7-history-fixture.patch | sha256sum -c -
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: '3.47.2'
