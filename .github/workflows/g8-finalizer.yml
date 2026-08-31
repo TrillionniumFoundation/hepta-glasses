@@ -1,0 +1,89 @@
+name: g8-finalizer
+
+on:
+  push:
+    branches:
+      - work/hepta-g8-finalizer-20260901
+
+permissions:
+  contents: write
+
+concurrency:
+  group: g8-finalizer
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    env:
+      MATERIALIZER_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: codex/hepta-glasses-gap-closure-g8
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Load immutable finalizer programs
+        run: |
+          git show "$MATERIALIZER_SHA:automation/apply_closure.py" > /tmp/apply_closure.py
+          git show "$MATERIALIZER_SHA:automation/scan_git_history_v2.py" > /tmp/scan_git_history_v2.py
+          chmod +x /tmp/apply_closure.py /tmp/scan_git_history_v2.py
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - run: flutter pub get
+      - name: Apply deterministic closure
+        run: python3 /tmp/apply_closure.py /tmp/scan_git_history_v2.py
+      - name: Canonical formatting and dependency resolution
+        run: |
+          dart format lib test
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib test
+      - name: Source contracts
+        run: |
+          mkdir -p build/evidence
+          python3 tools/scan_git_history.py --output build/evidence/source-history-scan.json
+          python3 tools/validate_repository.py
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+      - name: Flutter qualification
+        run: |
+          flutter analyze --no-fatal-infos
+          flutter test
+      - name: Android qualification
+        run: |
+          flutter build apk --debug
+          cd android
+          ./gradlew lintDebug testDebugUnitTest
+      - name: Native sanitizer qualification
+        run: tools/run_native_sanitizers.sh build/evidence/source-native-sanitizer.json
+      - name: Verify formal authority and clean diff
+        run: |
+          test "$(find .github/workflows -maxdepth 1 -type f -printf '%f\n' | sort)" = 'ci.yml'
+          git diff --exit-code -- .github/workflows
+          git diff --check
+          if git status --porcelain | grep -E '(^| )build/'; then
+            echo 'build outputs must remain untracked or ignored' >&2
+            exit 1
+          fi
+      - name: Commit verified closure to PR candidate
+        run: |
+          git config user.name 'hepta-g8-automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git reset -- build || true
+          if git diff --cached --quiet; then
+            echo 'No repository-actionable source delta remains.'
+            exit 0
+          fi
+          git commit -m 'fix(g8): close exact-head formatting Android and history blockers'
+          git push origin HEAD:codex/hepta-glasses-gap-closure-g8
