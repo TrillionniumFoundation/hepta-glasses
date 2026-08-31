@@ -21,7 +21,6 @@ jobs:
     env:
       TARGET_SHA: 1be0adc5bb738b2dcd87eefe0c3d67276575131d
       TARGET_BRANCH: codex/hepta-glasses-gap-closure-g7
-      BUNDLE_SHA256: 1491b92f8b884cd66448941429751791b0a791b6ad4738979a4e94594e46146d
     steps:
       - name: Check out exact bootstrap source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -29,11 +28,11 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: true
-      - name: Capture and verify formatted source bundle
+      - name: Decode formatted source bundle
         run: |
           set -euo pipefail
           base64 -d tools/g7-six-files.tar.gz.b64 > /tmp/g7-six-files.tar.gz
-          printf '%s  %s\n' "$BUNDLE_SHA256" /tmp/g7-six-files.tar.gz | sha256sum -c -
+          tar -tzf /tmp/g7-six-files.tar.gz
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: '3.47.2'
@@ -47,6 +46,15 @@ jobs:
           set -euo pipefail
           git checkout --detach "$TARGET_SHA"
           tar -xzf /tmp/g7-six-files.tar.gz
+          cat > /tmp/g7-file-sha256 <<'SHAS'
+          55d75241975372ee2662b203b7ee1f8472bd554bb6f4dc7c3ef27ac3c793b176  tools/scan_git_history.py
+          aeecf4f2b0e2f74f2f102a825aafdd97321c217b6b057a50d1ce9c4ed3a10a80  services/qualification/test_history_scan.py
+          3bcf1fb30d2370f9237227b9ea9a76783b0312100a5d253a4d7ebbf98fc3a113  lib/controllers/bmp_update_manager.dart
+          77bbaa888bce65309c155d946ca7eb76f8b44ddd7f2402757b86d037b5eb911b  lib/services/evenai.dart
+          eefbbc1d526c9d7d1c4508ca07c052ea6db1f39e8e791a519b222f2cc0e15860  test/runtime/audit_journal_test.dart
+          9d6c4bbfbe6c619548daaa0cbb7b00b891e0de7eecb2447611efbae0d14176c7  test/runtime/bmp_update_manager_test.dart
+          SHAS
+          sha256sum -c /tmp/g7-file-sha256
           git add \
             tools/scan_git_history.py \
             services/qualification/test_history_scan.py \
@@ -72,7 +80,7 @@ jobs:
           tree="$(git write-tree)"
           commit="$(printf '%s\n\n%s\n' \
             'fix(g7): close format and synthetic-history blockers' \
-            'Restores the Flutter 3.47.2-formatted files and exact object/path/fingerprint fixture allowlist.' \
+            'Restores Flutter 3.47.2-formatted files and an exact object/path/fingerprint fixture allowlist.' \
             | git commit-tree "$tree" -p "$TARGET_SHA")"
           git push \
             --force-with-lease="refs/heads/${TARGET_BRANCH}:${TARGET_SHA}" \
