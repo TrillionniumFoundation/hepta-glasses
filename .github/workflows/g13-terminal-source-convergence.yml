@@ -1,0 +1,52 @@
+name: g13-terminal-source-convergence
+
+on:
+  push:
+    branches:
+      - ops/hepta-g13-terminal-source-convergence
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: hepta-g13-terminal-source-convergence
+  cancel-in-progress: false
+
+jobs:
+  converge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ops/hepta-g13-terminal-source-convergence
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+
+      - name: Execute the single-authority terminal convergence controller
+        run: python3 ops/g13_controller.py
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: hepta-g13-terminal-source-convergence-${{ github.sha }}
+          path: build/g13
+          if-no-files-found: error
+          retention-days: 90
