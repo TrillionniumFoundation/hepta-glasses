@@ -21,6 +21,8 @@ PATTERN_DEFINITION_PATHS = frozenset(
     {
         ".github/workflows/ci.yml",
         "tools/scan_git_history.py",
+        "tools/apply_g7_synthesis.py",
+        "tools/apply_g7_repair.py",
         "tools/validate_repository.py",
     }
 )
