@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: g8-truth-materialize-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   apply:
@@ -33,6 +33,8 @@ jobs:
           cache: false
       - name: Apply deterministic G8 product-truth migration
         run: python3 .github/g8_truth_transform.py
+      - name: Close post-transform validator path drift
+        run: python3 .github/g8_truth_post_transform.py
       - name: Canonicalize Dart source
         run: dart format lib test
       - name: Verify repository contracts
