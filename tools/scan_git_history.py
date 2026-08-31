@@ -24,8 +24,6 @@ PATTERN_DEFINITION_PATHS = frozenset(
     {
         ".github/workflows/ci.yml",
         "tools/scan_git_history.py",
-        "tools/apply_g7_synthesis.py",
-        "tools/apply_g7_repair.py",
         "tools/validate_repository.py",
     }
 )
@@ -121,7 +119,7 @@ def build_report(root: Path) -> dict[str, object]:
     blocking = [item for item in ordered if item["scope"] == "current-tree"]
     historical = [item for item in ordered if item["scope"] == "historical-only"]
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "head": git(root, "rev-parse", "HEAD").decode().strip(),
         "scope": "all-fetched-refs-and-deduplicated-blobs",
         "ref_count": len(

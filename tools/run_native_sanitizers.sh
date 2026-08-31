@@ -10,6 +10,7 @@ CC_BIN="${CC:-clang}"
 COMMON_FLAGS=(
   -std=c11
   -D_GNU_SOURCE
+  -D_GNU_SOURCE
   -O1
   -g
   -fno-omit-frame-pointer
