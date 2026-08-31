@@ -1,0 +1,248 @@
+name: g8-postfinalize
+
+on:
+  push:
+    branches:
+      - ops/hepta-g8-postfinalize-20260831
+
+permissions:
+  actions: read
+  checks: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: g8-postfinalize-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  READY_BRANCH: work/hepta-glasses-g8-truth-ready
+  VALIDATION_BRANCH: codex/hepta-glasses-gap-closure-g8-validation-final
+  PR_BRANCH: codex/hepta-glasses-gap-closure-g8
+  PR_NUMBER: '23'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Wait for promoted exact head and formal evidence
+        id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/$GH_REPO"
+          head=''
+          ready=''
+          for attempt in $(seq 1 720); do
+            ready="$(curl --fail --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              "$api/branches/$(python3 -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["READY_BRANCH"],safe=""))')" \
+              2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["commit"]["sha"])' 2>/dev/null || true)"
+            head="$(curl --fail --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              "$api/pulls/$PR_NUMBER" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["head"]["sha"])')"
+            if test -n "$ready" && test "$head" = "$ready"; then
+              break
+            fi
+            if test "$attempt" = 720; then
+              echo 'PR head did not converge to the exported ready commit' >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          runs=''
+          run_id=''
+          for attempt in $(seq 1 180); do
+            runs="$(curl --fail --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              "$api/actions/runs?branch=$VALIDATION_BRANCH&event=workflow_dispatch&per_page=20")"
+            run_id="$(RUNS="$runs" SHA="$head" python3 - <<'PY'
+          import json,os
+          matches=[r for r in json.loads(os.environ['RUNS']).get('workflow_runs',[]) if r.get('head_sha')==os.environ['SHA'] and r.get('conclusion')=='success']
+          print(matches[0]['id'] if matches else '')
+          PY
+          )"
+            test -n "$run_id" && break
+            if test "$attempt" = 180; then
+              echo 'no successful formal exact-head run was found' >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          jobs="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            "$api/actions/runs/$run_id/jobs?per_page=100")"
+          JOBS="$jobs" python3 - <<'PY'
+          import json,os
+          expected={'repository-contracts','flutter','android-native','ios-native','native-sanitizers','secret-and-boundary-scan','source-evidence'}
+          jobs=json.loads(os.environ['JOBS']).get('jobs',[])
+          by_name={item.get('name'):item for item in jobs}
+          if set(by_name)!=expected:
+              raise SystemExit(f'formal job set mismatch: {sorted(by_name)}')
+          bad={name:item.get('conclusion') for name,item in by_name.items() if item.get('conclusion')!='success'}
+          if bad:
+              raise SystemExit(f'formal job failure: {bad}')
+          PY
+          artifacts="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            "$api/actions/runs/$run_id/artifacts?per_page=100")"
+          artifact="$(ARTIFACTS="$artifacts" SHA="$head" python3 - <<'PY'
+          import json,os
+          expected='hepta-source-evidence-'+os.environ['SHA']
+          matches=[x for x in json.loads(os.environ['ARTIFACTS']).get('artifacts',[]) if x.get('name')==expected and not x.get('expired')]
+          if len(matches)!=1:
+              raise SystemExit(f'expected one live artifact, found {len(matches)}')
+          item=matches[0]
+          if not str(item.get('digest','')).startswith('sha256:'):
+              raise SystemExit('artifact digest is not SHA-256')
+          print(json.dumps({'id':item['id'],'name':item['name'],'digest':item['digest']},separators=(',',':')))
+          PY
+          )"
+          echo "sha=$head" >> "$GITHUB_OUTPUT"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
+      - name: Re-audit the promoted tree independently of the formal run
+        run: |
+          set -euo pipefail
+          sha='${{ steps.state.outputs.sha }}'
+          git fetch --force origin "$sha"
+          git checkout --detach "$sha"
+          python3 tools/validate_repository.py
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+          find services adapters tools -type d -name __pycache__ -prune -exec rm -rf {} +
+          test -z "$(git status --porcelain)"
+          test "$(find .github/workflows -maxdepth 1 -type f -printf '%f\n' | sort)" = "ci.yml"
+      - name: Bind open external gates to the verified source baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          sha='${{ steps.state.outputs.sha }}'
+          run_id='${{ steps.state.outputs.run_id }}'
+          artifact='${{ steps.state.outputs.artifact }}'
+          api="https://api.github.com/repos/$GH_REPO"
+          for issue in 24 25 26 27 28 29; do
+            gate="$(curl --fail --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              "$api/issues/$issue")"
+            state="$(GATE="$gate" python3 -c 'import json,os; print(json.loads(os.environ["GATE"])["state"])')"
+            test "$state" = open
+            body="$(ISSUE="$issue" SHA="$sha" RUN_ID="$run_id" ARTIFACT="$artifact" python3 - <<'PY'
+          import json,os
+          artifact=json.loads(os.environ['ARTIFACT'])
+          issue=os.environ['ISSUE']
+          notes={
+              '24':'Physical Android/iOS plus real G1 qualification remains required.',
+              '25':'Deployed identity, KMS/HSM, attestation, rotation, revocation, and recovery evidence remains required.',
+              '26':'Authorized branch-protection administration and readback evidence remains required; source code cannot establish it.',
+              '27':'Vendor-authorized firmware, bootloader, secure boot, OTA, recovery, and rollback authority remains required.',
+              '28':'Production realtime/model tenancy, OAuth adapters, and authoritative external-effect reconciliation evidence remains required.',
+              '29':'Independent assurance, signing, pilot, kill switch, staged rollout, rollback, and store approval remain required.',
+          }
+          print('\n'.join([
+              'G8 source-preparation baseline refreshed.',
+              '',
+              f'- Exact source head: `{os.environ["SHA"]}`',
+              f'- Formal seven-job CI run: `{os.environ["RUN_ID"]}`',
+              f'- Source evidence artifact: `{artifact["name"]}`',
+              f'- Artifact digest: `{artifact["digest"]}`',
+              '',
+              notes[issue],
+              'This issue remains open; no source, simulator, unit-test, or digital-twin evidence is being promoted to an external E5-E7 claim.',
+          ]))
+          PY
+          )"
+            payload="$(BODY="$body" python3 -c 'import json,os; print(json.dumps({"body":os.environ["BODY"]}))')"
+            curl --fail --silent --show-error \
+              --request POST \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              "$api/issues/$issue/comments" \
+              --data "$payload" >/dev/null
+          done
+      - name: Request an eligible independent reviewer when available
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/$GH_REPO"
+          payload='{"reviewers":["ProfHepta"]}'
+          code="$(curl --silent --show-error --output /tmp/reviewer.json --write-out '%{http_code}' \
+            --request POST \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$api/pulls/$PR_NUMBER/requested_reviewers" \
+            --data "$payload")"
+          mkdir -p build/postfinalize
+          printf '%s\n' "$code" > build/postfinalize/reviewer-request-http-status.txt
+          cp /tmp/reviewer.json build/postfinalize/reviewer-request-response.json || true
+          case "$code" in
+            201) printf '%s\n' 'ProfHepta' > build/postfinalize/requested-reviewer.txt ;;
+            403|404|422) printf '%s\n' 'No eligible ProfHepta reviewer could be requested with the workflow token.' > build/postfinalize/requested-reviewer.txt ;;
+            *) cat /tmp/reviewer.json >&2; exit 1 ;;
+          esac
+      - name: Write final handoff state
+        run: |
+          set -euo pipefail
+          mkdir -p build/postfinalize
+          SHA='${{ steps.state.outputs.sha }}' RUN_ID='${{ steps.state.outputs.run_id }}' ARTIFACT='${{ steps.state.outputs.artifact }}' python3 - <<'PY'
+          import json,os,pathlib
+          state={
+              'schema_version':1,
+              'repository':'TrillionniumFoundation/hepta-glasses',
+              'pull_request':23,
+              'head_sha':os.environ['SHA'],
+              'formal_ci_run_id':int(os.environ['RUN_ID']),
+              'source_evidence_artifact':json.loads(os.environ['ARTIFACT']),
+              'repository_actionable_source_gaps':'closed_pending_independent_review',
+              'independent_review':'pending',
+              'external_gates':['HG-0015','HG-0016','HG-0017','HG-0018','HG-0019','HG-0020'],
+              'merged':False,
+              'released':False,
+          }
+          pathlib.Path('build/postfinalize/g8-handoff-state.json').write_text(json.dumps(state,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-g8-postfinalize-${{ steps.state.outputs.sha }}
+          path: build/postfinalize
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove temporary implementation and validation refs
+        run: |
+          set -euo pipefail
+          for branch in \
+            work/hepta-glasses-gap-closure-g8-materialize \
+            work/hepta-glasses-gap-closure-g8-diagnostics \
+            work/hepta-glasses-g8-truth-materialize \
+            work/hepta-glasses-g8-truth-ready \
+            codex/hepta-glasses-gap-closure-g8-validation \
+            codex/hepta-glasses-gap-closure-g8-validation-final \
+            ops/hepta-g8-truth-export-20260831 \
+            ops/hepta-g8-finalize-20260831; do
+            git push origin --delete "$branch" || true
+          done
