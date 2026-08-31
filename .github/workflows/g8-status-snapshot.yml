@@ -1,0 +1,282 @@
+name: g8-status-snapshot
+
+on:
+  push:
+    branches:
+      - work/hepta-g8-status-snapshot-20260901
+    paths:
+      - .github/workflows/g8-status-snapshot.yml
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: work/hepta-g8-status-snapshot-20260901
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Generate stable exact-head snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import base64
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from collections import Counter
+          from pathlib import Path
+
+          repository = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          api = 'https://api.github.com'
+          expected_jobs = {
+              'repository-contracts',
+              'flutter',
+              'android-native',
+              'ios-native',
+              'native-sanitizers',
+              'secret-and-boundary-scan',
+              'source-evidence',
+          }
+
+          def request(path: str):
+              req = urllib.request.Request(
+                  api + path,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  body = response.read()
+                  return json.loads(body) if body else None
+
+          stable_head = None
+          stable_iterations = 0
+          selected = None
+          jobs = []
+          pr = None
+          for _ in range(180):
+              pr = request(f'/repos/{repository}/pulls/23')
+              head = pr['head']['sha']
+              if head == stable_head:
+                  stable_iterations += 1
+              else:
+                  stable_head = head
+                  stable_iterations = 0
+                  selected = None
+                  jobs = []
+
+              encoded_branch = urllib.parse.quote(
+                  'codex/hepta-glasses-gap-closure-g8', safe=''
+              )
+              runs = request(
+                  f'/repos/{repository}/actions/runs?branch={encoded_branch}&per_page=50'
+              )['workflow_runs']
+              candidates = [
+                  run for run in runs
+                  if run.get('head_sha') == stable_head
+                  and run.get('path') == '.github/workflows/ci.yml'
+                  and run.get('status') == 'completed'
+                  and run.get('conclusion') != 'cancelled'
+              ]
+              if candidates:
+                  selected = sorted(
+                      candidates,
+                      key=lambda run: (run.get('run_started_at') or '', run['id']),
+                      reverse=True,
+                  )[0]
+                  jobs = request(
+                      f"/repos/{repository}/actions/runs/{selected['id']}/jobs?per_page=100"
+                  )['jobs']
+                  names = {job['name'] for job in jobs}
+                  if names == expected_jobs and all(
+                      job.get('status') == 'completed' for job in jobs
+                  ) and stable_iterations >= 2:
+                      break
+              time.sleep(10)
+
+          assert pr is not None
+          job_results = {job['name']: job.get('conclusion') for job in jobs}
+          matrix_complete = set(job_results) == expected_jobs
+          matrix_success = matrix_complete and all(
+              value == 'success' for value in job_results.values()
+          )
+
+          artifacts = []
+          if selected is not None:
+              artifacts = request(
+                  f"/repos/{repository}/actions/runs/{selected['id']}/artifacts?per_page=100"
+              )['artifacts']
+          expected_artifact_name = f'hepta-source-evidence-{stable_head}'
+          source_artifacts = [
+              artifact for artifact in artifacts
+              if artifact.get('name') == expected_artifact_name
+              and not artifact.get('expired')
+          ]
+
+          reviews = request(f'/repos/{repository}/pulls/23/reviews?per_page=100')
+          latest_reviews = {}
+          for review in reviews:
+              user = review.get('user', {}).get('login')
+              if user:
+                  latest_reviews[user] = {
+                      'state': review.get('state'),
+                      'commit_id': review.get('commit_id'),
+                      'submitted_at': review.get('submitted_at'),
+                  }
+
+          contents = request(
+              f'/repos/{repository}/contents/docs/GAP_LEDGER.yaml?ref='
+              + urllib.parse.quote('codex/hepta-glasses-gap-closure-g8', safe='')
+          )
+          ledger_text = base64.b64decode(contents['content']).decode('utf-8')
+          try:
+              ledger = json.loads(ledger_text)
+          except json.JSONDecodeError:
+              ledger = {'parse_error': 'ledger is not JSON-compatible'}
+          gap_items = []
+          if isinstance(ledger, dict):
+              for key in ('gaps', 'items', 'entries'):
+                  value = ledger.get(key)
+                  if isinstance(value, list):
+                      gap_items = value
+                      break
+          gap_status_counts = Counter(
+              str(item.get('status', 'MISSING'))
+              for item in gap_items
+              if isinstance(item, dict)
+          )
+
+          protection = None
+          try:
+              protection = request(f'/repos/{repository}/branches/main/protection')
+          except urllib.error.HTTPError as error:
+              protection = {
+                  'accessible': False,
+                  'http_status': error.code,
+              }
+
+          state = {
+              'schema_version': 1,
+              'repository': repository,
+              'pull_request': {
+                  'number': 23,
+                  'state': pr.get('state'),
+                  'draft': pr.get('draft'),
+                  'mergeable': pr.get('mergeable'),
+                  'mergeable_state': pr.get('mergeable_state'),
+                  'head_sha': stable_head,
+                  'base_sha': pr.get('base', {}).get('sha'),
+                  'requested_reviewers': [
+                      item.get('login') for item in pr.get('requested_reviewers', [])
+                  ],
+              },
+              'formal_ci': {
+                  'run_id': selected.get('id') if selected else None,
+                  'event': selected.get('event') if selected else None,
+                  'status': selected.get('status') if selected else None,
+                  'conclusion': selected.get('conclusion') if selected else None,
+                  'jobs': job_results,
+                  'matrix_complete': matrix_complete,
+                  'matrix_success': matrix_success,
+              },
+              'source_evidence': {
+                  'expected_name': expected_artifact_name,
+                  'matching_artifact_count': len(source_artifacts),
+                  'artifacts': [
+                      {
+                          'id': item.get('id'),
+                          'name': item.get('name'),
+                          'digest': item.get('digest'),
+                          'size_in_bytes': item.get('size_in_bytes'),
+                          'expired': item.get('expired'),
+                      }
+                      for item in source_artifacts
+                  ],
+              },
+              'reviews': latest_reviews,
+              'gap_ledger': {
+                  'item_count': len(gap_items),
+                  'status_counts': dict(sorted(gap_status_counts.items())),
+                  'parse_error': ledger.get('parse_error') if isinstance(ledger, dict) else None,
+              },
+              'main_branch_protection': protection,
+              'repository_actionable_gate': (
+                  'PASS'
+                  if matrix_success and len(source_artifacts) == 1
+                  else 'FAIL'
+              ),
+              'independent_review_gate': (
+                  'PASS'
+                  if any(
+                      review.get('state') == 'APPROVED'
+                      and review.get('commit_id') == stable_head
+                      for review in latest_reviews.values()
+                  )
+                  else 'PENDING'
+              ),
+          }
+
+          output = Path('status')
+          output.mkdir(exist_ok=True)
+          (output / 'g8-current.json').write_text(
+              json.dumps(state, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+
+          lines = [
+              '# Hepta Glasses G8 authoritative snapshot',
+              '',
+              f"- Candidate head: `{stable_head}`",
+              f"- PR state: `{pr.get('state')}`, draft: `{pr.get('draft')}`",
+              f"- Repository-actionable gate: `{state['repository_actionable_gate']}`",
+              f"- Independent review gate: `{state['independent_review_gate']}`",
+              f"- Formal run: `{state['formal_ci']['run_id']}`",
+              f"- Source Evidence artifacts: `{len(source_artifacts)}`",
+              '',
+              '## Formal checks',
+              '',
+              '| Check | Conclusion |',
+              '|---|---|',
+          ]
+          for name in sorted(expected_jobs):
+              lines.append(f"| `{name}` | `{job_results.get(name, 'missing')}` |")
+          lines.extend([
+              '',
+              '## Gap Ledger status counts',
+              '',
+          ])
+          for status, count in sorted(gap_status_counts.items()):
+              lines.append(f'- `{status}`: {count}')
+          lines.extend([
+              '',
+              'This snapshot is observational. It does not approve, merge, sign, deploy, or promote source evidence to physical-device or production evidence.',
+          ])
+          (output / 'g8-current.md').write_text(
+              '\n'.join(lines) + '\n',
+              encoding='utf-8',
+          )
+          PY
+      - name: Commit snapshot to status branch
+        run: |
+          git config user.name 'hepta-g8-status'
+          git config user.email 'actions@users.noreply.github.com'
+          git add status/g8-current.json status/g8-current.md
+          git commit -m 'chore(g8): record authoritative closure snapshot'
+          git push origin HEAD:work/hepta-g8-status-snapshot-20260901
