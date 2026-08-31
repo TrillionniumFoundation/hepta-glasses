@@ -292,6 +292,51 @@ void main() {
     expect(effects, 1);
   });
 
+  test('single-use lease cannot race across idempotency keys', () async {
+    final clock = MutableClock(now);
+    final journal = InMemoryAuditJournal(clock: clock);
+    final policy = PolicyEngine(clock: clock);
+    final gateway = ToolGateway(journal: journal, policy: policy, clock: clock);
+    var effects = 0;
+    gateway.register(
+      const ToolSpec(
+        action: 'display.show_card',
+        riskTier: RiskTier.r1,
+        mutating: true,
+      ),
+      (ToolRequest request) async {
+        effects++;
+        return <String, Object?>{'displayed': true};
+      },
+    );
+
+    final first = displayRequest(idempotencyKey: 'lease-race-a');
+    final second = displayRequest(idempotencyKey: 'lease-race-b');
+    final lease = displayLease(first, id: 'shared-single-use-lease');
+    final receipts = await Future.wait(<Future<ToolReceipt>>[
+      gateway.execute(request: first, context: context, lease: lease),
+      gateway.execute(request: second, context: context, lease: lease),
+    ]);
+
+    expect(
+      receipts.map((ToolReceipt receipt) => receipt.status).toSet(),
+      <ToolReceiptStatus>{
+        ToolReceiptStatus.succeeded,
+        ToolReceiptStatus.rejected,
+      },
+    );
+    expect(effects, 1);
+    expect(
+      receipts
+          .singleWhere(
+            (ToolReceipt receipt) =>
+                receipt.status == ToolReceiptStatus.rejected,
+          )
+          .policyReason,
+      'decision_lease_already_consumed',
+    );
+  });
+
   test('unknown tool fails closed without invoking an effect', () async {
     final clock = MutableClock(now);
     final gateway = ToolGateway(

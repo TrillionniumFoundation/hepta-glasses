@@ -63,18 +63,30 @@ class _BmpState extends State<BmpPage> {
 
   Future<void> _run(Future<ToolReceipt> Function() operation) async {
     setState(() => _busy = true);
-    final receipt = await operation();
-    if (!mounted) {
-      return;
-    }
-    setState(() => _busy = false);
-    if (receipt.status != ToolReceiptStatus.succeeded) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text('Device effect requires attention: ${receipt.status.name}'),
-        ),
-      );
+    try {
+      final receipt = await operation();
+      if (!mounted) {
+        return;
+      }
+      if (receipt.status != ToolReceiptStatus.succeeded) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Device effect requires attention: ${receipt.status.name}',
+            ),
+          ),
+        );
+      }
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Device operation failed safely.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 }

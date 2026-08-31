@@ -36,6 +36,7 @@ class ReleaseGateTest(unittest.TestCase):
                 "commit_count": 2,
                 "scanned_blob_count": 10,
                 "finding_count": 0,
+                "unscanned_blob_count": 0,
             },
             "native_sanitizer": {
                 "sha256": "f" * 64,
@@ -45,7 +46,7 @@ class ReleaseGateTest(unittest.TestCase):
             "audit_contract": "file-lock-checkpoint-v1",
             "provenance": {"sha256": "d" * 64},
             "provenance_type": "unsigned-source-provenance-v1",
-            "contracts_version": "2026-08-31-g5",
+            "contracts_version": "2026-08-31-g7",
         }
 
     def test_source_mode_passes_without_claiming_product_release(self) -> None:
@@ -54,7 +55,7 @@ class ReleaseGateTest(unittest.TestCase):
 
     def test_source_mode_rejects_stale_contracts_version(self) -> None:
         source = self.source()
-        source["contracts_version"] = "2026-08-30-g4"
+        source["contracts_version"] = "2026-08-31-g5"
         result = ReleaseGate().evaluate({"source": source}, mode="source")
         self.assertFalse(result.passed)
         self.assertIn("contracts_version", result.missing)
@@ -75,6 +76,15 @@ class ReleaseGateTest(unittest.TestCase):
         self.assertFalse(result.passed)
         self.assertIn("history_scan", result.missing)
 
+    def test_source_mode_rejects_unscanned_history_blob(self) -> None:
+        source = self.source()
+        history = dict(source["history_scan"])
+        history["unscanned_blob_count"] = 1
+        source["history_scan"] = history
+        result = ReleaseGate().evaluate({"source": source}, mode="source")
+        self.assertFalse(result.passed)
+        self.assertIn("history_scan", result.missing)
+
     def test_artifact_digest_is_recomputed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -85,6 +95,7 @@ class ReleaseGateTest(unittest.TestCase):
                     "head": "a" * 40,
                     "scope": "all-fetched-refs-and-deduplicated-blobs",
                     "finding_count": 0,
+                "unscanned_blob_count": 0,
                 },
                 "source-native-sanitizer.json": {
                     "passed": True,

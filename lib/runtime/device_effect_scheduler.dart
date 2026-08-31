@@ -21,6 +21,7 @@ final class DeviceEffectScheduler {
   final Queue<_ScheduledEffect> _queue = Queue<_ScheduledEffect>();
   bool _draining = false;
   bool _closed = false;
+  Completer<void>? _idleCompleter;
 
   int get pending => _queue.length + (_draining ? 1 : 0);
 
@@ -40,6 +41,7 @@ final class DeviceEffectScheduler {
       );
     }
     final completer = Completer<T>();
+    _idleCompleter ??= Completer<void>();
     _queue.add(
       _ScheduledEffect(() async {
         try {
@@ -53,10 +55,21 @@ final class DeviceEffectScheduler {
     return completer.future;
   }
 
-  Future<void> close() async {
+  Future<void> close({
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    if (timeout <= Duration.zero) {
+      throw ArgumentError.value(timeout, 'timeout', 'must be positive');
+    }
     _closed = true;
-    while (_draining || _queue.isNotEmpty) {
-      await Future<void>.delayed(const Duration(milliseconds: 1));
+    final idle = _idleCompleter?.future;
+    if (idle == null) {
+      return;
+    }
+    try {
+      await idle.timeout(timeout);
+    } on TimeoutException {
+      throw StateError('Device effect scheduler did not become idle.');
     }
   }
 
@@ -74,6 +87,12 @@ final class DeviceEffectScheduler {
       _draining = false;
       if (_queue.isNotEmpty) {
         unawaited(_drain());
+      } else {
+        final idle = _idleCompleter;
+        _idleCompleter = null;
+        if (idle != null && !idle.isCompleted) {
+          idle.complete();
+        }
       }
     }
   }

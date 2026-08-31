@@ -1,10 +1,23 @@
 import 'package:dio/dio.dart';
 
+final class ModelRequestCancellation {
+  final CancelToken _token = CancelToken();
+
+  bool get isCancelled => _token.isCancelled;
+
+  void cancel([String reason = 'cancelled']) {
+    if (!_token.isCancelled) {
+      _token.cancel(reason);
+    }
+  }
+}
+
 abstract interface class ModelGateway {
   Future<String> answer({
     required String question,
     String? taskId,
     Map<String, Object?> context = const <String, Object?>{},
+    ModelRequestCancellation? cancellation,
   });
 }
 
@@ -40,6 +53,7 @@ final class UnavailableModelGateway implements ModelGateway {
     required String question,
     String? taskId,
     Map<String, Object?> context = const <String, Object?>{},
+    ModelRequestCancellation? cancellation,
   }) async {
     throw ModelGatewayException(reason);
   }
@@ -55,7 +69,11 @@ final class DeterministicModelGateway implements ModelGateway {
     required String question,
     String? taskId,
     Map<String, Object?> context = const <String, Object?>{},
+    ModelRequestCancellation? cancellation,
   }) async {
+    if (cancellation?.isCancelled == true) {
+      throw const ModelGatewayException('model_request_cancelled');
+    }
     final trimmed = question.trim();
     if (trimmed.isEmpty) {
       throw const ModelGatewayException('empty_question');
@@ -83,12 +101,19 @@ final class HttpModelGateway implements ModelGateway {
     required String question,
     String? taskId,
     Map<String, Object?> context = const <String, Object?>{},
+    ModelRequestCancellation? cancellation,
   }) async {
+    if (cancellation?.isCancelled == true) {
+      throw const ModelGatewayException('model_request_cancelled');
+    }
     final trimmed = question.trim();
     if (trimmed.isEmpty) {
       throw const ModelGatewayException('empty_question');
     }
     final token = await _tokenProvider.getToken();
+    if (cancellation?.isCancelled == true) {
+      throw const ModelGatewayException('model_request_cancelled');
+    }
     final headers = <String, Object?>{
       'content-type': 'application/json',
       if (token != null && token.isNotEmpty) 'authorization': 'Bearer $token',
@@ -106,6 +131,7 @@ final class HttpModelGateway implements ModelGateway {
           sendTimeout: const Duration(seconds: 10),
           receiveTimeout: const Duration(seconds: 60),
         ),
+        cancelToken: cancellation?._token,
       );
       final data = response.data;
       if (data is Map && data['answer'] is String) {
@@ -118,6 +144,9 @@ final class HttpModelGateway implements ModelGateway {
     } on ModelGatewayException {
       rethrow;
     } on DioException catch (error) {
+      if (CancelToken.isCancel(error)) {
+        throw const ModelGatewayException('model_request_cancelled');
+      }
       final status = error.response?.statusCode;
       throw ModelGatewayException(
         status == null ? 'gateway_unreachable' : 'gateway_http_$status',

@@ -82,15 +82,23 @@ See what matters, when it matters.''';
 
   Future<void> _send() async {
     setState(() => _sending = true);
-    final success = await TextService.get.startSendText(_controller.text);
-    if (!mounted) {
-      return;
-    }
-    setState(() => _sending = false);
-    if (!success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Text transfer was not confirmed.')),
-      );
+    try {
+      final success = await TextService.get.startSendText(_controller.text);
+      if (mounted && !success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Text transfer was not confirmed.')),
+        );
+      }
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Text transfer failed safely.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false);
+      }
     }
   }
 

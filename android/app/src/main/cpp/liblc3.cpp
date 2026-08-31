@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <new>
 #include <vector>
 
 #include "include/lc3.h"
@@ -61,62 +62,81 @@ Java_com_example_demo_1ai_1even_cpp_Cpp_decodeLC3(
         return emptyByteArray(env);
     }
 
-    std::vector<uint8_t> decoderMemory(decoderSize, 0);
-    std::vector<int16_t> frameBuffer(static_cast<size_t>(samplesPerFrame), 0);
-    std::vector<uint8_t> decoded(decodedLength, 0);
-    lc3_decoder_t decoder = lc3_setup_decoder(
-        kFrameDurationUs,
-        kSampleRateHz,
-        0,
-        decoderMemory.data()
-    );
-    if (decoder == nullptr) {
-        env->ReleaseByteArrayElements(lc3Data, encodedBytes, JNI_ABORT);
-        return emptyByteArray(env);
-    }
-
-    bool success = true;
-    for (size_t frame = 0; frame < frameCount; frame++) {
-        const auto *input = reinterpret_cast<const uint8_t *>(encodedBytes) +
-            frame * kEncodedFrameBytes;
-        const int status = lc3_decode(
-            decoder,
-            input,
-            kEncodedFrameBytes,
-            LC3_PCM_FORMAT_S16,
-            frameBuffer.data(),
-            1
-        );
-        if (status < 0) {
-            success = false;
-            break;
+    bool released = false;
+    const auto releaseInput = [&]() {
+        if (!released) {
+            env->ReleaseByteArrayElements(lc3Data, encodedBytes, JNI_ABORT);
+            released = true;
         }
-        std::memcpy(
-            decoded.data() + frame * decodedFrameBytes,
-            frameBuffer.data(),
-            decodedFrameBytes
+    };
+
+    try {
+        std::vector<uint8_t> decoderMemory(decoderSize, 0);
+        std::vector<int16_t> frameBuffer(
+            static_cast<size_t>(samplesPerFrame),
+            0
         );
-        std::fill(frameBuffer.begin(), frameBuffer.end(), 0);
-    }
-    env->ReleaseByteArrayElements(lc3Data, encodedBytes, JNI_ABORT);
-    if (!success) {
+        std::vector<uint8_t> decoded(decodedLength, 0);
+        lc3_decoder_t decoder = lc3_setup_decoder(
+            kFrameDurationUs,
+            kSampleRateHz,
+            0,
+            decoderMemory.data()
+        );
+        if (decoder == nullptr) {
+            releaseInput();
+            return emptyByteArray(env);
+        }
+
+        for (size_t frame = 0; frame < frameCount; frame++) {
+            const auto *input =
+                reinterpret_cast<const uint8_t *>(encodedBytes) +
+                frame * kEncodedFrameBytes;
+            const int status = lc3_decode(
+                decoder,
+                input,
+                kEncodedFrameBytes,
+                LC3_PCM_FORMAT_S16,
+                frameBuffer.data(),
+                1
+            );
+            if (status < 0) {
+                releaseInput();
+                return emptyByteArray(env);
+            }
+            std::memcpy(
+                decoded.data() + frame * decodedFrameBytes,
+                frameBuffer.data(),
+                decodedFrameBytes
+            );
+            std::fill(frameBuffer.begin(), frameBuffer.end(), 0);
+        }
+        releaseInput();
+
+        jbyteArray result = env->NewByteArray(
+            static_cast<jsize>(decodedLength)
+        );
+        if (result == nullptr) {
+            return nullptr;
+        }
+        env->SetByteArrayRegion(
+            result,
+            0,
+            static_cast<jsize>(decodedLength),
+            reinterpret_cast<const jbyte *>(decoded.data())
+        );
+        if (env->ExceptionCheck()) {
+            return nullptr;
+        }
+        return result;
+    } catch (const std::bad_alloc &) {
+        releaseInput();
+        return emptyByteArray(env);
+    } catch (...) {
+        releaseInput();
         return emptyByteArray(env);
     }
 
-    jbyteArray result = env->NewByteArray(static_cast<jsize>(decodedLength));
-    if (result == nullptr) {
-        return nullptr;
-    }
-    env->SetByteArrayRegion(
-        result,
-        0,
-        static_cast<jsize>(decodedLength),
-        reinterpret_cast<const jbyte *>(decoded.data())
-    );
-    if (env->ExceptionCheck()) {
-        return nullptr;
-    }
-    return result;
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL

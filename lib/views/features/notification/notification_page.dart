@@ -134,16 +134,22 @@ class _NotificationState extends State<NotificationPage> {
       return;
     }
     setState(() => _setting = true);
-    final scope = HeptaRuntime.current.beginEffectScope('notify-whitelist');
-    final receipt = await HeptaRuntime.current.setNotificationWhitelist(
-      scope: scope,
-      document: whitelist.toJson(),
-    );
-    if (!mounted) {
-      return;
+    try {
+      final scope = HeptaRuntime.current.beginEffectScope('notify-whitelist');
+      final receipt = await HeptaRuntime.current.setNotificationWhitelist(
+        scope: scope,
+        document: whitelist.toJson(),
+      );
+      if (mounted) {
+        _report(receipt, 'Whitelist update');
+      }
+    } on Object {
+      _showMessage('Whitelist update failed safely.');
+    } finally {
+      if (mounted) {
+        setState(() => _setting = false);
+      }
     }
-    setState(() => _setting = false);
-    _report(receipt, 'Whitelist update');
   }
 
   Future<void> _sendNotification() async {
@@ -153,21 +159,28 @@ class _NotificationState extends State<NotificationPage> {
       return;
     }
     setState(() => _sending = true);
-    _notificationId = (_notificationId + 1) & 0xff;
-    final scope = HeptaRuntime.current.beginEffectScope('notification-send');
-    final document = notification.toMap().map<String, Object?>(
-          (String key, dynamic value) => MapEntry<String, Object?>(key, value),
-        );
-    final receipt = await HeptaRuntime.current.sendNotification(
-      scope: scope,
-      notification: document,
-      notificationId: _notificationId,
-    );
-    if (!mounted) {
-      return;
+    try {
+      _notificationId = (_notificationId + 1) & 0xff;
+      final scope = HeptaRuntime.current.beginEffectScope('notification-send');
+      final document = notification.toMap().map<String, Object?>(
+            (String key, dynamic value) =>
+                MapEntry<String, Object?>(key, value),
+          );
+      final receipt = await HeptaRuntime.current.sendNotification(
+        scope: scope,
+        notification: document,
+        notificationId: _notificationId,
+      );
+      if (mounted) {
+        _report(receipt, 'Notification');
+      }
+    } on Object {
+      _showMessage('Notification send failed safely.');
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false);
+      }
     }
-    setState(() => _sending = false);
-    _report(receipt, 'Notification');
   }
 
   void _report(ToolReceipt receipt, String operation) {

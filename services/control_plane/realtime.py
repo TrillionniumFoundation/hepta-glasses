@@ -8,16 +8,12 @@ keys are never returned to the mobile client.
 from __future__ import annotations
 
 import secrets
+import threading
 from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Callable, Iterable
 
-from .identity import (
-    AccessClaims,
-    IdentityError,
-    SlidingWindowRateLimiter,
-    TokenService,
-)
+from .identity import SlidingWindowRateLimiter, TokenService
 
 
 class RealtimeError(ValueError):
@@ -89,6 +85,7 @@ class RealtimeSessionBroker:
         self.maximum_ttl_seconds = maximum_ttl_seconds
         self._sessions: dict[str, RealtimeSession] = {}
         self._consumed_ticket_ids: set[str] = set()
+        self._lock = threading.RLock()
 
     def issue_ticket(
         self,
@@ -137,7 +134,10 @@ class RealtimeSessionBroker:
             microphone_indicator=False,
             provider_profile=provider_profile,
         )
-        self._sessions[session_id] = session
+        with self._lock:
+            if session_id in self._sessions:
+                raise RealtimeError("realtime_session_id_conflict")
+            self._sessions[session_id] = session
         return RealtimeTicket(
             session_id=session_id,
             bootstrap_token=bootstrap,
@@ -156,19 +156,23 @@ class RealtimeSessionBroker:
             required_scopes={"realtime.bootstrap"},
             now=now,
         )
-        if claims.token_id in self._consumed_ticket_ids:
-            raise RealtimeError("bootstrap_ticket_replayed")
-        session = self._sessions.get(claims.session_id)
-        if session is None:
-            raise RealtimeError("realtime_session_unknown")
-        if session.subject != claims.subject or session.device_id != claims.device_id:
-            raise RealtimeError("realtime_session_binding_mismatch")
-        if session.state is not SessionState.ISSUED:
-            raise RealtimeError("realtime_session_already_activated")
-        self._consumed_ticket_ids.add(claims.token_id)
-        session = replace(session, state=SessionState.CONNECTING)
-        self._sessions[session.session_id] = session
-        return session
+        with self._lock:
+            if claims.token_id in self._consumed_ticket_ids:
+                raise RealtimeError("bootstrap_ticket_replayed")
+            session = self._sessions.get(claims.session_id)
+            if session is None:
+                raise RealtimeError("realtime_session_unknown")
+            if (
+                session.subject != claims.subject
+                or session.device_id != claims.device_id
+            ):
+                raise RealtimeError("realtime_session_binding_mismatch")
+            if session.state is not SessionState.ISSUED:
+                raise RealtimeError("realtime_session_already_activated")
+            self._consumed_ticket_ids.add(claims.token_id)
+            session = replace(session, state=SessionState.CONNECTING)
+            self._sessions[session.session_id] = session
+            return session
 
     def transition(
         self,
@@ -178,73 +182,91 @@ class RealtimeSessionBroker:
         generation: int,
     ) -> RealtimeSession:
         now = self.clock()
-        session = self._sessions.get(session_id)
-        if session is None:
-            raise RealtimeError("realtime_session_unknown")
-        if now >= session.expires_at and session.state not in {
-            SessionState.CLOSED,
-            SessionState.REVOKED,
-        }:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is None:
+                raise RealtimeError("realtime_session_unknown")
+            if now >= session.expires_at and session.state not in {
+                SessionState.CLOSED,
+                SessionState.REVOKED,
+            }:
+                session = replace(
+                    session,
+                    state=SessionState.CLOSED,
+                    microphone_indicator=False,
+                )
+                self._sessions[session_id] = session
+                raise RealtimeError("realtime_session_expired")
+            if generation != session.generation:
+                raise RealtimeError("stale_realtime_generation")
+
+            transitions = {
+                (SessionState.CONNECTING, "connected"): SessionState.LISTENING,
+                (
+                    SessionState.LISTENING,
+                    "response_started",
+                ): SessionState.RESPONDING,
+                (
+                    SessionState.RESPONDING,
+                    "response_completed",
+                ): SessionState.LISTENING,
+                (
+                    SessionState.INTERRUPTING,
+                    "interrupt_completed",
+                ): SessionState.LISTENING,
+                (SessionState.LISTENING, "close"): SessionState.CLOSED,
+                (SessionState.RESPONDING, "close"): SessionState.CLOSED,
+                (SessionState.INTERRUPTING, "close"): SessionState.CLOSED,
+                (SessionState.CONNECTING, "close"): SessionState.CLOSED,
+            }
+            next_state = transitions.get((session.state, event))
+            if next_state is None:
+                raise RealtimeError("realtime_transition_invalid")
             session = replace(
                 session,
-                state=SessionState.CLOSED,
+                state=next_state,
+                microphone_indicator=next_state is SessionState.LISTENING,
+            )
+            self._sessions[session_id] = session
+            return session
+
+    def interrupt(self, session_id: str, *, generation: int) -> RealtimeSession:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is None:
+                raise RealtimeError("realtime_session_unknown")
+            if generation != session.generation:
+                raise RealtimeError("stale_realtime_generation")
+            if session.state not in {
+                SessionState.RESPONDING,
+                SessionState.LISTENING,
+            }:
+                raise RealtimeError("realtime_interrupt_invalid")
+            session = replace(
+                session,
+                state=SessionState.INTERRUPTING,
+                generation=session.generation + 1,
                 microphone_indicator=False,
             )
             self._sessions[session_id] = session
-            raise RealtimeError("realtime_session_expired")
-        if generation != session.generation:
-            raise RealtimeError("stale_realtime_generation")
-
-        transitions = {
-            (SessionState.CONNECTING, "connected"): SessionState.LISTENING,
-            (SessionState.LISTENING, "response_started"): SessionState.RESPONDING,
-            (SessionState.RESPONDING, "response_completed"): SessionState.LISTENING,
-            (SessionState.INTERRUPTING, "interrupt_completed"): SessionState.LISTENING,
-            (SessionState.LISTENING, "close"): SessionState.CLOSED,
-            (SessionState.RESPONDING, "close"): SessionState.CLOSED,
-            (SessionState.INTERRUPTING, "close"): SessionState.CLOSED,
-            (SessionState.CONNECTING, "close"): SessionState.CLOSED,
-        }
-        next_state = transitions.get((session.state, event))
-        if next_state is None:
-            raise RealtimeError("realtime_transition_invalid")
-        session = replace(
-            session,
-            state=next_state,
-            microphone_indicator=next_state is SessionState.LISTENING,
-        )
-        self._sessions[session_id] = session
-        return session
-
-    def interrupt(self, session_id: str, *, generation: int) -> RealtimeSession:
-        session = self._sessions.get(session_id)
-        if session is None:
-            raise RealtimeError("realtime_session_unknown")
-        if generation != session.generation:
-            raise RealtimeError("stale_realtime_generation")
-        if session.state not in {SessionState.RESPONDING, SessionState.LISTENING}:
-            raise RealtimeError("realtime_interrupt_invalid")
-        session = replace(
-            session,
-            state=SessionState.INTERRUPTING,
-            generation=session.generation + 1,
-            microphone_indicator=False,
-        )
-        self._sessions[session_id] = session
-        return session
+            return session
 
     def revoke(self, session_id: str) -> RealtimeSession:
-        session = self._sessions.get(session_id)
-        if session is None:
-            raise RealtimeError("realtime_session_unknown")
-        session = replace(
-            session,
-            state=SessionState.REVOKED,
-            generation=session.generation + 1,
-            microphone_indicator=False,
-        )
-        self._sessions[session_id] = session
-        return session
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is None:
+                raise RealtimeError("realtime_session_unknown")
+            if session.state is SessionState.REVOKED:
+                return session
+            session = replace(
+                session,
+                state=SessionState.REVOKED,
+                generation=session.generation + 1,
+                microphone_indicator=False,
+            )
+            self._sessions[session_id] = session
+            return session
 
     def get(self, session_id: str) -> RealtimeSession | None:
-        return self._sessions.get(session_id)
+        with self._lock:
+            return self._sessions.get(session_id)

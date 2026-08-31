@@ -14,6 +14,8 @@
 
 ## Development
 
+- `development/G7_SOURCE_CONVERGENCE.md`
+- `development/G5_AUDIT_CLOSURE.md`
 - `development/G4_SOURCE_CLOSURE.md`
 - `development/G3_G8_SOURCE_CLOSURE.md`
 - `G1_BLE_CONNECTION.md`
@@ -27,6 +29,7 @@
 - `operations/REPOSITORY_GOVERNANCE_RUNBOOK.md`
 - `operations/PRIVACY_SECURITY_REVIEW_CHECKLIST.md`
 - `operations/RELEASE_AND_ROLLBACK_RUNBOOK.md`
+- `operations/CREDENTIAL_INCIDENT_RUNBOOK.md`
 
 ## Architecture decisions
 

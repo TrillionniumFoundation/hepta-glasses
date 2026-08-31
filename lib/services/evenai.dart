@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:demo_ai_even/ble_manager.dart';
@@ -24,13 +23,6 @@ class EvenAI {
   static bool get isRunning => _isRunning;
 
   bool isReceivingAudio = false;
-  List<int> audioDataBuffer = <int>[];
-  Uint8List? audioData;
-
-  File? lc3File;
-  File? pcmFile;
-  int durationS = 0;
-
   static const int _linesPerPage = 5;
   static const Duration _pageInterval = Duration(seconds: 5);
   static const Duration _singlePageFinalizeDelay = Duration(seconds: 3);
@@ -42,16 +34,15 @@ class EvenAI {
   static int _currentLine = 0;
   static Timer? _timer;
   static List<String> list = <String>[];
-  static List<String> sendReplys = <String>[];
   static bool _isManual = false;
 
   Timer? _recordingTimer;
   StreamSubscription<dynamic>? _speechSubscription;
   Completer<String>? _finalTranscript;
   AssistantSessionToken? _session;
+  ModelRequestCancellation? _modelCancellation;
   int _lastStartTime = 0;
   int _lastStopTime = 0;
-  int retryCount = 0;
   bool _pageSendInFlight = false;
 
   static set isRunning(bool value) {
@@ -78,10 +69,12 @@ class EvenAI {
     _textStreamController.add(newText);
   }
 
-  void startListening(AssistantSessionToken session) {
+  Future<void> startListening(AssistantSessionToken session) async {
     combinedText = '';
     _finalTranscript = Completer<String>();
-    unawaited(_speechSubscription?.cancel());
+    final previous = _speechSubscription;
+    _speechSubscription = null;
+    await previous?.cancel();
     _speechSubscription = _eventSpeechRecognizeChannel.listen(
       (dynamic event) {
         if (!_isCurrent(session)) {
@@ -115,10 +108,10 @@ class EvenAI {
     }
     _lastStartTime = now;
 
-    clear();
+    await clear();
     final session = HeptaRuntime.current.sessions.begin();
     _session = session;
-    startListening(session);
+    await startListening(session);
     isReceivingAudio = true;
     isRunning = true;
     _currentLine = 0;
@@ -135,7 +128,10 @@ class EvenAI {
       if (!micOpened) {
         HeptaRuntime.current.sessions.fail(session, 'microphone_unavailable');
         isEvenAISyncing.value = false;
+        updateDynamicText('Microphone unavailable.');
         await startSendReply('Microphone unavailable.', session: session);
+        await _stopNativeAssistant(session);
+        await clear(cancelSession: false);
         return;
       }
       HeptaRuntime.current.sessions.transition(
@@ -152,7 +148,8 @@ class EvenAI {
         session,
         'assistant_start_failed',
       );
-      clear(cancelSession: false);
+      await _stopNativeAssistant(session);
+      await clear(cancelSession: false);
       isEvenAISyncing.value = false;
       updateDynamicText('Voice assistant is unavailable on this platform.');
       PrivacySafeLog.event(
@@ -194,10 +191,13 @@ class EvenAI {
     } on StateError {
       return;
     }
-    await BleManager.invokeMethod<void>(
-      'stopEvenAI',
-      <String, Object?>{'generation': session.generation},
-    );
+    if (!await _stopNativeAssistant(session)) {
+      HeptaRuntime.current.sessions.fail(session, 'speech_stop_failed');
+      isEvenAISyncing.value = false;
+      updateDynamicText('Speech recognition could not be finalized.');
+      await clear(cancelSession: false);
+      return;
+    }
     final transcript = await _awaitFinalTranscript(session);
     if (!_isCurrent(session)) {
       return;
@@ -225,16 +225,34 @@ class EvenAI {
       AssistantSessionState.thinking,
     );
     String answer;
+    final cancellation = ModelRequestCancellation();
+    _modelCancellation = cancellation;
     try {
       answer = await ModelGatewayRegistry.current
-          .answer(question: combinedText, taskId: session.sessionId)
-          .timeout(_modelTimeout);
+          .answer(
+            question: combinedText,
+            taskId: session.sessionId,
+            cancellation: cancellation,
+          )
+          .timeout(
+            _modelTimeout,
+            onTimeout: () {
+              cancellation.cancel('model_deadline_exceeded');
+              throw TimeoutException('model_deadline_exceeded');
+            },
+          );
     } on TimeoutException {
       answer = 'AI service timed out.';
     } on ModelGatewayException catch (error) {
-      answer = 'AI service unavailable (${error.code}).';
+      answer = error.code == 'model_request_cancelled'
+          ? 'AI request cancelled.'
+          : 'AI service unavailable (${error.code}).';
     } on Object {
       answer = 'AI service unavailable.';
+    } finally {
+      if (identical(_modelCancellation, cancellation)) {
+        _modelCancellation = null;
+      }
     }
     if (!_isCurrent(session)) {
       return;
@@ -293,7 +311,7 @@ class EvenAI {
     _currentLine = 0;
     list = EvenAIDataMethod.measureStringList(text);
     await sendEvenAIReply(_pageText(0), 0x01, 0x60, 0, session: session);
-    clear();
+    await clear();
   }
 
   Future<void> startSendReply(
@@ -325,6 +343,7 @@ class EvenAI {
           active,
           'initial_display_not_acknowledged',
         );
+        await clear(cancelSession: false);
       }
       return;
     }
@@ -346,6 +365,7 @@ class EvenAI {
             active,
             'final_display_not_acknowledged',
           );
+          await clear(cancelSession: false);
         }
       }
       return;
@@ -375,6 +395,7 @@ class EvenAI {
       return;
     }
     _pageSendInFlight = true;
+    final previousLine = _currentLine;
     try {
       _currentLine = next;
       final finalPage = _currentLine + _linesPerPage >= list.length;
@@ -386,12 +407,14 @@ class EvenAI {
         session: session,
       );
       if (!delivered && _isCurrent(session)) {
+        _currentLine = previousLine;
         HeptaRuntime.current.sessions.fail(
           session,
           'page_display_not_acknowledged',
         );
         _timer?.cancel();
         _timer = null;
+        await clear(cancelSession: false);
       } else if (finalPage) {
         _timer?.cancel();
         _timer = null;
@@ -416,8 +439,7 @@ class EvenAI {
     }
     final next = _currentLine + _linesPerPage;
     if (next < list.length) {
-      _currentLine = next;
-      unawaited(updateReplyToOSByManual(session: session));
+      unawaited(_sendManualPage(session, next));
     }
   }
 
@@ -431,8 +453,32 @@ class EvenAI {
       unawaited(manualForJustOnePage(session: session));
       return;
     }
-    _currentLine = max(0, _currentLine - _linesPerPage);
-    unawaited(updateReplyToOSByManual(session: session));
+    unawaited(_sendManualPage(session, max(0, _currentLine - _linesPerPage)));
+  }
+
+  Future<void> _sendManualPage(
+    AssistantSessionToken session,
+    int targetLine,
+  ) async {
+    if (_pageSendInFlight || !_isCurrent(session)) {
+      return;
+    }
+    final previousLine = _currentLine;
+    _pageSendInFlight = true;
+    _currentLine = targetLine;
+    try {
+      final delivered = await updateReplyToOSByManual(session: session);
+      if (!delivered && _isCurrent(session) && _currentLine == targetLine) {
+        _currentLine = previousLine;
+        HeptaRuntime.current.sessions.fail(
+          session,
+          'manual_display_not_acknowledged',
+        );
+        await clear(cancelSession: false);
+      }
+    } finally {
+      _pageSendInFlight = false;
+    }
   }
 
   void _enterManualMode() {
@@ -441,7 +487,7 @@ class EvenAI {
     _timer = null;
   }
 
-  Future<void> updateReplyToOSByManual({
+  Future<bool> updateReplyToOSByManual({
     AssistantSessionToken? session,
   }) async {
     final active = session ?? _session;
@@ -449,10 +495,9 @@ class EvenAI {
         !_isCurrent(active) ||
         _currentLine < 0 ||
         _currentLine >= list.length) {
-      return;
+      return false;
     }
-    sendReplys = list.sublist(_currentLine);
-    await sendEvenAIReply(
+    return sendEvenAIReply(
       _pageText(_currentLine),
       0x01,
       0x50,
@@ -461,20 +506,28 @@ class EvenAI {
     );
   }
 
-  Future<void> manualForJustOnePage({
+  Future<bool> manualForJustOnePage({
     AssistantSessionToken? session,
   }) async {
     final active = session ?? _session;
     if (active == null || !_isCurrent(active) || list.isEmpty) {
-      return;
+      return false;
     }
-    await sendEvenAIReply(
+    final delivered = await sendEvenAIReply(
       _pageText(0),
       0x01,
       0x50,
       0,
       session: active,
     );
+    if (!delivered && _isCurrent(active)) {
+      HeptaRuntime.current.sessions.fail(
+        active,
+        'manual_display_not_acknowledged',
+      );
+      await clear(cancelSession: false);
+    }
+    return delivered;
   }
 
   String _pageText(int start) {
@@ -492,17 +545,31 @@ class EvenAI {
     final session = _session;
     if (session != null && _isCurrent(session)) {
       HeptaRuntime.current.sessions.cancel(session, reason: reason);
+      await _stopNativeAssistant(session);
     }
-    clear(cancelSession: false);
-    if (session != null) {
+    await clear(cancelSession: false);
+  }
+
+  Future<bool> _stopNativeAssistant(AssistantSessionToken session) async {
+    try {
       await BleManager.invokeMethod<void>(
         'stopEvenAI',
         <String, Object?>{'generation': session.generation},
       );
+      return true;
+    } on Object catch (error) {
+      PrivacySafeLog.event(
+        'even_ai_native_stop_failed',
+        fields: <String, Object?>{
+          'generation': session.generation,
+          'error_type': error.runtimeType.toString(),
+        },
+      );
+      return false;
     }
   }
 
-  void clear({bool cancelSession = true}) {
+  Future<void> clear({bool cancelSession = true}) async {
     final session = _session;
     if (cancelSession &&
         session != null &&
@@ -516,6 +583,10 @@ class EvenAI {
     }
     _finalTranscript = null;
     _session = null;
+    _modelCancellation?.cancel('session_cleared');
+    _modelCancellation = null;
+    combinedText = '';
+    list = <String>[];
     isReceivingAudio = false;
     isRunning = false;
     _isManual = false;
@@ -524,14 +595,9 @@ class EvenAI {
     _recordingTimer = null;
     _timer?.cancel();
     _timer = null;
-    unawaited(_speechSubscription?.cancel());
+    final subscription = _speechSubscription;
     _speechSubscription = null;
-    audioDataBuffer.clear();
-    audioData = null;
-    list = <String>[];
-    sendReplys = <String>[];
-    durationS = 0;
-    retryCount = 0;
+    await subscription?.cancel();
     _pageSendInFlight = false;
   }
 
@@ -578,7 +644,6 @@ class EvenAI {
     if (!_isCurrent(session)) {
       return false;
     }
-    retryCount = receipt.status == ToolReceiptStatus.succeeded ? 0 : 1;
     if (receipt.status == ToolReceiptStatus.succeeded) {
       return true;
     }

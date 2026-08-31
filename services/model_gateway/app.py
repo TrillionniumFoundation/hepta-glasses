@@ -19,6 +19,7 @@ from typing import Any, Mapping
 MAX_BODY_BYTES = 64 * 1024
 MAX_QUESTION_CHARACTERS = 8_000
 MAX_CONTEXT_BYTES = 32 * 1024
+MINIMUM_TOKEN_CHARACTERS = 32
 
 
 class RequestError(ValueError):
@@ -39,11 +40,20 @@ class ChatRequest:
 
 def authorize(header_value: str | None, expected_token: str | None) -> bool:
     if not expected_token:
-        return True
+        return False
     if not header_value or not header_value.startswith("Bearer "):
         return False
     supplied = header_value.removeprefix("Bearer ")
     return hmac.compare_digest(supplied, expected_token)
+
+
+def validate_server_token(value: str | None) -> str:
+    if value is None or len(value) < MINIMUM_TOKEN_CHARACTERS:
+        raise RequestError(
+            "gateway_token_missing_or_too_short",
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+        )
+    return value
 
 
 def validate_chat_request(document: Any) -> ChatRequest:
@@ -99,7 +109,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
         if self.path != "/v1/chat":
             self._write_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
             return
-        expected_token = os.environ.get("HEPTA_GATEWAY_DEV_TOKEN")
+        expected_token = getattr(self.server, "expected_token", None)
         if not authorize(self.headers.get("Authorization"), expected_token):
             self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized"})
             return
@@ -150,7 +160,13 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8787)
     args = parser.parse_args()
+    try:
+        token = validate_server_token(os.environ.get("HEPTA_GATEWAY_DEV_TOKEN"))
+    except RequestError as error:
+        print(json.dumps({"ok": False, "error": error.code}))
+        return 2
     server = ThreadingHTTPServer((args.host, args.port), GatewayHandler)
+    server.expected_token = token  # type: ignore[attr-defined]
     try:
         server.serve_forever()
     except KeyboardInterrupt:

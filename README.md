@@ -39,11 +39,13 @@ python3 -m unittest discover -s services -p 'test_*.py'
 python3 -m unittest discover -s adapters -p 'test_*.py'
 python3 -m compileall -q services adapters tools
 flutter pub get
-flutter analyze --no-fatal-infos --no-fatal-warnings
+dart format --output=none --set-exit-if-changed lib test
+flutter analyze --no-fatal-infos
 flutter test
+bash tools/run_native_sanitizers.sh build/evidence/source-native-sanitizer.json
 ```
 
-CI additionally generates an exact-head source SBOM, provenance, and source release bundle.
+CI additionally scans complete bounded Git history and generates exact-head native-sanitizer, source SBOM, provenance, and source release evidence. The current candidate is not E4 until every required lane succeeds on one unchanged head.
 
 ## Security invariants
 

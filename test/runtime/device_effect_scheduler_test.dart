@@ -32,6 +32,24 @@ void main() {
     );
   });
 
+  test('close fails closed when an effect never reaches idle', () async {
+    final scheduler = DeviceEffectScheduler();
+    final release = Completer<void>();
+    final effect = scheduler.schedule<void>('blocked', () => release.future);
+    await Future<void>.delayed(Duration.zero);
+
+    await expectLater(
+      scheduler.close(timeout: const Duration(milliseconds: 10)),
+      throwsStateError,
+    );
+    await expectLater(
+      scheduler.schedule<void>('late', () async {}),
+      throwsStateError,
+    );
+    release.complete();
+    await effect;
+  });
+
   test('scheduler rejects work beyond its bounded capacity', () async {
     final scheduler = DeviceEffectScheduler(maxPending: 1);
     final release = Completer<void>();

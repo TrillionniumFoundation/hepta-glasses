@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 from services.control_plane.identity import (
     DeviceRegistry,
@@ -77,6 +79,32 @@ class RealtimeBrokerTest(unittest.TestCase):
         with self.assertRaises(RealtimeError) as replay:
             self.broker.activate(ticket.bootstrap_token)
         self.assertEqual(replay.exception.code, "bootstrap_ticket_replayed")
+
+    def test_concurrent_ticket_activation_is_exactly_once(self) -> None:
+        ticket = self.broker.issue_ticket(
+            access_token=self.access_token,
+            requested_scopes={"audio.input"},
+            provider_profile="primary",
+        )
+        barrier = threading.Barrier(8)
+
+        def activate() -> str:
+            barrier.wait()
+            try:
+                self.broker.activate(ticket.bootstrap_token)
+                return "activated"
+            except RealtimeError as error:
+                return error.code
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            outcomes = list(pool.map(lambda _: activate(), range(8)))
+
+        self.assertEqual(outcomes.count("activated"), 1)
+        self.assertEqual(outcomes.count("bootstrap_ticket_replayed"), 7)
+        self.assertEqual(
+            self.broker.get(ticket.session_id).state,
+            SessionState.CONNECTING,
+        )
 
     def test_barge_in_rotates_generation_and_rejects_stale_events(self) -> None:
         ticket = self.broker.issue_ticket(

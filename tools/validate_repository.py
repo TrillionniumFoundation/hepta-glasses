@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+CANONICAL_REVISION = "2026-08-31-g7"
 
 REQUIRED = {
     "README.md",
@@ -24,12 +25,15 @@ REQUIRED = {
     "docs/HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md",
     "docs/development/G3_G8_SOURCE_CLOSURE.md",
     "docs/development/G4_SOURCE_CLOSURE.md",
+    "docs/development/G5_AUDIT_CLOSURE.md",
+    "docs/development/G7_SOURCE_CONVERGENCE.md",
     "docs/operations/PRODUCTION_CONTROL_PLANE_RUNBOOK.md",
     "docs/operations/REALTIME_AND_CAPABILITY_RUNBOOK.md",
     "docs/operations/DEVICE_QUALIFICATION_RUNBOOK.md",
     "docs/operations/REPOSITORY_GOVERNANCE_RUNBOOK.md",
     "docs/operations/PRIVACY_SECURITY_REVIEW_CHECKLIST.md",
     "docs/operations/RELEASE_AND_ROLLBACK_RUNBOOK.md",
+    "docs/operations/CREDENTIAL_INCIDENT_RUNBOOK.md",
     "docs/GAP_LEDGER.yaml",
     "docs/EVIDENCE_INDEX.yaml",
     "contracts/hepta-glasses-runtime-v1.json",
@@ -109,6 +113,7 @@ EXPECTED_CHECKS = {
     "android-native",
     "flutter",
     "ios-native",
+    "native-sanitizers",
     "repository-contracts",
     "secret-and-boundary-scan",
     "source-evidence",
@@ -156,10 +161,10 @@ def validate_json_contracts() -> None:
 
 def validate_gap_ledger() -> None:
     ledger = read_json(ROOT / "docs/GAP_LEDGER.yaml")
-    if ledger.get("plan_revision") != "2026-08-30-g4":
-        fail("Gap Ledger is not bound to the canonical g4 plan")
+    if ledger.get("plan_revision") != CANONICAL_REVISION:
+        fail("Gap Ledger is not bound to the canonical revision")
     gaps = ledger.get("gaps")
-    if not isinstance(gaps, list) or len(gaps) < 34:
+    if not isinstance(gaps, list) or len(gaps) < 51:
         fail("Gap Ledger does not contain the complete source/external gate set")
     seen = set()
     for gap in gaps:
@@ -226,12 +231,65 @@ def validate_boundaries() -> None:
         fail(f"sensitive legacy logging remains in EvenAI: {found}")
 
 
+def validate_canonical_truth() -> None:
+    plan = (ROOT / "docs/HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md").read_text(
+        encoding="utf-8"
+    )
+    current = (ROOT / "docs/CURRENT_STATE.md").read_text(encoding="utf-8")
+    if f"Revision: `{CANONICAL_REVISION}`" not in plan:
+        fail("canonical plan revision drifted")
+    if f"Canonical plan revision: `{CANONICAL_REVISION}`" not in current:
+        fail("Current State revision drifted")
+    release = read_json(ROOT / "contracts/release-gates-v1.json")
+    if release.get("contracts_version") != CANONICAL_REVISION:
+        fail("release-gate contract revision drifted")
+    template = read_json(
+        ROOT / "evidence/templates/product-release-bundle.template.json"
+    )
+    source = template.get("source")
+    if not isinstance(source, dict) or source.get("contracts_version") != CANONICAL_REVISION:
+        fail("product evidence template revision drifted")
+
+
+def validate_single_ci_authority() -> None:
+    workflows = sorted(
+        str(path.relative_to(ROOT))
+        for path in (ROOT / ".github/workflows").glob("*.yml")
+    )
+    if workflows != [".github/workflows/ci.yml"]:
+        fail(f"temporary or competing workflow authority remains: {workflows}")
+    sanitizer = ROOT / "tools/run_native_sanitizers.sh"
+    if sanitizer.stat().st_mode & 0o111 == 0:
+        fail("native sanitizer runner is not executable")
+
+
+def validate_history_gate() -> None:
+    scanner = (ROOT / "tools/scan_git_history.py").read_text(encoding="utf-8")
+    required = (
+        "unscanned_blob_count",
+        "MAX_BLOB_BYTES = 16 * 1024 * 1024",
+        "report[\"unscanned_blob_count\"]",
+    )
+    if any(fragment not in scanner for fragment in required):
+        fail("history scanner does not fail closed on unscanned blobs")
+    release = (ROOT / "services/qualification/release_gate.py").read_text(
+        encoding="utf-8"
+    )
+    if 'int(history.get("unscanned_blob_count", -1)) == 0' not in release:
+        fail("release gate does not reject incomplete history scans")
+
+
 def validate_codex_policy() -> None:
     policy = read_json(ROOT / "services/codex_worker/policy.json")
     if policy.get("allowed_sandboxes") != ["read-only", "workspace-write"]:
         fail("Codex worker sandbox allowlist changed")
     if policy.get("network_access_default") is not False:
         fail("Codex worker network must default to disabled")
+    isolation = policy.get("network_isolation_command")
+    if not isinstance(isolation, list) or not isolation:
+        fail("Codex worker has no mandatory network-isolation command")
+    if int(policy.get("maximum_workspace_entries", 0)) < 1:
+        fail("Codex worker workspace traversal is unbounded")
     mcp = (ROOT / "adapters/mcp/hepta_glasses_mcp_server.py").read_text(
         encoding="utf-8"
     )
@@ -267,7 +325,7 @@ def validate_governance_contract() -> None:
 def validate_exact_head_workflow() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     expression = "${{ github.event.pull_request.head.sha || github.sha }}"
-    if workflow.count(f"ref: {expression}") < 6:
+    if workflow.count(f"ref: {expression}") < 7:
         fail("all CI jobs must explicitly check out the PR head or push SHA")
     for required_job in EXPECTED_CHECKS:
         if required_job not in workflow:
@@ -298,8 +356,8 @@ def validate_evidence_templates() -> None:
     ):
         read_json(ROOT / "evidence" / "templates" / name)
     index = read_json(ROOT / "docs/EVIDENCE_INDEX.yaml")
-    if index.get("plan_revision") != "2026-08-30-g4":
-        fail("Evidence Index is not bound to the canonical g4 plan")
+    if index.get("plan_revision") != CANONICAL_REVISION:
+        fail("Evidence Index is not bound to the canonical revision")
 
 
 def main() -> int:
@@ -308,6 +366,9 @@ def main() -> int:
         validate_json_contracts,
         validate_gap_ledger,
         validate_boundaries,
+        validate_canonical_truth,
+        validate_single_ci_authority,
+        validate_history_gate,
         validate_codex_policy,
         validate_governance_contract,
         validate_exact_head_workflow,

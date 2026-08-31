@@ -42,9 +42,16 @@ class SkillRegistryTest(unittest.TestCase):
         unsigned = SkillManifest(**values)  # type: ignore[arg-type]
         return self.trust.sign_development(unsigned)
 
-    def install(self, manifest: SkillManifest, *, now: int = 100):
+    def install(
+        self,
+        manifest: SkillManifest,
+        *,
+        package_bytes: bytes = b"package",
+        now: int = 100,
+    ):
         return self.registry.install(
             manifest,
+            package_bytes=package_bytes,
             consented_capabilities=frozenset({"calendar.read", "location.read"}),
             consented_data_classes=frozenset({"personal", "sensitive"}),
             consented_network_domains=frozenset(
@@ -76,6 +83,7 @@ class SkillRegistryTest(unittest.TestCase):
         with self.assertRaises(SkillError) as raised:
             self.registry.install(
                 self.manifest(),
+                package_bytes=b"package",
                 consented_capabilities=frozenset({"calendar.read"}),
                 consented_data_classes=frozenset({"personal"}),
                 consented_network_domains=frozenset(),
@@ -99,6 +107,7 @@ class SkillRegistryTest(unittest.TestCase):
         with self.assertRaises(SkillError):
             self.registry.install(
                 upgraded,
+                package_bytes=b"package",
                 consented_capabilities=frozenset({"calendar.read"}),
                 consented_data_classes=frozenset({"personal"}),
                 consented_network_domains=frozenset({"calendar.example"}),
@@ -116,7 +125,8 @@ class SkillRegistryTest(unittest.TestCase):
             self.install(
                 self.manifest(
                     package_digest=hashlib.sha256(b"different").hexdigest()
-                )
+                ),
+                package_bytes=b"different",
             )
         self.assertEqual(drift.exception.code, "skill_version_manifest_conflict")
 
@@ -127,6 +137,22 @@ class SkillRegistryTest(unittest.TestCase):
             downgrade.exception.code,
             "skill_version_downgrade_forbidden",
         )
+
+    def test_package_bytes_must_match_signed_digest(self) -> None:
+        with self.assertRaises(SkillError) as raised:
+            self.install(self.manifest(), package_bytes=b"tampered")
+        self.assertEqual(
+            raised.exception.code,
+            "skill_package_digest_mismatch",
+        )
+
+    def test_package_digest_must_be_canonical_sha256(self) -> None:
+        with self.assertRaises(SkillError) as raised:
+            self.install(
+                self.manifest(package_digest="Z" * 64),
+                package_bytes=b"package",
+            )
+        self.assertEqual(raised.exception.code, "skill_package_digest_invalid")
 
     def test_non_canonical_version_is_rejected(self) -> None:
         with self.assertRaises(SkillError) as raised:

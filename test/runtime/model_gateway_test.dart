@@ -7,6 +7,22 @@ void main() {
     expect(await gateway.answer(question: 'status'), 'test: status');
   });
 
+  test('model requests observe cancellation before execution', () async {
+    const gateway = DeterministicModelGateway(prefix: 'test');
+    final cancellation = ModelRequestCancellation()..cancel('session-ended');
+
+    await expectLater(
+      gateway.answer(question: 'status', cancellation: cancellation),
+      throwsA(
+        isA<ModelGatewayException>().having(
+          (ModelGatewayException error) => error.code,
+          'code',
+          'model_request_cancelled',
+        ),
+      ),
+    );
+  });
+
   test('unconfigured gateway fails with a typed error', () async {
     const gateway = UnavailableModelGateway();
     await expectLater(

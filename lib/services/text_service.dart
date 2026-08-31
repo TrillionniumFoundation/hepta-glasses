@@ -18,13 +18,14 @@ class TextService {
   static int _currentLine = 0;
   static Timer? _timer;
   static List<String> list = <String>[];
-  static List<String> sendReplys = <String>[];
 
   RuntimeEffectScope? _scope;
-  bool _sendInFlight = false;
+  int _generation = 0;
+  int? _sendInFlightGeneration;
 
   Future<bool> startSendText(String text) async {
     clear();
+    final generation = _generation;
     list = EvenAIDataMethod.measureStringList(text);
     if (list.isEmpty) {
       return false;
@@ -33,30 +34,37 @@ class TextService {
     isRunning = true;
     _scope = HeptaRuntime.current.beginEffectScope('manual-text');
     _currentLine = 0;
-    final success = await _sendCurrentPage();
+    final success = await _sendCurrentPage(generation);
+    if (!_isCurrent(generation)) {
+      return false;
+    }
     if (!success) {
       clear();
       return false;
     }
     if (getTotalPages() > 1) {
-      _timer = Timer.periodic(_pageInterval, (_) {
-        unawaited(_advancePage());
-      });
+      _scheduleNextPage(generation);
+    } else {
+      isRunning = false;
+      _scope = null;
     }
     return true;
   }
 
-  Future<bool> doSendText(
+  Future<bool> _doSendText(
     String text,
     int type,
     int status,
     int position,
+    int generation,
   ) async {
     final scope = _scope;
-    if (!isRunning || scope == null || _sendInFlight) {
+    if (!_isCurrent(generation) ||
+        scope == null ||
+        _sendInFlightGeneration == generation) {
       return false;
     }
-    _sendInFlight = true;
+    _sendInFlightGeneration = generation;
     try {
       final receipt = await HeptaRuntime.current.displayTextInScope(
         scope: scope,
@@ -66,35 +74,53 @@ class TextService {
         currentPageNumber: getCurrentPage(),
         maxPageNumber: getTotalPages(),
       );
-      return receipt.status == ToolReceiptStatus.succeeded;
+      return _isCurrent(generation) &&
+          receipt.status == ToolReceiptStatus.succeeded;
     } finally {
-      _sendInFlight = false;
+      if (_sendInFlightGeneration == generation) {
+        _sendInFlightGeneration = null;
+      }
     }
   }
 
-  Future<void> _advancePage() async {
-    if (!isRunning || _sendInFlight) {
+  void _scheduleNextPage(int generation) {
+    _timer?.cancel();
+    _timer = Timer(
+      _pageInterval,
+      () => unawaited(_advancePage(generation)),
+    );
+  }
+
+  Future<void> _advancePage(int generation) async {
+    if (!_isCurrent(generation) || _sendInFlightGeneration == generation) {
       return;
     }
     final next = _currentLine + _linesPerPage;
     if (next >= list.length) {
-      _timer?.cancel();
-      _timer = null;
-      isRunning = false;
+      _finish(generation);
       return;
     }
+    final previousLine = _currentLine;
     _currentLine = next;
-    final success = await _sendCurrentPage();
-    if (!success || _currentLine + _linesPerPage >= list.length) {
-      _timer?.cancel();
-      _timer = null;
-      isRunning = false;
+    final success = await _sendCurrentPage(generation);
+    if (!_isCurrent(generation)) {
+      return;
+    }
+    if (!success) {
+      _currentLine = previousLine;
+      clear();
+      return;
+    }
+    if (_currentLine + _linesPerPage >= list.length) {
+      _finish(generation);
+    } else {
+      _scheduleNextPage(generation);
     }
   }
 
-  Future<bool> _sendCurrentPage() {
+  Future<bool> _sendCurrentPage(int generation) {
     final text = _pageText(_currentLine);
-    return doSendText(text, 0x01, 0x70, 0);
+    return _doSendText(text, 0x01, 0x70, 0, generation);
   }
 
   String _pageText(int start) {
@@ -118,14 +144,26 @@ class TextService {
     clear();
   }
 
+  bool _isCurrent(int generation) => isRunning && generation == _generation;
+
+  void _finish(int generation) {
+    if (!_isCurrent(generation)) {
+      return;
+    }
+    _timer?.cancel();
+    _timer = null;
+    isRunning = false;
+    _scope = null;
+  }
+
   void clear() {
+    _generation++;
     isRunning = false;
     _currentLine = 0;
     _timer?.cancel();
     _timer = null;
     list = <String>[];
-    sendReplys = <String>[];
     _scope = null;
-    _sendInFlight = false;
+    _sendInFlightGeneration = null;
   }
 }

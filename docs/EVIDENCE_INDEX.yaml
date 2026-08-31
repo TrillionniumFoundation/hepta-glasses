@@ -1,6 +1,6 @@
 {
-  "schema_version": 3,
-  "plan_revision": "2026-08-30-g4",
+  "schema_version": 4,
+  "plan_revision": "2026-08-31-g7",
   "source_records": [
     {
       "id": "EV-SRC-FOUNDATION-V1",
@@ -19,10 +19,10 @@
         "E0",
         "E1"
       ],
-      "claim": "G3-G8 repository-side contracts, reference implementations, tests and evidence harness"
+      "claim": "G3-G8 repository contracts, reference implementations, tests, and evidence harness"
     },
     {
-      "id": "EV-SRC-G4-V1",
+      "id": "EV-SRC-G4-EXACT-HEAD-V1",
       "path": "docs/development/G4_SOURCE_CLOSURE.md",
       "levels": [
         "E0",
@@ -31,20 +31,44 @@
         "E3",
         "E4"
       ],
-      "claim": "G4 exact-head, concurrency, BLE, native-audio, assistant-lifecycle, native-test, and release-configuration source closure"
+      "claim": "Historical G4 exact-head source evidence only; it does not attest the current G7 tree"
+    },
+    {
+      "id": "EV-SRC-G5-AUDIT-V1",
+      "path": "docs/development/G5_AUDIT_CLOSURE.md",
+      "levels": [
+        "E0",
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "claim": "G5 audit controls incorporated into G7; the G5/G6 red CI runs are not E4 evidence"
+    },
+    {
+      "id": "EV-SRC-G7-CANDIDATE-V1",
+      "path": "docs/development/G7_SOURCE_CONVERGENCE.md",
+      "levels": [
+        "E0",
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "claim": "Converged G7 source candidate; E4 exists only after an unchanged exact-head CI artifact passes"
     }
   ],
   "ci_records": {
     "storage": "GitHub Actions and PR conversation",
-    "required_artifact": "hepta-source-evidence",
+    "required_artifact": "hepta-source-evidence-<exact-head-sha>",
     "required_files": [
       "source-sbom.spdx.json",
       "source-provenance.json",
+      "source-history-scan.json",
+      "source-native-sanitizer.json",
       "source-release-bundle.json",
       "source-evidence-summary.json",
       "source-gate-result.json"
     ],
-    "rule": "The CI record must name the exact PR-head commit and tree; committing a CI SHA to the same branch would invalidate it."
+    "rule": "The successful CI record must name the unchanged exact PR-head commit and tree. A source export, parent run, local result, or PR description is not E4 evidence."
   },
   "external_slots": {
     "governance": "evidence/governance/<date>.json",
@@ -52,6 +76,7 @@
     "ios_device": "evidence/device/ios/<session>.report.json",
     "control_plane_drills": "evidence/control-plane/<drill>.json",
     "external_receipts": "evidence/capabilities/<adapter>/<session>.json",
+    "credential_incident": "evidence/security/credential-incident/<closure>.json",
     "independent_reviews": "evidence/reviews/<discipline>/<review>.json",
     "release_bundle": "evidence/release/<release>.json"
   },
@@ -60,6 +85,7 @@
     "No evidence file may contain raw credentials, signing material, raw audio, or sensitive transcript content.",
     "Production and release claims require the product release gate to pass.",
     "Self-review is not independent review.",
-    "A source CI pass does not close an external gate."
+    "A source CI pass does not close an external gate.",
+    "No skipped history blob may be represented as a clean history scan."
   ]
 }

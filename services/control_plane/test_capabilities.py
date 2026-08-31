@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 from services.control_plane.capabilities import (
     AuditJournal,
@@ -76,6 +78,42 @@ class CapabilityGatewayTest(unittest.TestCase):
         events = [entry["event"] for entry in self.journal.entries]
         self.assertLess(events.index("capability.prepared"), events.index("capability.completed"))
         self.journal.verify()
+
+    def test_concurrent_identical_requests_execute_once(self) -> None:
+        request = self.request()
+        lease = self.lease(request)
+        barrier = threading.Barrier(8)
+
+        def execute() -> str:
+            barrier.wait()
+            return self.gateway.execute(request, lease=lease).status
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            outcomes = list(pool.map(lambda _: execute(), range(8)))
+
+        self.assertEqual(outcomes, ["succeeded"] * 8)
+        self.assertEqual(self.adapter.execution_count, 1)
+        events = [entry["event"] for entry in self.journal.entries]
+        self.assertEqual(events.count("capability.prepared"), 1)
+        self.assertEqual(events.count("capability.completed"), 1)
+        self.journal.verify()
+
+    def test_single_use_lease_cannot_race_across_idempotency_keys(self) -> None:
+        first = self.request()
+        second = self.request(request_id="request-2", idempotency_key="idem-2")
+        lease = self.lease(first)
+        barrier = threading.Barrier(2)
+
+        def execute(request: CapabilityRequest) -> str:
+            barrier.wait()
+            receipt = self.gateway.execute(request, lease=lease)
+            return receipt.status
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            outcomes = list(pool.map(execute, (first, second)))
+
+        self.assertEqual(sorted(outcomes), ["denied", "succeeded"])
+        self.assertEqual(self.adapter.execution_count, 1)
 
     def test_timeout_like_indeterminate_effect_is_reconciled(self) -> None:
         request = self.request()

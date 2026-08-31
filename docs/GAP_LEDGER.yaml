@@ -1,6 +1,6 @@
 {
-  "schema_version": 3,
-  "plan_revision": "2026-08-30-g4",
+  "schema_version": 4,
+  "plan_revision": "2026-08-31-g7",
   "audited_base_commit": "32178d3cb4ae38c2ef91db05bde836838c274259",
   "audited_base_tree": "f01ea2e305f5c1d54e8328c9028940e28519cb6e",
   "allowed_statuses": [
@@ -458,6 +458,216 @@
         "android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt",
         "ios/RunnerTests/RunnerTests.swift",
         "ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme"
+      ]
+    },
+    {
+      "id": "HG-0035",
+      "title": "Audit journal lacked process-safe locking and recoverable atomic checkpoints",
+      "status": "CLOSED_SOURCE",
+      "owner": "runtime",
+      "evidence": [
+        "lib/runtime/audit_journal.dart",
+        "test/runtime/audit_journal_test.dart"
+      ]
+    },
+    {
+      "id": "HG-0036",
+      "title": "Source SBOM did not cover Pub, Gradle, CocoaPods, and vendored native components deterministically",
+      "status": "CLOSED_SOURCE",
+      "owner": "release",
+      "evidence": [
+        "services/qualification/sbom.py",
+        "services/qualification/test_sbom.py",
+        "third_party/native-components.json"
+      ]
+    },
+    {
+      "id": "HG-0037",
+      "title": "Git history scanner did not fail closed on binary or oversized blobs",
+      "status": "CLOSED_SOURCE",
+      "owner": "security",
+      "evidence": [
+        "tools/scan_git_history.py",
+        "services/qualification/test_history_scan.py",
+        ".github/workflows/ci.yml"
+      ]
+    },
+    {
+      "id": "HG-0038",
+      "title": "Source release gate accepted digest-shaped claims without re-reading evidence content",
+      "status": "CLOSED_SOURCE",
+      "owner": "release",
+      "evidence": [
+        "services/qualification/release_gate.py",
+        "services/qualification/test_release_gate.py",
+        "tools/evaluate_release_gate.py"
+      ]
+    },
+    {
+      "id": "HG-0039",
+      "title": "Vendored LC3 and RNNoise supplier, license, path, and unknown-revision truth were not machine-readable",
+      "status": "CLOSED_SOURCE",
+      "owner": "supply-chain",
+      "evidence": [
+        "third_party/native-components.json",
+        "services/qualification/sbom.py"
+      ]
+    },
+    {
+      "id": "HG-0040",
+      "title": "Both LC3 copies and RNNoise were not exercised under ASAN/UBSAN with cross-platform PCM parity",
+      "status": "CLOSED_SOURCE",
+      "owner": "native-audio",
+      "evidence": [
+        "tools/run_native_sanitizers.sh",
+        "tools/native/lc3_sanitizer_harness.c",
+        "tools/native/rnnoise_sanitizer_harness.c",
+        ".github/workflows/ci.yml"
+      ]
+    },
+    {
+      "id": "HG-0041",
+      "title": "Provider-side rotation or revocation evidence for the historically exposed credential is absent",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "security-operations",
+      "source_preparation": [
+        "tools/scan_git_history.py",
+        "docs/operations/CREDENTIAL_INCIDENT_RUNBOOK.md"
+      ],
+      "evidence_required": [
+        "provider-side key revocation record",
+        "replacement-key rotation record",
+        "post-rotation access-denial verification",
+        "redacted incident closure approval"
+      ],
+      "unblock_condition": "Revoke the historical provider credential outside Git, rotate all dependent deployments, verify the old credential is rejected, and attach redacted E5/E6 closure evidence."
+    },
+    {
+      "id": "HG-0042",
+      "title": "G6 exact-head Flutter formatting, native sanitizer, history scan, and source-evidence lanes were red",
+      "status": "CLOSED_SOURCE",
+      "owner": "repository",
+      "evidence": [
+        ".github/workflows/ci.yml",
+        "test/runtime/audit_journal_test.dart",
+        "tools/run_native_sanitizers.sh",
+        "tools/scan_git_history.py",
+        "docs/development/G7_SOURCE_CONVERGENCE.md"
+      ]
+    },
+    {
+      "id": "HG-0043",
+      "title": "Independent exact-head approval for the converged source candidate is absent",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "independent-reviewer",
+      "source_preparation": [
+        ".github/CODEOWNERS",
+        ".github/pull_request_template.md",
+        "contracts/main-branch-protection-v1.json",
+        "docs/development/G7_SOURCE_CONVERGENCE.md"
+      ],
+      "evidence_required": [
+        "independent approving review bound to the unchanged exact head",
+        "all required checks successful on the same head",
+        "no unresolved review conversation"
+      ],
+      "unblock_condition": "An eligible reviewer other than the implementing agent approves the unchanged exact head after all required checks succeed."
+    },
+    {
+      "id": "HG-0044",
+      "title": "BMP transfer accepted malformed responses, ignored native write rejection, and could replay uncertain effects",
+      "status": "CLOSED_SOURCE",
+      "owner": "device-hal",
+      "evidence": [
+        "lib/controllers/bmp_update_manager.dart",
+        "test/runtime/bmp_update_manager_test.dart"
+      ]
+    },
+    {
+      "id": "HG-0045",
+      "title": "AI history ListView returned Expanded items and could crash with ParentData errors",
+      "status": "CLOSED_SOURCE",
+      "owner": "mobile-ui",
+      "evidence": [
+        "lib/views/even_list_page.dart",
+        "test/runtime/even_ai_history_page_test.dart"
+      ]
+    },
+    {
+      "id": "HG-0046",
+      "title": "Realtime ticket and capability idempotency decisions were not atomic under concurrency",
+      "status": "CLOSED_SOURCE",
+      "owner": "control-plane",
+      "evidence": [
+        "services/control_plane/realtime.py",
+        "services/control_plane/capabilities.py",
+        "services/control_plane/test_realtime.py",
+        "services/control_plane/test_capabilities.py"
+      ]
+    },
+    {
+      "id": "HG-0047",
+      "title": "Skill admission did not hash actual package bytes and Codex worker limits were post-hoc or unenforced",
+      "status": "CLOSED_SOURCE",
+      "owner": "skills-codex",
+      "evidence": [
+        "services/skills/registry.py",
+        "services/skills/test_registry.py",
+        "services/codex_worker/worker.py",
+        "services/codex_worker/test_worker.py",
+        "services/codex_worker/policy.json"
+      ]
+    },
+    {
+      "id": "HG-0048",
+      "title": "Model cancellation, lease race prevention, and scheduler shutdown deadlines were incomplete",
+      "status": "CLOSED_SOURCE",
+      "owner": "runtime",
+      "evidence": [
+        "lib/runtime/model_gateway.dart",
+        "lib/runtime/tool_gateway.dart",
+        "lib/runtime/device_effect_scheduler.dart",
+        "test/runtime/model_gateway_test.dart",
+        "test/runtime/tool_gateway_test.dart",
+        "test/runtime/device_effect_scheduler_test.dart"
+      ]
+    },
+    {
+      "id": "HG-0049",
+      "title": "Mobile startup, BLE readiness, heartbeat, text paging, and assistant cleanup retained fail-open or re-entry paths",
+      "status": "CLOSED_SOURCE",
+      "owner": "mobile-runtime",
+      "evidence": [
+        "lib/main.dart",
+        "lib/ble_manager.dart",
+        "lib/services/text_service.dart",
+        "lib/services/evenai.dart",
+        "lib/views/home_page.dart"
+      ]
+    },
+    {
+      "id": "HG-0050",
+      "title": "Temporary self-modifying remediation workflows and stale exact-head marker files polluted repository authority",
+      "status": "CLOSED_SOURCE",
+      "owner": "repository",
+      "evidence": [
+        ".github/workflows/ci.yml",
+        "tools/validate_repository.py",
+        "docs/development/G7_SOURCE_CONVERGENCE.md"
+      ]
+    },
+    {
+      "id": "HG-0051",
+      "title": "Canonical plan, Current State, Gap Ledger, Evidence Index, release gate, and templates used conflicting revisions",
+      "status": "CLOSED_SOURCE",
+      "owner": "repository",
+      "evidence": [
+        "docs/HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md",
+        "docs/CURRENT_STATE.md",
+        "docs/GAP_LEDGER.yaml",
+        "docs/EVIDENCE_INDEX.yaml",
+        "services/qualification/release_gate.py",
+        "evidence/templates/product-release-bundle.template.json"
       ]
     }
   ]

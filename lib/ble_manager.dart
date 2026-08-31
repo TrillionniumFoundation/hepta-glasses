@@ -39,12 +39,14 @@ class BleManager {
       );
 
   StreamSubscription<BleReceive>? _receiveSubscription;
+  static const Duration _heartbeatInterval = Duration(seconds: 8);
+
   Timer? beatHeartTimer;
+  bool _heartbeatInFlight = false;
 
   final List<Map<String, String>> pairedGlasses = <Map<String, String>>[];
   bool isConnected = false;
   String connectionStatus = 'Not connected';
-  int tryTime = 0;
   int _connectionGeneration = 0;
   bool isLeftConnected = false;
   bool isRightConnected = false;
@@ -104,14 +106,21 @@ class BleManager {
   }
 
   Future<void> connectToGlasses(String deviceName) async {
+    connectionStatus = 'Connecting...';
+    isLeftConnected = false;
+    isRightConnected = false;
+    isConnected = false;
+    _publishConnectionSnapshot();
+    onStatusChanged?.call();
     try {
       await _channel.invokeMethod<void>(
         'connectToGlasses',
         <String, Object?>{'deviceName': deviceName},
       );
-      connectionStatus = 'Connecting...';
-      onStatusChanged?.call();
     } on PlatformException catch (error) {
+      connectionStatus = 'Not connected';
+      _publishConnectionSnapshot();
+      onStatusChanged?.call();
       PrivacySafeLog.event(
         'ble_connect_failed',
         fields: <String, Object?>{'code': error.code},
@@ -197,13 +206,20 @@ class BleManager {
     final values = arguments is Map ? arguments : const <Object?, Object?>{};
     final leftName = values['leftDeviceName']?.toString() ?? 'left';
     final rightName = values['rightDeviceName']?.toString() ?? 'right';
-    connectionStatus = 'Connected: \n$leftName \n$rightName';
-    isLeftConnected = values['left_connected'] != false;
-    isRightConnected = values['right_connected'] != false;
+    isLeftConnected = values['left_connected'] == true;
+    isRightConnected = values['right_connected'] == true;
     isConnected = isLeftConnected && isRightConnected;
+    connectionStatus = isConnected
+        ? 'Connected: \n$leftName \n$rightName'
+        : 'Connection not ready';
     _publishConnectionSnapshot();
     onStatusChanged?.call();
-    startSendBeatHeart();
+    if (isConnected) {
+      startSendBeatHeart();
+    } else {
+      beatHeartTimer?.cancel();
+      beatHeartTimer = null;
+    }
     PrivacySafeLog.event(
       'ble_connected',
       fields: <String, Object?>{'generation': _connectionGeneration},
@@ -212,18 +228,38 @@ class BleManager {
 
   void startSendBeatHeart() {
     beatHeartTimer?.cancel();
-    beatHeartTimer = Timer.periodic(const Duration(seconds: 8), (_) async {
-      if (!isConnected) {
-        return;
+    beatHeartTimer = null;
+    if (!isConnected || _heartbeatInFlight) {
+      return;
+    }
+    beatHeartTimer = Timer(
+      _heartbeatInterval,
+      () => unawaited(_sendHeartbeat()),
+    );
+  }
+
+  Future<void> _sendHeartbeat() async {
+    if (_heartbeatInFlight || !isConnected) {
+      return;
+    }
+    _heartbeatInFlight = true;
+    try {
+      var success = await Proto.sendHeartBeat();
+      for (var attempt = 0; !success && attempt < 2 && isConnected; attempt++) {
+        success = await Proto.sendHeartBeat();
       }
-      final success = await Proto.sendHeartBeat();
-      if (!success && tryTime < 2) {
-        tryTime++;
-        await Proto.sendHeartBeat();
-      } else {
-        tryTime = 0;
+      if (!success) {
+        PrivacySafeLog.event(
+          'ble_heartbeat_failed',
+          fields: <String, Object?>{'generation': _connectionGeneration},
+        );
       }
-    });
+    } finally {
+      _heartbeatInFlight = false;
+      if (isConnected) {
+        startSendBeatHeart();
+      }
+    }
   }
 
   void _onGlassesConnecting(dynamic arguments) {
@@ -732,6 +768,8 @@ class BleManager {
 
   Future<void> dispose() async {
     beatHeartTimer?.cancel();
+    beatHeartTimer = null;
+    _heartbeatInFlight = false;
     _failPendingRequests(
       'manager_disposed',
       effectMayHaveOccurred: true,

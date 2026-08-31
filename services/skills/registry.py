@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import re
+import threading
 from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any, Mapping
@@ -114,6 +115,8 @@ class SkillTrustStore:
 
 
 class SkillRegistry:
+    MAXIMUM_PACKAGE_BYTES = 16 * 1024 * 1024
+
     def __init__(
         self,
         *,
@@ -125,84 +128,120 @@ class SkillRegistry:
         self.allowed_publishers = allowed_publishers
         self.allowed_network_domains = allowed_network_domains
         self._skills: dict[str, InstalledSkill] = {}
+        self._lock = threading.RLock()
 
     def install(
         self,
         manifest: SkillManifest,
         *,
+        package_bytes: bytes,
         consented_capabilities: frozenset[str],
         consented_data_classes: frozenset[str],
         consented_network_domains: frozenset[str],
         now: int,
     ) -> InstalledSkill:
-        self._validate_manifest(manifest)
-        manifest_version = _version_tuple(manifest.version)
-        if not manifest.required_capabilities.issubset(consented_capabilities):
-            raise SkillError("skill_capability_consent_missing")
-        if not manifest.data_classes.issubset(consented_data_classes):
-            raise SkillError("skill_data_consent_missing")
-        if not manifest.allowed_network_domains.issubset(consented_network_domains):
-            raise SkillError("skill_network_domain_consent_missing")
-        existing = self._skills.get(manifest.skill_id)
-        if existing is not None:
-            if existing.state is SkillState.REVOKED:
-                raise SkillError("skill_revoked")
-            existing_version = _version_tuple(existing.manifest.version)
-            if manifest_version < existing_version:
-                raise SkillError("skill_version_downgrade_forbidden")
-            if manifest_version == existing_version:
-                if manifest.manifest_digest != existing.manifest.manifest_digest:
-                    raise SkillError("skill_version_manifest_conflict")
-                return existing
-            added_capabilities = (
-                manifest.required_capabilities
-                - existing.manifest.required_capabilities
+        with self._lock:
+            self._validate_manifest(manifest)
+            self._validate_package(manifest, package_bytes)
+            manifest_version = _version_tuple(manifest.version)
+            if not manifest.required_capabilities.issubset(
+                consented_capabilities
+            ):
+                raise SkillError("skill_capability_consent_missing")
+            if not manifest.data_classes.issubset(consented_data_classes):
+                raise SkillError("skill_data_consent_missing")
+            if not manifest.allowed_network_domains.issubset(
+                consented_network_domains
+            ):
+                raise SkillError("skill_network_domain_consent_missing")
+            existing = self._skills.get(manifest.skill_id)
+            if existing is not None:
+                if existing.state is SkillState.REVOKED:
+                    raise SkillError("skill_revoked")
+                existing_version = _version_tuple(existing.manifest.version)
+                if manifest_version < existing_version:
+                    raise SkillError("skill_version_downgrade_forbidden")
+                if manifest_version == existing_version:
+                    if (
+                        manifest.manifest_digest
+                        != existing.manifest.manifest_digest
+                    ):
+                        raise SkillError("skill_version_manifest_conflict")
+                    return existing
+                added_capabilities = (
+                    manifest.required_capabilities
+                    - existing.manifest.required_capabilities
+                )
+                added_data = (
+                    manifest.data_classes - existing.manifest.data_classes
+                )
+                added_domains = (
+                    manifest.allowed_network_domains
+                    - existing.manifest.allowed_network_domains
+                )
+                if not added_capabilities.issubset(consented_capabilities):
+                    raise SkillError(
+                        "skill_upgrade_capability_reconsent_required"
+                    )
+                if not added_data.issubset(consented_data_classes):
+                    raise SkillError("skill_upgrade_data_reconsent_required")
+                if not added_domains.issubset(consented_network_domains):
+                    raise SkillError(
+                        "skill_upgrade_network_reconsent_required"
+                    )
+            consent_digest = hashlib.sha256(
+                _canonical(
+                    {
+                        "capabilities": sorted(consented_capabilities),
+                        "data_classes": sorted(consented_data_classes),
+                        "network_domains": sorted(
+                            consented_network_domains
+                        ),
+                        "manifest_digest": manifest.manifest_digest,
+                    }
+                )
+            ).hexdigest()
+            installed = InstalledSkill(
+                manifest=manifest,
+                state=SkillState.INSTALLED,
+                installed_at=now,
+                consent_digest=consent_digest,
             )
-            added_data = manifest.data_classes - existing.manifest.data_classes
-            added_domains = (
-                manifest.allowed_network_domains
-                - existing.manifest.allowed_network_domains
-            )
-            if not added_capabilities.issubset(consented_capabilities):
-                raise SkillError("skill_upgrade_capability_reconsent_required")
-            if not added_data.issubset(consented_data_classes):
-                raise SkillError("skill_upgrade_data_reconsent_required")
-            if not added_domains.issubset(consented_network_domains):
-                raise SkillError("skill_upgrade_network_reconsent_required")
-        consent_digest = hashlib.sha256(
-            _canonical(
-                {
-                    "capabilities": sorted(consented_capabilities),
-                    "data_classes": sorted(consented_data_classes),
-                    "network_domains": sorted(consented_network_domains),
-                    "manifest_digest": manifest.manifest_digest,
-                }
-            )
-        ).hexdigest()
-        installed = InstalledSkill(
-            manifest=manifest,
-            state=SkillState.INSTALLED,
-            installed_at=now,
-            consent_digest=consent_digest,
-        )
-        self._skills[manifest.skill_id] = installed
-        return installed
+            self._skills[manifest.skill_id] = installed
+            return installed
 
     def revoke(self, skill_id: str) -> InstalledSkill:
-        installed = self._skills.get(skill_id)
-        if installed is None:
-            raise SkillError("skill_unknown")
-        revoked = replace(installed, state=SkillState.REVOKED)
-        self._skills[skill_id] = revoked
-        return revoked
+        with self._lock:
+            installed = self._skills.get(skill_id)
+            if installed is None:
+                raise SkillError("skill_unknown")
+            if installed.state is SkillState.REVOKED:
+                return installed
+            revoked = replace(installed, state=SkillState.REVOKED)
+            self._skills[skill_id] = revoked
+            return revoked
 
     def resolve(self, skill_id: str) -> InstalledSkill:
-        installed = self._skills.get(skill_id)
-        if installed is None:
-            raise SkillError("skill_unknown")
-        if installed.state is SkillState.REVOKED:
-            raise SkillError("skill_revoked")
-        return installed
+        with self._lock:
+            installed = self._skills.get(skill_id)
+            if installed is None:
+                raise SkillError("skill_unknown")
+            if installed.state is SkillState.REVOKED:
+                raise SkillError("skill_revoked")
+            return installed
+
+    def _validate_package(
+        self,
+        manifest: SkillManifest,
+        package_bytes: bytes,
+    ) -> None:
+        if not isinstance(package_bytes, bytes):
+            raise SkillError("skill_package_bytes_required")
+        if not package_bytes or len(package_bytes) > self.MAXIMUM_PACKAGE_BYTES:
+            raise SkillError("skill_package_size_invalid")
+        actual = hashlib.sha256(package_bytes).hexdigest()
+        if not hmac.compare_digest(actual, manifest.package_digest):
+            raise SkillError("skill_package_digest_mismatch")
 
     def _validate_manifest(self, manifest: SkillManifest) -> None:
         self.trust_store.verify(manifest)
@@ -217,5 +256,12 @@ class SkillRegistry:
             raise SkillError("skill_network_domain_not_allowed")
         if manifest.timeout_ms < 1 or manifest.timeout_ms > 300_000:
             raise SkillError("skill_timeout_invalid")
-        if len(manifest.package_digest) != 64:
+        if (
+            len(manifest.package_digest) != 64
+            or manifest.package_digest != manifest.package_digest.lower()
+            or any(
+                character not in "0123456789abcdef"
+                for character in manifest.package_digest
+            )
+        ):
             raise SkillError("skill_package_digest_invalid")

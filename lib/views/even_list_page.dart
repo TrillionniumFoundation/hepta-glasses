@@ -7,18 +7,16 @@ class EvenAIListPage extends StatefulWidget {
   const EvenAIListPage({super.key});
 
   @override
-  _EvenAIListPageState createState() => _EvenAIListPageState();
+  State<EvenAIListPage> createState() => _EvenAIListPageState();
 }
 
 class _EvenAIListPageState extends State<EvenAIListPage> {
-  late EvenaiModelController controller;
+  late final EvenaiModelController controller;
 
   @override
   void initState() {
     super.initState();
     controller = Get.find<EvenaiModelController>();
-
-    print("controller.items--------${controller.items.length}");
   }
 
   @override
@@ -30,96 +28,72 @@ class _EvenAIListPageState extends State<EvenAIListPage> {
           if (controller.items.isEmpty && !EvenAI.isEvenAISyncing.value) {
             return const Center(
               child: Text(
-                "Press and hold left TouchBar to engage Even AI.",
+                'Press and hold left TouchBar to engage Even AI.',
                 style: TextStyle(color: Colors.grey),
                 textAlign: TextAlign.center,
               ),
             );
-          } else {
-            return Padding(
-              padding: EdgeInsets.only(left: 16, right: 16, top: 4),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: controller.items.length,
-                      itemBuilder: (context, index) {
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              if (controller.selectedIndex.value == index) {
-                                controller.deselectItem();
-                              } else {
-                                controller.selectItem(index);
-                              }
-                            });
-                          },
-                          child: controller.selectedIndex.value == index
-                              ? buildItemDetail(index)
-                              : buildItem(index),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
           }
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            itemCount: controller.items.length,
+            itemBuilder: (BuildContext context, int index) => GestureDetector(
+              key: ValueKey<String>('history-item-$index'),
+              onTap: () {
+                if (controller.selectedIndex.value == index) {
+                  controller.deselectItem();
+                } else {
+                  controller.selectItem(index);
+                }
+              },
+              child: controller.selectedIndex.value == index
+                  ? _buildItemDetail(index)
+                  : _buildItem(index),
+            ),
+          );
         }),
       );
 
-  Widget buildItem(int index) {
+  Widget _buildItem(int index) {
     final item = controller.items[index];
-    return Expanded(
-      child: Container(
-        alignment: Alignment.centerLeft,
-        decoration: BoxDecoration(
-          color: Color(0xFFFEF991).withOpacity(0.2),
-          borderRadius: BorderRadius.circular(5),
-        ),
-        margin: EdgeInsets.only(top: 8, bottom: 8),
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text(
-            item.title,
-            style: TextStyle(fontSize: 20),
-          ),
-        ),
+    return Container(
+      alignment: Alignment.centerLeft,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF991).withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(5),
+      ),
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(16),
+      child: Text(
+        item.title,
+        style: const TextStyle(fontSize: 20),
       ),
     );
   }
 
-  Widget buildItemDetail(int index) {
+  Widget _buildItemDetail(int index) {
     final item = controller.items[index];
-
-    return Expanded(
-      child: Container(
-        decoration: BoxDecoration(
-          color: Color(0xFFFEF991).withOpacity(0.2),
-          borderRadius: BorderRadius.circular(5),
-        ),
-        margin: EdgeInsets.only(top: 8, bottom: 8),
-        child: Column(
-          children: [
-            Container(
-              alignment: Alignment.centerLeft,
-              padding: EdgeInsets.all(16),
-              child: Text(
-                item.title,
-                style: TextStyle(fontSize: 20),
-              ),
-            ),
-            Container(
-              alignment: Alignment.centerLeft,
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                item.content,
-                style: TextStyle(fontSize: 15),
-              ),
-            ),
-            SizedBox(height: 16)
-          ],
-        ),
+    return Container(
+      key: ValueKey<String>('history-detail-$index'),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF991).withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(5),
+      ),
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            item.title,
+            style: const TextStyle(fontSize: 20),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            item.content,
+            style: const TextStyle(fontSize: 15),
+          ),
+        ],
       ),
     );
   }

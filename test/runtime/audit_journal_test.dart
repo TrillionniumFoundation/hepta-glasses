@@ -68,50 +68,54 @@ void main() {
     expect(await second.readAll(), hasLength(64));
   });
 
-  test('stale checkpoint is repaired after journal-before-checkpoint crash',
-      () async {
-    final directory =
-        await Directory.systemTemp.createTemp('hepta-audit-checkpoint-repair-');
-    addTearDown(() async => directory.delete(recursive: true));
-    final file = File('${directory.path}/audit.jsonl');
-    final journal = JsonlAuditJournal(file);
-    await journal.initialize();
-    final first = await journal.append(
-      'tool.prepared',
-      <String, Object?>{'request_id': 'r-1'},
-    );
+  test(
+    'stale checkpoint is repaired after journal-before-checkpoint crash',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'hepta-audit-checkpoint-repair-',
+      );
+      addTearDown(() async => directory.delete(recursive: true));
+      final file = File('${directory.path}/audit.jsonl');
+      final journal = JsonlAuditJournal(file);
+      await journal.initialize();
+      final first = await journal.append(
+        'tool.prepared',
+        <String, Object?>{'request_id': 'r-1'},
+      );
 
-    final timestamp = DateTime.utc(2026, 8, 31);
-    final hash = AuditEntry.calculateHash(
-      sequence: 2,
-      timestamp: timestamp,
-      eventType: 'tool.indeterminate',
-      payload: const <String, Object?>{'request_id': 'r-1'},
-      previousHash: first.hash,
-    );
-    final second = AuditEntry(
-      sequence: 2,
-      timestamp: timestamp,
-      eventType: 'tool.indeterminate',
-      payload: const <String, Object?>{'request_id': 'r-1'},
-      previousHash: first.hash,
-      hash: hash,
-    );
-    await file.writeAsString(
-      '${jsonEncode(second.toJson())}\n',
-      mode: FileMode.append,
-      flush: true,
-    );
+      final timestamp = DateTime.utc(2026, 8, 31);
+      final hash = AuditEntry.calculateHash(
+        sequence: 2,
+        timestamp: timestamp,
+        eventType: 'tool.indeterminate',
+        payload: const <String, Object?>{'request_id': 'r-1'},
+        previousHash: first.hash,
+      );
+      final second = AuditEntry(
+        sequence: 2,
+        timestamp: timestamp,
+        eventType: 'tool.indeterminate',
+        payload: const <String, Object?>{'request_id': 'r-1'},
+        previousHash: first.hash,
+        hash: hash,
+      );
+      await file.writeAsString(
+        '${jsonEncode(second.toJson())}\n',
+        mode: FileMode.append,
+        flush: true,
+      );
 
-    final recovered = JsonlAuditJournal(file);
-    await recovered.initialize();
-    expect(await recovered.readAll(), hasLength(2));
-    final checkpoint = jsonDecode(
-      await JsonlAuditJournal.checkpointFileFor(file).readAsString(),
-    ) as Map<String, dynamic>;
-    expect(checkpoint['sequence'], 2);
-    expect(checkpoint['hash'], hash);
-  });
+      final recovered = JsonlAuditJournal(file);
+      await recovered.initialize();
+      expect(await recovered.readAll(), hasLength(2));
+      final checkpoint = jsonDecode(
+        await JsonlAuditJournal.checkpointFileFor(file).readAsString(),
+      ) as Map<String, dynamic>;
+      expect(checkpoint['sequence'], 2);
+      expect(checkpoint['hash'], hash);
+    },
+  );
+
 
   test('checkpoint mismatch fails closed', () async {
     final directory =

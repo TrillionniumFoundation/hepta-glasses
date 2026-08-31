@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Mapping, Protocol
@@ -125,37 +126,54 @@ class CapabilityAdapter(Protocol):
 
 
 class AuditJournal:
-    """Metadata-only hash-chained journal."""
+    """Thread-safe metadata-only hash-chained journal."""
 
     def __init__(self) -> None:
         self.entries: list[dict[str, Any]] = []
+        self._lock = threading.RLock()
 
     def append(self, event: str, payload: Mapping[str, Any]) -> int:
-        previous = self.entries[-1]["hash"] if self.entries else ""
-        sequence = len(self.entries) + 1
-        body = {
-            "event": event,
-            "payload": dict(payload),
-            "previous_hash": previous,
-            "sequence": sequence,
-        }
-        body["hash"] = canonical_digest(body)
-        self.entries.append(body)
-        return sequence
+        with self._lock:
+            previous = self.entries[-1]["hash"] if self.entries else ""
+            sequence = len(self.entries) + 1
+            body = {
+                "event": event,
+                "payload": dict(payload),
+                "previous_hash": previous,
+                "sequence": sequence,
+            }
+            body["hash"] = canonical_digest(body)
+            self.entries.append(body)
+            return sequence
 
     def verify(self) -> None:
-        previous = ""
-        for index, entry in enumerate(self.entries, start=1):
-            if entry["sequence"] != index or entry["previous_hash"] != previous:
-                raise CapabilityError("capability_journal_invalid")
-            body = {key: value for key, value in entry.items() if key != "hash"}
-            if canonical_digest(body) != entry["hash"]:
-                raise CapabilityError("capability_journal_invalid")
-            previous = entry["hash"]
+        with self._lock:
+            previous = ""
+            for index, entry in enumerate(self.entries, start=1):
+                if entry["sequence"] != index or entry["previous_hash"] != previous:
+                    raise CapabilityError("capability_journal_invalid")
+                body = {
+                    key: value for key, value in entry.items() if key != "hash"
+                }
+                if canonical_digest(body) != entry["hash"]:
+                    raise CapabilityError("capability_journal_invalid")
+                previous = entry["hash"]
+
+
+@dataclass
+class _InFlightCapability:
+    fingerprint: str
+    done: threading.Event
+    error_code: str | None = None
 
 
 class CapabilityGateway:
-    """Sole authority for cloud/phone capability effects."""
+    """Sole authority for cloud/phone capability effects.
+
+    Requests with the same idempotency key join one in-flight execution. Lease
+    consumption and the journal-before-effect boundary are serialized so two
+    concurrent requests cannot both spend the same single-use authority.
+    """
 
     def __init__(self, *, journal: AuditJournal, clock: Callable[[], int]) -> None:
         self.journal = journal
@@ -165,14 +183,15 @@ class CapabilityGateway:
         self._receipts: dict[str, CapabilityReceipt] = {}
         self._fingerprints: dict[str, str] = {}
         self._consumed_leases: set[str] = set()
+        self._in_flight: dict[str, _InFlightCapability] = {}
+        self._lock = threading.RLock()
 
-    def register(
-        self, spec: CapabilitySpec, adapter: CapabilityAdapter
-    ) -> None:
-        if spec.name in self._specs:
-            raise CapabilityError("capability_already_registered")
-        self._specs[spec.name] = spec
-        self._adapters[spec.name] = adapter
+    def register(self, spec: CapabilitySpec, adapter: CapabilityAdapter) -> None:
+        with self._lock:
+            if spec.name in self._specs:
+                raise CapabilityError("capability_already_registered")
+            self._specs[spec.name] = spec
+            self._adapters[spec.name] = adapter
 
     def execute(
         self,
@@ -180,53 +199,107 @@ class CapabilityGateway:
         *,
         lease: DecisionLease | None = None,
     ) -> CapabilityReceipt:
-        existing = self._receipts.get(request.idempotency_key)
-        if existing is not None:
-            if self._fingerprints[request.idempotency_key] != request.fingerprint:
-                raise CapabilityError("idempotency_conflict")
-            return existing.as_replay()
+        key = request.idempotency_key
+        fingerprint = request.fingerprint
+        with self._lock:
+            existing = self._receipts.get(key)
+            if existing is not None:
+                if self._fingerprints[key] != fingerprint:
+                    raise CapabilityError("idempotency_conflict")
+                return existing.as_replay()
 
-        now = self.clock()
-        spec = self._specs.get(request.name)
-        adapter = self._adapters.get(request.name)
-        if spec is None or adapter is None:
-            return self._deny(request, "capability_unknown")
-        if now >= request.deadline:
-            return self._deny(request, "capability_deadline_expired")
-        if spec.risk is RiskTier.R4:
-            return self._deny(request, "r4_disabled")
-        fields = set(request.arguments)
-        if not spec.required_fields.issubset(fields):
-            return self._deny(request, "capability_fields_missing")
-        if fields - spec.required_fields - spec.optional_fields:
-            return self._deny(request, "capability_fields_unknown")
-        if spec.mutating:
-            denial = self._validate_mutation(request, spec, lease, now)
-            if denial is not None:
-                return self._deny(request, denial)
+            active = self._in_flight.get(key)
+            if active is not None:
+                if active.fingerprint != fingerprint:
+                    raise CapabilityError("idempotency_conflict")
+                owner = False
+            else:
+                active = _InFlightCapability(
+                    fingerprint=fingerprint,
+                    done=threading.Event(),
+                )
+                self._in_flight[key] = active
+                owner = True
 
-        decision_sequence = self.journal.append(
-            "capability.decision",
-            {
-                "action": request.name,
-                "idempotency_key": request.idempotency_key,
-                "request_id": request.request_id,
-                "risk": spec.risk.value,
-            },
-        )
-        prepared_sequence = None
-        if spec.mutating:
-            prepared_sequence = self.journal.append(
-                "capability.prepared",
+        if not owner:
+            active.done.wait()
+            with self._lock:
+                existing = self._receipts.get(key)
+                if existing is not None:
+                    return existing.as_replay()
+                raise CapabilityError(
+                    active.error_code or "capability_execution_aborted"
+                )
+
+        try:
+            receipt = self._execute_once(request, lease=lease)
+            with self._lock:
+                self._fingerprints[key] = fingerprint
+                self._receipts[key] = receipt
+            return receipt
+        except CapabilityError as error:
+            with self._lock:
+                active.error_code = error.code
+            raise
+        except BaseException:
+            with self._lock:
+                active.error_code = "capability_execution_aborted"
+            raise
+        finally:
+            with self._lock:
+                self._in_flight.pop(key, None)
+                active.done.set()
+
+    def _execute_once(
+        self,
+        request: CapabilityRequest,
+        *,
+        lease: DecisionLease | None,
+    ) -> CapabilityReceipt:
+        with self._lock:
+            now = self.clock()
+            spec = self._specs.get(request.name)
+            adapter = self._adapters.get(request.name)
+            if spec is None or adapter is None:
+                return self._deny(request, "capability_unknown")
+            if now >= request.deadline:
+                return self._deny(request, "capability_deadline_expired")
+            if spec.risk is RiskTier.R4:
+                return self._deny(request, "r4_disabled")
+            fields = set(request.arguments)
+            if not spec.required_fields.issubset(fields):
+                return self._deny(request, "capability_fields_missing")
+            if fields - spec.required_fields - spec.optional_fields:
+                return self._deny(request, "capability_fields_unknown")
+            if spec.mutating:
+                denial = self._validate_mutation(request, spec, lease, now)
+                if denial is not None:
+                    return self._deny(request, denial)
+
+            self.journal.append(
+                "capability.decision",
                 {
-                    "argument_digest": canonical_digest(dict(request.arguments)),
+                    "action": request.name,
                     "idempotency_key": request.idempotency_key,
-                    "lease_id": lease.lease_id if lease else None,
                     "request_id": request.request_id,
+                    "risk": spec.risk.value,
                 },
             )
-            if lease is not None and lease.single_use:
-                self._consumed_leases.add(lease.lease_id)
+            prepared_sequence = None
+            if spec.mutating:
+                prepared_sequence = self.journal.append(
+                    "capability.prepared",
+                    {
+                        "argument_digest": canonical_digest(
+                            dict(request.arguments)
+                        ),
+                        "idempotency_key": request.idempotency_key,
+                        "lease_id": lease.lease_id if lease else None,
+                        "request_id": request.request_id,
+                    },
+                )
+                if lease is not None and lease.single_use:
+                    self._consumed_leases.add(lease.lease_id)
 
         reconciled = False
         try:
@@ -238,7 +311,9 @@ class CapabilityGateway:
                 status = "indeterminate"
             else:
                 result = dict(adapter.reconcile(request, error.external_id))
-                status = "succeeded" if result.get("authoritative") else "indeterminate"
+                status = (
+                    "succeeded" if result.get("authoritative") else "indeterminate"
+                )
                 reconciled = True
         except Exception as error:  # noqa: BLE001 - stable external boundary
             result = {"error_type": type(error).__name__}
@@ -253,7 +328,7 @@ class CapabilityGateway:
                 "status": status,
             },
         )
-        receipt = CapabilityReceipt(
+        return CapabilityReceipt(
             request_id=request.request_id,
             idempotency_key=request.idempotency_key,
             status=status,
@@ -262,9 +337,6 @@ class CapabilityGateway:
             completed_sequence=completed_sequence,
             reconciled=reconciled,
         )
-        self._fingerprints[request.idempotency_key] = request.fingerprint
-        self._receipts[request.idempotency_key] = receipt
-        return receipt
 
     def _validate_mutation(
         self,
@@ -273,7 +345,10 @@ class CapabilityGateway:
         lease: DecisionLease | None,
         now: int,
     ) -> str | None:
-        if request.origin is TrustClass.UNTRUSTED and not request.human_confirmation_digest:
+        if (
+            request.origin is TrustClass.UNTRUSTED
+            and not request.human_confirmation_digest
+        ):
             return "untrusted_content_cannot_authorize_mutation"
         if lease is None:
             return "decision_lease_required"
@@ -286,13 +361,15 @@ class CapabilityGateway:
             or lease.device_id != request.device_id
             or lease.task_id != request.task_id
             or lease.action != request.name
-            or lease.argument_digest != canonical_digest(dict(request.arguments))
+            or lease.argument_digest
+            != canonical_digest(dict(request.arguments))
         ):
             return "decision_lease_binding_mismatch"
         if spec.risk is RiskTier.R3 and not lease.biometric_verified:
             return "biometric_confirmation_required"
-        if request.human_confirmation_digest is not None and (
-            request.human_confirmation_digest != lease.argument_digest
+        if (
+            request.human_confirmation_digest is not None
+            and request.human_confirmation_digest != lease.argument_digest
         ):
             return "confirmation_digest_mismatch"
         return None
@@ -307,7 +384,7 @@ class CapabilityGateway:
                 "request_id": request.request_id,
             },
         )
-        receipt = CapabilityReceipt(
+        return CapabilityReceipt(
             request_id=request.request_id,
             idempotency_key=request.idempotency_key,
             status="denied",
@@ -316,9 +393,6 @@ class CapabilityGateway:
             completed_sequence=sequence,
             reconciled=False,
         )
-        self._fingerprints[request.idempotency_key] = request.fingerprint
-        self._receipts[request.idempotency_key] = receipt
-        return receipt
 
 
 class InMemoryReminderAdapter:
@@ -327,28 +401,35 @@ class InMemoryReminderAdapter:
     def __init__(self) -> None:
         self._records: dict[str, dict[str, Any]] = {}
         self.indeterminate_once = False
+        self.execution_count = 0
+        self._lock = threading.RLock()
 
     def execute(self, request: CapabilityRequest) -> Mapping[str, Any]:
         external_id = f"reminder:{request.idempotency_key}"
-        record = self._records.setdefault(
-            external_id,
-            {
-                "authoritative": True,
-                "external_id": external_id,
-                "title_hash": hashlib.sha256(
-                    str(request.arguments["title"]).encode("utf-8")
-                ).hexdigest(),
-            },
-        )
-        if self.indeterminate_once:
-            self.indeterminate_once = False
-            raise IndeterminateEffect(external_id)
-        return record
+        with self._lock:
+            self.execution_count += 1
+            record = self._records.setdefault(
+                external_id,
+                {
+                    "authoritative": True,
+                    "external_id": external_id,
+                    "title_hash": hashlib.sha256(
+                        str(request.arguments["title"]).encode("utf-8")
+                    ).hexdigest(),
+                },
+            )
+            if self.indeterminate_once:
+                self.indeterminate_once = False
+                raise IndeterminateEffect(external_id)
+            return dict(record)
 
     def reconcile(
         self, request: CapabilityRequest, external_id: str
     ) -> Mapping[str, Any]:
-        return self._records.get(
-            external_id,
-            {"authoritative": False, "external_id": external_id},
-        )
+        with self._lock:
+            return dict(
+                self._records.get(
+                    external_id,
+                    {"authoritative": False, "external_id": external_id},
+                )
+            )

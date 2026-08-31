@@ -1,5 +1,3 @@
-// ignore_for_file: library_private_types_in_public_api
-
 import 'dart:async';
 
 import 'package:demo_ai_even/ble_manager.dart';
@@ -13,165 +11,198 @@ class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  _HomePageState createState() => _HomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  Timer? scanTimer;
-  bool isScanning = false;
+  Timer? _scanTimer;
+  bool _isScanning = false;
 
   @override
   void initState() {
     super.initState();
-    BleManager.get().setMethodCallHandler();
-    BleManager.get().startListening();
-    BleManager.get().onStatusChanged = _refreshPage;
+    final manager = BleManager.get();
+    manager.setMethodCallHandler();
+    manager.startListening();
+    manager.onStatusChanged = _refreshPage;
   }
 
-  void _refreshPage() => setState(() {});
-
-  Future<void> _startScan() async {
-    setState(() => isScanning = true);
-    await BleManager.get().startScan();
-    scanTimer?.cancel();
-    scanTimer = Timer(15.seconds, () {
-      // todo
-      _stopScan();
-    });
-  }
-
-  Future<void> _stopScan() async {
-    if (isScanning) {
-      await BleManager.get().stopScan();
-      setState(() => isScanning = false);
+  void _refreshPage() {
+    if (mounted) {
+      setState(() {});
     }
   }
 
-  Widget blePairedList() => Expanded(
-        child: ListView.separated(
-          separatorBuilder: (context, index) => const SizedBox(height: 5),
-          itemCount: BleManager.get().getPairedGlasses().length,
-          itemBuilder: (context, index) {
-            final glasses = BleManager.get().getPairedGlasses()[index];
-            return GestureDetector(
-              onTap: () async {
-                String channelNumber = glasses['channelNumber']!;
-                await BleManager.get().connectToGlasses("Pair_$channelNumber");
-                _refreshPage();
-              },
-              child: Container(
-                height: 72,
-                padding: const EdgeInsets.only(left: 16, right: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Pair: ${glasses['channelNumber']}'),
-                        Text(
-                            'Left: ${glasses['leftDeviceName']} \nRight: ${glasses['rightDeviceName']}'),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
+  Future<void> _startScan() async {
+    if (_isScanning || BleManager.get().isConnected) {
+      return;
+    }
+    setState(() => _isScanning = true);
+    await BleManager.get().startScan();
+    _scanTimer?.cancel();
+    _scanTimer = Timer(
+      const Duration(seconds: 15),
+      () => unawaited(_stopScan()),
+    );
+  }
+
+  Future<void> _stopScan() async {
+    if (!_isScanning) {
+      return;
+    }
+    _scanTimer?.cancel();
+    _scanTimer = null;
+    await BleManager.get().stopScan();
+    if (mounted) {
+      setState(() => _isScanning = false);
+    } else {
+      _isScanning = false;
+    }
+  }
+
+  Widget _pairedGlassesList() {
+    final glasses = BleManager.get().getPairedGlasses();
+    if (glasses.isEmpty) {
+      return Expanded(
+        child: Center(
+          child: Text(
+            _isScanning
+                ? 'Scanning for a complete left/right G1 pair…'
+                : 'Tap the connection card to scan for glasses.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.grey),
+          ),
         ),
       );
+    }
+    return Expanded(
+      child: ListView.separated(
+        separatorBuilder: (BuildContext context, int index) =>
+            const SizedBox(height: 8),
+        itemCount: glasses.length,
+        itemBuilder: (BuildContext context, int index) {
+          final pair = glasses[index];
+          final channel = pair['channelNumber'];
+          if (channel == null || channel.isEmpty) {
+            return const SizedBox.shrink();
+          }
+          return Card(
+            child: ListTile(
+              title: Text('Pair $channel'),
+              subtitle: Text(
+                'Left: ${pair['leftDeviceName'] ?? 'unknown'}\n'
+                'Right: ${pair['rightDeviceName'] ?? 'unknown'}',
+              ),
+              onTap: () async {
+                await _stopScan();
+                await BleManager.get().connectToGlasses('Pair_$channel');
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: const Text('Even AI Demo'),
-          actions: [
-            InkWell(
-              onTap: () {
-                print("To Features Page...");
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const FeaturesPage()),
-                );
-              },
-              splashColor: Colors.transparent,
-              highlightColor: Colors.transparent,
-              child: const Padding(
-                padding:
-                    EdgeInsets.only(left: 16, top: 12, bottom: 14, right: 16),
-                child: Icon(Icons.menu),
-              ),
-            ),
-          ],
-        ),
-        body: Padding(
-          padding:
-              const EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 44),
+  Widget build(BuildContext context) {
+    final manager = BleManager.get();
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Hepta Glasses'),
+        actions: <Widget>[
+          IconButton(
+            tooltip: 'Features',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (BuildContext context) => const FeaturesPage(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.menu),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [
-              GestureDetector(
-                onTap: () async {
-                  if (BleManager.get().getConnectionStatus() ==
-                      'Not connected') {
-                    _startScan();
-                  }
-                },
-                child: Container(
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(5),
+            children: <Widget>[
+              Semantics(
+                button: !manager.isConnected,
+                label: manager.isConnected
+                    ? manager.getConnectionStatus()
+                    : 'Scan for a paired left and right G1 device',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: manager.isConnected || _isScanning ? null : _startScan,
+                  child: Container(
+                    width: double.infinity,
+                    constraints: const BoxConstraints(minHeight: 100),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    alignment: Alignment.center,
+                    child: _isScanning
+                        ? const Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              CircularProgressIndicator(),
+                              SizedBox(height: 12),
+                              Text('Scanning…'),
+                            ],
+                          )
+                        : Text(
+                            manager.getConnectionStatus(),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 16),
+                          ),
                   ),
-                  alignment: Alignment.center,
-                  child: Text(BleManager.get().getConnectionStatus(),
-                      style: const TextStyle(fontSize: 16)),
                 ),
               ),
               const SizedBox(height: 16),
-              if (BleManager.get().getConnectionStatus() == 'Not connected')
-                blePairedList(),
-              if (BleManager.get().isConnected)
+              if (!manager.isConnected) _pairedGlassesList(),
+              if (manager.isConnected)
                 Expanded(
-                  child: GestureDetector(
-                    onTap: () async {
-                      // todo
-                      print("To AI History List...");
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const EvenAIListPage(),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (BuildContext context) =>
+                              const EvenAIListPage(),
                         ),
                       );
                     },
                     child: Container(
-                      color: Colors.white,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       padding: const EdgeInsets.all(16),
                       alignment: Alignment.topCenter,
                       child: SingleChildScrollView(
                         child: StreamBuilder<String>(
                           stream: EvenAI.textStream,
                           initialData:
-                              "Press and hold left TouchBar to engage Even AI.",
-                          builder: (context, snapshot) => Obx(
+                              'Press and hold the left TouchBar to start.',
+                          builder: (
+                            BuildContext context,
+                            AsyncSnapshot<String> snapshot,
+                          ) =>
+                              Obx(
                             () => EvenAI.isEvenAISyncing.value
-                                ? const SizedBox(
-                                    width: 50,
-                                    height: 50,
+                                ? const Padding(
+                                    padding: EdgeInsets.all(24),
                                     child: CircularProgressIndicator(),
-                                  ) // Color(0xFFFEF991)
+                                  )
                                 : Text(
-                                    snapshot.data ?? "Loading...",
-                                    style: TextStyle(
-                                        fontSize: 14,
-                                        color: BleManager.get().isConnected
-                                            ? Colors.black
-                                            : Colors.grey.withOpacity(0.5)),
+                                    snapshot.data ?? 'No assistant response.',
+                                    style: const TextStyle(fontSize: 14),
                                     textAlign: TextAlign.center,
                                   ),
                           ),
@@ -183,12 +214,16 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
-      );
+      ),
+    );
+  }
 
   @override
   void dispose() {
-    scanTimer?.cancel();
-    isScanning = false;
+    _scanTimer?.cancel();
+    if (_isScanning) {
+      unawaited(BleManager.get().stopScan());
+    }
     BleManager.get().onStatusChanged = null;
     super.dispose();
   }

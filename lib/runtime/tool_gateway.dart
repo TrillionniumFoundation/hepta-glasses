@@ -406,6 +406,12 @@ final class ToolGateway {
       context: context,
       lease: lease,
     );
+    if (decision.allowed) {
+      // Reserve single-use authority before the first asynchronous boundary.
+      // Otherwise a second idempotency key can evaluate the same lease while
+      // this request is waiting for its decision/prepared journal writes.
+      _policy.consume(lease);
+    }
     await _journal.append('tool.decision', <String, Object?>{
       'request_id': request.requestId,
       'task_id': request.taskId,
@@ -439,7 +445,6 @@ final class ToolGateway {
         'started_at': startedAt.toIso8601String(),
       });
     }
-    _policy.consume(lease);
 
     try {
       final remaining = request.deadline.difference(_clock.now());

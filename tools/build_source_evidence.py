@@ -81,6 +81,8 @@ def main() -> int:
         raise SystemExit("history scan did not bind to the exact source head")
     if history["finding_count"] != 0:
         raise SystemExit("history scan found candidate secret material")
+    if history["unscanned_blob_count"] != 0:
+        raise SystemExit("history scan left one or more blobs unscanned")
     history_digest = write_json(output / "source-history-scan.json", history)
 
     native_source = args.native_sanitizer_report
@@ -150,6 +152,7 @@ def main() -> int:
                 "commit_count": history["commit_count"],
                 "scanned_blob_count": history["scanned_blob_count"],
                 "finding_count": history["finding_count"],
+                "unscanned_blob_count": history["unscanned_blob_count"],
             },
             "native_sanitizer": {
                 "sha256": native_digest,
@@ -173,6 +176,7 @@ def main() -> int:
         "file_count": len(sbom["files"]),
         "history_commit_count": history["commit_count"],
         "history_finding_count": history["finding_count"],
+        "history_unscanned_blob_count": history["unscanned_blob_count"],
         "native_sanitizer_digest": native_digest,
         "package_count": len(sbom["packages"]),
         "provenance_digest": provenance_digest,

@@ -8,6 +8,7 @@ from services.model_gateway.app import (
     authorize,
     deterministic_answer,
     validate_chat_request,
+    validate_server_token,
 )
 
 
@@ -32,7 +33,19 @@ class ModelGatewayTest(unittest.TestCase):
     def test_token_comparison(self) -> None:
         self.assertTrue(authorize("Bearer expected", "expected"))
         self.assertFalse(authorize("Bearer wrong", "expected"))
-        self.assertTrue(authorize(None, None))
+        self.assertFalse(authorize(None, None))
+
+    def test_server_token_is_mandatory_and_bounded(self) -> None:
+        with self.assertRaises(RequestError) as missing:
+            validate_server_token(None)
+        self.assertEqual(
+            missing.exception.code,
+            "gateway_token_missing_or_too_short",
+        )
+        with self.assertRaises(RequestError):
+            validate_server_token("short")
+        token = "t" * 32
+        self.assertEqual(validate_server_token(token), token)
 
 
 if __name__ == "__main__":

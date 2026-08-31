@@ -8,5 +8,13 @@
   "maximum_prompt_characters": 24000,
   "maximum_timeout_seconds": 1800,
   "maximum_output_bytes": 4194304,
-  "executable": "codex"
+  "executable": "codex",
+  "maximum_workspace_entries": 100000,
+  "network_isolation_command": [
+    "unshare",
+    "--user",
+    "--map-root-user",
+    "--net",
+    "--"
+  ]
 }

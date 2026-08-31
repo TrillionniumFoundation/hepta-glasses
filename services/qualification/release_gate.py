@@ -52,7 +52,7 @@ class ReleaseGate:
     def __init__(
         self,
         *,
-        expected_contracts_version: str = "2026-08-31-g5",
+        expected_contracts_version: str = "2026-08-31-g7",
     ) -> None:
         if not expected_contracts_version:
             raise ReleaseGateError("contracts_version_invalid")
@@ -95,7 +95,8 @@ class ReleaseGate:
             and history.get("scope") == "all-fetched-refs-and-deduplicated-blobs"
             and int(history.get("commit_count", 0)) > 0
             and int(history.get("scanned_blob_count", 0)) > 0
-            and int(history.get("finding_count", -1)) == 0,
+            and int(history.get("finding_count", -1)) == 0
+            and int(history.get("unscanned_blob_count", -1)) == 0,
             "native_sanitizer": self._digest(sanitizer.get("sha256"), 64)
             and sanitizer.get("passed") is True
             and sanitizer.get("lc3_cross_platform_parity") is True,
@@ -160,6 +161,7 @@ class ReleaseGate:
             )
             checks["artifact_history_content"] = (
                 report.get("finding_count") == 0
+                and report.get("unscanned_blob_count") == 0
                 and report.get("head") == source.get("commit")
                 and report.get("scope")
                 == "all-fetched-refs-and-deduplicated-blobs"

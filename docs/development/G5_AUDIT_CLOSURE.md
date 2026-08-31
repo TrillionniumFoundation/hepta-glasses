@@ -1,33 +1,35 @@
-# G5 independent-audit source closure
+# G5 independent-audit source package
 
 Revision: `2026-08-31-g5`
 
-This package closes repository-actionable defects discovered after the G4
-candidate. It does not claim physical-device, deployed-infrastructure,
-independent-assurance, signing, pilot, or public-release evidence.
+This historical package introduced repository-side audit, supply-chain, history,
+native-sanitizer, and evidence-gate controls after the G4 candidate. Its G5/G6
+exact-head runs remained red, so the package by itself is not E4 evidence. The
+controls and their subsequent repairs are converged by revision g7.
 
-## Closure map
+## Introduced controls
 
-- `HG-0035`: OS advisory lock, atomic checkpoint, crash repair, cross-instance
-  tests, torn-tail rejection, and no temporary-storage fallback.
-- `HG-0036`: deterministic SPDX packages and relationships for Pub, Gradle,
-  CocoaPods, and vendored native code.
-- `HG-0037`: every fetched ref and deduplicated Git blob is scanned; possible
-  secrets are represented only by SHA-256 fingerprints.
-- `HG-0038`: source-gate evaluation recomputes artifact digests and reads the
-  history/native report content.
-- `HG-0039`: machine-readable LC3/RNNoise supplier, license, path, PURL, and
-  unknown-revision truth.
-- `HG-0040`: both platform LC3 copies and RNNoise run under ASAN/UBSAN; identical
-  inputs must produce identical Android/iOS PCM digests.
+- process-safe audit locking, atomic checkpoints, crash repair, torn-tail
+  rejection, and fail-closed durable startup;
+- deterministic SPDX packages and relationships for Pub, Gradle, CocoaPods, and
+  vendored native code;
+- redacted all-ref Git history scanning;
+- release evaluation that recomputes artifact digests and reads history/native
+  report content;
+- machine-readable LC3/RNNoise supplier, license, path, PURL, and
+  unknown-revision truth;
+- ASAN/UBSAN execution of both platform LC3 copies and RNNoise with PCM parity.
 
-## Exact-head rule
+## Superseding closure
 
-Closure becomes E4 only after the final G5 head completes all required jobs and
-its downloaded `hepta-source-evidence-<sha>` artifact is independently checked.
-A passing parent commit or the source-export workflow is not sufficient.
+`docs/development/G7_SOURCE_CONVERGENCE.md` closes the source defects exposed by
+the red G5/G6 matrices, including formatter drift, sanitizer execution/UB,
+incomplete history scanning, mobile correctness, concurrency, package
+integrity, and worker isolation.
 
-## External handoff
+## Evidence ceiling
 
-`HG-0015` through `HG-0020` and `HG-0041` through `HG-0043` remain blocked until
-real E5-E7 evidence is supplied. No source-only override exists.
+Neither this package nor g7 can claim physical devices, deployed
+infrastructure, provider-side credential rotation, repository administration,
+vendor firmware, independent assurance, signing, pilot, or release. Those
+remain external E5–E7 gates.
