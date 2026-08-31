@@ -1,0 +1,110 @@
+name: g8-pass1-materialize
+
+on:
+  push:
+    branches:
+      - work/hepta-g8-pass1-20260901
+
+permissions:
+  contents: write
+
+concurrency:
+  group: g8-pass1-materialize
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: codex/hepta-glasses-gap-closure-g8
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify expected parent
+        run: test "$(git rev-parse HEAD)" = "3edebbea61e2a8f190e4478fea813ccd304032dd"
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - run: flutter pub get
+      - name: Make Android Handler creation JVM-test safe
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('android/app/src/main/kotlin/com/example/demo_ai_even/model/BleDevice.kt')
+          text = path.read_text()
+          old = '''    private val writeQueue = BoundedWriteQueue(capacity = 128)
+              private val writeHandler = Handler(Looper.getMainLooper())
+
+              @Volatile
+              private var drainScheduled = false
+          '''.replace('      ', '')
+          new = '''    private val writeQueue = BoundedWriteQueue(capacity = 128)
+
+              @Volatile
+              private var writeHandler: Handler? = null
+
+              @Volatile
+              private var drainScheduled = false
+
+              private fun mainHandler(): Handler {
+                  writeHandler?.let { return it }
+                  return synchronized(this) {
+                      writeHandler ?: Handler(Looper.getMainLooper()).also {
+                          writeHandler = it
+                      }
+                  }
+              }
+          '''.replace('      ', '')
+          if old not in text:
+              raise SystemExit('BleDevice Handler declaration did not match expected source')
+          text = text.replace(old, new, 1)
+          text = text.replace('        writeHandler.post(::drainOne)', '        mainHandler().post(::drainOne)', 1)
+          text = text.replace('        writeHandler.postDelayed(::drainOne, WRITE_INTERVAL_MS)', '        mainHandler().postDelayed(::drainOne, WRITE_INTERVAL_MS)', 1)
+          text = text.replace(
+              '        writeHandler.removeCallbacksAndMessages(null)\n',
+              '        writeHandler?.removeCallbacksAndMessages(null)\n        writeHandler = null\n',
+              1,
+          )
+          path.write_text(text)
+          PY
+      - name: Apply canonical Dart formatting
+        run: dart format lib test
+      - name: Verify dependency resolution did not mutate lockfile
+        run: git diff --exit-code -- pubspec.lock
+      - name: Analyze and test Flutter
+        run: |
+          flutter analyze --no-fatal-infos
+          flutter test
+      - name: Build and test Android
+        run: |
+          flutter build apk --debug
+          cd android
+          ./gradlew testDebugUnitTest
+      - name: Restrict materialized diff
+        run: |
+          set -euo pipefail
+          allowed='^(lib/ble_manager.dart|lib/controllers/bmp_update_manager.dart|lib/services/evenai.dart|lib/views/home_page.dart|test/runtime/audit_journal_test.dart|test/runtime/bmp_update_manager_test.dart|test/runtime/ios_speech_finalization_contract_test.dart|android/app/src/main/kotlin/com/example/demo_ai_even/model/BleDevice.kt)$'
+          git diff --name-only | tee /tmp/changed-files.txt
+          test -s /tmp/changed-files.txt
+          if grep -Ev "$allowed" /tmp/changed-files.txt; then
+            echo 'Unexpected file changed' >&2
+            exit 1
+          fi
+          git diff --check
+      - name: Commit verified fixes to candidate
+        run: |
+          git config user.name 'hepta-g8-automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add lib test android/app/src/main/kotlin/com/example/demo_ai_even/model/BleDevice.kt
+          git commit -m 'fix(g8): close exact-head format and Android JVM test blockers'
+          git push origin HEAD:codex/hepta-glasses-gap-closure-g8
