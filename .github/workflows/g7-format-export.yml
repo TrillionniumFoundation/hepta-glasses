@@ -21,7 +21,8 @@ jobs:
     env:
       TARGET_SHA: 1be0adc5bb738b2dcd87eefe0c3d67276575131d
       TARGET_BRANCH: codex/hepta-glasses-gap-closure-g7
-      HISTORY_PATCH_BLOB: 7412b7ea661385621aaae76dc789133d8dd64a89
+      BUNDLE_SHA256: 1491b92f8b884cd66448941429751791b0a791b6ad4738979a4e94594e46146d
+      PAYLOAD_SHA256: 9a387043752025aff734ff51abbb57da3d82c01bec191a2098e7930cbf41b858
     steps:
       - name: Check out exact bootstrap source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -29,11 +30,13 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: true
-      - name: Capture and verify bounded history patch
+      - name: Capture and verify formatted source bundle
         run: |
           set -euo pipefail
-          test "$(git hash-object tools/g7-history-fixture.patch)" = "$HISTORY_PATCH_BLOB"
-          cp tools/g7-history-fixture.patch /tmp/g7-history-fixture.patch
+          cp tools/g7-six-files.tar.gz.b64 /tmp/g7-six-files.tar.gz.b64
+          printf '%s  %s\n' "$PAYLOAD_SHA256" /tmp/g7-six-files.tar.gz.b64 | sha256sum -c -
+          base64 -d /tmp/g7-six-files.tar.gz.b64 > /tmp/g7-six-files.tar.gz
+          printf '%s  %s\n' "$BUNDLE_SHA256" /tmp/g7-six-files.tar.gz | sha256sum -c -
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: '3.47.2'
@@ -42,23 +45,20 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
-      - name: Apply exact fix and format with release Dart
+      - name: Restore exact files and run full source qualification
         run: |
           set -euo pipefail
           git checkout --detach "$TARGET_SHA"
-          git apply --index --whitespace=error-all /tmp/g7-history-fixture.patch
-          flutter pub get
-          dart format \
-            lib/controllers/bmp_update_manager.dart \
-            lib/services/evenai.dart \
-            test/runtime/audit_journal_test.dart \
-            test/runtime/bmp_update_manager_test.dart
+          tar -xzf /tmp/g7-six-files.tar.gz
           git add \
+            tools/scan_git_history.py \
+            services/qualification/test_history_scan.py \
             lib/controllers/bmp_update_manager.dart \
             lib/services/evenai.dart \
             test/runtime/audit_journal_test.dart \
             test/runtime/bmp_update_manager_test.dart
           git diff --cached --check
+          flutter pub get
           dart format --output=none --set-exit-if-changed lib test
           flutter analyze --no-fatal-infos
           flutter test
@@ -75,7 +75,7 @@ jobs:
           tree="$(git write-tree)"
           commit="$(printf '%s\n\n%s\n' \
             'fix(g7): close format and synthetic-history blockers' \
-            'Uses Flutter 3.47.2 formatting and an exact object/path/fingerprint fixture allowlist.' \
+            'Restores the Flutter 3.47.2-formatted files and exact object/path/fingerprint fixture allowlist.' \
             | git commit-tree "$tree" -p "$TARGET_SHA")"
           git push \
             --force-with-lease="refs/heads/${TARGET_BRANCH}:${TARGET_SHA}" \
