@@ -1,0 +1,354 @@
+{
+  "captured_at_unix": 1788203925,
+  "formal_ci": {
+    "conclusion": "failure",
+    "jobs": {
+      "android-native": "failure",
+      "flutter": "failure",
+      "ios-native": "success",
+      "native-sanitizers": "success",
+      "repository-contracts": "success",
+      "secret-and-boundary-scan": "failure",
+      "source-evidence": "skipped"
+    },
+    "matrix_success": false,
+    "run_id": 33428154221,
+    "status": "completed"
+  },
+  "gap_ledger": {
+    "item_count": 51,
+    "non_closed": [
+      {
+        "id": "HG-0001",
+        "owner": "repository",
+        "status": "CLOSED_SOURCE",
+        "title": "Empty product README and no canonical entry point"
+      },
+      {
+        "id": "HG-0002",
+        "owner": "repository",
+        "status": "CLOSED_SOURCE",
+        "title": "No canonical development plan or exact current-state truth"
+      },
+      {
+        "id": "HG-0003",
+        "owner": "edge-runtime",
+        "status": "CLOSED_SOURCE",
+        "title": "Mobile client directly targeted external model providers"
+      },
+      {
+        "id": "HG-0004",
+        "owner": "runtime",
+        "status": "CLOSED_SOURCE",
+        "title": "No typed Agent, task, lease, tool, display, or skill contracts"
+      },
+      {
+        "id": "HG-0005",
+        "owner": "device-hal",
+        "status": "CLOSED_SOURCE",
+        "title": "Protocol framing mixed with global BLE state"
+      },
+      {
+        "id": "HG-0006",
+        "owner": "device-hal",
+        "status": "CLOSED_SOURCE",
+        "title": "No explicit dual-leg idempotency or degraded-state receipt"
+      },
+      {
+        "id": "HG-0007",
+        "owner": "simulator",
+        "status": "CLOSED_SOURCE",
+        "title": "No digital twin or deterministic fault injection"
+      },
+      {
+        "id": "HG-0008",
+        "owner": "runtime",
+        "status": "CLOSED_SOURCE",
+        "title": "No durable audit or recoverable task lifecycle"
+      },
+      {
+        "id": "HG-0009",
+        "owner": "security",
+        "status": "CLOSED_SOURCE",
+        "title": "No deny-by-default policy or single-use decision lease"
+      },
+      {
+        "id": "HG-0010",
+        "owner": "runtime",
+        "status": "CLOSED_SOURCE",
+        "title": "No journal-before-effect tool authority and replay-safe receipt"
+      },
+      {
+        "id": "HG-0011",
+        "owner": "privacy",
+        "status": "CLOSED_SOURCE",
+        "title": "Sensitive transcript and answer logging in current AI flow"
+      },
+      {
+        "id": "HG-0012",
+        "owner": "repository",
+        "status": "CLOSED_SOURCE",
+        "title": "No CI, repository validation, or meaningful tests"
+      },
+      {
+        "id": "HG-0013",
+        "owner": "codex-worker",
+        "status": "CLOSED_SOURCE",
+        "title": "No source Codex specialist boundary"
+      },
+      {
+        "id": "HG-0014",
+        "owner": "tooling",
+        "status": "CLOSED_SOURCE",
+        "title": "No MCP development surface"
+      },
+      {
+        "id": "HG-0015",
+        "owner": "device-lab",
+        "status": "BLOCKED_EXTERNAL",
+        "title": "Physical G1 protocol, latency, power, thermal, and soak evidence absent"
+      },
+      {
+        "id": "HG-0016",
+        "owner": "cloud-platform",
+        "status": "BLOCKED_EXTERNAL",
+        "title": "Production identity, device attestation, short-lived tokens, and revoke service absent"
+      },
+      {
+        "id": "HG-0017",
+        "owner": "repository-admin",
+        "status": "BLOCKED_ADMIN_SETTING",
+        "title": "Main branch protection disabled"
+      },
+      {
+        "id": "HG-0018",
+        "owner": "vendor-integration",
+        "status": "BLOCKED_UPSTREAM",
+        "title": "G1 firmware, bootloader, and signed OTA development access absent"
+      },
+      {
+        "id": "HG-0019",
+        "owner": "product-platform",
+        "status": "BLOCKED_EXTERNAL",
+        "title": "Production realtime voice, OAuth capability adapters, and external reconciliation absent"
+      },
+      {
+        "id": "HG-0020",
+        "owner": "release",
+        "status": "BLOCKED_EXTERNAL",
+        "title": "Independent review, pilot, staged rollout, signing, and release drills absent"
+      },
+      {
+        "id": "HG-0021",
+        "owner": "cloud-platform",
+        "status": "CLOSED_SOURCE",
+        "title": "No production control-plane source contract for identity, rotation, rate limits, and revocation"
+      },
+      {
+        "id": "HG-0022",
+        "owner": "realtime",
+        "status": "CLOSED_SOURCE",
+        "title": "No one-time realtime bootstrap or generation-fenced barge-in state machine"
+      },
+      {
+        "id": "HG-0023",
+        "owner": "capability-runtime",
+        "status": "CLOSED_SOURCE",
+        "title": "No typed OAuth capability adapter, Prompt Injection boundary, or authoritative reconciliation reference"
+      },
+      {
+        "id": "HG-0024",
+        "owner": "skills-memory",
+        "status": "CLOSED_SOURCE",
+        "title": "No signed Skill admission, upgrade re-consent, revoke, or user-approved Memory lifecycle"
+      },
+      {
+        "id": "HG-0025",
+        "owner": "device-lab",
+        "status": "CLOSED_SOURCE",
+        "title": "No machine evaluator for physical Android/iOS G1 traces"
+      },
+      {
+        "id": "HG-0026",
+        "owner": "release",
+        "status": "CLOSED_SOURCE",
+        "title": "No source SBOM, provenance, release evidence bundle, or non-overridable release gate"
+      },
+      {
+        "id": "HG-0027",
+        "owner": "repository",
+        "status": "CLOSED_SOURCE",
+        "title": "No canonical branch-protection contract or apply/verify automation"
+      },
+      {
+        "id": "HG-0028",
+        "owner": "repository",
+        "status": "CLOSED_SOURCE",
+        "title": "Exact-head CI, formatting, Gradle migration, and CocoaPods locks were inconsistent"
+      },
+      {
+        "id": "HG-0029",
+        "owner": "cloud-platform",
+        "status": "CLOSED_SOURCE",
+        "title": "Control-plane audience mismatch escaped the stable identity error contract"
+      },
+      {
+        "id": "HG-0030",
+        "owner": "runtime",
+        "status": "CLOSED_SOURCE",
+        "title": "Audit append, ToolGateway idempotency, and physical-effect scheduling had concurrency windows"
+      },
+      {
+        "id": "HG-0031",
+        "owner": "native-audio",
+        "status": "CLOSED_SOURCE",
+        "title": "Native LC3 decoders lacked strict frame, allocation, and session-boundary safety"
+      },
+      {
+        "id": "HG-0032",
+        "owner": "device-hal",
+        "status": "CLOSED_SOURCE",
+        "title": "Dual-leg readiness and stale callback truth were collapsed or weakly correlated"
+      },
+      {
+        "id": "HG-0033",
+        "owner": "assistant-runtime",
+        "status": "CLOSED_SOURCE",
+        "title": "Assistant completion could precede final ASR or final display acknowledgement"
+      },
+      {
+        "id": "HG-0034",
+        "owner": "release",
+        "status": "CLOSED_SOURCE",
+        "title": "Native tests and release-safe mobile configuration were not enforced by CI"
+      },
+      {
+        "id": "HG-0035",
+        "owner": "runtime",
+        "status": "CLOSED_SOURCE",
+        "title": "Audit journal lacked process-safe locking and recoverable atomic checkpoints"
+      },
+      {
+        "id": "HG-0036",
+        "owner": "release",
+        "status": "CLOSED_SOURCE",
+        "title": "Source SBOM did not cover Pub, Gradle, CocoaPods, and vendored native components deterministically"
+      },
+      {
+        "id": "HG-0037",
+        "owner": "security",
+        "status": "CLOSED_SOURCE",
+        "title": "Git history scanner did not fail closed on binary or oversized blobs"
+      },
+      {
+        "id": "HG-0038",
+        "owner": "release",
+        "status": "CLOSED_SOURCE",
+        "title": "Source release gate accepted digest-shaped claims without re-reading evidence content"
+      },
+      {
+        "id": "HG-0039",
+        "owner": "supply-chain",
+        "status": "CLOSED_SOURCE",
+        "title": "Vendored LC3 and RNNoise supplier, license, path, and unknown-revision truth were not machine-readable"
+      },
+      {
+        "id": "HG-0040",
+        "owner": "native-audio",
+        "status": "CLOSED_SOURCE",
+        "title": "Both LC3 copies and RNNoise were not exercised under ASAN/UBSAN with cross-platform PCM parity"
+      },
+      {
+        "id": "HG-0041",
+        "owner": "security-operations",
+        "status": "BLOCKED_EXTERNAL",
+        "title": "Provider-side rotation or revocation evidence for the historically exposed credential is absent"
+      },
+      {
+        "id": "HG-0042",
+        "owner": "repository",
+        "status": "CLOSED_SOURCE",
+        "title": "G6 exact-head Flutter formatting, native sanitizer, history scan, and source-evidence lanes were red"
+      },
+      {
+        "id": "HG-0043",
+        "owner": "independent-reviewer",
+        "status": "BLOCKED_EXTERNAL",
+        "title": "Independent exact-head approval for the converged source candidate is absent"
+      },
+      {
+        "id": "HG-0044",
+        "owner": "device-hal",
+        "status": "CLOSED_SOURCE",
+        "title": "BMP transfer accepted malformed responses, ignored native write rejection, and could replay uncertain effects"
+      },
+      {
+        "id": "HG-0045",
+        "owner": "mobile-ui",
+        "status": "CLOSED_SOURCE",
+        "title": "AI history ListView returned Expanded items and could crash with ParentData errors"
+      },
+      {
+        "id": "HG-0046",
+        "owner": "control-plane",
+        "status": "CLOSED_SOURCE",
+        "title": "Realtime ticket and capability idempotency decisions were not atomic under concurrency"
+      },
+      {
+        "id": "HG-0047",
+        "owner": "skills-codex",
+        "status": "CLOSED_SOURCE",
+        "title": "Skill admission did not hash actual package bytes and Codex worker limits were post-hoc or unenforced"
+      },
+      {
+        "id": "HG-0048",
+        "owner": "runtime",
+        "status": "CLOSED_SOURCE",
+        "title": "Model cancellation, lease race prevention, and scheduler shutdown deadlines were incomplete"
+      },
+      {
+        "id": "HG-0049",
+        "owner": "mobile-runtime",
+        "status": "CLOSED_SOURCE",
+        "title": "Mobile startup, BLE readiness, heartbeat, text paging, and assistant cleanup retained fail-open or re-entry paths"
+      },
+      {
+        "id": "HG-0050",
+        "owner": "repository",
+        "status": "CLOSED_SOURCE",
+        "title": "Temporary self-modifying remediation workflows and stale exact-head marker files polluted repository authority"
+      },
+      {
+        "id": "HG-0051",
+        "owner": "repository",
+        "status": "CLOSED_SOURCE",
+        "title": "Canonical plan, Current State, Gap Ledger, Evidence Index, release gate, and templates used conflicting revisions"
+      }
+    ],
+    "status_counts": {
+      "BLOCKED_ADMIN_SETTING": 1,
+      "BLOCKED_EXTERNAL": 6,
+      "BLOCKED_UPSTREAM": 1,
+      "CLOSED_SOURCE": 43
+    }
+  },
+  "head_bound_approvals": [],
+  "independent_review_gate": "PENDING",
+  "pull_request": {
+    "base_sha": "32178d3cb4ae38c2ef91db05bde836838c274259",
+    "draft": true,
+    "head_sha": "3edebbea61e2a8f190e4478fea813ccd304032dd",
+    "mergeable": true,
+    "mergeable_state": "blocked",
+    "number": 23,
+    "requested_reviewers": [],
+    "state": "open"
+  },
+  "repository": "TrillionniumFoundation/hepta-glasses",
+  "repository_actionable_gate": "FAIL",
+  "schema_version": 1,
+  "source_evidence": {
+    "artifacts": [],
+    "matching_artifact_count": 0
+  }
+}
