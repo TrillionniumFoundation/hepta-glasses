@@ -1,0 +1,217 @@
+name: g8-external-watch
+
+on:
+  push:
+    branches:
+      - ops/hepta-g8-external-watch-20260831
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: g8-external-watch-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  VALIDATION_BRANCH: codex/hepta-glasses-gap-closure-g8-validation-external
+  PR_BRANCH: codex/hepta-glasses-gap-closure-g8
+  PR_NUMBER: '23'
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Wait for externally-triggered exact-head CI
+        id: verified
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/$GH_REPO"
+          encoded="$(python3 -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["VALIDATION_BRANCH"],safe=""))')"
+          sha=''
+          for attempt in $(seq 1 720); do
+            sha="$(curl --fail --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              "$api/branches/$encoded" 2>/dev/null \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["commit"]["sha"])' 2>/dev/null || true)"
+            test -n "$sha" && break
+            if test "$attempt" = 720; then
+              echo 'external validation branch was not created' >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          run_id=''
+          for attempt in $(seq 1 720); do
+            runs="$(curl --fail --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              "$api/actions/runs?branch=$VALIDATION_BRANCH&per_page=30")"
+            run_id="$(RUNS="$runs" SHA="$sha" python3 - <<'PY'
+          import json,os
+          matches=[
+              r for r in json.loads(os.environ['RUNS']).get('workflow_runs',[])
+              if r.get('head_sha')==os.environ['SHA']
+              and r.get('name')=='hepta-glasses-ci'
+              and r.get('status')=='completed'
+              and r.get('conclusion')=='success'
+          ]
+          print(matches[0]['id'] if matches else '')
+          PY
+          )"
+            test -n "$run_id" && break
+            failures="$(RUNS="$runs" SHA="$sha" python3 - <<'PY'
+          import json,os
+          matches=[
+              r for r in json.loads(os.environ['RUNS']).get('workflow_runs',[])
+              if r.get('head_sha')==os.environ['SHA']
+              and r.get('name')=='hepta-glasses-ci'
+              and r.get('status')=='completed'
+              and r.get('conclusion') not in (None,'success','cancelled')
+          ]
+          print(len(matches))
+          PY
+          )"
+            if test "$failures" != 0; then
+              echo 'formal external validation CI completed unsuccessfully' >&2
+              exit 1
+            fi
+            if test "$attempt" = 720; then
+              echo 'formal external validation CI did not become successful' >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          jobs="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            "$api/actions/runs/$run_id/jobs?per_page=100")"
+          JOBS="$jobs" python3 - <<'PY'
+          import json,os
+          expected={'repository-contracts','flutter','android-native','ios-native','native-sanitizers','secret-and-boundary-scan','source-evidence'}
+          jobs=json.loads(os.environ['JOBS']).get('jobs',[])
+          by_name={job.get('name'):job for job in jobs}
+          if set(by_name)!=expected:
+              raise SystemExit(f'job set mismatch: {sorted(by_name)}')
+          bad={name:job.get('conclusion') for name,job in by_name.items() if job.get('conclusion')!='success'}
+          if bad:
+              raise SystemExit(f'non-success jobs: {bad}')
+          if any(not job.get('steps') for job in by_name.values()):
+              raise SystemExit('one or more required jobs are empty')
+          PY
+          artifacts="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            "$api/actions/runs/$run_id/artifacts?per_page=100")"
+          artifact="$(ARTIFACTS="$artifacts" SHA="$sha" python3 - <<'PY'
+          import json,os
+          expected='hepta-source-evidence-'+os.environ['SHA']
+          matches=[x for x in json.loads(os.environ['ARTIFACTS']).get('artifacts',[]) if x.get('name')==expected and not x.get('expired')]
+          if len(matches)!=1:
+              raise SystemExit(f'expected one live artifact, found {len(matches)}')
+          item=matches[0]
+          if not str(item.get('digest','')).startswith('sha256:'):
+              raise SystemExit('artifact digest is not SHA-256')
+          print(json.dumps({'id':item['id'],'name':item['name'],'digest':item['digest']},separators=(',',':')))
+          PY
+          )"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
+      - name: Revalidate source contracts before promotion
+        run: |
+          set -euo pipefail
+          sha='${{ steps.verified.outputs.sha }}'
+          git fetch --force origin "$sha"
+          git checkout --detach "$sha"
+          python3 tools/validate_repository.py
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+          find services adapters tools -type d -name __pycache__ -prune -exec rm -rf {} +
+          test -z "$(git status --porcelain)"
+          test "$(find .github/workflows -maxdepth 1 -type f -printf '%f\n' | sort)" = "ci.yml"
+      - name: Promote identical green SHA to PR 23
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          sha='${{ steps.verified.outputs.sha }}'
+          git push --force origin "$sha:refs/heads/$PR_BRANCH"
+          api="https://api.github.com/repos/$GH_REPO"
+          for attempt in $(seq 1 30); do
+            head="$(curl --fail --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              "$api/pulls/$PR_NUMBER" | python3 -c 'import json,sys; print(json.load(sys.stdin)["head"]["sha"])')"
+            test "$head" = "$sha" && break
+            if test "$attempt" = 30; then
+              echo 'PR head did not converge to verified SHA' >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          artifact='${{ steps.verified.outputs.artifact }}'
+          run_id='${{ steps.verified.outputs.run_id }}'
+          body="$(SHA="$sha" RUN_ID="$run_id" ARTIFACT="$artifact" python3 - <<'PY'
+          import json,os
+          a=json.loads(os.environ['ARTIFACT'])
+          print('\n'.join([
+              'G8 exact-head source verification completed through the externally-triggered CI path.',
+              '',
+              f'- Head: `{os.environ["SHA"]}`',
+              f'- Formal CI run: `{os.environ["RUN_ID"]}`',
+              '- Required jobs: all seven non-empty and successful',
+              f'- Source evidence artifact: `{a["name"]}`',
+              f'- Artifact digest: `{a["digest"]}`',
+              '',
+              'The same immutable commit was promoted to PR #23. The automation did not approve or merge it. External E5-E7 gates remain open until real evidence exists.',
+          ]))
+          PY
+          )"
+          payload="$(BODY="$body" python3 -c 'import json,os; print(json.dumps({"body":os.environ["BODY"]}))')"
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$api/issues/$PR_NUMBER/comments" \
+            --data "$payload" >/dev/null
+      - name: Record verification receipt
+        run: |
+          mkdir -p build/external-watch
+          SHA='${{ steps.verified.outputs.sha }}' RUN_ID='${{ steps.verified.outputs.run_id }}' ARTIFACT='${{ steps.verified.outputs.artifact }}' python3 - <<'PY'
+          import json,os,pathlib
+          data={
+              'schema_version':1,
+              'head_sha':os.environ['SHA'],
+              'formal_ci_run_id':int(os.environ['RUN_ID']),
+              'source_evidence_artifact':json.loads(os.environ['ARTIFACT']),
+              'promoted_to_pull_request':23,
+              'independent_review':'pending',
+              'merged':False,
+              'released':False,
+          }
+          pathlib.Path('build/external-watch/receipt.json').write_text(json.dumps(data,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-g8-external-watch-${{ steps.verified.outputs.sha }}
+          path: build/external-watch
+          if-no-files-found: error
+          retention-days: 30
