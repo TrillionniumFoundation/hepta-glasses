@@ -1,0 +1,170 @@
+name: g8-cleanup
+
+on:
+  push:
+    branches:
+      - work/hepta-g8-cleanup-20260901
+    paths:
+      - .github/workflows/g8-cleanup.yml
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Delete temporary branches only after final gate passes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          repository = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          api = 'https://api.github.com'
+          candidate = 'codex/hepta-glasses-gap-closure-g8'
+          expected = {
+              'repository-contracts',
+              'flutter',
+              'android-native',
+              'ios-native',
+              'native-sanitizers',
+              'secret-and-boundary-scan',
+              'source-evidence',
+          }
+
+          def request(method: str, path: str, payload=None):
+              data = None if payload is None else json.dumps(payload).encode()
+              req = urllib.request.Request(
+                  api + path,
+                  data=data,
+                  method=method,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'Content-Type': 'application/json',
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  body = response.read()
+                  return json.loads(body) if body else None
+
+          pr = request('GET', f'/repos/{repository}/pulls/23')
+          if pr.get('draft'):
+              raise SystemExit('PR #23 is still Draft; cleanup is forbidden')
+          head = pr['head']['sha']
+          encoded = urllib.parse.quote(candidate, safe='')
+          runs = request(
+              'GET',
+              f'/repos/{repository}/actions/runs?branch={encoded}&event=workflow_dispatch&per_page=30',
+          )['workflow_runs']
+          candidates = [
+              run for run in runs
+              if run.get('head_sha') == head
+              and run.get('path') == '.github/workflows/ci.yml'
+              and run.get('status') == 'completed'
+          ]
+          if not candidates:
+              raise SystemExit('No completed final workflow-dispatch run for current head')
+          run = sorted(candidates, key=lambda item: item['id'], reverse=True)[0]
+          jobs = request(
+              'GET',
+              f"/repos/{repository}/actions/runs/{run['id']}/jobs?per_page=100",
+          )['jobs']
+          results = {job['name']: job.get('conclusion') for job in jobs}
+          if set(results) != expected or any(value != 'success' for value in results.values()):
+              raise SystemExit(f'Final matrix is not fully successful: {results}')
+          artifacts = request(
+              'GET',
+              f"/repos/{repository}/actions/runs/{run['id']}/artifacts?per_page=100",
+          )['artifacts']
+          evidence_name = f'hepta-source-evidence-{head}'
+          evidence = [
+              item for item in artifacts
+              if item.get('name') == evidence_name and not item.get('expired')
+          ]
+          if len(evidence) != 1:
+              raise SystemExit('Current head does not have exactly one Source Evidence artifact')
+
+          branches = [
+              'work/hepta-g8-pass1-20260901',
+              'work/hepta-g8-source-closure-20260901',
+              'work/hepta-g8-source-closure-v2-20260901',
+              'work/hepta-g8-finalizer-20260901',
+              'work/hepta-g8-evidence-compat-20260901',
+              'work/hepta-g8-identity-final-20260901',
+              'work/hepta-g8-ci-orchestrator-20260901',
+              'work/hepta-g8-gap-sync-20260901',
+              'work/hepta-g8-final-bind-20260901',
+              'work/hepta-glasses-gap-closure-g8-diagnostics',
+              'work/hepta-glasses-gap-closure-g7-staging',
+          ]
+          deleted = []
+          missing = []
+          for branch in branches:
+              ref = urllib.parse.quote(f'heads/{branch}', safe='/')
+              try:
+                  request('DELETE', f'/repos/{repository}/git/refs/{ref}')
+                  deleted.append(branch)
+              except urllib.error.HTTPError as error:
+                  if error.code == 422:
+                      missing.append(branch)
+                  else:
+                      raise
+
+          marker = '<!-- hepta-g8-cleanup -->'
+          body = '\n'.join([
+              marker,
+              '## G8 temporary branch cleanup',
+              '',
+              f'- Bound head: `{head}`',
+              f"- Formal run: `{run['id']}`",
+              f'- Deleted temporary branches: `{len(deleted)}`',
+              f'- Already absent: `{len(missing)}`',
+              '',
+              'The canonical candidate, audit history branches, status snapshot branch, and all external-evidence issues were preserved.',
+          ])
+          comments = request(
+              'GET', f'/repos/{repository}/issues/23/comments?per_page=100'
+          )
+          existing = next(
+              (item for item in comments if marker in (item.get('body') or '')),
+              None,
+          )
+          if existing:
+              request(
+                  'PATCH',
+                  f"/repos/{repository}/issues/comments/{existing['id']}",
+                  {'body': body},
+              )
+          else:
+              request(
+                  'POST',
+                  f'/repos/{repository}/issues/23/comments',
+                  {'body': body},
+              )
+
+          own_ref = urllib.parse.quote(
+              'heads/work/hepta-g8-cleanup-20260901', safe='/'
+          )
+          request('DELETE', f'/repos/{repository}/git/refs/{own_ref}')
+          PY
