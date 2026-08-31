@@ -21,40 +21,40 @@ class _EvenAIListPageState extends State<EvenAIListPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('History', style: TextStyle(fontSize: 20)),
-    ),
-    body: Obx(() {
-      if (controller.items.isEmpty && !EvenAI.isEvenAISyncing.value) {
-        return const Center(
-          child: Text(
-            'Press and hold left TouchBar to engage Even AI.',
-            style: TextStyle(color: Colors.grey),
-            textAlign: TextAlign.center,
-          ),
-        );
-      }
-      return ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-        itemCount: controller.items.length,
-        itemBuilder: (BuildContext context, int index) => Obx(
-          () => GestureDetector(
-            key: ValueKey<String>('history-item-$index'),
-            onTap: () {
-              if (controller.selectedIndex.value == index) {
-                controller.deselectItem();
-              } else {
-                controller.selectItem(index);
-              }
-            },
-            child: controller.selectedIndex.value == index
-                ? _buildItemDetail(index)
-                : _buildItem(index),
-          ),
+        appBar: AppBar(
+          title: const Text('History', style: TextStyle(fontSize: 20)),
         ),
+        body: Obx(() {
+          if (controller.items.isEmpty && !EvenAI.isEvenAISyncing.value) {
+            return const Center(
+              child: Text(
+                'Press and hold left TouchBar to engage Even AI.',
+                style: TextStyle(color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+            );
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            itemCount: controller.items.length,
+            itemBuilder: (BuildContext context, int index) => Obx(
+              () => GestureDetector(
+                key: ValueKey<String>('history-item-$index'),
+                onTap: () {
+                  if (controller.selectedIndex.value == index) {
+                    controller.deselectItem();
+                  } else {
+                    controller.selectItem(index);
+                  }
+                },
+                child: controller.selectedIndex.value == index
+                    ? _buildItemDetail(index)
+                    : _buildItem(index),
+              ),
+            ),
+          );
+        }),
       );
-    }),
-  );
 
   Widget _buildItem(int index) {
     final item = controller.items[index];

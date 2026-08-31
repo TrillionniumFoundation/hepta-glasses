@@ -190,9 +190,8 @@ class Proto {
       final end = start + payloadBytes < data.length
           ? start + payloadBytes
           : data.length;
-      final itemData = start < data.length
-          ? data.sublist(start, end)
-          : Uint8List(0);
+      final itemData =
+          start < data.length ? data.sublist(start, end) : Uint8List(0);
       packets.add(
         Utils.addPrefixToUint8List(<int>[
           command,
@@ -273,9 +272,8 @@ class Proto {
       final end = start + payloadBytes < data.length
           ? start + payloadBytes
           : data.length;
-      final itemData = start < data.length
-          ? data.sublist(start, end)
-          : Uint8List(0);
+      final itemData =
+          start < data.length ? data.sublist(start, end) : Uint8List(0);
       packets.add(
         Utils.addPrefixToUint8List(<int>[
           command,

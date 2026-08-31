@@ -13,11 +13,9 @@ class Utils {
     for (var i = 0; i < prefix.length; i++) {
       newData[i] = prefix[i];
     }
-    for (
-      var i = prefix.length, j = 0;
-      i < prefix.length + data.length;
-      i++, j++
-    ) {
+    for (var i = prefix.length, j = 0;
+        i < prefix.length + data.length;
+        i++, j++) {
       newData[i] = data[j];
     }
     return newData;
@@ -25,9 +23,8 @@ class Utils {
 
   /// Convert binary array to hexadecimal string
   static String bytesToHexStr(Uint8List data, [String join = '']) {
-    List<String> hexList = data
-        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
-        .toList();
+    List<String> hexList =
+        data.map((byte) => byte.toRadixString(16).padLeft(2, '0')).toList();
     String hexResult = hexList.join(join);
     return hexResult;
   }

@@ -14,17 +14,18 @@ void main() {
   ToolRequest displayRequest({
     String idempotencyKey = 'display-card-1',
     String cardId = 'card-1',
-  }) => ToolRequest(
-    requestId: 'request-1',
-    taskId: 'task-1',
-    deviceId: 'device-1',
-    action: 'display.show_card',
-    arguments: <String, Object?>{'card_id': cardId},
-    riskTier: RiskTier.r1,
-    mutating: true,
-    idempotencyKey: idempotencyKey,
-    deadline: now.add(const Duration(minutes: 1)),
-  );
+  }) =>
+      ToolRequest(
+        requestId: 'request-1',
+        taskId: 'task-1',
+        deviceId: 'device-1',
+        action: 'display.show_card',
+        arguments: <String, Object?>{'card_id': cardId},
+        riskTier: RiskTier.r1,
+        mutating: true,
+        idempotencyKey: idempotencyKey,
+        deadline: now.add(const Duration(minutes: 1)),
+      );
 
   DecisionLease displayLease(ToolRequest request, {String id = 'lease-1'}) =>
       DecisionLease(

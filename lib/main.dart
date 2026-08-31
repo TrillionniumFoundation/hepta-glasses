@@ -62,7 +62,8 @@ Future<void> _initializeRuntime(String supportPath) async {
     notificationEffect: (
       Map<String, Object?> notification,
       int notificationId,
-    ) => Proto.sendNotify(notification, notificationId),
+    ) =>
+        Proto.sendNotify(notification, notificationId),
     bitmapAssetEffect: (String assetPath) async {
       final bytes = await Utils.loadBmpImage(assetPath);
       if (bytes.isEmpty) {
@@ -82,22 +83,22 @@ class FailClosedStartupApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const MaterialApp(
-    home: Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Text(
-              'Hepta Glasses could not establish durable local state. '
-              'Device and assistant actions remain disabled. Restart the '
-              'application or contact support.',
-              textAlign: TextAlign.center,
+        home: Scaffold(
+          body: SafeArea(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'Hepta Glasses could not establish durable local state. '
+                  'Device and assistant actions remain disabled. Restart the '
+                  'application or contact support.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
             ),
           ),
         ),
-      ),
-    ),
-  );
+      );
 }
 
 class MyApp extends StatelessWidget {
@@ -105,11 +106,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'Hepta Glasses',
-    theme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-      useMaterial3: true,
-    ),
-    home: const HomePage(),
-  );
+        title: 'Hepta Glasses',
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+          useMaterial3: true,
+        ),
+        home: const HomePage(),
+      );
 }

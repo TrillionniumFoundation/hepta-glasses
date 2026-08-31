@@ -32,12 +32,12 @@ final class DualLegReceipt {
   bool get degraded => !complete;
 
   DualLegReceipt asReplay() => DualLegReceipt(
-    idempotencyKey: idempotencyKey,
-    left: left,
-    right: right,
-    replayed: true,
-    reconciled: reconciled,
-  );
+        idempotencyKey: idempotencyKey,
+        left: left,
+        right: right,
+        replayed: true,
+        reconciled: reconciled,
+      );
 }
 
 final class DualLegCoordinator {

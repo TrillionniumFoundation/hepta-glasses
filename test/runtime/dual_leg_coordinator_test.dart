@@ -54,11 +54,11 @@ void main() {
         idempotencyKey: 'ack-lost-write',
         reconciler: (GlassesSide side, TransportAck prior) async =>
             TransportAck(
-              accepted: true,
-              timeout: false,
-              sequence: prior.sequence,
-              effectMayHaveOccurred: true,
-            ),
+          accepted: true,
+          timeout: false,
+          sequence: prior.sequence,
+          effectMayHaveOccurred: true,
+        ),
       );
       expect(reconciled.complete, isTrue);
       expect(reconciled.reconciled, isTrue);

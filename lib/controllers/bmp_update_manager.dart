@@ -20,9 +20,9 @@ final class BmpUpdateManager {
     BmpPacketSender? sendPacket,
     BmpRequester? request,
     BmpDelay? delay,
-  }) : _sendPacket = sendPacket ?? _defaultSendPacket,
-       _request = request ?? _defaultRequest,
-       _delay = delay ?? _defaultDelay;
+  })  : _sendPacket = sendPacket ?? _defaultSendPacket,
+        _request = request ?? _defaultRequest,
+        _delay = delay ?? _defaultDelay;
 
   static const int packetPayloadLength = 194;
   static const int maximumPacketCount = 256;
@@ -186,7 +186,8 @@ final class BmpUpdateManager {
     Uint8List packet,
     String side,
     int timeoutMs,
-  ) => BleManager.request(packet, lr: side, timeoutMs: timeoutMs);
+  ) =>
+      BleManager.request(packet, lr: side, timeoutMs: timeoutMs);
 
   static Future<void> _defaultDelay(Duration duration) =>
       Future<void>.delayed(duration);

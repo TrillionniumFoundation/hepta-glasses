@@ -126,7 +126,11 @@ void main() {
     await journal.initialize();
     await journal.append('task.created', <String, Object?>{'task_id': 't-1'});
     await JsonlAuditJournal.checkpointFileFor(file).writeAsString(
-      '${jsonEncode(<String, Object?>{'schema_version': 1, 'sequence': 1, 'hash': '0' * 64})}\n',
+      '${jsonEncode(<String, Object?>{
+            'schema_version': 1,
+            'sequence': 1,
+            'hash': '0' * 64
+          })}\n',
       flush: true,
     );
 

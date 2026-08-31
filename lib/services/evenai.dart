@@ -226,17 +226,17 @@ class EvenAI {
     try {
       answer = await ModelGatewayRegistry.current
           .answer(
-            question: combinedText,
-            taskId: session.sessionId,
-            cancellation: cancellation,
-          )
+        question: combinedText,
+        taskId: session.sessionId,
+        cancellation: cancellation,
+      )
           .timeout(
-            _modelTimeout,
-            onTimeout: () {
-              cancellation.cancel('model_deadline_exceeded');
-              throw TimeoutException('model_deadline_exceeded');
-            },
-          );
+        _modelTimeout,
+        onTimeout: () {
+          cancellation.cancel('model_deadline_exceeded');
+          throw TimeoutException('model_deadline_exceeded');
+        },
+      );
     } on TimeoutException {
       answer = 'AI service timed out.';
     } on ModelGatewayException catch (error) {
@@ -682,11 +682,9 @@ extension EvenAIDataMethod on EvenAI {
       )..layout(maxWidth: maxWidth);
       final lineCount = textPainter.computeLineMetrics().length;
       var start = 0;
-      for (
-        var index = 0;
-        index < lineCount && start < paragraph.length;
-        index++
-      ) {
+      for (var index = 0;
+          index < lineCount && start < paragraph.length;
+          index++) {
         final boundary = textPainter.getLineBoundary(
           TextPosition(offset: start),
         );

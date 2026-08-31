@@ -5,8 +5,8 @@ import 'contracts.dart';
 
 final class TaskEngine {
   TaskEngine({required AuditJournal journal, Clock clock = const SystemClock()})
-    : _journal = journal,
-      _clock = clock;
+      : _journal = journal,
+        _clock = clock;
 
   final AuditJournal _journal;
   final Clock _clock;
@@ -16,59 +16,59 @@ final class TaskEngine {
 
   static final Map<TaskState, Set<TaskState>> _allowedTransitions =
       <TaskState, Set<TaskState>>{
-        TaskState.created: <TaskState>{
-          TaskState.validating,
-          TaskState.cancelled,
-          TaskState.failed,
-        },
-        TaskState.validating: <TaskState>{
-          TaskState.waitingForContext,
-          TaskState.waitingForApproval,
-          TaskState.running,
-          TaskState.cancelled,
-          TaskState.failed,
-        },
-        TaskState.waitingForContext: <TaskState>{
-          TaskState.validating,
-          TaskState.cancelled,
-          TaskState.failed,
-        },
-        TaskState.waitingForApproval: <TaskState>{
-          TaskState.running,
-          TaskState.cancelled,
-          TaskState.failed,
-        },
-        TaskState.running: <TaskState>{
-          TaskState.waitingForExternal,
-          TaskState.reconciling,
-          TaskState.succeeded,
-          TaskState.failed,
-          TaskState.cancelled,
-          TaskState.degraded,
-        },
-        TaskState.waitingForExternal: <TaskState>{
-          TaskState.running,
-          TaskState.reconciling,
-          TaskState.failed,
-          TaskState.cancelled,
-          TaskState.degraded,
-        },
-        TaskState.reconciling: <TaskState>{
-          TaskState.running,
-          TaskState.succeeded,
-          TaskState.failed,
-          TaskState.cancelled,
-          TaskState.degraded,
-        },
-        TaskState.succeeded: <TaskState>{},
-        TaskState.failed: <TaskState>{},
-        TaskState.cancelled: <TaskState>{},
-        TaskState.degraded: <TaskState>{
-          TaskState.reconciling,
-          TaskState.failed,
-          TaskState.cancelled,
-        },
-      };
+    TaskState.created: <TaskState>{
+      TaskState.validating,
+      TaskState.cancelled,
+      TaskState.failed,
+    },
+    TaskState.validating: <TaskState>{
+      TaskState.waitingForContext,
+      TaskState.waitingForApproval,
+      TaskState.running,
+      TaskState.cancelled,
+      TaskState.failed,
+    },
+    TaskState.waitingForContext: <TaskState>{
+      TaskState.validating,
+      TaskState.cancelled,
+      TaskState.failed,
+    },
+    TaskState.waitingForApproval: <TaskState>{
+      TaskState.running,
+      TaskState.cancelled,
+      TaskState.failed,
+    },
+    TaskState.running: <TaskState>{
+      TaskState.waitingForExternal,
+      TaskState.reconciling,
+      TaskState.succeeded,
+      TaskState.failed,
+      TaskState.cancelled,
+      TaskState.degraded,
+    },
+    TaskState.waitingForExternal: <TaskState>{
+      TaskState.running,
+      TaskState.reconciling,
+      TaskState.failed,
+      TaskState.cancelled,
+      TaskState.degraded,
+    },
+    TaskState.reconciling: <TaskState>{
+      TaskState.running,
+      TaskState.succeeded,
+      TaskState.failed,
+      TaskState.cancelled,
+      TaskState.degraded,
+    },
+    TaskState.succeeded: <TaskState>{},
+    TaskState.failed: <TaskState>{},
+    TaskState.cancelled: <TaskState>{},
+    TaskState.degraded: <TaskState>{
+      TaskState.reconciling,
+      TaskState.failed,
+      TaskState.cancelled,
+    },
+  };
 
   List<TaskRecord> get tasks => List.unmodifiable(_tasks.values);
 

@@ -28,22 +28,23 @@ final class AuditEntry {
     required String eventType,
     required Map<String, Object?> payload,
     required String previousHash,
-  }) => sha256CanonicalJson(<String, Object?>{
-    'sequence': sequence,
-    'timestamp': timestamp.toUtc().toIso8601String(),
-    'event_type': eventType,
-    'payload': payload,
-    'previous_hash': previousHash,
-  });
+  }) =>
+      sha256CanonicalJson(<String, Object?>{
+        'sequence': sequence,
+        'timestamp': timestamp.toUtc().toIso8601String(),
+        'event_type': eventType,
+        'payload': payload,
+        'previous_hash': previousHash,
+      });
 
   Map<String, Object?> toJson() => <String, Object?>{
-    'sequence': sequence,
-    'timestamp': timestamp.toIso8601String(),
-    'event_type': eventType,
-    'payload': payload,
-    'previous_hash': previousHash,
-    'hash': hash,
-  };
+        'sequence': sequence,
+        'timestamp': timestamp.toIso8601String(),
+        'event_type': eventType,
+        'payload': payload,
+        'previous_hash': previousHash,
+        'hash': hash,
+      };
 
   factory AuditEntry.fromJson(Map<String, Object?> json) {
     final rawPayload = json['payload'];
@@ -168,11 +169,11 @@ final class _AuditHead {
   final int byteLength;
 
   Map<String, Object?> toJson() => <String, Object?>{
-    'schema_version': 2,
-    'sequence': sequence,
-    'hash': hash,
-    'byte_length': byteLength,
-  };
+        'schema_version': 2,
+        'sequence': sequence,
+        'hash': hash,
+        'byte_length': byteLength,
+      };
 }
 
 final class _DecodedCheckpoint {
@@ -241,19 +242,17 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
     final key = file.absolute.path;
     final previous = _processTails[key] ?? Future<void>.value();
     late final Future<void> queued;
-    queued = previous
-        .then<void>((_) async {
-          try {
-            completer.complete(await _withFileLock(operation));
-          } on Object catch (error, stackTrace) {
-            completer.completeError(error, stackTrace);
-          }
-        })
-        .whenComplete(() {
-          if (identical(_processTails[key], queued)) {
-            _processTails.remove(key);
-          }
-        });
+    queued = previous.then<void>((_) async {
+      try {
+        completer.complete(await _withFileLock(operation));
+      } on Object catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    }).whenComplete(() {
+      if (identical(_processTails[key], queued)) {
+        _processTails.remove(key);
+      }
+    });
     _processTails[key] = queued;
     return completer.future;
   }
@@ -278,10 +277,10 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
   }
 
   Future<void> initialize() => _exclusive(() async {
-    await _ensureDataFileUnlocked();
-    final entries = await _readAndVerifyUnlocked();
-    await _verifyOrRepairCheckpointUnlocked(entries);
-  });
+        await _ensureDataFileUnlocked();
+        final entries = await _readAndVerifyUnlocked();
+        await _verifyOrRepairCheckpointUnlocked(entries);
+      });
 
   @override
   Future<AuditEntry> append(String eventType, Map<String, Object?> payload) =>
@@ -348,18 +347,18 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
 
   @override
   Future<List<AuditEntry>> readAll() => _exclusive(() async {
-    await _ensureDataFileUnlocked();
-    final entries = await _readAndVerifyUnlocked();
-    await _verifyOrRepairCheckpointUnlocked(entries);
-    return List.unmodifiable(entries);
-  });
+        await _ensureDataFileUnlocked();
+        final entries = await _readAndVerifyUnlocked();
+        await _verifyOrRepairCheckpointUnlocked(entries);
+        return List.unmodifiable(entries);
+      });
 
   @override
   Future<void> verify() => _exclusive(() async {
-    await _ensureDataFileUnlocked();
-    final entries = await _readAndVerifyUnlocked();
-    await _verifyOrRepairCheckpointUnlocked(entries);
-  });
+        await _ensureDataFileUnlocked();
+        final entries = await _readAndVerifyUnlocked();
+        await _verifyOrRepairCheckpointUnlocked(entries);
+      });
 
   Future<void> _ensureDataFileUnlocked() async {
     await file.parent.create(recursive: true);

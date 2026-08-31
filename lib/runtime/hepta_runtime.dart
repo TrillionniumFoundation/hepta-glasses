@@ -53,8 +53,8 @@ final class HeptaRuntime {
     required ToolGateway gateway,
     required Clock clock,
     required this.sessions,
-  }) : _gateway = gateway,
-       _clock = clock;
+  })  : _gateway = gateway,
+        _clock = clock;
 
   static const String _displayTextAction = 'device.display_text';
   static const String _microphoneOnAction = 'device.microphone_on';
@@ -97,8 +97,7 @@ final class HeptaRuntime {
     if (_instance != null) {
       return;
     }
-    final effectiveJournal =
-        journal ??
+    final effectiveJournal = journal ??
         JsonlAuditJournal(
           File(
             '${Directory.systemTemp.path}/hepta-glasses-runtime/audit.jsonl',
@@ -168,17 +167,17 @@ final class HeptaRuntime {
       },
       reconciler: (ToolRequest request, String externalId) async =>
           <String, Object?>{
-            'authoritative': false,
-            'external_id': externalId,
-            'reason': 'firmware_display_readback_unavailable',
-          },
+        'authoritative': false,
+        'external_id': externalId,
+        'reason': 'firmware_display_readback_unavailable',
+      },
       recoveryReconciler:
           (ToolAuditEnvelope request, String externalId) async =>
               <String, Object?>{
-                'authoritative': false,
-                'external_id': externalId,
-                'reason': 'firmware_display_readback_unavailable',
-              },
+        'authoritative': false,
+        'external_id': externalId,
+        'reason': 'firmware_display_readback_unavailable',
+      },
     );
 
     gateway.register(
@@ -294,15 +293,16 @@ final class HeptaRuntime {
     required int position,
     required int currentPageNumber,
     required int maxPageNumber,
-  }) => displayTextInScope(
-    scope: RuntimeEffectScope.assistant(session),
-    text: text,
-    newScreen: newScreen,
-    position: position,
-    currentPageNumber: currentPageNumber,
-    maxPageNumber: maxPageNumber,
-    origin: TrustClass.system,
-  );
+  }) =>
+      displayTextInScope(
+        scope: RuntimeEffectScope.assistant(session),
+        text: text,
+        newScreen: newScreen,
+        position: position,
+        currentPageNumber: currentPageNumber,
+        maxPageNumber: maxPageNumber,
+        origin: TrustClass.system,
+      );
 
   Future<ToolReceipt> displayTextInScope({
     required RuntimeEffectScope scope,
@@ -312,30 +312,32 @@ final class HeptaRuntime {
     required int currentPageNumber,
     required int maxPageNumber,
     TrustClass origin = TrustClass.user,
-  }) => _executeMutation(
-    scope: scope,
-    action: _displayTextAction,
-    riskTier: RiskTier.r1,
-    arguments: <String, Object?>{
-      'text': text,
-      'new_screen': newScreen,
-      'position': position,
-      'current_page_number': currentPageNumber,
-      'max_page_number': maxPageNumber,
-    },
-    origin: origin,
-  );
+  }) =>
+      _executeMutation(
+        scope: scope,
+        action: _displayTextAction,
+        riskTier: RiskTier.r1,
+        arguments: <String, Object?>{
+          'text': text,
+          'new_screen': newScreen,
+          'position': position,
+          'current_page_number': currentPageNumber,
+          'max_page_number': maxPageNumber,
+        },
+        origin: origin,
+      );
 
   Future<ToolReceipt> openMicrophone({
     required AssistantSessionToken session,
     String side = 'R',
-  }) => _executeMutation(
-    scope: RuntimeEffectScope.assistant(session),
-    action: _microphoneOnAction,
-    riskTier: RiskTier.r2,
-    arguments: <String, Object?>{'side': side},
-    origin: TrustClass.user,
-  );
+  }) =>
+      _executeMutation(
+        scope: RuntimeEffectScope.assistant(session),
+        action: _microphoneOnAction,
+        riskTier: RiskTier.r2,
+        arguments: <String, Object?>{'side': side},
+        origin: TrustClass.user,
+      );
 
   Future<ToolReceipt> exitDeviceMode({required RuntimeEffectScope scope}) =>
       _executeMutation(
@@ -348,12 +350,13 @@ final class HeptaRuntime {
   Future<ToolReceipt> setNotificationWhitelist({
     required RuntimeEffectScope scope,
     required String document,
-  }) => _executeMutation(
-    scope: scope,
-    action: _notificationWhitelistAction,
-    riskTier: RiskTier.r2,
-    arguments: <String, Object?>{'document': document},
-  );
+  }) =>
+      _executeMutation(
+        scope: scope,
+        action: _notificationWhitelistAction,
+        riskTier: RiskTier.r2,
+        arguments: <String, Object?>{'document': document},
+      );
 
   Future<ToolReceipt> sendNotification({
     required RuntimeEffectScope scope,
@@ -361,28 +364,30 @@ final class HeptaRuntime {
     required int notificationId,
     TrustClass origin = TrustClass.user,
     String? humanConfirmationDigest,
-  }) => _executeMutation(
-    scope: scope,
-    action: _notificationAction,
-    riskTier: RiskTier.r1,
-    arguments: <String, Object?>{
-      'notification': notification,
-      'notification_id': notificationId,
-    },
-    origin: origin,
-    humanConfirmationDigest: humanConfirmationDigest,
-  );
+  }) =>
+      _executeMutation(
+        scope: scope,
+        action: _notificationAction,
+        riskTier: RiskTier.r1,
+        arguments: <String, Object?>{
+          'notification': notification,
+          'notification_id': notificationId,
+        },
+        origin: origin,
+        humanConfirmationDigest: humanConfirmationDigest,
+      );
 
   Future<ToolReceipt> displayBitmapAsset({
     required RuntimeEffectScope scope,
     required String assetPath,
-  }) => _executeMutation(
-    scope: scope,
-    action: _bitmapAction,
-    riskTier: RiskTier.r1,
-    arguments: <String, Object?>{'asset_path': assetPath},
-    deadline: const Duration(minutes: 2),
-  );
+  }) =>
+      _executeMutation(
+        scope: scope,
+        action: _bitmapAction,
+        riskTier: RiskTier.r1,
+        arguments: <String, Object?>{'asset_path': assetPath},
+        deadline: const Duration(minutes: 2),
+      );
 
   Future<ToolReceipt> _executeMutation({
     required RuntimeEffectScope scope,

@@ -10,7 +10,7 @@ import 'package:demo_ai_even/services/ble.dart';
 /// depend on [GlassesTransport], not on the global platform-channel facade.
 final class EvenG1Transport implements GlassesTransport {
   EvenG1Transport({BleManager? manager})
-    : _manager = manager ?? BleManager.get() {
+      : _manager = manager ?? BleManager.get() {
     _connectionSubscription = _manager.connectionSnapshots.listen(
       _publishConnectionSnapshot,
     );
@@ -113,8 +113,7 @@ final class EvenG1Transport implements GlassesTransport {
       lr: side == GlassesSide.left ? 'L' : 'R',
       timeoutMs: timeout.inMilliseconds,
     );
-    final accepted =
-        !response.isTimeout &&
+    final accepted = !response.isTimeout &&
         response.data.length > 1 &&
         (response.data[1] == 0xc9 || response.data[1] == 0xcb);
     final receipt = TransportAck(
@@ -124,9 +123,9 @@ final class EvenG1Transport implements GlassesTransport {
       errorCode: accepted
           ? null
           : response.errorCode ??
-                (response.isTimeout
-                    ? 'timeout_after_native_write'
-                    : 'negative_acknowledgement'),
+              (response.isTimeout
+                  ? 'timeout_after_native_write'
+                  : 'negative_acknowledgement'),
       effectMayHaveOccurred: accepted || response.effectMayHaveOccurred,
     );
     if (accepted || receipt.requiresReconciliation) {

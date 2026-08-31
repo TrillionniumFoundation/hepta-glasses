@@ -88,9 +88,9 @@ final class HttpModelGateway implements ModelGateway {
     required RuntimeTokenProvider tokenProvider,
     Dio? dio,
     bool allowInsecureLoopback = false,
-  }) : _baseUri = _validatedUri(baseUri, allowInsecureLoopback),
-       _tokenProvider = tokenProvider,
-       _dio = dio ?? Dio();
+  })  : _baseUri = _validatedUri(baseUri, allowInsecureLoopback),
+        _tokenProvider = tokenProvider,
+        _dio = dio ?? Dio();
 
   final Uri _baseUri;
   final RuntimeTokenProvider _tokenProvider;

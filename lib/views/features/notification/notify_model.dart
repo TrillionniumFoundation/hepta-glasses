@@ -44,14 +44,14 @@ class NotifyModel {
   }
 
   Map<String, dynamic> toMap() => {
-    "msg_id": msgId,
-    "app_identifier": appIdentifier,
-    "title": title,
-    "subtitle": subTitle,
-    "message": message,
-    "time_s": timestamp,
-    "display_name": displayName,
-  };
+        "msg_id": msgId,
+        "app_identifier": appIdentifier,
+        "title": title,
+        "subtitle": subTitle,
+        "message": message,
+        "time_s": timestamp,
+        "display_name": displayName,
+      };
 
   String toJson() => jsonEncode(toMap());
 }
@@ -77,12 +77,15 @@ class NotifyWhitelistModel {
       apps.map((app) => app.toMap()).toList();
 
   Map<String, dynamic> toMap() => {
-    "calendar_enable": false,
-    "call_enable": false,
-    "msg_enable": false,
-    "ios_mail_enable": false,
-    "app": {"list": apps.map((app) => app.toMap()).toList(), "enable": true},
-  };
+        "calendar_enable": false,
+        "call_enable": false,
+        "msg_enable": false,
+        "ios_mail_enable": false,
+        "app": {
+          "list": apps.map((app) => app.toMap()).toList(),
+          "enable": true
+        },
+      };
 
   String toJson() => jsonEncode(toMap());
 

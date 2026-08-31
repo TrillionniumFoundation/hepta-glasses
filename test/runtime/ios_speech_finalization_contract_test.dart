@@ -6,8 +6,8 @@ void main() {
   test(
     'iOS speech waits for framework final and discards bounded partials',
     () {
-      final source = File('ios/Runner/SpeechStreamRecognizer.swift')
-          .readAsStringSync();
+      final source =
+          File('ios/Runner/SpeechStreamRecognizer.swift').readAsStringSync();
 
       expect(source, contains('result.isFinal'));
       expect(source, contains('request?.endAudio()'));

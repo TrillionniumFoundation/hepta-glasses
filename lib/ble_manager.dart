@@ -49,10 +49,10 @@ class BleManager {
   Stream<BleConnectionSnapshot> get connectionSnapshots =>
       _connectionController.stream;
   BleConnectionSnapshot get connectionSnapshot => BleConnectionSnapshot(
-    leftConnected: isLeftConnected,
-    rightConnected: isRightConnected,
-    generation: _connectionGeneration,
-  );
+        leftConnected: isLeftConnected,
+        rightConnected: isRightConnected,
+        generation: _connectionGeneration,
+      );
 
   void _publishConnectionSnapshot() {
     if (!_connectionController.isClosed) {
@@ -287,8 +287,8 @@ class BleManager {
     connectionStatus = isConnected
         ? 'Connected'
         : (isLeftConnected || isRightConnected
-              ? 'Degraded connection'
-              : 'Not connected');
+            ? 'Degraded connection'
+            : 'Not connected');
     _publishConnectionSnapshot();
     beatHeartTimer?.cancel();
     beatHeartTimer = null;
@@ -377,9 +377,8 @@ class BleManager {
       return;
     }
 
-    final generation = response.generation > 0
-        ? response.generation
-        : _connectionGeneration;
+    final generation =
+        response.generation > 0 ? response.generation : _connectionGeneration;
     final key = BleRequestKey(
       generation: generation,
       side: response.lr,
@@ -742,8 +741,8 @@ class BleManager {
     return side == 'L'
         ? manager.isLeftConnected
         : side == 'R'
-        ? manager.isRightConnected
-        : false;
+            ? manager.isRightConnected
+            : false;
   }
 
   static bool isBothConnected() =>

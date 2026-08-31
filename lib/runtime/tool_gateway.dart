@@ -75,18 +75,18 @@ final class ToolAuditEnvelope {
   final String requestFingerprint;
 
   Map<String, Object?> toJson() => <String, Object?>{
-    'request_id': requestId,
-    'task_id': taskId,
-    'device_id': deviceId,
-    'action': action,
-    'risk_tier': riskTier.name,
-    'mutating': mutating,
-    'idempotency_key': idempotencyKey,
-    'deadline': deadline.toIso8601String(),
-    'origin': origin.name,
-    'argument_digest': argumentDigest,
-    'request_fingerprint': requestFingerprint,
-  };
+        'request_id': requestId,
+        'task_id': taskId,
+        'device_id': deviceId,
+        'action': action,
+        'risk_tier': riskTier.name,
+        'mutating': mutating,
+        'idempotency_key': idempotencyKey,
+        'deadline': deadline.toIso8601String(),
+        'origin': origin.name,
+        'argument_digest': argumentDigest,
+        'request_fingerprint': requestFingerprint,
+      };
 
   factory ToolAuditEnvelope.fromJson(Map<String, Object?> json) =>
       ToolAuditEnvelope(
@@ -121,10 +121,10 @@ Map<String, Object?> _objectMap(Object? value, String label) {
 bool _isSha256(String value) =>
     value.length == 64 &&
     value.toLowerCase().runes.every(
-      (character) =>
-          (character >= 48 && character <= 57) ||
-          (character >= 97 && character <= 102),
-    );
+          (character) =>
+              (character >= 48 && character <= 57) ||
+              (character >= 97 && character <= 102),
+        );
 
 Map<String, Object?> _receiptAuditJson(ToolReceipt receipt) {
   final externalId = receipt.result['external_id'];
@@ -173,9 +173,9 @@ final class ToolGateway {
     required AuditJournal journal,
     required PolicyEngine policy,
     Clock clock = const SystemClock(),
-  }) : _journal = journal,
-       _policy = policy,
-       _clock = clock;
+  })  : _journal = journal,
+        _policy = policy,
+        _clock = clock;
 
   final AuditJournal _journal;
   final PolicyEngine _policy;

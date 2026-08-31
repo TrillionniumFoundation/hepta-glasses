@@ -4,7 +4,7 @@ import 'package:demo_ai_even/runtime/model_gateway.dart';
 /// targets the Hepta model gateway and never embeds a third-party provider key.
 class ApiDeepSeekService {
   ApiDeepSeekService({ModelGateway? gateway})
-    : _gateway = gateway ?? ModelGatewayRegistry.current;
+      : _gateway = gateway ?? ModelGatewayRegistry.current;
 
   final ModelGateway _gateway;
 

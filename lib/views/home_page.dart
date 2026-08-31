@@ -296,23 +296,22 @@ class _HomePageState extends State<HomePage> {
                           stream: EvenAI.textStream,
                           initialData:
                               'Press and hold the left TouchBar to start.',
-                          builder:
-                              (
-                                BuildContext context,
-                                AsyncSnapshot<String> snapshot,
-                              ) => Obx(
-                                () => EvenAI.isEvenAISyncing.value
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(24),
-                                        child: CircularProgressIndicator(),
-                                      )
-                                    : Text(
-                                        snapshot.data ??
-                                            'No assistant response.',
-                                        style: const TextStyle(fontSize: 14),
-                                        textAlign: TextAlign.center,
-                                      ),
-                              ),
+                          builder: (
+                            BuildContext context,
+                            AsyncSnapshot<String> snapshot,
+                          ) =>
+                              Obx(
+                            () => EvenAI.isEvenAISyncing.value
+                                ? const Padding(
+                                    padding: EdgeInsets.all(24),
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : Text(
+                                    snapshot.data ?? 'No assistant response.',
+                                    style: const TextStyle(fontSize: 14),
+                                    textAlign: TextAlign.center,
+                                  ),
+                          ),
                         ),
                       ),
                     ),

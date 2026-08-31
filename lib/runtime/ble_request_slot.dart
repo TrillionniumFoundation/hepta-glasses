@@ -5,9 +5,9 @@ final class BleRequestKey {
     required this.generation,
     required this.side,
     required this.command,
-  }) : assert(generation >= 0),
-       assert(side == 'L' || side == 'R'),
-       assert(command >= 0 && command <= 0xff);
+  })  : assert(generation >= 0),
+        assert(side == 'L' || side == 'R'),
+        assert(command >= 0 && command <= 0xff);
 
   final int generation;
   final String side;
