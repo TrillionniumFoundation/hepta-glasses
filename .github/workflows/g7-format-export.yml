@@ -22,7 +22,6 @@ jobs:
       TARGET_SHA: 1be0adc5bb738b2dcd87eefe0c3d67276575131d
       TARGET_BRANCH: codex/hepta-glasses-gap-closure-g7
       BUNDLE_SHA256: 1491b92f8b884cd66448941429751791b0a791b6ad4738979a4e94594e46146d
-      PAYLOAD_SHA256: 9a387043752025aff734ff51abbb57da3d82c01bec191a2098e7930cbf41b858
     steps:
       - name: Check out exact bootstrap source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -33,9 +32,7 @@ jobs:
       - name: Capture and verify formatted source bundle
         run: |
           set -euo pipefail
-          cp tools/g7-six-files.tar.gz.b64 /tmp/g7-six-files.tar.gz.b64
-          printf '%s  %s\n' "$PAYLOAD_SHA256" /tmp/g7-six-files.tar.gz.b64 | sha256sum -c -
-          base64 -d /tmp/g7-six-files.tar.gz.b64 > /tmp/g7-six-files.tar.gz
+          base64 -d tools/g7-six-files.tar.gz.b64 > /tmp/g7-six-files.tar.gz
           printf '%s  %s\n' "$BUNDLE_SHA256" /tmp/g7-six-files.tar.gz | sha256sum -c -
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
