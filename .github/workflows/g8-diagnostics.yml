@@ -22,6 +22,13 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Snapshot exact diagnostic source
+        run: |
+          mkdir -p build/diagnostics
+          git archive \
+            --format=tar.gz \
+            --output=build/diagnostics/source.tar.gz \
+            HEAD
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
         with:
           distribution: temurin
