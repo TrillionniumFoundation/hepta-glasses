@@ -1,0 +1,17 @@
+{
+  "candidate_sha": null,
+  "claim": "terminal_source_convergence_failed",
+  "controller_branch": "ops/hepta-g13-terminal-source-convergence",
+  "controller_run_id": 33416768074,
+  "error": "command failed (1): gh api repos/TrillionniumFoundation/hepta-glasses/actions/runs?per_page=100",
+  "error_type": "ConvergenceError",
+  "generated_at": "2026-08-31T17:44:01.269897+00:00",
+  "pull_request_head": null,
+  "repository": "TrillionniumFoundation/hepta-glasses",
+  "schema_version": 1,
+  "stage": {
+    "stage": "cancel_legacy_orchestration",
+    "updated_at": "2026-08-31T17:44:00.505100+00:00"
+  },
+  "traceback": "Traceback (most recent call last):\n  File \"/home/runner/work/hepta-glasses/hepta-glasses/ops/g13_controller.py\", line 1330, in main\n    cancel_legacy_orchestration()\n  File \"/home/runner/work/hepta-glasses/hepta-glasses/ops/g13_controller.py\", line 285, in cancel_legacy_orchestration\n    runs = api(f\"repos/{REPOSITORY}/actions/runs?per_page=100\") or {}\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-glasses/hepta-glasses/ops/g13_controller.py\", line 239, in api\n    result = run(command, capture=True, input_text=input_text, check=check)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-glasses/hepta-glasses/ops/g13_controller.py\", line 181, in run\n    raise ConvergenceError(\nConvergenceError: command failed (1): gh api repos/TrillionniumFoundation/hepta-glasses/actions/runs?per_page=100\n"
+}
