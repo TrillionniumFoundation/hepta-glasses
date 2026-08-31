@@ -1,0 +1,45 @@
+name: g7-services-materialize
+
+on:
+  push:
+    branches:
+      - codex/hepta-glasses-gap-closure-g7
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: g7-services-materialize
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: codex/hepta-glasses-gap-closure-g7
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Apply services convergence
+        run: python3 tools/apply_g7_services_closure.py
+      - run: python3 -m compileall -q services adapters tools
+      - run: python3 -m unittest discover -s services -p 'test_*.py'
+      - run: python3 -m unittest discover -s adapters -p 'test_*.py'
+      - name: Commit services candidate
+        run: |
+          set -euo pipefail
+          git config user.name 'hepta-g7-convergence-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No source changes to commit.'
+            exit 0
+          fi
+          git commit -m 'fix(g7): close service concurrency and isolation blockers'
+          git push origin HEAD:codex/hepta-glasses-gap-closure-g7
