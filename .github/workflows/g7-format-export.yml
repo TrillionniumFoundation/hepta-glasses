@@ -1,4 +1,4 @@
-name: g7-format-export
+name: g7-format-and-history-fix
 
 on:
   push:
@@ -8,38 +8,76 @@ on:
       - '.github/workflows/g7-format-export.yml'
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: hepta-g7-format-fix
+  cancel-in-progress: false
 
 jobs:
-  format:
+  publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
+    env:
+      TARGET_SHA: 1be0adc5bb738b2dcd87eefe0c3d67276575131d
+      TARGET_BRANCH: codex/hepta-glasses-gap-closure-g7
+      HISTORY_PATCH_SHA256: 2b5b9f663803cf821df42e07a50164e606bf318a34b125b496219579d4487fea
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Check out exact bootstrap source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
-          persist-credentials: false
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Capture and verify bounded history patch
+        run: |
+          set -euo pipefail
+          cp tools/g7-history-fixture.patch /tmp/g7-history-fixture.patch
+          printf '%s  %s\n' "$HISTORY_PATCH_SHA256" /tmp/g7-history-fixture.patch | sha256sum -c -
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: '3.47.2'
           channel: stable
           cache: false
-      - run: flutter pub get
-      - name: Format exact failing files
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Apply exact fix and format with release Dart
         run: |
+          set -euo pipefail
+          git checkout --detach "$TARGET_SHA"
+          git apply --index --whitespace=error-all /tmp/g7-history-fixture.patch
+          flutter pub get
           dart format \
             lib/controllers/bmp_update_manager.dart \
             lib/services/evenai.dart \
             test/runtime/audit_journal_test.dart \
             test/runtime/bmp_update_manager_test.dart
-          git diff --check
-          git diff --binary > /tmp/g7-format.patch
-          sha256sum /tmp/g7-format.patch > /tmp/g7-format.patch.sha256
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: g7-format-${{ github.sha }}
-          path: |
-            /tmp/g7-format.patch
-            /tmp/g7-format.patch.sha256
-          if-no-files-found: error
-          retention-days: 1
+          git add \
+            lib/controllers/bmp_update_manager.dart \
+            lib/services/evenai.dart \
+            test/runtime/audit_journal_test.dart \
+            test/runtime/bmp_update_manager_test.dart
+          git diff --cached --check
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze --no-fatal-infos
+          flutter test
+          python3 tools/validate_repository.py
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+          tools/run_native_sanitizers.sh /tmp/g7-native-sanitizer.json
+      - name: Publish one non-workflow commit to G7
+        run: |
+          set -euo pipefail
+          git config user.name 'Hepta G7 Qualification Fix'
+          git config user.email 'actions@users.noreply.github.com'
+          tree="$(git write-tree)"
+          commit="$(printf '%s\n\n%s\n' \
+            'fix(g7): close format and synthetic-history blockers' \
+            'Uses Flutter 3.47.2 formatting and an exact object/path/fingerprint fixture allowlist.' \
+            | git commit-tree "$tree" -p "$TARGET_SHA")"
+          git push \
+            --force-with-lease="refs/heads/${TARGET_BRANCH}:${TARGET_SHA}" \
+            origin "${commit}:refs/heads/${TARGET_BRANCH}"
+          echo "G7_COMMIT=${commit}" >> "$GITHUB_ENV"
