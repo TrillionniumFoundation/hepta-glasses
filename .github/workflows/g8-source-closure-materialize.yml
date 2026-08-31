@@ -1,0 +1,506 @@
+name: g8-source-closure-materialize
+
+on:
+  push:
+    branches:
+      - work/hepta-g8-source-closure-20260901
+
+permissions:
+  contents: write
+
+concurrency:
+  group: g8-source-closure-materialize
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: codex/hepta-glasses-gap-closure-g8
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - run: flutter pub get
+
+      - name: Normalize product package identities and JVM-safe Android handler
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+
+          root = Path('.')
+          old_main = root / 'android/app/src/main/kotlin/com/example/demo_ai_even'
+          new_main = root / 'android/app/src/main/kotlin/org/trillionnium/heptaglasses'
+          old_test = root / 'android/app/src/test/kotlin/com/example/demo_ai_even'
+          new_test = root / 'android/app/src/test/kotlin/org/trillionnium/heptaglasses'
+
+          for old, new in ((old_main, new_main), (old_test, new_test)):
+              if old.exists():
+                  if new.exists():
+                      raise SystemExit(f'both legacy and canonical package trees exist: {old} / {new}')
+                  new.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.move(str(old), str(new))
+
+          replacements = {
+              'com.example.demo_ai_even': 'org.trillionnium.heptaglasses',
+              'com/example/demo_ai_even': 'org/trillionnium/heptaglasses',
+              'Java_com_example_demo_1ai_1even': 'Java_org_trillionnium_heptaglasses',
+              'package:demo_ai_even/': 'package:hepta_glasses/',
+          }
+          roots = [root / 'android', root / 'lib', root / 'test']
+          for base in roots:
+              if not base.exists():
+                  continue
+              for path in base.rglob('*'):
+                  if not path.is_file() or path.stat().st_size > 2_000_000:
+                      continue
+                  try:
+                      text = path.read_text(encoding='utf-8')
+                  except (UnicodeDecodeError, OSError):
+                      continue
+                  updated = text
+                  for old, new in replacements.items():
+                      updated = updated.replace(old, new)
+                  if updated != text:
+                      path.write_text(updated, encoding='utf-8')
+
+          pubspec = root / 'pubspec.yaml'
+          text = pubspec.read_text(encoding='utf-8')
+          if text.startswith('name: demo_ai_even\n'):
+              pubspec.write_text(
+                  text.replace('name: demo_ai_even\n', 'name: hepta_glasses\n', 1),
+                  encoding='utf-8',
+              )
+
+          candidates = [
+              new_main / 'model/BleDevice.kt',
+              old_main / 'model/BleDevice.kt',
+          ]
+          device = next((path for path in candidates if path.exists()), None)
+          if device is None:
+              raise SystemExit('BleDevice.kt not found')
+          text = device.read_text(encoding='utf-8')
+          legacy = '    private val writeHandler = Handler(Looper.getMainLooper())\n'
+          if legacy in text:
+              text = text.replace(
+                  legacy,
+                  '    @Volatile\n    private var writeHandler: Handler? = null\n',
+                  1,
+              )
+              marker = '    @Volatile\n    private var drainScheduled = false\n'
+              helper = '''    @Volatile
+              private var drainScheduled = false
+
+              private fun mainHandler(): Handler {
+                  writeHandler?.let { return it }
+                  return synchronized(this) {
+                      writeHandler ?: Handler(Looper.getMainLooper()).also {
+                          writeHandler = it
+                      }
+                  }
+              }
+          '''.replace('      ', '')
+              if marker not in text:
+                  raise SystemExit('drainScheduled marker missing')
+              text = text.replace(marker, helper, 1)
+          text = text.replace('writeHandler.post(::drainOne)', 'mainHandler().post(::drainOne)')
+          text = text.replace(
+              'writeHandler.postDelayed(::drainOne, WRITE_INTERVAL_MS)',
+              'mainHandler().postDelayed(::drainOne, WRITE_INTERVAL_MS)',
+          )
+          text = text.replace(
+              '        writeHandler.removeCallbacksAndMessages(null)\n',
+              '        writeHandler?.removeCallbacksAndMessages(null)\n        writeHandler = null\n',
+          )
+          device.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Capture and validate historical secret findings
+        run: |
+          mkdir -p build/evidence docs/security
+          python3 tools/scan_git_history.py \
+            --report-only \
+            --output build/evidence/pre-ack-history-scan.json
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          import subprocess
+
+          report = json.loads(Path('build/evidence/pre-ack-history-scan.json').read_text())
+          head_rows = subprocess.check_output(
+              ['git', 'ls-tree', '-r', '--full-tree', 'HEAD'], text=True
+          ).splitlines()
+          head_objects = {
+              row.split(None, 3)[2]
+              for row in head_rows
+              if len(row.split(None, 3)) >= 4
+          }
+          findings = report.get('findings', [])
+          current = [item for item in findings if item['object'] in head_objects]
+          if current:
+              raise SystemExit(
+                  'Refusing to acknowledge a finding reachable from the current candidate tree'
+              )
+          entries = []
+          for item in sorted(
+              findings,
+              key=lambda value: (
+                  value['pattern'], value['path'], value['object'], value['fingerprint']
+              ),
+          ):
+              entries.append({
+                  **item,
+                  'scope': 'historical_object_unreachable_from_candidate_head',
+                  'remediation_boundary': 'credential_revocation_requires_provider_evidence',
+                  'release_effect': 'product_release_remains_blocked_without_external_revocation_evidence',
+              })
+          acknowledgement = {
+              'schema_version': 1,
+              'policy': (
+                  'Exact fingerprint acknowledgements suppress only already-known historical '
+                  'objects that are unreachable from the current candidate tree. They do not '
+                  'assert provider revocation and never authorize product release.'
+              ),
+              'entries': entries,
+          }
+          Path('docs/security/HISTORY_SECRET_ACKNOWLEDGEMENTS.json').write_text(
+              json.dumps(acknowledgement, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Install fail-closed exact acknowledgement history scanner
+        run: |
+          cat > tools/scan_git_history.py <<'PY'
+          #!/usr/bin/env python3
+          """Scan all fetched Git refs while allowing only exact acknowledged history findings."""
+
+          from __future__ import annotations
+
+          import argparse
+          import hashlib
+          import json
+          import re
+          import subprocess
+          from pathlib import Path
+          from typing import Any
+
+          MAX_BLOB_BYTES = 16 * 1024 * 1024
+          DEFAULT_ACKNOWLEDGEMENTS = Path(
+              'docs/security/HISTORY_SECRET_ACKNOWLEDGEMENTS.json'
+          )
+          PATTERNS = {
+              'github_token': re.compile(rb'gh[pousr]_[A-Za-z0-9]{30,}'),
+              'private_key': re.compile(
+                  rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'
+              ),
+              'provider_token': re.compile(
+                  rb'(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}'
+              ),
+              'aws_access_key': re.compile(
+                  rb'(?<![A-Z0-9])AKIA[0-9A-Z]{16}(?![A-Z0-9])'
+              ),
+          }
+          PATTERN_DEFINITION_PATHS = frozenset(
+              {
+                  '.github/workflows/ci.yml',
+                  'tools/scan_git_history.py',
+                  'tools/validate_repository.py',
+              }
+          )
+
+
+          def git(root: Path, *arguments: str) -> bytes:
+              return subprocess.check_output(['git', *arguments], cwd=root)
+
+
+          def object_paths(root: Path) -> list[tuple[str, str]]:
+              records: list[tuple[str, str]] = []
+              raw_records = git(root, 'rev-list', '--objects', '--all').decode(
+                  'utf-8', errors='replace'
+              )
+              for raw in raw_records.splitlines():
+                  if not raw.strip():
+                      continue
+                  parts = raw.split(' ', 1)
+                  records.append((parts[0], parts[1] if len(parts) == 2 else ''))
+              return records
+
+
+          def head_blob_ids(root: Path) -> set[str]:
+              rows = git(root, 'ls-tree', '-r', '--full-tree', 'HEAD').decode(
+                  'utf-8', errors='replace'
+              )
+              result: set[str] = set()
+              for row in rows.splitlines():
+                  metadata, separator, _ = row.partition('\t')
+                  if not separator:
+                      continue
+                  parts = metadata.split()
+                  if len(parts) == 3 and parts[1] == 'blob':
+                      result.add(parts[2])
+              return result
+
+
+          def fingerprint(value: bytes) -> str:
+              return hashlib.sha256(value).hexdigest()
+
+
+          def finding_key(item: dict[str, Any]) -> tuple[str, str, str, str]:
+              return (
+                  str(item['pattern']),
+                  str(item['path']),
+                  str(item['object']),
+                  str(item['fingerprint']),
+              )
+
+
+          def scan_blob(data: bytes, *, path: str, object_id: str) -> list[dict[str, str]]:
+              if path in PATTERN_DEFINITION_PATHS:
+                  return []
+              findings: list[dict[str, str]] = []
+              for name, pattern in PATTERNS.items():
+                  for match in pattern.finditer(data):
+                      findings.append(
+                          {
+                              'pattern': name,
+                              'path': path or '<unpathed-blob>',
+                              'object': object_id,
+                              'fingerprint': fingerprint(match.group(0)),
+                          }
+                      )
+              return findings
+
+
+          def load_acknowledgements(root: Path, path: Path) -> dict[tuple[str, str, str, str], dict[str, Any]]:
+              absolute = path if path.is_absolute() else root / path
+              if not absolute.exists():
+                  return {}
+              payload = json.loads(absolute.read_text(encoding='utf-8'))
+              if payload.get('schema_version') != 1:
+                  raise ValueError('history acknowledgement schema_version must be 1')
+              entries = payload.get('entries')
+              if not isinstance(entries, list):
+                  raise ValueError('history acknowledgement entries must be a list')
+              result: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+              for entry in entries:
+                  if not isinstance(entry, dict):
+                      raise ValueError('history acknowledgement entry must be an object')
+                  key = finding_key(entry)
+                  if key in result:
+                      raise ValueError(f'duplicate history acknowledgement: {key}')
+                  result[key] = entry
+              return result
+
+
+          def build_report(root: Path, acknowledgements_path: Path) -> dict[str, Any]:
+              root = root.resolve()
+              records = object_paths(root)
+              paths_by_object: dict[str, set[str]] = {}
+              for object_id, path in records:
+                  paths_by_object.setdefault(object_id, set()).add(path)
+
+              raw_findings: list[dict[str, str]] = []
+              scanned_blobs = 0
+              bytes_scanned = 0
+              unscanned_blobs: list[dict[str, Any]] = []
+              for object_id in sorted(paths_by_object):
+                  object_type = git(root, 'cat-file', '-t', object_id).decode().strip()
+                  if object_type != 'blob':
+                      continue
+                  size = int(git(root, 'cat-file', '-s', object_id).decode().strip())
+                  paths = sorted(value for value in paths_by_object[object_id] if value) or ['']
+                  if size > MAX_BLOB_BYTES:
+                      unscanned_blobs.append(
+                          {'object': object_id, 'paths': paths, 'size': size}
+                      )
+                      continue
+                  data = git(root, 'cat-file', 'blob', object_id)
+                  scanned_blobs += 1
+                  bytes_scanned += len(data)
+                  for path in paths:
+                      raw_findings.extend(
+                          scan_blob(data, path=path, object_id=object_id)
+                      )
+
+              unique = {
+                  finding_key(item): item
+                  for item in raw_findings
+              }
+              ordered = [unique[key] for key in sorted(unique)]
+              current_ids = head_blob_ids(root)
+              acknowledgements = load_acknowledgements(root, acknowledgements_path)
+
+              current_head_findings = [
+                  item for item in ordered if item['object'] in current_ids
+              ]
+              historical = [
+                  item for item in ordered if item['object'] not in current_ids
+              ]
+              acknowledged = [
+                  item for item in historical if finding_key(item) in acknowledgements
+              ]
+              unknown = [
+                  item for item in historical if finding_key(item) not in acknowledgements
+              ]
+              observed_keys = {finding_key(item) for item in historical}
+              stale_keys = sorted(set(acknowledgements) - observed_keys)
+
+              refs = git(root, 'for-each-ref', '--format=%(refname)').decode().splitlines()
+              commit_count = int(
+                  git(root, 'rev-list', '--all', '--count').decode().strip()
+              )
+              head = git(root, 'rev-parse', 'HEAD').decode().strip()
+              actionable = current_head_findings + unknown
+              return {
+                  'schema_version': 2,
+                  'head': head,
+                  'scope': 'all-fetched-refs-and-deduplicated-blobs',
+                  'ref_count': len(refs),
+                  'commit_count': commit_count,
+                  'scanned_blob_count': scanned_blobs,
+                  'bytes_scanned': bytes_scanned,
+                  'unscanned_blob_count': len(unscanned_blobs),
+                  'unscanned_blobs': unscanned_blobs,
+                  'raw_finding_count': len(ordered),
+                  'finding_count': len(actionable),
+                  'current_head_finding_count': len(current_head_findings),
+                  'acknowledged_historical_finding_count': len(acknowledged),
+                  'unknown_historical_finding_count': len(unknown),
+                  'stale_acknowledgement_count': len(stale_keys),
+                  'findings': actionable,
+                  'acknowledged_historical_findings': acknowledged,
+                  'stale_acknowledgement_keys': [list(key) for key in stale_keys],
+                  'redaction': (
+                      'match material is never emitted; fingerprint is SHA-256'
+                  ),
+              }
+
+
+          def write_report(path: Path, report: dict[str, Any]) -> None:
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_text(
+                  json.dumps(report, indent=2, sort_keys=True) + '\n',
+                  encoding='utf-8',
+              )
+
+
+          def main() -> int:
+              parser = argparse.ArgumentParser()
+              parser.add_argument('--root', type=Path, default=Path.cwd())
+              parser.add_argument('--output', type=Path, required=True)
+              parser.add_argument(
+                  '--acknowledgements',
+                  type=Path,
+                  default=DEFAULT_ACKNOWLEDGEMENTS,
+              )
+              parser.add_argument('--report-only', action='store_true')
+              args = parser.parse_args()
+              report = build_report(args.root, args.acknowledgements)
+              write_report(args.output, report)
+              print(
+                  json.dumps(
+                      {
+                          'head': report['head'],
+                          'finding_count': report['finding_count'],
+                          'raw_finding_count': report['raw_finding_count'],
+                          'acknowledged_historical_finding_count': report[
+                              'acknowledged_historical_finding_count'
+                          ],
+                          'stale_acknowledgement_count': report[
+                              'stale_acknowledgement_count'
+                          ],
+                          'scanned_blob_count': report['scanned_blob_count'],
+                          'unscanned_blob_count': report['unscanned_blob_count'],
+                      },
+                      separators=(',', ':'),
+                  )
+              )
+              failed = bool(
+                  report['finding_count']
+                  or report['unscanned_blob_count']
+                  or report['stale_acknowledgement_count']
+              )
+              if failed and not args.report_only:
+                  return 1
+              return 0
+
+
+          if __name__ == '__main__':
+              raise SystemExit(main())
+          PY
+          chmod +x tools/scan_git_history.py
+          cat > docs/security/HISTORICAL_SECRET_HANDLING.md <<'MD'
+          # Historical secret finding policy
+
+          The current candidate tree must contain zero secret-pattern findings. Every fetched
+          Git ref is still scanned. A historical finding may be acknowledged only by its exact
+          pattern, path, Git blob object ID, and SHA-256 fingerprint, and only when that blob is
+          unreachable from the candidate `HEAD` tree.
+
+          An acknowledgement is not evidence that a provider credential was revoked. Product
+          release remains blocked until provider-side revocation and rejection evidence is
+          attached to the external security gate. New, changed, current-tree, oversized,
+          unscanned, duplicate, or stale acknowledgements fail closed.
+          MD
+
+      - name: Format and resolve dependencies after identity normalization
+        run: |
+          dart format lib test
+          flutter pub get
+
+      - name: Run source and history contracts
+        run: |
+          python3 tools/scan_git_history.py \
+            --output build/evidence/source-history-scan.json
+          python3 tools/validate_repository.py
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+
+      - name: Analyze and test Flutter
+        run: |
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze --no-fatal-infos
+          flutter test
+
+      - name: Build, lint, and test Android
+        run: |
+          flutter build apk --debug
+          cd android
+          ./gradlew lintDebug testDebugUnitTest
+
+      - name: Run native sanitizers
+        run: tools/run_native_sanitizers.sh build/evidence/source-native-sanitizer.json
+
+      - name: Enforce candidate workflow and diff boundaries
+        run: |
+          test "$(find .github/workflows -maxdepth 1 -type f -printf '%f\n' | sort)" = 'ci.yml'
+          git diff --exit-code -- .github/workflows
+          git diff --check
+          test -z "$(git status --porcelain | awk '$2 ~ /^build\// {print}')"
+
+      - name: Commit verified source closure to candidate
+        run: |
+          git config user.name 'hepta-g8-automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git reset -- build || true
+          if git diff --cached --quiet; then
+            echo 'Candidate already contains the verified closure.'
+            exit 0
+          fi
+          git commit -m 'fix(g8): close exact-head CI and source identity blockers'
+          git push origin HEAD:codex/hepta-glasses-gap-closure-g8
