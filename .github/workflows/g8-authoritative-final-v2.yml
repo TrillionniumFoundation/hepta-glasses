@@ -1,0 +1,547 @@
+name: g8-authoritative-final-v2
+
+on:
+  push:
+    branches:
+      - work/hepta-g8-authoritative-final-v2-20260901
+    paths:
+      - .github/workflows/g8-authoritative-final-v2.yml
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  bind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: work/hepta-g8-authoritative-final-v2-20260901
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Stabilize candidate, dispatch fresh matrix, and capture authority
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import base64
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from collections import Counter
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from typing import Any
+
+          repository = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          api = 'https://api.github.com'
+          candidate_branch = 'codex/hepta-glasses-gap-closure-g8'
+          pull_number = 23
+          expected_jobs = {
+              'repository-contracts',
+              'flutter',
+              'android-native',
+              'ios-native',
+              'native-sanitizers',
+              'secret-and-boundary-scan',
+              'source-evidence',
+          }
+
+          def request(method: str, path: str, payload: Any = None):
+              data = None if payload is None else json.dumps(payload).encode('utf-8')
+              req = urllib.request.Request(
+                  api + path,
+                  data=data,
+                  method=method,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'Content-Type': 'application/json',
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  body = response.read()
+                  return json.loads(body) if body else None
+
+          def graphql(query: str, variables: dict[str, Any]):
+              return request(
+                  'POST',
+                  '/graphql',
+                  {'query': query, 'variables': variables},
+              )
+
+          encoded_branch = urllib.parse.quote(candidate_branch, safe='')
+
+          # Require six consecutive observations of one unchanged PR head.
+          stable_head = None
+          stable_count = 0
+          pr = None
+          for _ in range(90):
+              pr = request('GET', f'/repos/{repository}/pulls/{pull_number}')
+              observed = pr['head']['sha']
+              if observed == stable_head:
+                  stable_count += 1
+              else:
+                  stable_head = observed
+                  stable_count = 1
+              if stable_count >= 6:
+                  break
+              time.sleep(10)
+          else:
+              raise SystemExit('Candidate head did not stabilize')
+
+          assert pr is not None and stable_head is not None
+          head = stable_head
+
+          old_dispatch_runs = request(
+              'GET',
+              f'/repos/{repository}/actions/runs?branch={encoded_branch}'
+              '&event=workflow_dispatch&per_page=100',
+          )['workflow_runs']
+          old_ids = {int(item['id']) for item in old_dispatch_runs}
+
+          request(
+              'POST',
+              f'/repos/{repository}/actions/workflows/ci.yml/dispatches',
+              {'ref': candidate_branch},
+          )
+
+          selected = None
+          jobs: list[dict[str, Any]] = []
+          head_changed = False
+          for _ in range(210):
+              current_pr = request('GET', f'/repos/{repository}/pulls/{pull_number}')
+              if current_pr['head']['sha'] != head:
+                  head_changed = True
+                  pr = current_pr
+                  break
+
+              runs = request(
+                  'GET',
+                  f'/repos/{repository}/actions/runs?branch={encoded_branch}'
+                  '&event=workflow_dispatch&per_page=100',
+              )['workflow_runs']
+              candidates = [
+                  item for item in runs
+                  if int(item['id']) not in old_ids
+                  and item.get('head_sha') == head
+                  and item.get('path') == '.github/workflows/ci.yml'
+                  and item.get('event') == 'workflow_dispatch'
+              ]
+              if candidates:
+                  selected = sorted(
+                      candidates,
+                      key=lambda item: int(item['id']),
+                      reverse=True,
+                  )[0]
+                  if selected.get('status') == 'completed':
+                      jobs = request(
+                          'GET',
+                          f"/repos/{repository}/actions/runs/{selected['id']}/jobs?per_page=100",
+                      )['jobs']
+                      names = {item['name'] for item in jobs}
+                      if names == expected_jobs and all(
+                          item.get('status') == 'completed' for item in jobs
+                      ):
+                          break
+              time.sleep(10)
+
+          job_results = {item['name']: item.get('conclusion') for item in jobs}
+          matrix_complete = set(job_results) == expected_jobs
+          matrix_success = matrix_complete and all(
+              value == 'success' for value in job_results.values()
+          )
+
+          artifacts: list[dict[str, Any]] = []
+          if selected is not None:
+              artifacts = request(
+                  'GET',
+                  f"/repos/{repository}/actions/runs/{selected['id']}/artifacts?per_page=100",
+              )['artifacts']
+          expected_artifact_name = f'hepta-source-evidence-{head}'
+          source_artifacts = [
+              item for item in artifacts
+              if item.get('name') == expected_artifact_name
+              and not item.get('expired')
+          ]
+          artifact_unique = len(source_artifacts) == 1
+          repository_gate = (
+              'PASS'
+              if not head_changed and matrix_success and artifact_unique
+              else 'FAIL'
+          )
+
+          # Review state and unresolved conversations are governance gates.
+          pr = request('GET', f'/repos/{repository}/pulls/{pull_number}')
+          reviews = request(
+              'GET', f'/repos/{repository}/pulls/{pull_number}/reviews?per_page=100'
+          )
+          latest_review_by_login: dict[str, dict[str, Any]] = {}
+          for review in reviews:
+              login = review.get('user', {}).get('login')
+              if login:
+                  latest_review_by_login[login] = review
+
+          commit = request('GET', f'/repos/{repository}/commits/{head}')
+          last_pusher_candidates = {
+              value
+              for value in (
+                  commit.get('author', {}).get('login') if commit.get('author') else None,
+                  commit.get('committer', {}).get('login') if commit.get('committer') else None,
+                  pr.get('user', {}).get('login'),
+              )
+              if value
+          }
+          eligible_approvals = [
+              {
+                  'reviewer': login,
+                  'commit_id': review.get('commit_id'),
+                  'submitted_at': review.get('submitted_at'),
+              }
+              for login, review in latest_review_by_login.items()
+              if review.get('state') == 'APPROVED'
+              and review.get('commit_id') == head
+              and login not in last_pusher_candidates
+          ]
+
+          unresolved_threads = None
+          try:
+              thread_data = graphql(
+                  '''
+                  query($owner:String!,$name:String!,$number:Int!){
+                    repository(owner:$owner,name:$name){
+                      pullRequest(number:$number){
+                        reviewThreads(first:100){nodes{isResolved}}
+                      }
+                    }
+                  }
+                  ''',
+                  {
+                      'owner': repository.split('/', 1)[0],
+                      'name': repository.split('/', 1)[1],
+                      'number': pull_number,
+                  },
+              )
+              nodes = (
+                  thread_data.get('data', {})
+                  .get('repository', {})
+                  .get('pullRequest', {})
+                  .get('reviewThreads', {})
+                  .get('nodes', [])
+              )
+              unresolved_threads = sum(
+                  1 for item in nodes if not item.get('isResolved')
+              )
+          except Exception:
+              unresolved_threads = None
+
+          independent_review_gate = 'PASS' if eligible_approvals else 'PENDING'
+          conversation_gate = (
+              'PASS' if unresolved_threads == 0
+              else 'PENDING' if unresolved_threads is None
+              else 'FAIL'
+          )
+
+          # Read Gap Ledger from the exact candidate head.
+          ledger_file = request(
+              'GET',
+              f'/repos/{repository}/contents/docs/GAP_LEDGER.yaml?ref={head}',
+          )
+          ledger_text = base64.b64decode(ledger_file['content']).decode('utf-8')
+          ledger_parse_error = None
+          try:
+              ledger = json.loads(ledger_text)
+          except json.JSONDecodeError as error:
+              ledger = {}
+              ledger_parse_error = str(error)
+          entries: list[dict[str, Any]] = []
+          for key in ('gaps', 'items', 'entries'):
+              value = ledger.get(key)
+              if isinstance(value, list):
+                  entries = [item for item in value if isinstance(item, dict)]
+                  break
+          closed_statuses = {
+              'CLOSED', 'MERGED', 'RELEASED', 'SUPERSEDED', 'REJECTED'
+          }
+          non_closed = [
+              {
+                  'id': item.get('id'),
+                  'status': item.get('status'),
+                  'owner': item.get('owner'),
+                  'title': item.get('title') or item.get('summary') or item.get('description'),
+                  'required_evidence': item.get('required_evidence') or item.get('evidence'),
+                  'unlock_condition': item.get('unlock_condition') or item.get('exit_criteria'),
+              }
+              for item in entries
+              if str(item.get('status', 'MISSING')).upper() not in closed_statuses
+          ]
+          status_counts = Counter(
+              str(item.get('status', 'MISSING')) for item in entries
+          )
+
+          branch_record = request(
+              'GET', f'/repos/{repository}/branches/main'
+          )
+          branch_protection: Any
+          try:
+              branch_protection = request(
+                  'GET', f'/repos/{repository}/branches/main/protection'
+              )
+          except urllib.error.HTTPError as error:
+              branch_protection = {
+                  'accessible': False,
+                  'http_status': error.code,
+                  'main_protected_flag': branch_record.get('protected'),
+              }
+
+          review_handoff_ready = (
+              repository_gate == 'PASS'
+              and conversation_gate == 'PASS'
+          )
+
+          # Ready-for-review is not approval. Never merge here.
+          reviewer_request = None
+          ready_transition = None
+          if review_handoff_ready:
+              if pr.get('draft'):
+                  try:
+                      result = graphql(
+                          '''
+                          mutation($id:ID!){
+                            markPullRequestReadyForReview(input:{pullRequestId:$id}){
+                              pullRequest{isDraft}
+                            }
+                          }
+                          ''',
+                          {'id': pr['node_id']},
+                      )
+                      ready_transition = result
+                  except Exception as error:
+                      ready_transition = {
+                          'error_type': type(error).__name__,
+                          'message': str(error),
+                      }
+              try:
+                  request(
+                      'POST',
+                      f'/repos/{repository}/pulls/{pull_number}/requested_reviewers',
+                      {'reviewers': ['ProfHepta']},
+                  )
+                  reviewer_request = 'ProfHepta'
+              except urllib.error.HTTPError as error:
+                  reviewer_request = f'unavailable_http_{error.code}'
+
+          state = {
+              'schema_version': 2,
+              'captured_at': datetime.now(timezone.utc).isoformat(),
+              'repository': repository,
+              'candidate_branch': candidate_branch,
+              'pull_request': {
+                  'number': pull_number,
+                  'state': pr.get('state'),
+                  'draft_before_transition': pr.get('draft'),
+                  'head_sha': head,
+                  'head_changed_after_dispatch': head_changed,
+                  'base_sha': pr.get('base', {}).get('sha'),
+                  'mergeable': pr.get('mergeable'),
+                  'mergeable_state': pr.get('mergeable_state'),
+                  'requested_reviewers_before_transition': [
+                      item.get('login') for item in pr.get('requested_reviewers', [])
+                  ],
+              },
+              'formal_ci': {
+                  'run_id': selected.get('id') if selected else None,
+                  'run_event': selected.get('event') if selected else None,
+                  'run_status': selected.get('status') if selected else None,
+                  'run_conclusion': selected.get('conclusion') if selected else None,
+                  'jobs': job_results,
+                  'matrix_complete': matrix_complete,
+                  'matrix_success': matrix_success,
+              },
+              'source_evidence': {
+                  'expected_name': expected_artifact_name,
+                  'matching_artifact_count': len(source_artifacts),
+                  'artifacts': [
+                      {
+                          'id': item.get('id'),
+                          'name': item.get('name'),
+                          'digest': item.get('digest'),
+                          'size_in_bytes': item.get('size_in_bytes'),
+                          'expired': item.get('expired'),
+                      }
+                      for item in source_artifacts
+                  ],
+              },
+              'gates': {
+                  'repository_actionable': repository_gate,
+                  'review_conversations': conversation_gate,
+                  'independent_review': independent_review_gate,
+                  'product_release': 'BLOCKED_UNTIL_ALL_REQUIRED_E5_E7_EVIDENCE_EXISTS',
+              },
+              'eligible_head_bound_approvals': eligible_approvals,
+              'excluded_approval_identities': sorted(last_pusher_candidates),
+              'unresolved_review_thread_count': unresolved_threads,
+              'review_handoff_ready': review_handoff_ready,
+              'ready_for_review_transition': ready_transition,
+              'independent_reviewer_request': reviewer_request,
+              'gap_ledger': {
+                  'parse_error': ledger_parse_error,
+                  'item_count': len(entries),
+                  'status_counts': dict(sorted(status_counts.items())),
+                  'non_closed': non_closed,
+              },
+              'main_branch': {
+                  'protected_flag': branch_record.get('protected'),
+                  'protection': branch_protection,
+              },
+              'claim_ceiling': (
+                  'A passing repository-actionable gate establishes source/CI evidence only. '
+                  'It is not physical-device qualification, deployed-system evidence, vendor '
+                  'authority, independent approval, release signing, pilot, rollout, rollback, '
+                  'or store approval.'
+              ),
+          }
+
+          output = Path('status')
+          output.mkdir(exist_ok=True)
+          json_path = output / 'g8-authoritative-final-v2.json'
+          md_path = output / 'g8-authoritative-final-v2.md'
+          json_path.write_text(
+              json.dumps(state, indent=2, sort_keys=True, ensure_ascii=False) + '\n',
+              encoding='utf-8',
+          )
+
+          lines = [
+              '# Hepta Glasses G8 authoritative final state v2',
+              '',
+              f"- Captured: `{state['captured_at']}`",
+              f"- Candidate head: `{head}`",
+              f"- Head changed after dispatch: `{head_changed}`",
+              f"- Formal run: `{state['formal_ci']['run_id']}`",
+              f"- Repository-actionable gate: `{repository_gate}`",
+              f"- Review-conversation gate: `{conversation_gate}`",
+              f"- Independent-review gate: `{independent_review_gate}`",
+              f"- Product-release gate: `{state['gates']['product_release']}`",
+              f"- Source Evidence artifact count: `{len(source_artifacts)}`",
+              '',
+              '## Formal exact-head checks',
+              '',
+              '| Check | Conclusion |',
+              '|---|---|',
+          ]
+          for name in sorted(expected_jobs):
+              lines.append(f"| `{name}` | `{job_results.get(name, 'missing')}` |")
+          lines.extend([
+              '',
+              '## Governance',
+              '',
+              f"- Unresolved review threads: `{unresolved_threads}`",
+              f"- Eligible head-bound approvals: `{len(eligible_approvals)}`",
+              f"- Review handoff ready: `{review_handoff_ready}`",
+              f"- Reviewer request: `{reviewer_request}`",
+              '',
+              '## Non-closed Gap Ledger entries',
+              '',
+          ])
+          if non_closed:
+              lines.extend([
+                  '| Gap | Status | Owner | Title |',
+                  '|---|---|---|---|',
+              ])
+              for item in non_closed:
+                  title = str(item.get('title') or '').replace('|', '/')
+                  lines.append(
+                      f"| `{item.get('id')}` | `{item.get('status')}` | "
+                      f"`{item.get('owner')}` | {title} |"
+                  )
+          else:
+              lines.append('No non-closed entries were present in the parsed ledger.')
+          lines.extend([
+              '',
+              '## Claim ceiling',
+              '',
+              state['claim_ceiling'],
+          ])
+          md_path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+
+          marker = '<!-- hepta-g8-authoritative-final-v2 -->'
+          comment_lines = [
+              marker,
+              '## Authoritative G8 final binding v2',
+              '',
+              f'- Exact head: `{head}`',
+              f"- Fresh workflow-dispatch run: `{state['formal_ci']['run_id']}`",
+              f'- Repository-actionable gate: `{repository_gate}`',
+              f'- Review-conversation gate: `{conversation_gate}`',
+              f'- Independent-review gate: `{independent_review_gate}`',
+              f'- Source Evidence artifact count: `{len(source_artifacts)}`',
+              '',
+              '| Required check | Conclusion |',
+              '|---|---|',
+          ]
+          for name in sorted(expected_jobs):
+              comment_lines.append(
+                  f"| `{name}` | `{job_results.get(name, 'missing')}` |"
+              )
+          comment_lines.extend([
+              '',
+              f'- Non-closed Gap Ledger entries: `{len(non_closed)}`',
+              f'- Review handoff ready: `{review_handoff_ready}`',
+              '',
+              'Any later push invalidates this binding. This comment does not approve or merge the PR and does not promote source evidence to E5-E7 evidence.',
+          ])
+          comment_body = '\n'.join(comment_lines)
+          comments = request(
+              'GET', f'/repos/{repository}/issues/{pull_number}/comments?per_page=100'
+          )
+          existing = next(
+              (
+                  item for item in comments
+                  if marker in (item.get('body') or '')
+              ),
+              None,
+          )
+          if existing:
+              request(
+                  'PATCH',
+                  f"/repos/{repository}/issues/comments/{existing['id']}",
+                  {'body': comment_body},
+              )
+          else:
+              request(
+                  'POST',
+                  f'/repos/{repository}/issues/{pull_number}/comments',
+                  {'body': comment_body},
+              )
+
+          Path('status/gate-exit-code.txt').write_text(
+              '0\n' if repository_gate == 'PASS' else '1\n',
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Commit authoritative state to the status branch
+        run: |
+          git config user.name 'hepta-g8-status'
+          git config user.email 'actions@users.noreply.github.com'
+          git add status/g8-authoritative-final-v2.json \
+                  status/g8-authoritative-final-v2.md \
+                  status/gate-exit-code.txt
+          git commit -m 'chore(g8): record authoritative stable-head final state v2'
+          git push origin HEAD:work/hepta-g8-authoritative-final-v2-20260901
+
+      - name: Enforce repository gate result
+        run: test "$(cat status/gate-exit-code.txt)" = '0'
