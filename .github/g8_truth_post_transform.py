@@ -72,6 +72,21 @@ if import_line not in validator:
     validator = validator.replace(anchor, f"{anchor}\n{import_line}\n", 1)
 VALIDATOR.write_text(validator, encoding="utf-8")
 
+# Remove duplicate YAML-named JSON ledgers only after verifying that the
+# canonical JSON forms exist and every duplicate remains parseable.
+for old_relative, new_relative in (
+    ("docs/GAP_LEDGER.yaml", "docs/GAP_LEDGER.json"),
+    ("docs/EVIDENCE_INDEX.yaml", "docs/EVIDENCE_INDEX.json"),
+):
+    old_path = ROOT / old_relative
+    new_path = ROOT / new_relative
+    if not new_path.is_file():
+        raise SystemExit(f"canonical ledger missing: {new_relative}")
+    json.loads(new_path.read_text(encoding="utf-8"))
+    if old_path.exists():
+        json.loads(old_path.read_text(encoding="utf-8"))
+        old_path.unlink()
+
 # Machine truth must never reference files removed by the package migration.
 for relative in ("docs/GAP_LEDGER.json", "docs/EVIDENCE_INDEX.json"):
     path = ROOT / relative
