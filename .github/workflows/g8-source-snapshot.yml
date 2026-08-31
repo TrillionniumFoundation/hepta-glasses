@@ -1,0 +1,33 @@
+name: g8-source-snapshot
+
+on:
+  push:
+    branches:
+      - work/hepta-glasses-g8-source-snapshot
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Archive parent source tree
+        run: |
+          set -euo pipefail
+          mkdir -p build/snapshot
+          git archive --format=tar.gz --output=build/snapshot/source.tar.gz HEAD^
+          git rev-parse HEAD^ > build/snapshot/source.sha
+          sha256sum build/snapshot/source.tar.gz > build/snapshot/source.tar.gz.sha256
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-g8-source-${{ github.sha }}
+          path: build/snapshot
+          if-no-files-found: error
+          retention-days: 3
