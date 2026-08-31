@@ -1,0 +1,271 @@
+name: g8-finalize
+
+on:
+  push:
+    branches:
+      - ops/hepta-g8-finalize-20260831
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: g8-finalize-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BASE_SHA: 0b52e35683bc56f756473d5341c87af18585630c
+  READY_BRANCH: work/hepta-glasses-g8-truth-ready
+  VALIDATION_BRANCH: codex/hepta-glasses-gap-closure-g8-validation-final
+  PR_BRANCH: codex/hepta-glasses-gap-closure-g8
+  PR_NUMBER: '23'
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Wait for and verify clean candidate
+        id: candidate
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 180); do
+            if git fetch --force origin \
+              "refs/heads/$READY_BRANCH:refs/remotes/origin/$READY_BRANCH"; then
+              break
+            fi
+            if test "$attempt" = 180; then
+              echo 'ready branch was not produced' >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          sha="$(git rev-parse "refs/remotes/origin/$READY_BRANCH^{commit}")"
+          parent="$(git rev-parse "$sha^")"
+          test "$parent" = "$BASE_SHA"
+          test "$(git rev-list --parents -n 1 "$sha" | wc -w)" = 2
+          git checkout --detach "$sha"
+          python3 tools/validate_repository.py
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+          find services adapters tools -type d -name __pycache__ -prune -exec rm -rf {} +
+          test -z "$(git status --porcelain)"
+          test "$(find .github/workflows -maxdepth 1 -type f -printf '%f\n' | sort)" = "ci.yml"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Publish isolated exact-head validation ref
+        run: |
+          set -euo pipefail
+          sha='${{ steps.candidate.outputs.sha }}'
+          git push --force origin "$sha:refs/heads/$VALIDATION_BRANCH"
+      - name: Dispatch the formal seven-job CI authority
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          sha='${{ steps.candidate.outputs.sha }}'
+          api="https://api.github.com/repos/$GH_REPO"
+          workflow_id="$(python3 - "$api" "$GH_TOKEN" <<'PY'
+          import json,sys,urllib.request
+          api,token=sys.argv[1:]
+          request=urllib.request.Request(
+              api+'/actions/workflows?per_page=100',
+              headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json'},
+          )
+          with urllib.request.urlopen(request) as response:
+              workflows=json.load(response)['workflows']
+          matches=[item for item in workflows if item.get('path')=='.github/workflows/ci.yml']
+          if len(matches)!=1:
+              raise SystemExit(f'expected one ci.yml workflow, found {len(matches)}')
+          print(matches[0]['id'])
+          PY
+          )"
+          payload="$(python3 -c 'import json,os; print(json.dumps({"ref":os.environ["VALIDATION_BRANCH"]}))')"
+          http="$(curl --silent --show-error --output /tmp/dispatch.out --write-out '%{http_code}' \
+            --request POST \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$api/actions/workflows/$workflow_id/dispatches" \
+            --data "$payload")"
+          if test "$http" != 204; then
+            cat /tmp/dispatch.out >&2
+            echo "workflow dispatch failed with HTTP $http" >&2
+            exit 1
+          fi
+          echo "workflow_id=$workflow_id" >> "$GITHUB_OUTPUT"
+          echo "dispatched_sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Wait for exact-head CI and verify every required job
+        id: evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          sha='${{ steps.candidate.outputs.sha }}'
+          workflow_id='${{ steps.dispatch.outputs.workflow_id }}'
+          api="https://api.github.com/repos/$GH_REPO"
+          run_id=''
+          for attempt in $(seq 1 180); do
+            runs="$(curl --fail --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              "$api/actions/workflows/$workflow_id/runs?branch=$VALIDATION_BRANCH&event=workflow_dispatch&per_page=20")"
+            run_id="$(RUNS="$runs" SHA="$sha" python3 - <<'PY'
+          import json,os
+          runs=json.loads(os.environ['RUNS']).get('workflow_runs',[])
+          sha=os.environ['SHA']
+          matches=[r for r in runs if r.get('head_sha')==sha and r.get('event')=='workflow_dispatch']
+          print(matches[0]['id'] if matches else '')
+          PY
+          )"
+            test -n "$run_id" && break
+            if test "$attempt" = 180; then
+              echo 'exact-head workflow_dispatch run was not created' >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          conclusion=''
+          for attempt in $(seq 1 540); do
+            run="$(curl --fail --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              "$api/actions/runs/$run_id")"
+            status="$(RUN="$run" python3 -c 'import json,os; print(json.loads(os.environ["RUN"])["status"])')"
+            if test "$status" = completed; then
+              conclusion="$(RUN="$run" python3 -c 'import json,os; print(json.loads(os.environ["RUN"]).get("conclusion") or "")')"
+              break
+            fi
+            if test "$attempt" = 540; then
+              echo 'exact-head CI did not complete before deadline' >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          test "$conclusion" = success
+          jobs="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            "$api/actions/runs/$run_id/jobs?per_page=100")"
+          JOBS="$jobs" python3 - <<'PY'
+          import json,os
+          expected={
+              'repository-contracts','flutter','android-native','ios-native',
+              'native-sanitizers','secret-and-boundary-scan','source-evidence',
+          }
+          jobs=json.loads(os.environ['JOBS']).get('jobs',[])
+          by_name={job.get('name'):job for job in jobs}
+          if set(by_name)!=expected:
+              raise SystemExit(f'job set mismatch: {sorted(by_name)}')
+          failed={name:job.get('conclusion') for name,job in by_name.items() if job.get('conclusion')!='success'}
+          if failed:
+              raise SystemExit(f'non-success jobs: {failed}')
+          for name,job in by_name.items():
+              if not job.get('steps'):
+                  raise SystemExit(f'job {name} has no steps')
+          PY
+          artifacts="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            "$api/actions/runs/$run_id/artifacts?per_page=100")"
+          artifact_record="$(ARTIFACTS="$artifacts" SHA="$sha" python3 - <<'PY'
+          import json,os
+          expected='hepta-source-evidence-'+os.environ['SHA']
+          items=json.loads(os.environ['ARTIFACTS']).get('artifacts',[])
+          matches=[item for item in items if item.get('name')==expected and not item.get('expired')]
+          if len(matches)!=1:
+              raise SystemExit(f'expected one live source artifact, found {len(matches)}')
+          item=matches[0]
+          digest=item.get('digest') or ''
+          if not digest.startswith('sha256:'):
+              raise SystemExit('source artifact has no SHA-256 digest')
+          print(json.dumps({'id':item['id'],'name':item['name'],'digest':digest},separators=(',',':')))
+          PY
+          )"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "artifact=$artifact_record" >> "$GITHUB_OUTPUT"
+          mkdir -p build/finalization
+          JOBS="$jobs" ARTIFACT="$artifact_record" SHA="$sha" RUN_ID="$run_id" python3 - <<'PY'
+          import json,os,pathlib
+          state={
+              'schema_version':1,
+              'head_sha':os.environ['SHA'],
+              'workflow_run_id':int(os.environ['RUN_ID']),
+              'required_jobs':{
+                  item['name']:item['conclusion']
+                  for item in json.loads(os.environ['JOBS'])['jobs']
+              },
+              'source_evidence_artifact':json.loads(os.environ['ARTIFACT']),
+              'independent_review':'pending',
+              'merged':False,
+              'product_release':False,
+          }
+          pathlib.Path('build/finalization/exact-head-source-state.json').write_text(
+              json.dumps(state,indent=2,sort_keys=True)+'\n',encoding='utf-8'
+          )
+          PY
+      - name: Promote the verified identical commit to PR 23
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          sha='${{ steps.candidate.outputs.sha }}'
+          git push --force origin "$sha:refs/heads/$PR_BRANCH"
+          api="https://api.github.com/repos/$GH_REPO"
+          for attempt in $(seq 1 30); do
+            head="$(curl --fail --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header 'Accept: application/vnd.github+json' \
+              "$api/pulls/$PR_NUMBER" | python3 -c 'import json,sys; print(json.load(sys.stdin)["head"]["sha"])')"
+            test "$head" = "$sha" && break
+            if test "$attempt" = 30; then
+              echo "PR head did not converge to $sha" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          artifact='${{ steps.evidence.outputs.artifact }}'
+          run_id='${{ steps.evidence.outputs.run_id }}'
+          body="$(SHA="$sha" RUN_ID="$run_id" ARTIFACT="$artifact" python3 - <<'PY'
+          import json,os
+          artifact=json.loads(os.environ['ARTIFACT'])
+          print('\n'.join([
+              'G8 exact-head source verification completed.',
+              '',
+              f'- Head: `{os.environ["SHA"]}`',
+              f'- Formal CI run: `{os.environ["RUN_ID"]}`',
+              '- Required jobs: all seven non-empty and successful',
+              f'- Source evidence artifact: `{artifact["name"]}`',
+              f'- Artifact digest: `{artifact["digest"]}`',
+              '',
+              'This establishes source evidence only. Independent approval, physical G1 qualification, deployed production controls, vendor authority, signing, pilot, rollout, rollback, and store approval remain separate gates. The implementing automation did not approve or merge this PR.',
+          ]))
+          PY
+          )"
+          payload="$(BODY="$body" python3 -c 'import json,os; print(json.dumps({"body":os.environ["BODY"]}))')"
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$api/issues/$PR_NUMBER/comments" \
+            --data "$payload" >/dev/null
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-g8-finalization-${{ steps.candidate.outputs.sha }}
+          path: build/finalization
+          if-no-files-found: error
+          retention-days: 30
