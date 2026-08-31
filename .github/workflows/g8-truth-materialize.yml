@@ -16,7 +16,7 @@ jobs:
   apply:
     if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -31,9 +31,11 @@ jobs:
           flutter-version: '3.47.2'
           channel: stable
           cache: false
+      - name: Resolve locked Flutter dependencies
+        run: flutter pub get
       - name: Apply deterministic G8 product-truth migration
         run: python3 .github/g8_truth_transform.py
-      - name: Close post-transform validator path drift
+      - name: Close post-transform validator drift
         run: python3 .github/g8_truth_post_transform.py
       - name: Canonicalize Dart source
         run: dart format lib test
@@ -47,7 +49,28 @@ jobs:
           find services adapters tools -type d -name __pycache__ -prune -exec rm -rf {} +
           git diff --check
           test "$(find .github/workflows -maxdepth 1 -type f -printf '%f\n' | sort)" = "ci.yml"
+      - name: Capture transformed source after a failed gate
+        if: failure()
+        run: |
+          set -euo pipefail
+          mkdir -p build/g8-diagnostics
+          git status --short > build/g8-diagnostics/status.txt
+          git diff --no-ext-diff --binary > build/g8-diagnostics/materialized.patch
+          tar \
+            --exclude=.git \
+            --exclude=build/g8-diagnostics \
+            -czf /tmp/g8-materialized-source.tar.gz \
+            .
+          mv /tmp/g8-materialized-source.tar.gz build/g8-diagnostics/source.tar.gz
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: hepta-g8-materialized-diagnostics-${{ github.sha }}
+          path: build/g8-diagnostics
+          if-no-files-found: error
+          retention-days: 3
       - name: Commit self-cleaning result
+        if: success()
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'

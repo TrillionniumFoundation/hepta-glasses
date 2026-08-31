@@ -12,6 +12,7 @@ VALIDATOR = ROOT / "tools" / "validate_repository.py"
 SURFACE_VALIDATOR = ROOT / "tools" / "validate_product_surface.py"
 ANDROID_BUILD = ROOT / "android" / "app" / "build.gradle"
 ANDROID_MANIFEST = ROOT / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
+CANONICAL_REVISION = "2026-08-31-g8"
 
 PATH_REPLACEMENTS = (
     (
@@ -46,6 +47,19 @@ def replace_json(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: replace_json(item) for key, item in value.items()}
     return value
+
+
+def normalize_revision_label(path: Path) -> None:
+    value = path.read_text(encoding="utf-8")
+    normalized, count = re.subn(
+        rf"(?m)^(?:Revision|Canonical plan revision|Canonical revision):\s*`{re.escape(CANONICAL_REVISION)}`\s*$",
+        f"Canonical revision: `{CANONICAL_REVISION}`",
+        value,
+        count=1,
+    )
+    if count != 1:
+        raise SystemExit(f"unable to normalize canonical revision label in {path.relative_to(ROOT)}")
+    path.write_text(normalized, encoding="utf-8")
 
 
 # Required-file contract must point to the canonical test package. The legacy
@@ -96,6 +110,11 @@ if transformed_check in surface:
 elif legacy_check not in surface:
     raise SystemExit("product-surface legacy-ledger check cannot be reconciled")
 SURFACE_VALIDATOR.write_text(surface, encoding="utf-8")
+
+# The canonical plan and Current State use one label so both human and machine
+# readers bind to the same revision without special-case wording.
+normalize_revision_label(ROOT / "docs" / "HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md")
+normalize_revision_label(ROOT / "docs" / "CURRENT_STATE.md")
 
 # Remove Kotlin reflection regardless of whether an older branch pinned the
 # version directly or interpolated it from a Gradle variable.
