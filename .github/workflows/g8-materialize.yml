@@ -35,10 +35,13 @@ jobs:
       - name: Apply staged exact-source repair
         run: |
           set -euo pipefail
-          base64 --decode .github/g8-fix.patch.gz.b64 | gunzip > /tmp/g8-fix.patch
+          base64 --decode .github/g8-fix-v2.patch.gz.b64 | gunzip > /tmp/g8-fix.patch
           git apply --check /tmp/g8-fix.patch
           git apply /tmp/g8-fix.patch
-          rm -f .github/g8-fix.patch.gz.b64 .github/workflows/g8-materialize.yml
+          rm -f \
+            .github/g8-fix.patch.gz.b64 \
+            .github/g8-fix-v2.patch.gz.b64 \
+            .github/workflows/g8-materialize.yml
       - name: Normalize and verify source
         run: |
           set -euo pipefail
