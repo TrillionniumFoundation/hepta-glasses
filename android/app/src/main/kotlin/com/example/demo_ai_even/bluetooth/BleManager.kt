@@ -20,7 +20,8 @@ import com.example.demo_ai_even.model.BleDevice
 import com.example.demo_ai_even.model.BlePairDevice
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.lang.ref.WeakReference
 import java.util.UUID
@@ -37,6 +38,8 @@ class BleManager private constructor() {
             "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
         private const val CLIENT_CONFIGURATION_UUID =
             "00002902-0000-1000-8000-00805f9b34fb"
+        private const val REQUIRED_MTU = 203
+        private const val REQUESTED_MTU = 251
 
         val instance: BleManager by lazy { BleManager() }
     }
@@ -47,10 +50,14 @@ class BleManager private constructor() {
         get() = bluetoothManager.adapter
     private val discoveredDevices: MutableList<BleDevice> = mutableListOf()
     private var connectedDevice: BlePairDevice? = null
+    private val notificationReadyAddresses: MutableSet<String> = mutableSetOf()
     private val readyAddresses: MutableSet<String> = mutableSetOf()
     private val intentionalDisconnectAddresses: MutableSet<String> = mutableSetOf()
+
+    @Volatile
     private var connectionGeneration = 0
-    private val mainScope: CoroutineScope = MainScope()
+
+    private val decodeScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val scanSettings = ScanSettings.Builder()
         .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
@@ -130,11 +137,14 @@ class BleManager private constructor() {
             )
             return
         }
+
         disconnectCurrent(notifyFlutter = false)
         connectionGeneration += 1
         intentionalDisconnectAddresses.clear()
+        notificationReadyAddresses.clear()
         readyAddresses.clear()
-        connectedDevice = BlePairDevice(left, right)
+        val pair = BlePairDevice(left, right)
+        connectedDevice = pair
         BleChannelHelper.bleMC.flutterGlassesConnecting(
             mapOf(
                 "leftDeviceName" to left.name,
@@ -142,16 +152,31 @@ class BleManager private constructor() {
                 "generation" to connectionGeneration,
             ),
         )
+
         val activity = weakActivity.get()
         if (activity == null) {
+            connectedDevice = null
             result.error("ActivityUnavailable", "Activity is unavailable", null)
             return
         }
+
         val generation = connectionGeneration
-        bluetoothAdapter.getRemoteDevice(left.address)
-            .connectGatt(activity, false, gattCallback(generation))
-        bluetoothAdapter.getRemoteDevice(right.address)
-            .connectGatt(activity, false, gattCallback(generation))
+        try {
+            val leftGatt = bluetoothAdapter.getRemoteDevice(left.address)
+                .connectGatt(activity, false, gattCallback(generation))
+            left.gatt = leftGatt
+            val rightGatt = bluetoothAdapter.getRemoteDevice(right.address)
+                .connectGatt(activity, false, gattCallback(generation))
+            right.gatt = rightGatt
+        } catch (error: Exception) {
+            disconnectCurrent(notifyFlutter = true)
+            result.error(
+                "ConnectionStartFailed",
+                error::class.java.simpleName,
+                null,
+            )
+            return
+        }
         result.success("Connecting to G1_$deviceChannel ...")
     }
 
@@ -191,156 +216,184 @@ class BleManager private constructor() {
 
     private fun gattCallback(generation: Int): BluetoothGattCallback =
         object : BluetoothGattCallback() {
-        private fun current(gatt: BluetoothGatt): Boolean {
-            if (generation == connectionGeneration) {
-                return true
-            }
-            intentionalDisconnectAddresses.remove(gatt.device.address)
-            try {
-                gatt.close()
-            } catch (error: Exception) {
-                Log.w(LOG_TAG, "Stale GATT close failed", error)
-            }
-            return false
-        }
-        override fun onConnectionStateChange(
-            gatt: BluetoothGatt,
-            status: Int,
-            newState: Int,
-        ) {
-            if (!current(gatt)) return
-            when {
-                status != BluetoothGatt.GATT_SUCCESS -> {
-                    handleDisconnected(gatt, "gatt_status_$status")
+            private fun current(gatt: BluetoothGatt): Boolean {
+                val pair = connectedDevice
+                val selected = pair?.leftDevice?.gatt === gatt ||
+                    pair?.rightDevice?.gatt === gatt
+                if (generation == connectionGeneration && selected) {
+                    return true
                 }
-                newState == BluetoothProfile.STATE_CONNECTED -> {
-                    if (!gatt.discoverServices()) {
-                        handleDisconnected(gatt, "service_discovery_not_started")
+                intentionalDisconnectAddresses.remove(gatt.device.address)
+                try {
+                    gatt.close()
+                } catch (error: Exception) {
+                    Log.w(LOG_TAG, "Stale GATT close failed", error)
+                }
+                return false
+            }
+
+            override fun onConnectionStateChange(
+                gatt: BluetoothGatt,
+                status: Int,
+                newState: Int,
+            ) {
+                if (!current(gatt)) return
+                when {
+                    status != BluetoothGatt.GATT_SUCCESS -> {
+                        handleDisconnected(gatt, "gatt_status_$status")
+                    }
+                    newState == BluetoothProfile.STATE_CONNECTED -> {
+                        if (!gatt.discoverServices()) {
+                            handleDisconnected(
+                                gatt,
+                                "service_discovery_not_started",
+                            )
+                        }
+                    }
+                    newState == BluetoothProfile.STATE_DISCONNECTED -> {
+                        handleDisconnected(gatt, "link_disconnected")
                     }
                 }
-                newState == BluetoothProfile.STATE_DISCONNECTED -> {
-                    handleDisconnected(gatt, "link_disconnected")
+            }
+
+            override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+                if (!current(gatt)) return
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    handleDisconnected(gatt, "service_discovery_failed_$status")
+                    return
+                }
+                val pair = connectedDevice ?: return
+                val isLeft = pair.leftDevice?.gatt === gatt
+                val isRight = pair.rightDevice?.gatt === gatt
+                if (!isLeft && !isRight) return
+
+                val service = gatt.getService(UUID.fromString(SERVICE_UUID))
+                val readCharacteristic = service?.getCharacteristic(
+                    UUID.fromString(READ_CHARACTERISTIC_UUID),
+                )
+                val writeCharacteristic = service?.getCharacteristic(
+                    UUID.fromString(WRITE_CHARACTERISTIC_UUID),
+                )
+                val descriptor = readCharacteristic?.getDescriptor(
+                    UUID.fromString(CLIENT_CONFIGURATION_UUID),
+                )
+                if (readCharacteristic == null ||
+                    writeCharacteristic == null ||
+                    descriptor == null ||
+                    !gatt.setCharacteristicNotification(readCharacteristic, true)
+                ) {
+                    handleDisconnected(gatt, "gatt_contract_incomplete")
+                    return
+                }
+
+                if (isLeft) {
+                    pair.leftDevice?.writeCharacteristic = writeCharacteristic
+                } else {
+                    pair.rightDevice?.writeCharacteristic = writeCharacteristic
+                }
+
+                val started = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    gatt.writeDescriptor(
+                        descriptor,
+                        BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE,
+                    ) == BluetoothGatt.GATT_SUCCESS
+                } else {
+                    @Suppress("DEPRECATION")
+                    descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                    @Suppress("DEPRECATION")
+                    gatt.writeDescriptor(descriptor)
+                }
+                if (!started) {
+                    handleDisconnected(gatt, "notification_descriptor_not_started")
                 }
             }
-        }
 
-        override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-            if (!current(gatt)) return
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                handleDisconnected(gatt, "service_discovery_failed_$status")
-                return
-            }
-            val pair = connectedDevice ?: return
-            val isLeft = gatt.device.address == pair.leftDevice?.address
-            val isRight = gatt.device.address == pair.rightDevice?.address
-            if (!isLeft && !isRight) return
-
-            val service = gatt.getService(UUID.fromString(SERVICE_UUID))
-            val readCharacteristic = service?.getCharacteristic(
-                UUID.fromString(READ_CHARACTERISTIC_UUID),
-            )
-            val writeCharacteristic = service?.getCharacteristic(
-                UUID.fromString(WRITE_CHARACTERISTIC_UUID),
-            )
-            val descriptor = readCharacteristic?.getDescriptor(
-                UUID.fromString(CLIENT_CONFIGURATION_UUID),
-            )
-            if (readCharacteristic == null ||
-                writeCharacteristic == null ||
-                descriptor == null ||
-                !gatt.setCharacteristicNotification(readCharacteristic, true)
+            override fun onDescriptorWrite(
+                gatt: BluetoothGatt,
+                descriptor: BluetoothGattDescriptor,
+                status: Int,
             ) {
-                handleDisconnected(gatt, "gatt_contract_incomplete")
-                return
+                if (!current(gatt)) return
+                if (descriptor.uuid != UUID.fromString(CLIENT_CONFIGURATION_UUID)) {
+                    return
+                }
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    handleDisconnected(
+                        gatt,
+                        "notification_descriptor_failed_$status",
+                    )
+                    return
+                }
+                notificationReadyAddresses.add(gatt.device.address)
+                if (!gatt.requestMtu(REQUESTED_MTU)) {
+                    handleDisconnected(gatt, "mtu_request_not_started")
+                }
             }
 
-            if (isLeft) {
-                pair.update(leftGatt = gatt)
-                pair.leftDevice?.writeCharacteristic = writeCharacteristic
-            } else {
-                pair.update(rightGatt = gatt)
-                pair.rightDevice?.writeCharacteristic = writeCharacteristic
+            override fun onMtuChanged(
+                gatt: BluetoothGatt,
+                mtu: Int,
+                status: Int,
+            ) {
+                if (!current(gatt)) return
+                if (status != BluetoothGatt.GATT_SUCCESS ||
+                    mtu < REQUIRED_MTU ||
+                    !notificationReadyAddresses.contains(gatt.device.address)
+                ) {
+                    handleDisconnected(gatt, "mtu_contract_failed_${status}_$mtu")
+                    return
+                }
+                markReady(gatt)
             }
 
-            val started = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                gatt.writeDescriptor(
-                    descriptor,
-                    BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE,
-                ) == BluetoothGatt.GATT_SUCCESS
-            } else {
+            @Deprecated("Deprecated in Android 13")
+            override fun onCharacteristicChanged(
+                gatt: BluetoothGatt,
+                characteristic: BluetoothGattCharacteristic,
+            ) {
+                if (!current(gatt)) return
                 @Suppress("DEPRECATION")
-                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                @Suppress("DEPRECATION")
-                gatt.writeDescriptor(descriptor)
+                handleCharacteristic(gatt, characteristic.value ?: return)
             }
-            if (!started) {
-                handleDisconnected(gatt, "notification_descriptor_not_started")
-            }
-        }
 
-        override fun onDescriptorWrite(
-            gatt: BluetoothGatt,
-            descriptor: BluetoothGattDescriptor,
-            status: Int,
-        ) {
-            if (!current(gatt)) return
-            if (descriptor.uuid != UUID.fromString(CLIENT_CONFIGURATION_UUID)) {
-                return
+            override fun onCharacteristicChanged(
+                gatt: BluetoothGatt,
+                characteristic: BluetoothGattCharacteristic,
+                value: ByteArray,
+            ) {
+                if (!current(gatt)) return
+                handleCharacteristic(gatt, value)
             }
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                handleDisconnected(gatt, "notification_descriptor_failed_$status")
-                return
-            }
-            markReady(gatt)
         }
-
-        @Deprecated("Deprecated in Android 13")
-        override fun onCharacteristicChanged(
-            gatt: BluetoothGatt,
-            characteristic: BluetoothGattCharacteristic,
-        ) {
-            if (!current(gatt)) return
-            @Suppress("DEPRECATION")
-            handleCharacteristic(gatt, characteristic.value ?: return)
-        }
-
-        override fun onCharacteristicChanged(
-            gatt: BluetoothGatt,
-            characteristic: BluetoothGattCharacteristic,
-            value: ByteArray,
-        ) {
-            if (!current(gatt)) return
-            handleCharacteristic(gatt, value)
-        }
-    }
 
     private fun markReady(gatt: BluetoothGatt) {
         val pair = connectedDevice ?: return
         val address = gatt.device.address
-        val isLeft = address == pair.leftDevice?.address
-        val isRight = address == pair.rightDevice?.address
-        if (!isLeft && !isRight) return
+        val device = when {
+            pair.leftDevice?.gatt === gatt -> pair.leftDevice
+            pair.rightDevice?.gatt === gatt -> pair.rightDevice
+            else -> null
+        } ?: return
+        if (readyAddresses.contains(address)) return
 
-        readyAddresses.add(address)
-        gatt.requestMtu(251)
-        gatt.device.createBond()
-        if (isLeft) {
-            pair.update(leftGatt = gatt, isLeftConnect = true)
-            pair.leftDevice?.sendData(byteArrayOf(0xf4.toByte(), 0x01))
-        } else {
-            pair.update(rightGatt = gatt, isRightConnected = true)
-            pair.rightDevice?.sendData(byteArrayOf(0xf4.toByte(), 0x01))
+        if (!device.writeInitialization(byteArrayOf(0xf4.toByte(), 0x01))) {
+            handleDisconnected(gatt, "initialization_write_not_accepted")
+            return
         }
+        readyAddresses.add(address)
+
         if (pair.isBothConnected() && readyAddresses.size == 2) {
             weakActivity.get()?.runOnUiThread {
-                BleChannelHelper.bleMC.flutterGlassesConnected(
-                    pair.toConnectedJson() +
-                        mapOf(
-                            "left_connected" to true,
-                            "right_connected" to true,
-                            "generation" to connectionGeneration,
-                        ),
-                )
+                if (pair === connectedDevice) {
+                    BleChannelHelper.bleMC.flutterGlassesConnected(
+                        pair.toConnectedJson() +
+                            mapOf(
+                                "left_connected" to true,
+                                "right_connected" to true,
+                                "generation" to connectionGeneration,
+                            ),
+                    )
+                }
             }
         }
     }
@@ -348,25 +401,32 @@ class BleManager private constructor() {
     private fun handleCharacteristic(gatt: BluetoothGatt, value: ByteArray) {
         if (value.isEmpty()) return
         val pair = connectedDevice ?: return
-        val isLeft = gatt.device.address == pair.leftDevice?.address
-        val isRight = gatt.device.address == pair.rightDevice?.address
-        if (!isLeft && !isRight) return
+        val side = when {
+            pair.leftDevice?.gatt === gatt -> "L"
+            pair.rightDevice?.gatt === gatt -> "R"
+            else -> return
+        }
+        val frame = value.copyOf()
+        val generation = connectionGeneration
 
-        mainScope.launch {
-            val microphoneData = value[0] == 0xF1.toByte()
+        decodeScope.launch {
+            val microphoneData = frame[0] == 0xF1.toByte()
             if (microphoneData) {
-                if (value.size != 202) return@launch
-                val lc3 = value.copyOfRange(2, 202)
-                Cpp.decodeLC3(lc3)
+                if (frame.size != 202) return@launch
+                Cpp.decodeLC3(frame.copyOfRange(2, 202))
             }
-            BleChannelHelper.bleReceive(
-                mapOf(
-                    "lr" to if (isLeft) "L" else "R",
-                    "data" to value,
-                    "type" to if (microphoneData) "VoiceChunk" else "Receive",
-                    "generation" to connectionGeneration,
-                ),
-            )
+            if (generation != connectionGeneration) return@launch
+            weakActivity.get()?.runOnUiThread {
+                if (generation != connectionGeneration) return@runOnUiThread
+                BleChannelHelper.bleReceive(
+                    mapOf(
+                        "lr" to side,
+                        "data" to frame,
+                        "type" to if (microphoneData) "VoiceChunk" else "Receive",
+                        "generation" to generation,
+                    ),
+                )
+            }
         }
     }
 
@@ -381,43 +441,56 @@ class BleManager private constructor() {
 
     private fun handleDisconnected(gatt: BluetoothGatt, reason: String) {
         if (intentionalDisconnectAddresses.remove(gatt.device.address)) {
-            try {
-                gatt.close()
-            } catch (error: Exception) {
-                Log.w(LOG_TAG, "GATT close failed", error)
-            }
+            closeGatt(gatt)
             return
         }
         val pair = connectedDevice
+        notificationReadyAddresses.remove(gatt.device.address)
         readyAddresses.remove(gatt.device.address)
-        when (gatt.device.address) {
-            pair?.leftDevice?.address -> pair.update(isLeftConnect = false)
-            pair?.rightDevice?.address -> pair.update(isRightConnected = false)
+        val side = when {
+            pair?.leftDevice?.gatt === gatt -> {
+                pair.leftDevice?.writeCharacteristic = null
+                pair.leftDevice?.gatt = null
+                pair.leftDevice?.isConnect = false
+                "L"
+            }
+            pair?.rightDevice?.gatt === gatt -> {
+                pair.rightDevice?.writeCharacteristic = null
+                pair.rightDevice?.gatt = null
+                pair.rightDevice?.isConnect = false
+                "R"
+            }
+            else -> "unknown"
         }
+        closeGatt(gatt)
+        notifyDisconnected(reason, side, pair)
+    }
+
+    private fun closeGatt(gatt: BluetoothGatt) {
         try {
             gatt.close()
         } catch (error: Exception) {
             Log.w(LOG_TAG, "GATT close failed", error)
         }
-        notifyDisconnected(
-            reason,
-            when (gatt.device.address) {
-                pair?.leftDevice?.address -> "L"
-                pair?.rightDevice?.address -> "R"
-                else -> "unknown"
-            },
-        )
     }
 
     private fun disconnectCurrent(notifyFlutter: Boolean) {
-        val pair = connectedDevice ?: return
+        val pair = connectedDevice
+        if (pair == null) {
+            notificationReadyAddresses.clear()
+            readyAddresses.clear()
+            return
+        }
         pair.leftDevice?.address?.let(intentionalDisconnectAddresses::add)
         pair.rightDevice?.address?.let(intentionalDisconnectAddresses::add)
         pair.leftDevice?.disconnectAndClose()
         pair.rightDevice?.disconnectAndClose()
+        notificationReadyAddresses.clear()
         readyAddresses.clear()
         connectedDevice = null
-        if (notifyFlutter) notifyDisconnected("user_requested", "both", pair)
+        if (notifyFlutter) {
+            notifyDisconnected("user_requested", "both", pair)
+        }
     }
 
     private fun notifyDisconnected(

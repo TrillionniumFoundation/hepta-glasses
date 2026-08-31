@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:demo_ai_even/app.dart';
+import 'package:demo_ai_even/runtime/ble_request_slot.dart';
 import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
 import 'package:demo_ai_even/services/ble.dart';
 import 'package:demo_ai_even/services/evenai.dart';
@@ -9,16 +10,6 @@ import 'package:demo_ai_even/services/proto.dart';
 import 'package:flutter/services.dart';
 
 typedef SendResultParse = bool Function(Uint8List value);
-
-final class _PendingBleRequest {
-  const _PendingBleRequest({
-    required this.completer,
-    required this.generation,
-  });
-
-  final Completer<BleReceive> completer;
-  final int generation;
-}
 
 class BleManager {
   BleManager._();
@@ -91,6 +82,7 @@ class BleManager {
         'ble_scan_start_failed',
         fields: <String, Object?>{'code': error.code},
       );
+      rethrow;
     }
   }
 
@@ -102,10 +94,17 @@ class BleManager {
         'ble_scan_stop_failed',
         fields: <String, Object?>{'code': error.code},
       );
+      rethrow;
     }
   }
 
   Future<void> connectToGlasses(String deviceName) async {
+    beatHeartTimer?.cancel();
+    beatHeartTimer = null;
+    _failPendingRequests(
+      'connection_replaced',
+      effectMayHaveOccurred: true,
+    );
     connectionStatus = 'Connecting...';
     isLeftConnected = false;
     isRightConnected = false;
@@ -125,6 +124,7 @@ class BleManager {
         'ble_connect_failed',
         fields: <String, Object?>{'code': error.code},
       );
+      rethrow;
     }
   }
 
@@ -136,6 +136,7 @@ class BleManager {
         'ble_disconnect_failed',
         fields: <String, Object?>{'code': error.code},
       );
+      rethrow;
     }
   }
 
@@ -189,7 +190,7 @@ class BleManager {
       'connection_generation_changed',
       effectMayHaveOccurred: true,
     );
-    _quarantinedRequestKeys.clear();
+    _requestRegistry.clearQuarantine();
   }
 
   bool _isStaleGeneration(int generation) =>
@@ -298,11 +299,15 @@ class BleManager {
       'device_disconnected',
       effectMayHaveOccurred: true,
     );
-    _quarantinedRequestKeys.clear();
+    _requestRegistry.clearQuarantine();
     onStatusChanged?.call();
     PrivacySafeLog.event(
       'ble_disconnected',
-      fields: <String, Object?>{'generation': _connectionGeneration},
+      fields: <String, Object?>{
+        'generation': _connectionGeneration,
+        'left_connected': isLeftConnected,
+        'right_connected': isRightConnected,
+      },
     );
   }
 
@@ -311,12 +316,15 @@ class BleManager {
     if (channelNumber == null || channelNumber.isEmpty) {
       return;
     }
-    final alreadyPaired = pairedGlasses.any(
+    final existingIndex = pairedGlasses.indexWhere(
       (Map<String, String> glasses) =>
           glasses['channelNumber'] == channelNumber,
     );
-    if (!alreadyPaired) {
-      pairedGlasses.add(Map.unmodifiable(deviceInfo));
+    final immutable = Map<String, String>.unmodifiable(deviceInfo);
+    if (existingIndex < 0) {
+      pairedGlasses.add(immutable);
+    } else {
+      pairedGlasses[existingIndex] = immutable;
     }
     onStatusChanged?.call();
   }
@@ -367,69 +375,70 @@ class BleManager {
       return;
     }
 
-    final key = _requestKey(response.lr, command);
-    final pending = _requestListeners.remove(key);
-    _requestTimeouts.remove(key)?.cancel();
-    if (pending != null && !pending.completer.isCompleted) {
-      if (pending.generation == _connectionGeneration ||
-          _connectionGeneration == 0) {
-        pending.completer.complete(response);
-      } else {
-        pending.completer.complete(
-          _timeoutResponse(
-            effectMayHaveOccurred: true,
-            generation: pending.generation,
-            errorCode: 'connection_generation_changed',
-          ),
-        );
-      }
+    if (response.lr != 'L' && response.lr != 'R') {
+      PrivacySafeLog.event(
+        'ble_response_side_invalid',
+        fields: <String, Object?>{'command': command},
+      );
       return;
     }
 
-    if (_quarantinedRequestKeys.remove(key)) {
+    final generation = response.generation > 0
+        ? response.generation
+        : _connectionGeneration;
+    final key = BleRequestKey(
+      generation: generation,
+      side: response.lr,
+      command: command,
+    );
+
+    if (_requestRegistry.observeLateResponse(key)) {
       PrivacySafeLog.event(
         'ble_late_response_observed',
         fields: <String, Object?>{
-          'generation': _connectionGeneration,
+          'generation': generation,
+          'side': response.lr,
           'command': command,
         },
       );
       return;
     }
 
-    final next = _nextReceive;
-    if (_nextReceiveKey == key && next != null && !next.completer.isCompleted) {
-      if (next.generation == _connectionGeneration ||
-          _connectionGeneration == 0) {
-        next.completer.complete(response);
-      } else {
-        next.completer.complete(
-          _timeoutResponse(
-            effectMayHaveOccurred: true,
-            generation: next.generation,
-            errorCode: 'connection_generation_changed',
-          ),
-        );
-      }
-      _nextReceive = null;
-      _nextReceiveKey = null;
+    final pending = _requestRegistry.take(key);
+    _requestTimeouts.remove(key)?.cancel();
+    if (pending == null || pending.completer.isCompleted) {
+      PrivacySafeLog.event(
+        'ble_unsolicited_response',
+        fields: <String, Object?>{
+          'generation': generation,
+          'side': response.lr,
+          'command': command,
+        },
+      );
+      return;
+    }
+    if (pending.generation == generation || pending.generation == 0) {
+      pending.completer.complete(response);
+    } else {
+      pending.completer.complete(
+        _timeoutResponse(
+          effectMayHaveOccurred: true,
+          generation: pending.generation,
+          errorCode: 'connection_generation_changed',
+        ),
+      );
     }
   }
 
   String getConnectionStatus() => connectionStatus;
 
   List<Map<String, String>> getPairedGlasses() =>
-      List.unmodifiable(pairedGlasses);
+      List<Map<String, String>>.unmodifiable(pairedGlasses);
 
-  static final Map<String, _PendingBleRequest> _requestListeners =
-      <String, _PendingBleRequest>{};
-  static final Map<String, Timer> _requestTimeouts = <String, Timer>{};
-  static final Set<String> _quarantinedRequestKeys = <String>{};
-  static _PendingBleRequest? _nextReceive;
-  static String? _nextReceiveKey;
-
-  static String _requestKey(String side, int command) =>
-      '$side${command.toRadixString(16).padLeft(2, '0')}';
+  static final BleRequestRegistry<BleReceive> _requestRegistry =
+      BleRequestRegistry<BleReceive>();
+  static final Map<BleRequestKey, Timer> _requestTimeouts =
+      <BleRequestKey, Timer>{};
 
   static BleReceive _timeoutResponse({
     bool effectMayHaveOccurred = false,
@@ -444,51 +453,55 @@ class BleManager {
     return response;
   }
 
-  static void _checkTimeout(
-    String key,
-    int timeoutMs,
-    int generation,
+  static void _startAckTimeout(
+    BleRequestKey key,
+    BleRequestSlot<BleReceive> pending,
+    int requestedTimeoutMs,
   ) {
+    final timeoutMs = requestedTimeoutMs > 0 ? requestedTimeoutMs : 1000;
     _requestTimeouts.remove(key)?.cancel();
-    final pending = _requestListeners.remove(key);
-    if (pending != null && !pending.completer.isCompleted) {
-      _quarantinedRequestKeys.add(key);
-      pending.completer.complete(
-        _timeoutResponse(
-          effectMayHaveOccurred: true,
-          generation: generation,
-          errorCode: 'ack_timeout_after_native_write',
-        ),
-      );
-      PrivacySafeLog.event(
-        'ble_request_timeout',
-        fields: <String, Object?>{
-          'timeout_ms': timeoutMs,
-          'generation': generation,
-        },
-      );
+    if (pending.completer.isCompleted) {
+      return;
     }
-    final next = _nextReceive;
-    if (_nextReceiveKey == key && next != null && !next.completer.isCompleted) {
-      _quarantinedRequestKeys.add(key);
-      next.completer.complete(
-        _timeoutResponse(
-          effectMayHaveOccurred: true,
-          generation: generation,
-          errorCode: 'ack_timeout_after_native_write',
-        ),
-      );
-      _nextReceive = null;
-      _nextReceiveKey = null;
-    }
+    _requestTimeouts[key] = Timer(
+      Duration(milliseconds: timeoutMs),
+      () {
+        if (!_requestRegistry.quarantineIfOwned(key, pending)) {
+          return;
+        }
+        _requestTimeouts.remove(key)?.cancel();
+        if (!pending.completer.isCompleted) {
+          pending.completer.complete(
+            _timeoutResponse(
+              effectMayHaveOccurred: true,
+              generation: pending.generation,
+              errorCode: 'ack_timeout_after_native_write',
+            ),
+          );
+        }
+        PrivacySafeLog.event(
+          'ble_request_timeout',
+          fields: <String, Object?>{
+            'timeout_ms': timeoutMs,
+            'generation': pending.generation,
+            'side': key.side,
+            'command': key.command,
+          },
+        );
+      },
+    );
   }
 
   void _failPendingRequests(
     String reason, {
     required bool effectMayHaveOccurred,
   }) {
-    for (final MapEntry<String, _PendingBleRequest> entry
-        in _requestListeners.entries) {
+    final entries = _requestRegistry.takeAllPending();
+    for (final timer in _requestTimeouts.values) {
+      timer.cancel();
+    }
+    _requestTimeouts.clear();
+    for (final entry in entries) {
       final pending = entry.value;
       if (!pending.completer.isCompleted) {
         pending.completer.complete(
@@ -500,26 +513,12 @@ class BleManager {
         );
       }
     }
-    _requestListeners.clear();
-    for (final timer in _requestTimeouts.values) {
-      timer.cancel();
-    }
-    _requestTimeouts.clear();
-    final next = _nextReceive;
-    if (next != null && !next.completer.isCompleted) {
-      next.completer.complete(
-        _timeoutResponse(
-          effectMayHaveOccurred: effectMayHaveOccurred,
-          generation: next.generation,
-          errorCode: reason,
-        ),
-      );
-    }
-    _nextReceive = null;
-    _nextReceiveKey = null;
     PrivacySafeLog.event(
       'ble_pending_requests_failed',
-      fields: <String, Object?>{'reason': reason},
+      fields: <String, Object?>{
+        'reason': reason,
+        'request_count': entries.length,
+      },
     );
   }
 
@@ -544,7 +543,7 @@ class BleManager {
       );
       if (!response.isTimeout ||
           response.effectMayHaveOccurred ||
-          !isBothConnected()) {
+          !_isSideReady(lr ?? Proto.lR())) {
         return response;
       }
     }
@@ -591,8 +590,14 @@ class BleManager {
     Map<String, dynamic>? other,
     int secondDelay = 100,
   }) async {
+    if (data.isEmpty) {
+      return false;
+    }
     final parameters = <String, dynamic>{'data': data, ...?other};
     if (lr != null) {
+      if (lr != 'L' && lr != 'R') {
+        return false;
+      }
       parameters['lr'] = lr;
       return await invokeMethod<bool>(methodSend, parameters) == true;
     }
@@ -622,8 +627,27 @@ class BleManager {
     final manager = get();
     final generation = manager._connectionGeneration;
     final side = lr ?? Proto.lR();
-    final key = _requestKey(side, data[0]);
-    if (_quarantinedRequestKeys.contains(key)) {
+    if (side != 'L' && side != 'R') {
+      return _timeoutResponse(
+        effectMayHaveOccurred: false,
+        generation: generation,
+        errorCode: 'invalid_side',
+      );
+    }
+    if (!_isSideReady(side)) {
+      return _timeoutResponse(
+        effectMayHaveOccurred: false,
+        generation: generation,
+        errorCode: 'side_not_ready',
+      );
+    }
+
+    final key = BleRequestKey(
+      generation: generation,
+      side: side,
+      command: data[0],
+    );
+    if (_requestRegistry.isQuarantined(key)) {
       return _timeoutResponse(
         effectMayHaveOccurred: true,
         generation: generation,
@@ -632,7 +656,7 @@ class BleManager {
     }
 
     final slotDeadline = DateTime.now().add(const Duration(seconds: 3));
-    while (_requestListeners.containsKey(key)) {
+    while (_requestRegistry.contains(key)) {
       if (manager._connectionGeneration != generation) {
         return _timeoutResponse(
           effectMayHaveOccurred: false,
@@ -650,28 +674,27 @@ class BleManager {
       await Future<void>.delayed(const Duration(milliseconds: 5));
     }
 
-    final completer = Completer<BleReceive>();
-    final pending = _PendingBleRequest(
-      completer: completer,
+    if (manager._connectionGeneration != generation || !_isSideReady(side)) {
+      return _timeoutResponse(
+        effectMayHaveOccurred: false,
+        generation: generation,
+        errorCode: 'connection_changed_before_write',
+      );
+    }
+
+    final pending = BleRequestSlot<BleReceive>(
+      completer: Completer<BleReceive>(),
       generation: generation,
     );
-    if (useNext) {
-      if (_nextReceive != null && !_nextReceive!.completer.isCompleted) {
-        return _timeoutResponse(
-          effectMayHaveOccurred: false,
-          generation: generation,
-          errorCode: 'next_receive_slot_busy',
-        );
-      }
-      _nextReceive = pending;
-      _nextReceiveKey = key;
-    } else {
-      _requestListeners[key] = pending;
-    }
-    if (timeoutMs > 0) {
-      _requestTimeouts[key] = Timer(
-        Duration(milliseconds: timeoutMs),
-        () => _checkTimeout(key, timeoutMs, generation),
+    // `useNext` is retained for source compatibility. Both legacy modes now
+    // reserve the same exact response owner.
+    if (!_requestRegistry.reserve(key, pending)) {
+      return _timeoutResponse(
+        effectMayHaveOccurred: _requestRegistry.isQuarantined(key),
+        generation: generation,
+        errorCode: _requestRegistry.isQuarantined(key)
+            ? 'request_slot_quarantined'
+            : 'request_slot_busy',
       );
     }
 
@@ -679,48 +702,55 @@ class BleManager {
       final accepted = await sendData(data, lr: side, other: other).timeout(
         const Duration(seconds: 2),
       );
-      if (!accepted && !completer.isCompleted) {
-        _requestTimeouts.remove(key)?.cancel();
-        _requestListeners.remove(key);
-        if (_nextReceive == pending) {
-          _nextReceive = null;
-          _nextReceiveKey = null;
-        }
-        completer.complete(
+      if (!accepted && !pending.completer.isCompleted) {
+        _requestRegistry.releaseIfOwned(key, pending);
+        pending.completer.complete(
           _timeoutResponse(
             effectMayHaveOccurred: false,
             generation: generation,
             errorCode: 'native_write_not_accepted',
           ),
         );
+      } else if (accepted && !pending.completer.isCompleted) {
+        _startAckTimeout(key, pending, timeoutMs);
       }
-    } on Object {
-      if (!completer.isCompleted) {
+    } on Object catch (error) {
+      if (!pending.completer.isCompleted) {
         _requestTimeouts.remove(key)?.cancel();
-        _requestListeners.remove(key);
-        if (_nextReceive == pending) {
-          _nextReceive = null;
-          _nextReceiveKey = null;
+        final quarantined = _requestRegistry.quarantineIfOwned(key, pending);
+        if (quarantined) {
+          pending.completer.complete(
+            _timeoutResponse(
+              effectMayHaveOccurred: true,
+              generation: generation,
+              errorCode: 'native_write_result_unknown',
+            ),
+          );
         }
-        _quarantinedRequestKeys.add(key);
-        completer.complete(
-          _timeoutResponse(
-            effectMayHaveOccurred: true,
-            generation: generation,
-            errorCode: 'native_write_result_unknown',
-          ),
-        );
       }
+      PrivacySafeLog.event(
+        'ble_native_write_error',
+        fields: <String, Object?>{
+          'generation': generation,
+          'side': side,
+          'error_type': error.runtimeType.toString(),
+        },
+      );
     }
 
-    final response = await completer.future;
+    final response = await pending.completer.future;
     _requestTimeouts.remove(key)?.cancel();
-    _requestListeners.remove(key);
-    if (_nextReceive == pending) {
-      _nextReceive = null;
-      _nextReceiveKey = null;
-    }
+    _requestRegistry.releaseIfOwned(key, pending);
     return response;
+  }
+
+  static bool _isSideReady(String side) {
+    final manager = get();
+    return side == 'L'
+        ? manager.isLeftConnected
+        : side == 'R'
+            ? manager.isRightConnected
+            : false;
   }
 
   static bool isBothConnected() =>
@@ -774,6 +804,7 @@ class BleManager {
       'manager_disposed',
       effectMayHaveOccurred: true,
     );
+    _requestRegistry.clearQuarantine();
     await _receiveSubscription?.cancel();
     _receiveSubscription = null;
     await _connectionController.close();

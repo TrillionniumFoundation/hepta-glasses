@@ -21,6 +21,7 @@ final class SpeechStreamRecognizer {
         "IT": "it-IT",
     ]
 
+    private let stateLock = NSLock()
     private var recognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -28,12 +29,17 @@ final class SpeechStreamRecognizer {
     private var acceptedText = ""
     private var pendingText = ""
     private var activeGeneration = 0
+    private var stopRequestedGeneration = 0
+    private var finalizationDeadline: DispatchWorkItem?
 
     private init() {
         if SFSpeechRecognizer.authorizationStatus() == .notDetermined {
             SFSpeechRecognizer.requestAuthorization { status in
                 if status != .authorized {
-                    print("Speech recognition authorization unavailable: \(status.rawValue)")
+                    print(
+                        "Speech recognition authorization unavailable: "
+                            + "\(status.rawValue)"
+                    )
                 }
             }
         }
@@ -67,26 +73,43 @@ final class SpeechStreamRecognizer {
         request.shouldReportPartialResults = true
         request.requiresOnDeviceRecognition = true
 
+        stateLock.lock()
         activeGeneration = generation
+        stopRequestedGeneration = 0
         acceptedText = ""
         pendingText = ""
         lastTranscription = nil
         self.recognizer = recognizer
         recognitionRequest = request
+        stateLock.unlock()
 
         let recognitionGeneration = generation
-        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            guard
-                let self,
-                self.activeGeneration == recognitionGeneration
-            else {
-                return
-            }
+        let task = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            guard let self else { return }
+
             if let error {
-                print("Speech recognition failed: \(type(of: error))")
+                self.stateLock.lock()
+                let shouldFinish =
+                    self.activeGeneration == recognitionGeneration &&
+                    self.stopRequestedGeneration == recognitionGeneration
+                self.stateLock.unlock()
+                if shouldFinish {
+                    self.finishRecognition(
+                        generation: recognitionGeneration,
+                        finality: "framework_error_partial"
+                    )
+                } else {
+                    print("Speech recognition failed: \(type(of: error))")
+                }
                 return
             }
             guard let result else { return }
+
+            self.stateLock.lock()
+            guard self.activeGeneration == recognitionGeneration else {
+                self.stateLock.unlock()
+                return
+            }
             let transcription = result.bestTranscription
             if let previous = self.lastTranscription,
                (transcription.segments.count < previous.segments.count ||
@@ -96,46 +119,64 @@ final class SpeechStreamRecognizer {
             }
             self.pendingText = transcription.formattedString
             self.lastTranscription = transcription
+            let shouldFinish =
+                result.isFinal &&
+                self.stopRequestedGeneration == recognitionGeneration
+            self.stateLock.unlock()
+
+            if shouldFinish {
+                self.finishRecognition(
+                    generation: recognitionGeneration,
+                    finality: "framework_final"
+                )
+            }
         }
-        return true
+
+        stateLock.lock()
+        if activeGeneration == generation {
+            recognitionTask = task
+            stateLock.unlock()
+            return true
+        }
+        stateLock.unlock()
+        task.cancel()
+        return false
     }
 
     @discardableResult
     func stopRecognition(generation: Int) -> Bool {
+        stateLock.lock()
         guard generation > 0, generation == activeGeneration else {
+            stateLock.unlock()
             return false
         }
-        let transcript = (acceptedText + pendingText)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let stoppedGeneration = activeGeneration
-        recognitionRequest?.endAudio()
-        recognitionTask?.cancel()
-        recognitionRequest = nil
-        recognitionTask = nil
-        recognizer = nil
-        lastTranscription = nil
-        acceptedText = ""
-        pendingText = ""
-        activeGeneration = 0
-        do {
-            try AVAudioSession.sharedInstance().setActive(false)
-        } catch {
-            print("Speech audio-session teardown failed: \(type(of: error))")
+        if stopRequestedGeneration == generation {
+            stateLock.unlock()
+            return true
         }
-        DispatchQueue.main.async {
-            BluetoothManager.shared.blueSpeechSink?([
-                "script": transcript,
-                "generation": stoppedGeneration,
-                "is_final": true,
-            ])
+
+        stopRequestedGeneration = generation
+        let request = recognitionRequest
+        finalizationDeadline?.cancel()
+        let deadline = DispatchWorkItem { [weak self] in
+            self?.finishRecognition(
+                generation: generation,
+                finality: "timeout_partial"
+            )
         }
+        finalizationDeadline = deadline
+        stateLock.unlock()
+
+        request?.endAudio()
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 2.5,
+            execute: deadline
+        )
         return true
     }
 
     func appendPCMData(_ pcmData: Data) {
         guard
-            activeGeneration > 0,
-            let recognitionRequest,
             pcmData.count == 3_200,
             pcmData.count.isMultiple(of: MemoryLayout<Int16>.size),
             let format = AVAudioFormat(
@@ -167,12 +208,31 @@ final class SpeechStreamRecognizer {
                 count: Int(frames)
             )
         }
-        recognitionRequest.append(buffer)
+
+        stateLock.lock()
+        guard
+            activeGeneration > 0,
+            stopRequestedGeneration == 0,
+            let request = recognitionRequest
+        else {
+            stateLock.unlock()
+            return
+        }
+        request.append(buffer)
+        stateLock.unlock()
     }
 
-    private func cancelWithoutEmission() {
-        recognitionRequest?.endAudio()
-        recognitionTask?.cancel()
+    private func finishRecognition(generation: Int, finality: String) {
+        stateLock.lock()
+        guard generation == activeGeneration else {
+            stateLock.unlock()
+            return
+        }
+        let transcript = (acceptedText + pendingText)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let task = recognitionTask
+        finalizationDeadline?.cancel()
+        finalizationDeadline = nil
         recognitionRequest = nil
         recognitionTask = nil
         recognizer = nil
@@ -180,10 +240,54 @@ final class SpeechStreamRecognizer {
         acceptedText = ""
         pendingText = ""
         activeGeneration = 0
+        stopRequestedGeneration = 0
+        stateLock.unlock()
+
+        task?.cancel()
+        deactivateAudioSession(label: "teardown")
+        let frameworkFinal = finality == "framework_final"
+        let emittedTranscript = frameworkFinal ? transcript : ""
+        DispatchQueue.main.async {
+            BluetoothManager.shared.blueSpeechSink?([
+                "script": emittedTranscript,
+                "generation": generation,
+                "is_final": true,
+                "is_framework_final": frameworkFinal,
+                "partial_discarded": !frameworkFinal,
+                "partial_character_count": frameworkFinal ? 0 : transcript.count,
+                "finality": finality,
+            ])
+        }
+    }
+
+    private func cancelWithoutEmission() {
+        stateLock.lock()
+        let request = recognitionRequest
+        let task = recognitionTask
+        finalizationDeadline?.cancel()
+        finalizationDeadline = nil
+        recognitionRequest = nil
+        recognitionTask = nil
+        recognizer = nil
+        lastTranscription = nil
+        acceptedText = ""
+        pendingText = ""
+        activeGeneration = 0
+        stopRequestedGeneration = 0
+        stateLock.unlock()
+
+        request?.endAudio()
+        task?.cancel()
+        deactivateAudioSession(label: "cancellation")
+    }
+
+    private func deactivateAudioSession(label: String) {
         do {
             try AVAudioSession.sharedInstance().setActive(false)
         } catch {
-            print("Speech audio-session cancellation failed: \(type(of: error))")
+            print(
+                "Speech audio-session \(label) failed: \(type(of: error))"
+            )
         }
     }
 }
