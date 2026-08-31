@@ -1,0 +1,558 @@
+name: g8-controller-v2
+
+on:
+  push:
+    branches:
+      - ops/hepta-g8-controller-v2-20260831
+
+permissions:
+  actions: write
+  checks: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: g8-controller-v2-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BASE_SHA: 0b52e35683bc56f756473d5341c87af18585630c
+  READY_BRANCH: work/hepta-glasses-g8-truth-ready
+  VALIDATION_BRANCH: codex/hepta-glasses-gap-closure-g8-validation-external
+  PR_BRANCH: codex/hepta-glasses-gap-closure-g8
+  PR_NUMBER: '23'
+
+jobs:
+  controller:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - name: Wait for and independently verify the clean ready commit
+        id: ready
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 720); do
+            if git fetch --force origin \
+              "refs/heads/$READY_BRANCH:refs/remotes/origin/$READY_BRANCH"; then
+              break
+            fi
+            if test "$attempt" = 720; then
+              echo 'ready branch was not produced before the deadline' >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          sha="$(git rev-parse "refs/remotes/origin/$READY_BRANCH^{commit}")"
+          parent="$(git rev-parse "$sha^")"
+          test "$parent" = "$BASE_SHA"
+          test "$(git rev-list --parents -n 1 "$sha" | wc -w)" = 2
+          git checkout --detach "$sha"
+          dart format --output=none --set-exit-if-changed lib test
+          python3 tools/validate_repository.py
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+          find services adapters tools -type d -name __pycache__ -prune -exec rm -rf {} +
+          test -z "$(git status --porcelain)"
+          test "$(find .github/workflows -maxdepth 1 -type f -printf '%f\n' | sort)" = "ci.yml"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Publish validation ref
+        run: |
+          set -euo pipefail
+          sha='${{ steps.ready.outputs.sha }}'
+          git push --force origin "$sha:refs/heads/$VALIDATION_BRANCH"
+      - name: Require one exact-head seven-job formal run and live artifact
+        id: formal
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ steps.ready.outputs.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/controller-v2
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          token = os.environ['GH_TOKEN']
+          repo = os.environ['GH_REPO']
+          head = os.environ['HEAD_SHA']
+          branch = os.environ['VALIDATION_BRANCH']
+          api = f'https://api.github.com/repos/{repo}'
+          expected = {
+              'repository-contracts',
+              'flutter',
+              'android-native',
+              'ios-native',
+              'native-sanitizers',
+              'secret-and-boundary-scan',
+              'source-evidence',
+          }
+
+          def request_json(
+              path: str,
+              *,
+              method: str = 'GET',
+              payload: object | None = None,
+              expected_status: set[int] = {200},
+          ) -> tuple[int, object | None]:
+              data = None if payload is None else json.dumps(payload).encode()
+              request = urllib.request.Request(
+                  api + path,
+                  data=data,
+                  method=method,
+                  headers={
+                      'Authorization': f'Bearer {token}',
+                      'Accept': 'application/vnd.github+json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'User-Agent': 'hepta-g8-controller-v2',
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=60) as response:
+                      raw = response.read()
+                      status = response.status
+              except urllib.error.HTTPError as error:
+                  raw = error.read()
+                  status = error.code
+              parsed = json.loads(raw) if raw else None
+              if status not in expected_status:
+                  raise RuntimeError(
+                      f'{method} {path} returned HTTP {status}: {parsed}'
+                  )
+              return status, parsed
+
+          _, workflows = request_json('/actions/workflows?per_page=100')
+          assert isinstance(workflows, dict)
+          matches = [
+              item
+              for item in workflows.get('workflows', [])
+              if item.get('path') == '.github/workflows/ci.yml'
+          ]
+          if len(matches) != 1:
+              raise SystemExit(
+                  f'expected exactly one registered ci.yml workflow; got {len(matches)}'
+              )
+          workflow_id = int(matches[0]['id'])
+
+          def runs() -> list[dict[str, object]]:
+              query = urllib.parse.urlencode(
+                  {'branch': branch, 'per_page': 30}
+              )
+              _, value = request_json(f'/actions/runs?{query}')
+              assert isinstance(value, dict)
+              return [
+                  item
+                  for item in value.get('workflow_runs', [])
+                  if item.get('name') == 'hepta-glasses-ci'
+                  and item.get('head_sha') == head
+              ]
+
+          def validate_run(run: dict[str, object]) -> dict[str, object]:
+              run_id = int(run['id'])
+              _, jobs_payload = request_json(
+                  f'/actions/runs/{run_id}/jobs?per_page=100'
+              )
+              assert isinstance(jobs_payload, dict)
+              jobs = jobs_payload.get('jobs', [])
+              by_name = {item.get('name'): item for item in jobs}
+              if set(by_name) != expected:
+                  raise RuntimeError(
+                      f'run {run_id} job set mismatch: {sorted(by_name)}'
+                  )
+              bad = {
+                  name: item.get('conclusion')
+                  for name, item in by_name.items()
+                  if item.get('conclusion') != 'success'
+              }
+              if bad:
+                  raise RuntimeError(f'run {run_id} has non-success jobs: {bad}')
+              empty = [
+                  name for name, item in by_name.items() if not item.get('steps')
+              ]
+              if empty:
+                  raise RuntimeError(f'run {run_id} has empty jobs: {empty}')
+
+              _, artifact_payload = request_json(
+                  f'/actions/runs/{run_id}/artifacts?per_page=100'
+              )
+              assert isinstance(artifact_payload, dict)
+              artifact_name = f'hepta-source-evidence-{head}'
+              artifacts = [
+                  item
+                  for item in artifact_payload.get('artifacts', [])
+                  if item.get('name') == artifact_name
+                  and not item.get('expired')
+              ]
+              if len(artifacts) != 1:
+                  raise RuntimeError(
+                      f'run {run_id} expected one live source artifact; got {len(artifacts)}'
+                  )
+              artifact = artifacts[0]
+              digest = str(artifact.get('digest') or '')
+              if not digest.startswith('sha256:'):
+                  raise RuntimeError(
+                      f'run {run_id} source artifact lacks a SHA-256 digest'
+                  )
+              return {
+                  'schema_version': 1,
+                  'head_sha': head,
+                  'workflow_id': workflow_id,
+                  'workflow_run_id': run_id,
+                  'event': run.get('event'),
+                  'required_jobs': {
+                      name: {
+                          'conclusion': by_name[name].get('conclusion'),
+                          'step_count': len(by_name[name].get('steps') or []),
+                      }
+                      for name in sorted(expected)
+                  },
+                  'source_evidence_artifact': {
+                      'id': artifact['id'],
+                      'name': artifact['name'],
+                      'digest': digest,
+                      'size_in_bytes': artifact.get('size_in_bytes'),
+                  },
+              }
+
+          dispatch_attempted = False
+          rerun_attempted: set[int] = set()
+          deadline = time.time() + 9000
+          result: dict[str, object] | None = None
+          while time.time() < deadline:
+              candidates = sorted(
+                  runs(),
+                  key=lambda item: str(item.get('created_at') or ''),
+                  reverse=True,
+              )
+              for run in candidates:
+                  if (
+                      run.get('status') == 'completed'
+                      and run.get('conclusion') == 'success'
+                  ):
+                      result = validate_run(run)
+                      break
+              if result is not None:
+                  break
+
+              active = [
+                  run for run in candidates if run.get('status') != 'completed'
+              ]
+              failures = [
+                  run
+                  for run in candidates
+                  if run.get('status') == 'completed'
+                  and run.get('conclusion') not in (None, 'success', 'cancelled')
+              ]
+              if failures:
+                  latest = failures[0]
+                  run_id = int(latest['id'])
+                  if run_id not in rerun_attempted:
+                      status, _ = request_json(
+                          f'/actions/runs/{run_id}/rerun-failed-jobs',
+                          method='POST',
+                          expected_status={201, 202},
+                      )
+                      rerun_attempted.add(run_id)
+                      time.sleep(15)
+                      continue
+                  if not active:
+                      Path('build/controller-v2/formal-failure.json').write_text(
+                          json.dumps(latest, indent=2, sort_keys=True) + '\n',
+                          encoding='utf-8',
+                      )
+                      raise SystemExit(
+                          f'exact-head CI remained unsuccessful after one retry: run {run_id}'
+                      )
+
+              if not active and not dispatch_attempted:
+                  request_json(
+                      f'/actions/workflows/{workflow_id}/dispatches',
+                      method='POST',
+                      payload={'ref': branch},
+                      expected_status={204},
+                  )
+                  dispatch_attempted = True
+              time.sleep(15)
+
+          if result is None:
+              raise SystemExit('formal exact-head CI did not become successful')
+          Path('build/controller-v2/formal-result.json').write_text(
+              json.dumps(result, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+          echo "run_id=$(python3 -c 'import json; print(json.load(open("build/controller-v2/formal-result.json"))["workflow_run_id"])')" >> "$GITHUB_OUTPUT"
+          echo "artifact_id=$(python3 -c 'import json; print(json.load(open("build/controller-v2/formal-result.json"))["source_evidence_artifact"]["id"])')" >> "$GITHUB_OUTPUT"
+      - name: Promote the identical verified commit to PR 23
+        run: |
+          set -euo pipefail
+          sha='${{ steps.ready.outputs.sha }}'
+          git push --force origin "$sha:refs/heads/$PR_BRANCH"
+      - name: Verify PR state, refresh gates, and request independent review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ steps.ready.outputs.sha }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          token = os.environ['GH_TOKEN']
+          repo = os.environ['GH_REPO']
+          head = os.environ['HEAD_SHA']
+          pr_number = int(os.environ['PR_NUMBER'])
+          api = f'https://api.github.com/repos/{repo}'
+          formal = json.loads(
+              Path('build/controller-v2/formal-result.json').read_text(
+                  encoding='utf-8'
+              )
+          )
+          marker = f'<!-- hepta-g8-source-baseline:{head} -->'
+
+          def request_json(
+              path: str,
+              *,
+              method: str = 'GET',
+              payload: object | None = None,
+              expected_status: set[int] = {200},
+          ) -> tuple[int, object | None]:
+              data = None if payload is None else json.dumps(payload).encode()
+              request = urllib.request.Request(
+                  api + path,
+                  data=data,
+                  method=method,
+                  headers={
+                      'Authorization': f'Bearer {token}',
+                      'Accept': 'application/vnd.github+json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'User-Agent': 'hepta-g8-controller-v2',
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=60) as response:
+                      raw = response.read()
+                      status = response.status
+              except urllib.error.HTTPError as error:
+                  raw = error.read()
+                  status = error.code
+              parsed = json.loads(raw) if raw else None
+              if status not in expected_status:
+                  raise RuntimeError(
+                      f'{method} {path} returned HTTP {status}: {parsed}'
+                  )
+              return status, parsed
+
+          pr: dict[str, object] | None = None
+          for _ in range(60):
+              _, value = request_json(f'/pulls/{pr_number}')
+              assert isinstance(value, dict)
+              pr = value
+              if value['head']['sha'] == head:
+                  break
+              time.sleep(2)
+          if pr is None or pr['head']['sha'] != head:
+              raise SystemExit('PR head did not converge to the verified commit')
+
+          _, comments_payload = request_json(
+              f'/issues/{pr_number}/comments?per_page=100'
+          )
+          assert isinstance(comments_payload, list)
+          if not any(marker in str(item.get('body') or '') for item in comments_payload):
+              artifact = formal['source_evidence_artifact']
+              body = '\n'.join(
+                  [
+                      marker,
+                      'G8 exact-head source verification completed.',
+                      '',
+                      f'- Head: `{head}`',
+                      f'- Formal CI run: `{formal["workflow_run_id"]}`',
+                      '- Required jobs: all seven non-empty and successful',
+                      f'- Source evidence artifact: `{artifact["name"]}`',
+                      f'- Artifact digest: `{artifact["digest"]}`',
+                      '',
+                      'The same immutable commit is now PR #23 head. The implementing automation did not approve or merge the PR. Physical, deployed, vendor, independent-assurance, signing, pilot, rollout, rollback, and store gates remain separate.',
+                  ]
+              )
+              request_json(
+                  f'/issues/{pr_number}/comments',
+                  method='POST',
+                  payload={'body': body},
+                  expected_status={201},
+              )
+
+          gate_notes = {
+              24: 'Physical Android/iOS plus real G1 qualification remains required.',
+              25: 'Deployed identity, KMS/HSM, attestation, rotation, revocation, and recovery evidence remains required.',
+              26: 'Authorized branch-protection administration and readback evidence remains required.',
+              27: 'Vendor-authorized firmware, bootloader, secure boot, OTA, recovery, and rollback authority remains required.',
+              28: 'Production realtime/model tenancy, OAuth adapters, and authoritative reconciliation evidence remains required.',
+              29: 'Independent assurance, signing, pilot, kill switch, rollout, rollback, and store approval remain required.',
+          }
+          for issue_number, note in gate_notes.items():
+              _, issue = request_json(f'/issues/{issue_number}')
+              assert isinstance(issue, dict)
+              if issue.get('state') != 'open':
+                  raise RuntimeError(
+                      f'external gate issue {issue_number} is unexpectedly closed'
+                  )
+              _, existing = request_json(
+                  f'/issues/{issue_number}/comments?per_page=100'
+              )
+              assert isinstance(existing, list)
+              if any(marker in str(item.get('body') or '') for item in existing):
+                  continue
+              artifact = formal['source_evidence_artifact']
+              body = '\n'.join(
+                  [
+                      marker,
+                      'G8 source-preparation baseline refreshed.',
+                      '',
+                      f'- Exact head: `{head}`',
+                      f'- Formal seven-job CI run: `{formal["workflow_run_id"]}`',
+                      f'- Source evidence artifact: `{artifact["name"]}`',
+                      f'- Artifact digest: `{artifact["digest"]}`',
+                      '',
+                      note,
+                      'This issue remains open. Source, simulator, unit-test, and digital-twin evidence are not being promoted to an external E5-E7 claim.',
+                  ]
+              )
+              request_json(
+                  f'/issues/{issue_number}/comments',
+                  method='POST',
+                  payload={'body': body},
+                  expected_status={201},
+              )
+
+          reviewer = {
+              'requested': False,
+              'reviewer': 'ProfHepta',
+              'http_status': None,
+              'response': None,
+          }
+          status, response = request_json(
+              f'/pulls/{pr_number}/requested_reviewers',
+              method='POST',
+              payload={'reviewers': ['ProfHepta']},
+              expected_status={201, 403, 404, 422},
+          )
+          reviewer['http_status'] = status
+          reviewer['response'] = response
+          reviewer['requested'] = status == 201
+
+          _, reviews = request_json(f'/pulls/{pr_number}/reviews?per_page=100')
+          assert isinstance(reviews, list)
+          independent_approvals = [
+              review
+              for review in reviews
+              if review.get('state') == 'APPROVED'
+              and review.get('commit_id') == head
+              and review.get('user', {}).get('login') not in {
+                  'Tomasrgbsf',
+                  'github-actions[bot]',
+              }
+          ]
+
+          governance = {
+              'status': 'blocked_admin_readback',
+              'http_status': None,
+          }
+          status, _ = request_json(
+              '/branches/main/protection',
+              expected_status={200, 403, 404},
+          )
+          governance['http_status'] = status
+          governance['status'] = (
+              'readback_available_requires_contract_comparison'
+              if status == 200
+              else 'blocked_admin_readback'
+          )
+
+          state = {
+              'schema_version': 1,
+              'repository': repo,
+              'pull_request': pr_number,
+              'head_sha': head,
+              'pull_request_state': pr.get('state'),
+              'pull_request_draft': pr.get('draft'),
+              'formal_ci': formal,
+              'repository_actionable_source_gaps': 'closed',
+              'review_request': reviewer,
+              'independent_approvals_for_exact_head': [
+                  item.get('user', {}).get('login')
+                  for item in independent_approvals
+              ],
+              'independent_review': (
+                  'approved'
+                  if independent_approvals
+                  else 'pending'
+              ),
+              'governance': governance,
+              'external_gates': [
+                  'HG-0015',
+                  'HG-0016',
+                  'HG-0017',
+                  'HG-0018',
+                  'HG-0019',
+                  'HG-0020',
+              ],
+              'merged': False,
+              'released': False,
+          }
+          Path('build/controller-v2/final-state.json').write_text(
+              json.dumps(state, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-g8-controller-v2-${{ steps.ready.outputs.sha }}
+          path: build/controller-v2
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove temporary implementation and validation refs
+        run: |
+          set -euo pipefail
+          for branch in \
+            work/hepta-glasses-gap-closure-g8-materialize \
+            work/hepta-glasses-gap-closure-g8-diagnostics \
+            work/hepta-glasses-g8-truth-materialize \
+            work/hepta-glasses-g8-truth-ready \
+            codex/hepta-glasses-gap-closure-g8-validation \
+            codex/hepta-glasses-gap-closure-g8-validation-final \
+            codex/hepta-glasses-gap-closure-g8-validation-external \
+            ops/hepta-g8-truth-export-20260831 \
+            ops/hepta-g8-finalize-20260831 \
+            ops/hepta-g8-postfinalize-20260831 \
+            ops/hepta-g8-external-watch-20260831 \
+            ops/hepta-g8-external-complete-20260831; do
+            git push origin --delete "$branch" || true
+          done
