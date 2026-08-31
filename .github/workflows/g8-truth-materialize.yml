@@ -1,0 +1,55 @@
+name: g8-truth-materialize
+
+on:
+  push:
+    branches:
+      - work/hepta-glasses-g8-truth-materialize
+
+permissions:
+  contents: write
+
+concurrency:
+  group: g8-truth-materialize-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: work/hepta-glasses-g8-truth-materialize
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - name: Apply deterministic G8 product-truth migration
+        run: python3 .github/g8_truth_transform.py
+      - name: Canonicalize Dart source
+        run: dart format lib test
+      - name: Verify repository contracts
+        run: |
+          set -euo pipefail
+          python3 tools/validate_repository.py
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+          find services adapters tools -type d -name __pycache__ -prune -exec rm -rf {} +
+          git diff --check
+          test "$(find .github/workflows -maxdepth 1 -type f -printf '%f\n' | sort)" = "ci.yml"
+      - name: Commit self-cleaning result
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -s -m 'refactor(g8): establish canonical product and evidence truth'
+          git push origin HEAD:work/hepta-glasses-g8-truth-materialize
