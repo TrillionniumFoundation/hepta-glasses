@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "tools" / "validate_repository.py"
 SURFACE_VALIDATOR = ROOT / "tools" / "validate_product_surface.py"
+ANDROID_BUILD = ROOT / "android" / "app" / "build.gradle"
 
 PATH_REPLACEMENTS = (
     (
@@ -93,6 +95,20 @@ if transformed_check in surface:
 elif legacy_check not in surface:
     raise SystemExit("product-surface legacy-ledger check cannot be reconciled")
 SURFACE_VALIDATOR.write_text(surface, encoding="utf-8")
+
+# Remove Kotlin reflection regardless of whether an older branch pinned the
+# version directly or interpolated it from a Gradle variable. This app does not
+# use reflection, and leaving the runtime in release builds violates the G8
+# product-surface contract.
+android_build = ANDROID_BUILD.read_text(encoding="utf-8")
+android_build = re.sub(
+    r"(?m)^\s*(?:implementation|api)\s+[\"']org\.jetbrains\.kotlin:kotlin-reflect:[^\"']+[\"']\s*$\n?",
+    "",
+    android_build,
+)
+if "kotlin-reflect" in android_build:
+    raise SystemExit("unable to remove every Kotlin reflection dependency")
+ANDROID_BUILD.write_text(android_build, encoding="utf-8")
 
 # Machine truth must never reference files removed by the package migration.
 for relative in ("docs/GAP_LEDGER.json", "docs/EVIDENCE_INDEX.json"):
