@@ -1,0 +1,45 @@
+name: g7-format-export
+
+on:
+  push:
+    branches:
+      - bootstrap/hepta-glasses-g7-format
+    paths:
+      - '.github/workflows/g7-format-export.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - run: flutter pub get
+      - name: Format exact failing files
+        run: |
+          dart format \
+            lib/controllers/bmp_update_manager.dart \
+            lib/services/evenai.dart \
+            test/runtime/audit_journal_test.dart \
+            test/runtime/bmp_update_manager_test.dart
+          git diff --check
+          git diff --binary > /tmp/g7-format.patch
+          sha256sum /tmp/g7-format.patch > /tmp/g7-format.patch.sha256
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: g7-format-${{ github.sha }}
+          path: |
+            /tmp/g7-format.patch
+            /tmp/g7-format.patch.sha256
+          if-no-files-found: error
+          retention-days: 1
