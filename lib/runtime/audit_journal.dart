@@ -230,20 +230,34 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
   final Clock _clock;
   final int maximumFileBytes;
   final int maximumEntryBytes;
-  Future<void> _tail = Future<void>.value();
+
+  // POSIX advisory locks can be process-associated on some runtimes, so two
+  // File handles opened by the same process must also share a Dart-level lane.
+  // The absolute path makes separate journal instances serialize before taking
+  // the operating-system lock.
+  static final Map<String, Future<void>> _processTails =
+      <String, Future<void>>{};
 
   static File lockFileFor(File file) => File('${file.path}.lock');
   static File checkpointFileFor(File file) => File('${file.path}.head.json');
 
   Future<T> _exclusive<T>(Future<T> Function() operation) {
     final completer = Completer<T>();
-    _tail = _tail.then((_) async {
+    final key = file.absolute.path;
+    final previous = _processTails[key] ?? Future<void>.value();
+    late final Future<void> queued;
+    queued = previous.then<void>((_) async {
       try {
         completer.complete(await _withFileLock(operation));
       } on Object catch (error, stackTrace) {
         completer.completeError(error, stackTrace);
       }
+    }).whenComplete(() {
+      if (identical(_processTails[key], queued)) {
+        _processTails.remove(key);
+      }
     });
+    _processTails[key] = queued;
     return completer.future;
   }
 

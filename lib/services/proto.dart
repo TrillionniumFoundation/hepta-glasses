@@ -84,8 +84,8 @@ class Proto {
       syncSeq: syncSequence,
       newScreen: newScreen,
       pos: pos,
-      current_page_num: currentPage,
-      max_page_num: maximumPage,
+      currentPageNumber: currentPage,
+      maxPageNumber: maximumPage,
     );
     _evenAiSequence = (_evenAiSequence + 1) & 0xff;
     if (packets.isEmpty) {

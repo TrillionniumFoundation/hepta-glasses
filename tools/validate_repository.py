@@ -41,6 +41,7 @@ REQUIRED = {
     "contracts/main-branch-protection-v1.json",
     "contracts/release-gates-v1.json",
     "contracts/qualification-slo-v1.json",
+    "contracts/history-scan-acknowledgements-v1.json",
     "lib/runtime/contracts.dart",
     "lib/runtime/audit_journal.dart",
     "lib/runtime/task_engine.dart",
@@ -155,6 +156,7 @@ def validate_json_contracts() -> None:
         "main-branch-protection-v1.json",
         "release-gates-v1.json",
         "qualification-slo-v1.json",
+        "history-scan-acknowledgements-v1.json",
     ):
         read_json(ROOT / "contracts" / name)
 
@@ -264,11 +266,24 @@ def validate_single_ci_authority() -> None:
 
 
 def validate_history_gate() -> None:
+    acknowledgement_contract = read_json(ROOT / "contracts/history-scan-acknowledgements-v1.json")
+    acknowledgements = acknowledgement_contract.get("acknowledgements")
+    if acknowledgement_contract.get("schema_version") != 1 or not isinstance(acknowledgements, list):
+        fail("history acknowledgement contract is malformed")
+    if not acknowledgements:
+        fail("history acknowledgement contract is unexpectedly empty")
+    for acknowledgement in acknowledgements:
+        if acknowledgement.get("classification") != "synthetic_test_fixture":
+            fail("history acknowledgement is broader than a synthetic fixture")
+        if not re.fullmatch(r"[0-9a-f]{64}", str(acknowledgement.get("fingerprint", ""))):
+            fail("history acknowledgement lacks an exact SHA-256 fingerprint")
     scanner = (ROOT / "tools/scan_git_history.py").read_text(encoding="utf-8")
     required = (
         "unscanned_blob_count",
         "MAX_BLOB_BYTES = 16 * 1024 * 1024",
         "report[\"unscanned_blob_count\"]",
+        "unused_acknowledgement_count",
+        "synthetic_test_fixture",
     )
     if any(fragment not in scanner for fragment in required):
         fail("history scanner does not fail closed on unscanned blobs")

@@ -468,7 +468,7 @@ final class ToolGateway {
         startedAt: startedAt,
         completedAt: _clock.now(),
       );
-      return _recordTerminal(
+      return await _recordTerminal(
         eventType: request.mutating ? 'tool.completed' : 'tool.observed',
         request: request,
         receipt: receipt,

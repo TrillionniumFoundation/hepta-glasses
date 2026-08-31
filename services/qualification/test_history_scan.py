@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import subprocess
 import tempfile
 import unittest
@@ -46,6 +48,45 @@ class HistoryScanTest(unittest.TestCase):
             self.assertEqual(report["unscanned_blob_count"], 0)
             self.assertGreaterEqual(report["commit_count"], 2)
             self.assertGreaterEqual(report["ref_count"], 2)
+
+
+    def test_exact_synthetic_fixture_acknowledgement_is_auditable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.check_call(["git", "init", "-q"], cwd=root)
+            subprocess.check_call(["git", "config", "user.email", "test@example.invalid"], cwd=root)
+            subprocess.check_call(["git", "config", "user.name", "Test"], cwd=root)
+            secret = b"sk-abcdefghijklmnopqrstuvwxyz123456"
+            fixture = root / "services/qualification/test_history_scan.py"
+            fixture.parent.mkdir(parents=True)
+            fixture.write_bytes(secret)
+            contract = root / "contracts/history-scan-acknowledgements-v1.json"
+            contract.parent.mkdir(parents=True)
+            contract.write_text(json.dumps({"schema_version": 1, "acknowledgements": [{"id": "synthetic-fixture", "pattern": "provider_token", "path": str(fixture.relative_to(root)), "fingerprint": hashlib.sha256(secret).hexdigest(), "classification": "synthetic_test_fixture", "reason": "unit-test fixture"}]}), encoding="utf-8")
+            subprocess.check_call(["git", "add", "."], cwd=root)
+            subprocess.check_call(["git", "commit", "-qm", "fixture"], cwd=root)
+            report = build_report(root)
+            self.assertEqual(report["raw_finding_count"], 1)
+            self.assertEqual(report["acknowledged_finding_count"], 1)
+            self.assertEqual(report["finding_count"], 0)
+            self.assertEqual(report["unused_acknowledgement_count"], 0)
+            self.assertNotIn(secret.decode(), str(report))
+
+    def test_stale_history_acknowledgement_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.check_call(["git", "init", "-q"], cwd=root)
+            subprocess.check_call(["git", "config", "user.email", "test@example.invalid"], cwd=root)
+            subprocess.check_call(["git", "config", "user.name", "Test"], cwd=root)
+            (root / "safe.txt").write_text("safe\n", encoding="utf-8")
+            contract = root / "contracts/history-scan-acknowledgements-v1.json"
+            contract.parent.mkdir(parents=True)
+            contract.write_text(json.dumps({"schema_version": 1, "acknowledgements": [{"id": "stale-fixture", "pattern": "provider_token", "path": "services/qualification/test_history_scan.py", "fingerprint": "0" * 64, "classification": "synthetic_test_fixture", "reason": "must be consumed"}]}), encoding="utf-8")
+            subprocess.check_call(["git", "add", "."], cwd=root)
+            subprocess.check_call(["git", "commit", "-qm", "safe"], cwd=root)
+            report = build_report(root)
+            self.assertEqual(report["finding_count"], 0)
+            self.assertEqual(report["unused_acknowledgement_count"], 1)
 
     def test_large_blob_is_reported_as_unscanned(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

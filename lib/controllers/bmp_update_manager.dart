@@ -29,8 +29,7 @@ final class BmpUpdateManager {
 
   static const int packetPayloadLength = 194;
   static const int maximumPacketCount = 256;
-  static const int maximumImageBytes =
-      packetPayloadLength * maximumPacketCount;
+  static const int maximumImageBytes = packetPayloadLength * maximumPacketCount;
   static const List<int> _storageAddress = <int>[0x00, 0x1c, 0x00, 0x00];
 
   final BmpPacketSender _sendPacket;
@@ -140,8 +139,8 @@ final class BmpUpdateManager {
     }
     final crcInput = Uint8List(_storageAddress.length + image.length)
       ..setRange(0, _storageAddress.length, _storageAddress)
-      ..setRange(_storageAddress.length, _storageAddress.length + image.length,
-          image);
+      ..setRange(
+          _storageAddress.length, _storageAddress.length + image.length, image);
     final value = Crc32Xz().convert(crcInput).toBigInt().toInt();
     return Uint8List.fromList(<int>[
       0x16,

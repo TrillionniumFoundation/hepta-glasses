@@ -30,7 +30,9 @@ data class BleDevice(
     }
 
     private val writeQueue = BoundedWriteQueue(capacity = 128)
-    private val writeHandler = Handler(Looper.getMainLooper())
+    private val writeHandler by lazy(LazyThreadSafetyMode.NONE) {
+        Handler(Looper.getMainLooper())
+    }
 
     @Volatile
     private var drainScheduled = false

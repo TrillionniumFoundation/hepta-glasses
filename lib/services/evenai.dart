@@ -230,17 +230,17 @@ class EvenAI {
     try {
       answer = await ModelGatewayRegistry.current
           .answer(
-            question: combinedText,
-            taskId: session.sessionId,
-            cancellation: cancellation,
-          )
+        question: combinedText,
+        taskId: session.sessionId,
+        cancellation: cancellation,
+      )
           .timeout(
-            _modelTimeout,
-            onTimeout: () {
-              cancellation.cancel('model_deadline_exceeded');
-              throw TimeoutException('model_deadline_exceeded');
-            },
-          );
+        _modelTimeout,
+        onTimeout: () {
+          cancellation.cancel('model_deadline_exceeded');
+          throw TimeoutException('model_deadline_exceeded');
+        },
+      );
     } on TimeoutException {
       answer = 'AI service timed out.';
     } on ModelGatewayException catch (error) {

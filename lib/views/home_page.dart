@@ -96,7 +96,8 @@ class _HomePageState extends State<HomePage> {
     } on Object {
       if (mounted) {
         setState(() {
-          _connectionError ??= 'Bluetooth scanning could not be stopped cleanly.';
+          _connectionError ??=
+              'Bluetooth scanning could not be stopped cleanly.';
         });
       }
     } finally {

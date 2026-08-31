@@ -83,6 +83,8 @@ def main() -> int:
         raise SystemExit("history scan found candidate secret material")
     if history["unscanned_blob_count"] != 0:
         raise SystemExit("history scan left one or more blobs unscanned")
+    if history["unused_acknowledgement_count"] != 0:
+        raise SystemExit("history scan contains stale or unmatched acknowledgements")
     history_digest = write_json(output / "source-history-scan.json", history)
 
     native_source = args.native_sanitizer_report
@@ -151,7 +153,10 @@ def main() -> int:
                 "scope": history["scope"],
                 "commit_count": history["commit_count"],
                 "scanned_blob_count": history["scanned_blob_count"],
+                "raw_finding_count": history["raw_finding_count"],
+                "acknowledged_finding_count": history["acknowledged_finding_count"],
                 "finding_count": history["finding_count"],
+                "unused_acknowledgement_count": history["unused_acknowledgement_count"],
                 "unscanned_blob_count": history["unscanned_blob_count"],
             },
             "native_sanitizer": {
@@ -175,7 +180,10 @@ def main() -> int:
         "contracts_version": contracts_version,
         "file_count": len(sbom["files"]),
         "history_commit_count": history["commit_count"],
+        "history_raw_finding_count": history["raw_finding_count"],
+        "history_acknowledged_finding_count": history["acknowledged_finding_count"],
         "history_finding_count": history["finding_count"],
+        "history_unused_acknowledgement_count": history["unused_acknowledgement_count"],
         "history_unscanned_blob_count": history["unscanned_blob_count"],
         "native_sanitizer_digest": native_digest,
         "package_count": len(sbom["packages"]),

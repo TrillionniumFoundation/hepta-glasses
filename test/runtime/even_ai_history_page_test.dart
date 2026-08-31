@@ -11,9 +11,7 @@ void main() {
     EvenAI.isEvenAISyncing.value = false;
   });
 
-  tearDown(() async {
-    await Get.reset();
-  });
+  tearDown(Get.reset);
 
   testWidgets('history items expand without invalid flex parent data',
       (WidgetTester tester) async {

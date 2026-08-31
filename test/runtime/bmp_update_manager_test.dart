@@ -4,19 +4,21 @@ import 'package:demo_ai_even/controllers/bmp_update_manager.dart';
 import 'package:demo_ai_even/services/ble.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-BleReceive response(List<int> data) => BleReceive()
-  ..data = Uint8List.fromList(data);
+BleReceive response(List<int> data) =>
+    BleReceive()..data = Uint8List.fromList(data);
 
 void main() {
-  test('BMP transfer rejects invalid input before touching transport', () async {
+  test('BMP transfer rejects invalid input before touching transport',
+      () async {
     var sends = 0;
     final manager = BmpUpdateManager(
-      sendPacket: (Uint8List _, String _) async {
+      sendPacket: (Uint8List packet, String side) async {
         sends++;
         return true;
       },
-      request: (Uint8List _, String _, int _) async => response(<int>[]),
-      delay: (Duration _) async {},
+      request: (Uint8List packet, String side, int timeoutMs) async =>
+          response(<int>[]),
+      delay: (Duration duration) async {},
     );
 
     expect(await manager.updateBmp('X', Uint8List.fromList(<int>[1])), isFalse);
@@ -51,7 +53,7 @@ void main() {
         expect(timeoutMs, 1000);
         return response(<int>[0x16, 0, 0, 0, 0, 0xc9]);
       },
-      delay: (Duration _) async {},
+      delay: (Duration duration) async {},
     );
     final image = Uint8List.fromList(
       List<int>.generate(200, (int index) => index & 0xff),
@@ -69,12 +71,12 @@ void main() {
   test('BMP transfer fails closed on an unaccepted packet', () async {
     var requests = 0;
     final manager = BmpUpdateManager(
-      sendPacket: (Uint8List _, String _) async => false,
-      request: (Uint8List _, String _, int _) async {
+      sendPacket: (Uint8List packet, String side) async => false,
+      request: (Uint8List packet, String side, int timeoutMs) async {
         requests++;
         return response(<int>[]);
       },
-      delay: (Duration _) async {},
+      delay: (Duration duration) async {},
     );
 
     expect(
@@ -88,8 +90,8 @@ void main() {
       () async {
     var finishRequests = 0;
     final manager = BmpUpdateManager(
-      sendPacket: (Uint8List _, String _) async => true,
-      request: (Uint8List packet, String _, int _) async {
+      sendPacket: (Uint8List packet, String side) async => true,
+      request: (Uint8List packet, String side, int timeoutMs) async {
         if (packet[0] == 0x20) {
           finishRequests++;
           return BleReceive()
@@ -98,7 +100,7 @@ void main() {
         }
         return response(<int>[0x16, 0, 0, 0, 0, 0xc9]);
       },
-      delay: (Duration _) async {},
+      delay: (Duration duration) async {},
     );
 
     expect(

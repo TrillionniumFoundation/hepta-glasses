@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
-
 import 'package:demo_ai_even/app.dart';
 import 'package:demo_ai_even/runtime/ble_request_slot.dart';
 import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
@@ -383,9 +381,8 @@ class BleManager {
       return;
     }
 
-    final generation = response.generation > 0
-        ? response.generation
-        : _connectionGeneration;
+    final generation =
+        response.generation > 0 ? response.generation : _connectionGeneration;
     final key = BleRequestKey(
       generation: generation,
       side: response.lr,

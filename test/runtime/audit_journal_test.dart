@@ -116,7 +116,6 @@ void main() {
     },
   );
 
-
   test('checkpoint mismatch fails closed', () async {
     final directory =
         await Directory.systemTemp.createTemp('hepta-audit-checkpoint-bad-');
@@ -127,10 +126,10 @@ void main() {
     await journal.append('task.created', <String, Object?>{'task_id': 't-1'});
     await JsonlAuditJournal.checkpointFileFor(file).writeAsString(
       '${jsonEncode(<String, Object?>{
-        'schema_version': 1,
-        'sequence': 1,
-        'hash': '0' * 64,
-      })}\n',
+            'schema_version': 1,
+            'sequence': 1,
+            'hash': '0' * 64,
+          })}\n',
       flush: true,
     );
 
