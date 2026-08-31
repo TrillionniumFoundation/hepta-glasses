@@ -1,0 +1,74 @@
+name: g8-diagnostics
+
+on:
+  push:
+    branches:
+      - work/hepta-glasses-gap-closure-g8-diagnostics
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g8-diagnostics-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - run: flutter pub get
+      - name: Materialize deterministic Dart formatting
+        run: |
+          set -euo pipefail
+          mkdir -p build/diagnostics/formatted
+          dart format lib test
+          git diff --name-only -- lib test > build/diagnostics/formatted-files.txt
+          while IFS= read -r file; do
+            if [ -n "$file" ]; then
+              cp --parents "$file" build/diagnostics/formatted
+            fi
+          done < build/diagnostics/formatted-files.txt
+          git diff --no-ext-diff --binary -- lib test > build/diagnostics/dart-format.patch
+      - name: Run analyzer and Flutter tests on formatted workspace
+        run: |
+          set +e
+          flutter analyze --no-fatal-infos > build/diagnostics/flutter-analyze.log 2>&1
+          echo "$?" > build/diagnostics/flutter-analyze.status
+          flutter test > build/diagnostics/flutter-test.log 2>&1
+          echo "$?" > build/diagnostics/flutter-test.status
+          exit 0
+      - name: Produce redacted all-ref history report
+        run: |
+          python3 tools/scan_git_history.py \
+            --report-only \
+            --output build/diagnostics/source-history-scan.json
+      - name: Capture Android unit-test diagnostics
+        run: |
+          set +e
+          cd android
+          ./gradlew testDebugUnitTest --stacktrace \
+            > ../build/diagnostics/android-test.log 2>&1
+          echo "$?" > ../build/diagnostics/android-test.status
+          exit 0
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-g8-diagnostics-${{ github.sha }}
+          path: build/diagnostics
+          if-no-files-found: error
+          retention-days: 3
