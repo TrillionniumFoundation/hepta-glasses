@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: g8-materialize-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   apply-and-verify:
