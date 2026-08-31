@@ -1,6 +1,7 @@
 name: hepta-glasses-ci
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches:
