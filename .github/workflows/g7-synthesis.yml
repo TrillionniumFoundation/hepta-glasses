@@ -1,0 +1,83 @@
+name: g7-synthesis
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/hepta-glasses-g7-synthesis
+    paths:
+      - .github/workflows/g7-synthesis.yml
+      - tools/apply_g7_synthesis.py
+      - tools/g7-synthesis.trigger
+
+permissions:
+  contents: write
+
+concurrency:
+  group: g7-synthesis-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  synthesize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: codex/hepta-glasses-g7-synthesis
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Configure bounded merge identity
+        run: |
+          git config user.name 'hepta-g7-synthesis[bot]'
+          git config user.email 'hepta-g7-synthesis[bot]@users.noreply.github.com'
+
+      - name: Apply deterministic G4/G6 convergence
+        run: python3 tools/apply_g7_synthesis.py
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+
+      - name: Resolve and format the exact candidate tree
+        run: |
+          flutter pub get
+          dart format lib test
+          git add -A
+          git diff --cached --check
+
+      - name: Validate repository and deterministic services
+        run: |
+          python3 tools/validate_repository.py
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+
+      - name: Validate Flutter source
+        run: |
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze --no-fatal-infos
+          flutter test
+
+      - name: Validate native safety and source boundary
+        run: |
+          bash tools/run_native_sanitizers.sh build/evidence/source-native-sanitizer.json
+          python3 tools/scan_git_history.py --output build/evidence/source-history-scan.json
+
+      - name: Commit only a fully validated synthesis
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No synthesis changes remain.'
+            exit 0
+          fi
+          git commit -m 'fix(g7): converge source blockers on validated tree'
+          git push origin HEAD:codex/hepta-glasses-g7-synthesis
