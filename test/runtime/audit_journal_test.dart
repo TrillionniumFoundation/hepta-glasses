@@ -20,8 +20,9 @@ void main() {
   });
 
   test('file audit journal serializes concurrent appenders', () async {
-    final directory =
-        await Directory.systemTemp.createTemp('hepta-audit-race-');
+    final directory = await Directory.systemTemp.createTemp(
+      'hepta-audit-race-',
+    );
     addTearDown(() async => directory.delete(recursive: true));
     final journal = JsonlAuditJournal(File('${directory.path}/audit.jsonl'));
     await journal.initialize();
@@ -29,10 +30,9 @@ void main() {
     await Future.wait(
       List<Future<AuditEntry>>.generate(
         32,
-        (int index) => journal.append(
-          'concurrent.append',
-          <String, Object?>{'index': index},
-        ),
+        (int index) => journal.append('concurrent.append', <String, Object?>{
+          'index': index,
+        }),
       ),
     );
 
@@ -46,8 +46,9 @@ void main() {
   });
 
   test('two journal instances share an operating-system file lock', () async {
-    final directory =
-        await Directory.systemTemp.createTemp('hepta-audit-cross-instance-');
+    final directory = await Directory.systemTemp.createTemp(
+      'hepta-audit-cross-instance-',
+    );
     addTearDown(() async => directory.delete(recursive: true));
     final file = File('${directory.path}/audit.jsonl');
     final first = JsonlAuditJournal(file);
@@ -78,10 +79,9 @@ void main() {
       final file = File('${directory.path}/audit.jsonl');
       final journal = JsonlAuditJournal(file);
       await journal.initialize();
-      final first = await journal.append(
-        'tool.prepared',
-        <String, Object?>{'request_id': 'r-1'},
-      );
+      final first = await journal.append('tool.prepared', <String, Object?>{
+        'request_id': 'r-1',
+      });
 
       final timestamp = DateTime.utc(2026, 8, 31);
       final hash = AuditEntry.calculateHash(
@@ -117,19 +117,16 @@ void main() {
   );
 
   test('checkpoint mismatch fails closed', () async {
-    final directory =
-        await Directory.systemTemp.createTemp('hepta-audit-checkpoint-bad-');
+    final directory = await Directory.systemTemp.createTemp(
+      'hepta-audit-checkpoint-bad-',
+    );
     addTearDown(() async => directory.delete(recursive: true));
     final file = File('${directory.path}/audit.jsonl');
     final journal = JsonlAuditJournal(file);
     await journal.initialize();
     await journal.append('task.created', <String, Object?>{'task_id': 't-1'});
     await JsonlAuditJournal.checkpointFileFor(file).writeAsString(
-      '${jsonEncode(<String, Object?>{
-            'schema_version': 1,
-            'sequence': 1,
-            'hash': '0' * 64,
-          })}\n',
+      '${jsonEncode(<String, Object?>{'schema_version': 1, 'sequence': 1, 'hash': '0' * 64})}\n',
       flush: true,
     );
 
@@ -137,8 +134,9 @@ void main() {
   });
 
   test('torn final record fails closed', () async {
-    final directory =
-        await Directory.systemTemp.createTemp('hepta-audit-torn-');
+    final directory = await Directory.systemTemp.createTemp(
+      'hepta-audit-torn-',
+    );
     addTearDown(() async => directory.delete(recursive: true));
     final file = File('${directory.path}/audit.jsonl');
     final journal = JsonlAuditJournal(file);
@@ -159,8 +157,9 @@ void main() {
     final file = File('${directory.path}/audit.jsonl');
     final journal = JsonlAuditJournal(file);
     await journal.initialize();
-    await journal
-        .append('tool.prepared', <String, Object?>{'request_id': 'r-1'});
+    await journal.append('tool.prepared', <String, Object?>{
+      'request_id': 'r-1',
+    });
     await journal.verify();
 
     final line =

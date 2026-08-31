@@ -54,12 +54,12 @@ final class TransportAck {
   bool get requiresReconciliation => !accepted && effectMayHaveOccurred;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'accepted': accepted,
-        'timeout': timeout,
-        'sequence': sequence,
-        'error_code': errorCode,
-        'effect_may_have_occurred': effectMayHaveOccurred,
-      };
+    'accepted': accepted,
+    'timeout': timeout,
+    'sequence': sequence,
+    'error_code': errorCode,
+    'effect_may_have_occurred': effectMayHaveOccurred,
+  };
 }
 
 abstract interface class GlassesTransport {

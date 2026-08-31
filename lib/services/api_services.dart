@@ -5,7 +5,7 @@ import 'package:demo_ai_even/runtime/model_gateway.dart';
 /// absent from the mobile application.
 class ApiService {
   ApiService({ModelGateway? gateway})
-      : _gateway = gateway ?? ModelGatewayRegistry.current;
+    : _gateway = gateway ?? ModelGatewayRegistry.current;
 
   final ModelGateway _gateway;
 

@@ -28,23 +28,22 @@ final class AuditEntry {
     required String eventType,
     required Map<String, Object?> payload,
     required String previousHash,
-  }) =>
-      sha256CanonicalJson(<String, Object?>{
-        'sequence': sequence,
-        'timestamp': timestamp.toUtc().toIso8601String(),
-        'event_type': eventType,
-        'payload': payload,
-        'previous_hash': previousHash,
-      });
+  }) => sha256CanonicalJson(<String, Object?>{
+    'sequence': sequence,
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'event_type': eventType,
+    'payload': payload,
+    'previous_hash': previousHash,
+  });
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'sequence': sequence,
-        'timestamp': timestamp.toIso8601String(),
-        'event_type': eventType,
-        'payload': payload,
-        'previous_hash': previousHash,
-        'hash': hash,
-      };
+    'sequence': sequence,
+    'timestamp': timestamp.toIso8601String(),
+    'event_type': eventType,
+    'payload': payload,
+    'previous_hash': previousHash,
+    'hash': hash,
+  };
 
   factory AuditEntry.fromJson(Map<String, Object?> json) {
     final rawPayload = json['payload'];
@@ -77,10 +76,7 @@ final class AuditEntry {
 }
 
 abstract interface class AuditJournal {
-  Future<AuditEntry> append(
-    String eventType,
-    Map<String, Object?> payload,
-  );
+  Future<AuditEntry> append(String eventType, Map<String, Object?> payload);
 
   Future<List<AuditEntry>> readAll();
 
@@ -172,11 +168,11 @@ final class _AuditHead {
   final int byteLength;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'schema_version': 2,
-        'sequence': sequence,
-        'hash': hash,
-        'byte_length': byteLength,
-      };
+    'schema_version': 2,
+    'sequence': sequence,
+    'hash': hash,
+    'byte_length': byteLength,
+  };
 }
 
 final class _DecodedCheckpoint {
@@ -195,12 +191,11 @@ final class _DecodedCheckpoint {
 
 /// A process-safe bounded JSONL journal.
 ///
-/// Startup, recovery, explicit verification, and full reads validate the whole
-/// hash chain. Normal append no longer rereads the complete history: under the
-/// OS lock it validates the v2 checkpoint, exact file byte length, and terminal
-/// record before appending and atomically replacing the checkpoint. A crash
-/// after journal flush but before checkpoint replacement is repaired by a full
-/// validation on the next operation.
+/// Startup, recovery, explicit verification, full reads, and every append
+/// validate the complete hash chain. The v2 checkpoint and exact byte length are
+/// crash-recovery hints, never standalone integrity roots. A crash after journal
+/// flush but before checkpoint replacement is repaired only after the full chain
+/// has been authenticated under both the process lane and the OS file lock.
 final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
   JsonlAuditJournal(
     this.file, {
@@ -246,17 +241,19 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
     final key = file.absolute.path;
     final previous = _processTails[key] ?? Future<void>.value();
     late final Future<void> queued;
-    queued = previous.then<void>((_) async {
-      try {
-        completer.complete(await _withFileLock(operation));
-      } on Object catch (error, stackTrace) {
-        completer.completeError(error, stackTrace);
-      }
-    }).whenComplete(() {
-      if (identical(_processTails[key], queued)) {
-        _processTails.remove(key);
-      }
-    });
+    queued = previous
+        .then<void>((_) async {
+          try {
+            completer.complete(await _withFileLock(operation));
+          } on Object catch (error, stackTrace) {
+            completer.completeError(error, stackTrace);
+          }
+        })
+        .whenComplete(() {
+          if (identical(_processTails[key], queued)) {
+            _processTails.remove(key);
+          }
+        });
     _processTails[key] = queued;
     return completer.future;
   }
@@ -281,16 +278,13 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
   }
 
   Future<void> initialize() => _exclusive(() async {
-        await _ensureDataFileUnlocked();
-        final entries = await _readAndVerifyUnlocked();
-        await _verifyOrRepairCheckpointUnlocked(entries);
-      });
+    await _ensureDataFileUnlocked();
+    final entries = await _readAndVerifyUnlocked();
+    await _verifyOrRepairCheckpointUnlocked(entries);
+  });
 
   @override
-  Future<AuditEntry> append(
-    String eventType,
-    Map<String, Object?> payload,
-  ) =>
+  Future<AuditEntry> append(String eventType, Map<String, Object?> payload) =>
       _exclusive(() async {
         if (eventType.trim().isEmpty) {
           throw ArgumentError.value(
@@ -300,6 +294,11 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
           );
         }
         await _ensureDataFileUnlocked();
+        // Authenticate all prior records before creating a new audit fact. A
+        // checkpoint that matches only the file length and terminal record is
+        // insufficient because a same-length middle record may have changed.
+        final entries = await _readAndVerifyUnlocked();
+        await _verifyOrRepairCheckpointUnlocked(entries);
         final head = await _loadAppendHeadUnlocked();
 
         final sequence = head.sequence + 1;
@@ -342,29 +341,25 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
           await handle.close();
         }
         await _writeCheckpointUnlocked(
-          _AuditHead(
-            sequence: sequence,
-            hash: hash,
-            byteLength: nextLength,
-          ),
+          _AuditHead(sequence: sequence, hash: hash, byteLength: nextLength),
         );
         return entry;
       });
 
   @override
   Future<List<AuditEntry>> readAll() => _exclusive(() async {
-        await _ensureDataFileUnlocked();
-        final entries = await _readAndVerifyUnlocked();
-        await _verifyOrRepairCheckpointUnlocked(entries);
-        return List.unmodifiable(entries);
-      });
+    await _ensureDataFileUnlocked();
+    final entries = await _readAndVerifyUnlocked();
+    await _verifyOrRepairCheckpointUnlocked(entries);
+    return List.unmodifiable(entries);
+  });
 
   @override
   Future<void> verify() => _exclusive(() async {
-        await _ensureDataFileUnlocked();
-        final entries = await _readAndVerifyUnlocked();
-        await _verifyOrRepairCheckpointUnlocked(entries);
-      });
+    await _ensureDataFileUnlocked();
+    final entries = await _readAndVerifyUnlocked();
+    await _verifyOrRepairCheckpointUnlocked(entries);
+  });
 
   Future<void> _ensureDataFileUnlocked() async {
     await file.parent.create(recursive: true);
@@ -523,9 +518,7 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
       throw StateError('Audit terminal record is not an object.');
     }
     return AuditEntry.fromJson(
-      decoded.map(
-        (key, value) => MapEntry(key.toString(), value as Object?),
-      ),
+      decoded.map((key, value) => MapEntry(key.toString(), value as Object?)),
     );
   }
 
@@ -565,9 +558,7 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
     }
   }
 
-  Future<_AuditHead> _headForEntriesUnlocked(
-    List<AuditEntry> entries,
-  ) async {
+  Future<_AuditHead> _headForEntriesUnlocked(List<AuditEntry> entries) async {
     final length = await file.length();
     return entries.isEmpty
         ? _AuditHead(sequence: 0, hash: '', byteLength: length)

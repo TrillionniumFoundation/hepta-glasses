@@ -25,10 +25,7 @@ final class DeviceEffectScheduler {
 
   int get pending => _queue.length + (_draining ? 1 : 0);
 
-  Future<T> schedule<T>(
-    String operation,
-    Future<T> Function() effect,
-  ) {
+  Future<T> schedule<T>(String operation, Future<T> Function() effect) {
     if (operation.trim().isEmpty) {
       throw ArgumentError.value(operation, 'operation', 'must not be empty');
     }
@@ -55,9 +52,7 @@ final class DeviceEffectScheduler {
     return completer.future;
   }
 
-  Future<void> close({
-    Duration timeout = const Duration(seconds: 30),
-  }) async {
+  Future<void> close({Duration timeout = const Duration(seconds: 30)}) async {
     if (timeout <= Duration.zero) {
       throw ArgumentError.value(timeout, 'timeout', 'must be positive');
     }

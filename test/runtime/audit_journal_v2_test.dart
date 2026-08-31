@@ -6,8 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('v2 checkpoint binds the exact journal byte length', () async {
-    final directory =
-        await Directory.systemTemp.createTemp('hepta-audit-v2-head-');
+    final directory = await Directory.systemTemp.createTemp(
+      'hepta-audit-v2-head-',
+    );
     addTearDown(() async => directory.delete(recursive: true));
     final file = File('${directory.path}/audit.jsonl');
     final journal = JsonlAuditJournal(file);
@@ -25,8 +26,9 @@ void main() {
   });
 
   test('append is bounded by entry and total journal capacity', () async {
-    final directory =
-        await Directory.systemTemp.createTemp('hepta-audit-v2-bounds-');
+    final directory = await Directory.systemTemp.createTemp(
+      'hepta-audit-v2-bounds-',
+    );
     addTearDown(() async => directory.delete(recursive: true));
     final file = File('${directory.path}/audit.jsonl');
     final journal = JsonlAuditJournal(
@@ -37,49 +39,95 @@ void main() {
     await journal.initialize();
 
     await expectLater(
-      journal.append(
-        'oversized',
-        <String, Object?>{'value': 'x' * 1200},
-      ),
+      journal.append('oversized', <String, Object?>{'value': 'x' * 1200}),
       throwsStateError,
     );
     expect(await file.length(), 0);
   });
 
-  test('append repairs a valid journal tail written before checkpoint update',
-      () async {
-    final directory =
-        await Directory.systemTemp.createTemp('hepta-audit-v2-crash-');
-    addTearDown(() async => directory.delete(recursive: true));
-    final file = File('${directory.path}/audit.jsonl');
-    final first = JsonlAuditJournal(file);
-    await first.initialize();
-    final entry = await first.append('event.one', const <String, Object?>{});
+  test(
+    'append repairs a valid journal tail written before checkpoint update',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'hepta-audit-v2-crash-',
+      );
+      addTearDown(() async => directory.delete(recursive: true));
+      final file = File('${directory.path}/audit.jsonl');
+      final first = JsonlAuditJournal(file);
+      await first.initialize();
+      final entry = await first.append('event.one', const <String, Object?>{});
 
-    final timestamp = DateTime.utc(2026, 8, 31, 12);
-    final hash = AuditEntry.calculateHash(
-      sequence: 2,
-      timestamp: timestamp,
-      eventType: 'event.two',
-      payload: const <String, Object?>{},
-      previousHash: entry.hash,
-    );
-    final second = AuditEntry(
-      sequence: 2,
-      timestamp: timestamp,
-      eventType: 'event.two',
-      payload: const <String, Object?>{},
-      previousHash: entry.hash,
-      hash: hash,
-    );
-    await file.writeAsString(
-      '${jsonEncode(second.toJson())}\n',
-      mode: FileMode.append,
-      flush: true,
-    );
+      final timestamp = DateTime.utc(2026, 8, 31, 12);
+      final hash = AuditEntry.calculateHash(
+        sequence: 2,
+        timestamp: timestamp,
+        eventType: 'event.two',
+        payload: const <String, Object?>{},
+        previousHash: entry.hash,
+      );
+      final second = AuditEntry(
+        sequence: 2,
+        timestamp: timestamp,
+        eventType: 'event.two',
+        payload: const <String, Object?>{},
+        previousHash: entry.hash,
+        hash: hash,
+      );
+      await file.writeAsString(
+        '${jsonEncode(second.toJson())}\n',
+        mode: FileMode.append,
+        flush: true,
+      );
 
-    final recovered = JsonlAuditJournal(file);
-    await recovered.append('event.three', const <String, Object?>{});
-    expect(await recovered.readAll(), hasLength(3));
-  });
+      final recovered = JsonlAuditJournal(file);
+      await recovered.append('event.three', const <String, Object?>{});
+      expect(await recovered.readAll(), hasLength(3));
+    },
+  );
+
+  test(
+    'append rejects equal-length middle-record tampering before writing',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'hepta-audit-v2-middle-tamper-',
+      );
+      addTearDown(() async => directory.delete(recursive: true));
+      final file = File('${directory.path}/audit.jsonl');
+      final journal = JsonlAuditJournal(file);
+
+      await journal.initialize();
+      await journal.append('event.one', const <String, Object?>{
+        'value': 'AAAAAAAA',
+      });
+      await journal.append('event.two', const <String, Object?>{
+        'value': 'BBBBBBBB',
+      });
+      await journal.append('event.three', const <String, Object?>{
+        'value': 'CCCCCCCC',
+      });
+
+      final original = await file.readAsString();
+      final checkpointFile = JsonlAuditJournal.checkpointFileFor(file);
+      final checkpointBefore = await checkpointFile.readAsString();
+      final tampered = original.replaceFirst(
+        '"value":"BBBBBBBB"',
+        '"value":"XXXXXXXX"',
+      );
+      expect(tampered, isNot(original));
+      expect(utf8.encode(tampered).length, utf8.encode(original).length);
+      await file.writeAsString(tampered, flush: true);
+      final lengthBeforeAppend = await file.length();
+
+      await expectLater(
+        journal.append('event.four', const <String, Object?>{
+          'value': 'DDDDDDDD',
+        }),
+        throwsStateError,
+      );
+
+      expect(await file.length(), lengthBeforeAppend);
+      expect(await file.readAsString(), tampered);
+      expect(await checkpointFile.readAsString(), checkpointBefore);
+    },
+  );
 }

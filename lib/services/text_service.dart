@@ -85,10 +85,7 @@ class TextService {
 
   void _scheduleNextPage(int generation) {
     _timer?.cancel();
-    _timer = Timer(
-      _pageInterval,
-      () => unawaited(_advancePage(generation)),
-    );
+    _timer = Timer(_pageInterval, () => unawaited(_advancePage(generation)));
   }
 
   Future<void> _advancePage(int generation) async {

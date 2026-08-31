@@ -17,11 +17,9 @@ final class DisplayPage {
 }
 
 final class DisplayComposer {
-  const DisplayComposer({
-    this.maxLines = 5,
-    this.maxCharactersPerLine = 24,
-  })  : assert(maxLines > 0),
-        assert(maxCharactersPerLine > 0);
+  const DisplayComposer({this.maxLines = 5, this.maxCharactersPerLine = 24})
+    : assert(maxLines > 0),
+      assert(maxCharactersPerLine > 0);
 
   final int maxLines;
   final int maxCharactersPerLine;
@@ -46,8 +44,9 @@ final class DisplayComposer {
     final pageCount = (lines.length + maxLines - 1) ~/ maxLines;
     return List<DisplayPage>.generate(pageCount, (pageIndex) {
       final start = pageIndex * maxLines;
-      final end =
-          start + maxLines < lines.length ? start + maxLines : lines.length;
+      final end = start + maxLines < lines.length
+          ? start + maxLines
+          : lines.length;
       return DisplayPage(
         cardId: card.cardId,
         index: pageIndex + 1,

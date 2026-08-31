@@ -7,10 +7,7 @@ import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
 import 'package:demo_ai_even/services/ble.dart';
 import 'package:demo_ai_even/utils/utils.dart';
 
-typedef BmpPacketSender = Future<bool> Function(
-  Uint8List packet,
-  String side,
-);
+typedef BmpPacketSender = Future<bool> Function(Uint8List packet, String side);
 typedef BmpRequester = Future<BleReceive> Function(
   Uint8List packet,
   String side,
@@ -23,9 +20,9 @@ final class BmpUpdateManager {
     BmpPacketSender? sendPacket,
     BmpRequester? request,
     BmpDelay? delay,
-  })  : _sendPacket = sendPacket ?? _defaultSendPacket,
-        _request = request ?? _defaultRequest,
-        _delay = delay ?? _defaultDelay;
+  }) : _sendPacket = sendPacket ?? _defaultSendPacket,
+       _request = request ?? _defaultRequest,
+       _delay = delay ?? _defaultDelay;
 
   static const int packetPayloadLength = 194;
   static const int maximumPacketCount = 256;
@@ -65,9 +62,7 @@ final class BmpUpdateManager {
       }
       _reportProgress(side, index + 1, packets.length);
       if (index + 1 < packets.length) {
-        await _delay(
-          Duration(milliseconds: Platform.isIOS ? 8 : 5),
-        );
+        await _delay(Duration(milliseconds: Platform.isIOS ? 8 : 5));
       }
     }
 
@@ -88,11 +83,7 @@ final class BmpUpdateManager {
       return false;
     }
 
-    final crcResponse = await _request(
-      buildCrcCommand(image),
-      side,
-      1000,
-    );
+    final crcResponse = await _request(buildCrcCommand(image), side, 1000);
     final crcAccepted = isSuccessfulCrcResponse(crcResponse);
     if (!crcAccepted) {
       PrivacySafeLog.event(
@@ -109,12 +100,7 @@ final class BmpUpdateManager {
 
   static Uint8List buildDataPacket(int sequence, Uint8List payload) {
     if (sequence < 0 || sequence >= maximumPacketCount) {
-      throw RangeError.range(
-        sequence,
-        0,
-        maximumPacketCount - 1,
-        'sequence',
-      );
+      throw RangeError.range(sequence, 0, maximumPacketCount - 1, 'sequence');
     }
     if (payload.isEmpty || payload.length > packetPayloadLength) {
       throw ArgumentError.value(
@@ -140,7 +126,10 @@ final class BmpUpdateManager {
     final crcInput = Uint8List(_storageAddress.length + image.length)
       ..setRange(0, _storageAddress.length, _storageAddress)
       ..setRange(
-          _storageAddress.length, _storageAddress.length + image.length, image);
+        _storageAddress.length,
+        _storageAddress.length + image.length,
+        image,
+      );
     final value = Crc32Xz().convert(crcInput).toBigInt().toInt();
     return Uint8List.fromList(<int>[
       0x16,
@@ -190,18 +179,14 @@ final class BmpUpdateManager {
     );
   }
 
-  static Future<bool> _defaultSendPacket(
-    Uint8List packet,
-    String side,
-  ) =>
+  static Future<bool> _defaultSendPacket(Uint8List packet, String side) =>
       BleManager.sendData(packet, lr: side);
 
   static Future<BleReceive> _defaultRequest(
     Uint8List packet,
     String side,
     int timeoutMs,
-  ) =>
-      BleManager.request(packet, lr: side, timeoutMs: timeoutMs);
+  ) => BleManager.request(packet, lr: side, timeoutMs: timeoutMs);
 
   static Future<void> _defaultDelay(Duration duration) =>
       Future<void>.delayed(duration);

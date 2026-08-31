@@ -4,11 +4,9 @@ import 'clock.dart';
 import 'contracts.dart';
 
 final class TaskEngine {
-  TaskEngine({
-    required AuditJournal journal,
-    Clock clock = const SystemClock(),
-  })  : _journal = journal,
-        _clock = clock;
+  TaskEngine({required AuditJournal journal, Clock clock = const SystemClock()})
+    : _journal = journal,
+      _clock = clock;
 
   final AuditJournal _journal;
   final Clock _clock;
@@ -18,59 +16,59 @@ final class TaskEngine {
 
   static final Map<TaskState, Set<TaskState>> _allowedTransitions =
       <TaskState, Set<TaskState>>{
-    TaskState.created: <TaskState>{
-      TaskState.validating,
-      TaskState.cancelled,
-      TaskState.failed,
-    },
-    TaskState.validating: <TaskState>{
-      TaskState.waitingForContext,
-      TaskState.waitingForApproval,
-      TaskState.running,
-      TaskState.cancelled,
-      TaskState.failed,
-    },
-    TaskState.waitingForContext: <TaskState>{
-      TaskState.validating,
-      TaskState.cancelled,
-      TaskState.failed,
-    },
-    TaskState.waitingForApproval: <TaskState>{
-      TaskState.running,
-      TaskState.cancelled,
-      TaskState.failed,
-    },
-    TaskState.running: <TaskState>{
-      TaskState.waitingForExternal,
-      TaskState.reconciling,
-      TaskState.succeeded,
-      TaskState.failed,
-      TaskState.cancelled,
-      TaskState.degraded,
-    },
-    TaskState.waitingForExternal: <TaskState>{
-      TaskState.running,
-      TaskState.reconciling,
-      TaskState.failed,
-      TaskState.cancelled,
-      TaskState.degraded,
-    },
-    TaskState.reconciling: <TaskState>{
-      TaskState.running,
-      TaskState.succeeded,
-      TaskState.failed,
-      TaskState.cancelled,
-      TaskState.degraded,
-    },
-    TaskState.succeeded: <TaskState>{},
-    TaskState.failed: <TaskState>{},
-    TaskState.cancelled: <TaskState>{},
-    TaskState.degraded: <TaskState>{
-      TaskState.reconciling,
-      TaskState.failed,
-      TaskState.cancelled,
-    },
-  };
+        TaskState.created: <TaskState>{
+          TaskState.validating,
+          TaskState.cancelled,
+          TaskState.failed,
+        },
+        TaskState.validating: <TaskState>{
+          TaskState.waitingForContext,
+          TaskState.waitingForApproval,
+          TaskState.running,
+          TaskState.cancelled,
+          TaskState.failed,
+        },
+        TaskState.waitingForContext: <TaskState>{
+          TaskState.validating,
+          TaskState.cancelled,
+          TaskState.failed,
+        },
+        TaskState.waitingForApproval: <TaskState>{
+          TaskState.running,
+          TaskState.cancelled,
+          TaskState.failed,
+        },
+        TaskState.running: <TaskState>{
+          TaskState.waitingForExternal,
+          TaskState.reconciling,
+          TaskState.succeeded,
+          TaskState.failed,
+          TaskState.cancelled,
+          TaskState.degraded,
+        },
+        TaskState.waitingForExternal: <TaskState>{
+          TaskState.running,
+          TaskState.reconciling,
+          TaskState.failed,
+          TaskState.cancelled,
+          TaskState.degraded,
+        },
+        TaskState.reconciling: <TaskState>{
+          TaskState.running,
+          TaskState.succeeded,
+          TaskState.failed,
+          TaskState.cancelled,
+          TaskState.degraded,
+        },
+        TaskState.succeeded: <TaskState>{},
+        TaskState.failed: <TaskState>{},
+        TaskState.cancelled: <TaskState>{},
+        TaskState.degraded: <TaskState>{
+          TaskState.reconciling,
+          TaskState.failed,
+          TaskState.cancelled,
+        },
+      };
 
   List<TaskRecord> get tasks => List.unmodifiable(_tasks.values);
 
@@ -92,7 +90,8 @@ final class TaskEngine {
     if (existingTaskId != null) {
       if (_creationFingerprints[idempotencyKey] != fingerprint) {
         throw StateError(
-            'Idempotency key was reused with different task data.');
+          'Idempotency key was reused with different task data.',
+        );
       }
       return _tasks[existingTaskId]!;
     }
@@ -138,8 +137,11 @@ final class TaskEngine {
       );
     }
 
-    final updated =
-        current.transitionTo(next, _clock.now(), transitionReason: reason);
+    final updated = current.transitionTo(
+      next,
+      _clock.now(),
+      transitionReason: reason,
+    );
     await _journal.append('task.transition', <String, Object?>{
       'task_id': taskId,
       'from': current.state.name,
@@ -163,8 +165,11 @@ final class TaskEngine {
     }.contains(current.state)) {
       return current;
     }
-    return transition(taskId, TaskState.cancelled,
-        reason: reason ?? 'cancelled');
+    return transition(
+      taskId,
+      TaskState.cancelled,
+      reason: reason ?? 'cancelled',
+    );
   }
 
   Future<void> recover() async {

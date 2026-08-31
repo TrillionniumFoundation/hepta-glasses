@@ -33,10 +33,7 @@ class Proto {
       session: session.token,
       side: lr ?? 'R',
     );
-    return (
-      startedAt,
-      receipt.status == ToolReceiptStatus.succeeded,
-    );
+    return (startedAt, receipt.status == ToolReceiptStatus.succeeded);
   }
 
   /// Native protocol effect used only by the runtime capability adapter.
@@ -180,8 +177,10 @@ class Proto {
       throw ArgumentError.value(count, 'count', 'must exceed header size');
     }
     final payloadBytes = count - 3;
-    final packetCount =
-        max(1, (data.length + payloadBytes - 1) ~/ payloadBytes);
+    final packetCount = max(
+      1,
+      (data.length + payloadBytes - 1) ~/ payloadBytes,
+    );
     if (packetCount > 255) {
       throw StateError('Payload exceeds protocol packet limit.');
     }
@@ -191,13 +190,15 @@ class Proto {
       final end = start + payloadBytes < data.length
           ? start + payloadBytes
           : data.length;
-      final itemData =
-          start < data.length ? data.sublist(start, end) : Uint8List(0);
+      final itemData = start < data.length
+          ? data.sublist(start, end)
+          : Uint8List(0);
       packets.add(
-        Utils.addPrefixToUint8List(
-          <int>[command, packetCount, sequence],
-          itemData,
-        ),
+        Utils.addPrefixToUint8List(<int>[
+          command,
+          packetCount,
+          sequence,
+        ], itemData),
       );
     }
     return packets;
@@ -209,8 +210,11 @@ class Proto {
       Uint8List.fromList(utf8.encode(whitelistJson)),
       count: 180,
     );
-    final success =
-        await BleManager.requestList(packets, timeoutMs: 300, lr: 'L');
+    final success = await BleManager.requestList(
+      packets,
+      timeoutMs: 300,
+      lr: 'L',
+    );
     if (!success) {
       PrivacySafeLog.event(
         'whitelist_send_failed',
@@ -233,8 +237,11 @@ class Proto {
       notifyId,
       Uint8List.fromList(utf8.encode(notifyJson)),
     );
-    final success =
-        await BleManager.requestList(packets, timeoutMs: 1000, lr: 'L');
+    final success = await BleManager.requestList(
+      packets,
+      timeoutMs: 1000,
+      lr: 'L',
+    );
     if (!success) {
       PrivacySafeLog.event(
         'notification_send_failed',
@@ -253,8 +260,10 @@ class Proto {
     Uint8List data,
   ) {
     const payloadBytes = 176;
-    final packetCount =
-        max(1, (data.length + payloadBytes - 1) ~/ payloadBytes);
+    final packetCount = max(
+      1,
+      (data.length + payloadBytes - 1) ~/ payloadBytes,
+    );
     if (packetCount > 255) {
       throw StateError('Notification exceeds protocol packet limit.');
     }
@@ -264,13 +273,16 @@ class Proto {
       final end = start + payloadBytes < data.length
           ? start + payloadBytes
           : data.length;
-      final itemData =
-          start < data.length ? data.sublist(start, end) : Uint8List(0);
+      final itemData = start < data.length
+          ? data.sublist(start, end)
+          : Uint8List(0);
       packets.add(
-        Utils.addPrefixToUint8List(
-          <int>[command, messageId, packetCount, sequence],
-          itemData,
-        ),
+        Utils.addPrefixToUint8List(<int>[
+          command,
+          messageId,
+          packetCount,
+          sequence,
+        ], itemData),
       );
     }
     return packets;

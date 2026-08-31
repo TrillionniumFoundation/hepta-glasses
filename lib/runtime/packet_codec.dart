@@ -22,8 +22,9 @@ final class PacketCodec {
       );
     }
     final chunkBytes = maxPacketBytes - headerBytes;
-    final frameCount =
-        payload.isEmpty ? 1 : (payload.length + chunkBytes - 1) ~/ chunkBytes;
+    final frameCount = payload.isEmpty
+        ? 1
+        : (payload.length + chunkBytes - 1) ~/ chunkBytes;
     if (frameCount > 255) {
       throw StateError('Payload requires more than 255 protocol frames.');
     }
@@ -34,8 +35,8 @@ final class PacketCodec {
       final end = payload.isEmpty
           ? 0
           : (start + chunkBytes < payload.length
-              ? start + chunkBytes
-              : payload.length);
+                ? start + chunkBytes
+                : payload.length);
       frames.add(
         Uint8List.fromList(<int>[
           command,

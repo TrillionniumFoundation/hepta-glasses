@@ -13,14 +13,13 @@ void main() {
 
   tearDown(Get.reset);
 
-  testWidgets('history items expand without invalid flex parent data',
-      (WidgetTester tester) async {
+  testWidgets('history items expand without invalid flex parent data', (
+    WidgetTester tester,
+  ) async {
     final controller = Get.put(EvenaiModelController());
     controller.addItem('Question', 'Answer');
 
-    await tester.pumpWidget(
-      const MaterialApp(home: EvenAIListPage()),
-    );
+    await tester.pumpWidget(const MaterialApp(home: EvenAIListPage()));
     expect(tester.takeException(), isNull);
     expect(find.text('Question'), findsOneWidget);
     expect(find.text('Answer'), findsNothing);

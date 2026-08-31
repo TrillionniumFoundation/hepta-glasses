@@ -50,9 +50,7 @@ Map<String, Object?> _stringObjectMap(Object? value) {
   if (value is! Map) {
     throw const FormatException('Expected a JSON object.');
   }
-  return value.map(
-    (key, item) => MapEntry(key.toString(), item as Object?),
-  );
+  return value.map((key, item) => MapEntry(key.toString(), item as Object?));
 }
 
 final class ToolRequest {
@@ -87,32 +85,32 @@ final class ToolRequest {
   String get fingerprint => sha256CanonicalJson(toJson());
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'request_id': requestId,
-        'task_id': taskId,
-        'device_id': deviceId,
-        'action': action,
-        'arguments': arguments,
-        'risk_tier': riskTier.name,
-        'mutating': mutating,
-        'idempotency_key': idempotencyKey,
-        'deadline': deadline.toIso8601String(),
-        'origin': origin.name,
-        'human_confirmation_digest': humanConfirmationDigest,
-      };
+    'request_id': requestId,
+    'task_id': taskId,
+    'device_id': deviceId,
+    'action': action,
+    'arguments': arguments,
+    'risk_tier': riskTier.name,
+    'mutating': mutating,
+    'idempotency_key': idempotencyKey,
+    'deadline': deadline.toIso8601String(),
+    'origin': origin.name,
+    'human_confirmation_digest': humanConfirmationDigest,
+  };
 
   factory ToolRequest.fromJson(Map<String, Object?> json) => ToolRequest(
-        requestId: json['request_id']! as String,
-        taskId: json['task_id']! as String,
-        deviceId: json['device_id']! as String,
-        action: json['action']! as String,
-        arguments: _stringObjectMap(json['arguments']),
-        riskTier: riskTierFromJson(json['risk_tier']! as String),
-        mutating: json['mutating']! as bool,
-        idempotencyKey: json['idempotency_key']! as String,
-        deadline: DateTime.parse(json['deadline']! as String),
-        origin: trustClassFromJson(json['origin'] as String? ?? 'user'),
-        humanConfirmationDigest: json['human_confirmation_digest'] as String?,
-      );
+    requestId: json['request_id']! as String,
+    taskId: json['task_id']! as String,
+    deviceId: json['device_id']! as String,
+    action: json['action']! as String,
+    arguments: _stringObjectMap(json['arguments']),
+    riskTier: riskTierFromJson(json['risk_tier']! as String),
+    mutating: json['mutating']! as bool,
+    idempotencyKey: json['idempotency_key']! as String,
+    deadline: DateTime.parse(json['deadline']! as String),
+    origin: trustClassFromJson(json['origin'] as String? ?? 'user'),
+    humanConfirmationDigest: json['human_confirmation_digest'] as String?,
+  );
 }
 
 final class DecisionLease {
@@ -128,10 +126,10 @@ final class DecisionLease {
     required this.singleUse,
     required this.policyHash,
     this.approvalProof,
-  })  : allowedActions = Set.unmodifiable(allowedActions),
-        argumentConstraints = Map.unmodifiable(argumentConstraints),
-        issuedAt = issuedAt.toUtc(),
-        expiresAt = expiresAt.toUtc() {
+  }) : allowedActions = Set.unmodifiable(allowedActions),
+       argumentConstraints = Map.unmodifiable(argumentConstraints),
+       issuedAt = issuedAt.toUtc(),
+       expiresAt = expiresAt.toUtc() {
     if (!this.issuedAt.isBefore(this.expiresAt)) {
       throw ArgumentError('Decision lease must expire after it is issued.');
     }
@@ -152,34 +150,34 @@ final class DecisionLease {
   String get argumentDigest => sha256CanonicalJson(argumentConstraints);
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'lease_id': leaseId,
-        'subject': subject,
-        'task_id': taskId,
-        'device_id': deviceId,
-        'allowed_actions': allowedActions.toList()..sort(),
-        'argument_constraints': argumentConstraints,
-        'issued_at': issuedAt.toIso8601String(),
-        'expires_at': expiresAt.toIso8601String(),
-        'single_use': singleUse,
-        'policy_hash': policyHash,
-        'approval_proof': approvalProof,
-      };
+    'lease_id': leaseId,
+    'subject': subject,
+    'task_id': taskId,
+    'device_id': deviceId,
+    'allowed_actions': allowedActions.toList()..sort(),
+    'argument_constraints': argumentConstraints,
+    'issued_at': issuedAt.toIso8601String(),
+    'expires_at': expiresAt.toIso8601String(),
+    'single_use': singleUse,
+    'policy_hash': policyHash,
+    'approval_proof': approvalProof,
+  };
 
   factory DecisionLease.fromJson(Map<String, Object?> json) => DecisionLease(
-        leaseId: json['lease_id']! as String,
-        subject: json['subject']! as String,
-        taskId: json['task_id']! as String,
-        deviceId: json['device_id']! as String,
-        allowedActions: (json['allowed_actions']! as List)
-            .map((item) => item.toString())
-            .toSet(),
-        argumentConstraints: _stringObjectMap(json['argument_constraints']),
-        issuedAt: DateTime.parse(json['issued_at']! as String),
-        expiresAt: DateTime.parse(json['expires_at']! as String),
-        singleUse: json['single_use']! as bool,
-        policyHash: json['policy_hash']! as String,
-        approvalProof: json['approval_proof'] as String?,
-      );
+    leaseId: json['lease_id']! as String,
+    subject: json['subject']! as String,
+    taskId: json['task_id']! as String,
+    deviceId: json['device_id']! as String,
+    allowedActions: (json['allowed_actions']! as List)
+        .map((item) => item.toString())
+        .toSet(),
+    argumentConstraints: _stringObjectMap(json['argument_constraints']),
+    issuedAt: DateTime.parse(json['issued_at']! as String),
+    expiresAt: DateTime.parse(json['expires_at']! as String),
+    singleUse: json['single_use']! as bool,
+    policyHash: json['policy_hash']! as String,
+    approvalProof: json['approval_proof'] as String?,
+  );
 }
 
 final class ToolSpec {
@@ -217,9 +215,9 @@ final class PolicyDecision {
   final String reason;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'allowed': allowed,
-        'reason': reason,
-      };
+    'allowed': allowed,
+    'reason': reason,
+  };
 }
 
 final class ToolReceipt {
@@ -232,8 +230,8 @@ final class ToolReceipt {
     required DateTime startedAt,
     required DateTime completedAt,
     this.replayed = false,
-  })  : startedAt = startedAt.toUtc(),
-        completedAt = completedAt.toUtc();
+  }) : startedAt = startedAt.toUtc(),
+       completedAt = completedAt.toUtc();
 
   final String requestId;
   final String idempotencyKey;
@@ -245,37 +243,37 @@ final class ToolReceipt {
   final bool replayed;
 
   ToolReceipt asReplay() => ToolReceipt(
-        requestId: requestId,
-        idempotencyKey: idempotencyKey,
-        status: status,
-        policyReason: policyReason,
-        result: result,
-        startedAt: startedAt,
-        completedAt: completedAt,
-        replayed: true,
-      );
+    requestId: requestId,
+    idempotencyKey: idempotencyKey,
+    status: status,
+    policyReason: policyReason,
+    result: result,
+    startedAt: startedAt,
+    completedAt: completedAt,
+    replayed: true,
+  );
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'request_id': requestId,
-        'idempotency_key': idempotencyKey,
-        'status': status.name,
-        'policy_reason': policyReason,
-        'result': result,
-        'started_at': startedAt.toIso8601String(),
-        'completed_at': completedAt.toIso8601String(),
-        'replayed': replayed,
-      };
+    'request_id': requestId,
+    'idempotency_key': idempotencyKey,
+    'status': status.name,
+    'policy_reason': policyReason,
+    'result': result,
+    'started_at': startedAt.toIso8601String(),
+    'completed_at': completedAt.toIso8601String(),
+    'replayed': replayed,
+  };
 
   factory ToolReceipt.fromJson(Map<String, Object?> json) => ToolReceipt(
-        requestId: json['request_id']! as String,
-        idempotencyKey: json['idempotency_key']! as String,
-        status: toolReceiptStatusFromJson(json['status']! as String),
-        policyReason: json['policy_reason']! as String,
-        result: _stringObjectMap(json['result']),
-        startedAt: DateTime.parse(json['started_at']! as String),
-        completedAt: DateTime.parse(json['completed_at']! as String),
-        replayed: json['replayed'] as bool? ?? false,
-      );
+    requestId: json['request_id']! as String,
+    idempotencyKey: json['idempotency_key']! as String,
+    status: toolReceiptStatusFromJson(json['status']! as String),
+    policyReason: json['policy_reason']! as String,
+    result: _stringObjectMap(json['result']),
+    startedAt: DateTime.parse(json['started_at']! as String),
+    completedAt: DateTime.parse(json['completed_at']! as String),
+    replayed: json['replayed'] as bool? ?? false,
+  );
 }
 
 final class DisplayCard {
@@ -289,8 +287,8 @@ final class DisplayCard {
     DateTime? expiresAt,
     this.sensitivity = 'personal',
     this.interruptible = true,
-  })  : actions = List.unmodifiable(actions),
-        expiresAt = expiresAt?.toUtc();
+  }) : actions = List.unmodifiable(actions),
+       expiresAt = expiresAt?.toUtc();
 
   final String cardId;
   final String taskId;
@@ -303,32 +301,32 @@ final class DisplayCard {
   final bool interruptible;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'card_id': cardId,
-        'task_id': taskId,
-        'kind': kind.name,
-        'title': title,
-        'body': body,
-        'actions': actions,
-        'expires_at': expiresAt?.toIso8601String(),
-        'sensitivity': sensitivity,
-        'interruptible': interruptible,
-      };
+    'card_id': cardId,
+    'task_id': taskId,
+    'kind': kind.name,
+    'title': title,
+    'body': body,
+    'actions': actions,
+    'expires_at': expiresAt?.toIso8601String(),
+    'sensitivity': sensitivity,
+    'interruptible': interruptible,
+  };
 
   factory DisplayCard.fromJson(Map<String, Object?> json) => DisplayCard(
-        cardId: json['card_id']! as String,
-        taskId: json['task_id']! as String,
-        kind: displayCardKindFromJson(json['kind']! as String),
-        title: json['title']! as String,
-        body: json['body']! as String,
-        actions: (json['actions'] as List? ?? const <Object?>[])
-            .map((item) => item.toString())
-            .toList(),
-        expiresAt: json['expires_at'] == null
-            ? null
-            : DateTime.parse(json['expires_at']! as String),
-        sensitivity: json['sensitivity'] as String? ?? 'personal',
-        interruptible: json['interruptible'] as bool? ?? true,
-      );
+    cardId: json['card_id']! as String,
+    taskId: json['task_id']! as String,
+    kind: displayCardKindFromJson(json['kind']! as String),
+    title: json['title']! as String,
+    body: json['body']! as String,
+    actions: (json['actions'] as List? ?? const <Object?>[])
+        .map((item) => item.toString())
+        .toList(),
+    expiresAt: json['expires_at'] == null
+        ? null
+        : DateTime.parse(json['expires_at']! as String),
+    sensitivity: json['sensitivity'] as String? ?? 'personal',
+    interruptible: json['interruptible'] as bool? ?? true,
+  );
 }
 
 final class TaskRecord {
@@ -340,8 +338,8 @@ final class TaskRecord {
     required DateTime updatedAt,
     this.metadata = const <String, Object?>{},
     this.reason,
-  })  : createdAt = createdAt.toUtc(),
-        updatedAt = updatedAt.toUtc();
+  }) : createdAt = createdAt.toUtc(),
+       updatedAt = updatedAt.toUtc();
 
   final String taskId;
   final String idempotencyKey;
@@ -355,34 +353,33 @@ final class TaskRecord {
     TaskState next,
     DateTime at, {
     String? transitionReason,
-  }) =>
-      TaskRecord(
-        taskId: taskId,
-        idempotencyKey: idempotencyKey,
-        state: next,
-        createdAt: createdAt,
-        updatedAt: at,
-        metadata: metadata,
-        reason: transitionReason,
-      );
+  }) => TaskRecord(
+    taskId: taskId,
+    idempotencyKey: idempotencyKey,
+    state: next,
+    createdAt: createdAt,
+    updatedAt: at,
+    metadata: metadata,
+    reason: transitionReason,
+  );
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'task_id': taskId,
-        'idempotency_key': idempotencyKey,
-        'state': state.name,
-        'created_at': createdAt.toIso8601String(),
-        'updated_at': updatedAt.toIso8601String(),
-        'metadata': metadata,
-        'reason': reason,
-      };
+    'task_id': taskId,
+    'idempotency_key': idempotencyKey,
+    'state': state.name,
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt.toIso8601String(),
+    'metadata': metadata,
+    'reason': reason,
+  };
 
   factory TaskRecord.fromJson(Map<String, Object?> json) => TaskRecord(
-        taskId: json['task_id']! as String,
-        idempotencyKey: json['idempotency_key']! as String,
-        state: taskStateFromJson(json['state']! as String),
-        createdAt: DateTime.parse(json['created_at']! as String),
-        updatedAt: DateTime.parse(json['updated_at']! as String),
-        metadata: _stringObjectMap(json['metadata']),
-        reason: json['reason'] as String?,
-      );
+    taskId: json['task_id']! as String,
+    idempotencyKey: json['idempotency_key']! as String,
+    state: taskStateFromJson(json['state']! as String),
+    createdAt: DateTime.parse(json['created_at']! as String),
+    updatedAt: DateTime.parse(json['updated_at']! as String),
+    metadata: _stringObjectMap(json['metadata']),
+    reason: json['reason'] as String?,
+  );
 }

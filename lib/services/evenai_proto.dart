@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+
 import 'package:demo_ai_even/utils/utils.dart';
 
 class EvenaiProto {
@@ -35,7 +36,7 @@ class EvenaiProto {
         newScreen,
         ...byteData.buffer.asUint8List(),
         currentPageNumber,
-        maxPageNumber
+        maxPageNumber,
       ], itemData);
       send.add(pack);
     }

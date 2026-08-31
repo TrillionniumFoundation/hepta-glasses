@@ -31,7 +31,8 @@ See what matters, when it matters.''';
 
   @override
   Widget build(BuildContext context) {
-    final enabled = BleManager.get().isConnected &&
+    final enabled =
+        BleManager.get().isConnected &&
         _controller.text.trim().isNotEmpty &&
         !_sending;
     return Scaffold(

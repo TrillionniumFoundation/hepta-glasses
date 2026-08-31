@@ -311,10 +311,18 @@ final class BluetoothManager: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         guard isSelected(peripheral) else { return }
         let inserted = readyIdentifiers.insert(peripheral.identifier).inserted
         if inserted {
-            _ = writeData(
+            let accepted = writeData(
                 writeData: Data([0x4d, 0x01]),
                 side: peripheral === leftPeripheral ? "L" : "R"
             )
+            if !accepted {
+                readyIdentifiers.remove(peripheral.identifier)
+                handleUnexpectedDisconnect(
+                    peripheral,
+                    reason: "initialization_write_not_accepted"
+                )
+                return
+            }
         }
         guard
             let left = leftPeripheral,

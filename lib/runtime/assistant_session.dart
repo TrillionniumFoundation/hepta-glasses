@@ -38,15 +38,15 @@ final class AssistantSessionSnapshot {
   final String? reason;
 
   bool get terminal => <AssistantSessionState>{
-        AssistantSessionState.completed,
-        AssistantSessionState.cancelled,
-        AssistantSessionState.failed,
-      }.contains(state);
+    AssistantSessionState.completed,
+    AssistantSessionState.cancelled,
+    AssistantSessionState.failed,
+  }.contains(state);
 }
 
 final class AssistantSessionCoordinator {
   AssistantSessionCoordinator({Clock clock = const SystemClock()})
-      : _clock = clock;
+    : _clock = clock;
 
   final Clock _clock;
   final StreamController<AssistantSessionSnapshot> _controller =
@@ -55,7 +55,7 @@ final class AssistantSessionCoordinator {
   AssistantSessionSnapshot? _current;
 
   static final Map<AssistantSessionState, Set<AssistantSessionState>>
-      _allowedTransitions = <AssistantSessionState, Set<AssistantSessionState>>{
+  _allowedTransitions = <AssistantSessionState, Set<AssistantSessionState>>{
     AssistantSessionState.acquiringAudio: <AssistantSessionState>{
       AssistantSessionState.recording,
       AssistantSessionState.cancelled,
@@ -105,7 +105,8 @@ final class AssistantSessionCoordinator {
     }
     _generation++;
     final token = AssistantSessionToken(
-      sessionId: sessionId ??
+      sessionId:
+          sessionId ??
           'assistant-${_clock.now().microsecondsSinceEpoch}-$_generation',
       generation: _generation,
     );

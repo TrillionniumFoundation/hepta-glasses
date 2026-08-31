@@ -1,0 +1,37 @@
+{
+  "claim_ceiling": "E4 only after exact-head CI; E5-E7 require external evidence",
+  "external_gates": {
+    "independent_assurance": "blocked_external",
+    "main_protection": "blocked_admin_setting",
+    "physical_g1": "blocked_external",
+    "production_identity_and_attestation": "blocked_external",
+    "production_realtime_oauth": "blocked_external",
+    "provider_credential_revocation": "blocked_external",
+    "signing_pilot_release": "blocked_external",
+    "vendor_firmware_ota": "blocked_upstream"
+  },
+  "plan_revision": "2026-08-31-g7",
+  "program_increment": "G8",
+  "repository_actionable_gate": {
+    "independent_latest_head_approval_required": true,
+    "required_checks": [
+      "repository-contracts",
+      "flutter",
+      "android-native",
+      "ios-native",
+      "native-sanitizers",
+      "secret-and-boundary-scan",
+      "source-evidence"
+    ],
+    "status": "derive_from_exact_head_ci"
+  },
+  "schema_version": 1,
+  "source_authority": {
+    "branch": "codex/hepta-glasses-gap-closure-g8",
+    "identity_rule": "live_pr_head_and_tree",
+    "pull_request": 23,
+    "repository": "TrillionniumFoundation/hepta-glasses",
+    "required_artifact": "hepta-source-evidence-<exact-head-sha>",
+    "self_attested_sha_is_authoritative": false
+  }
+}

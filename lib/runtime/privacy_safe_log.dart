@@ -30,15 +30,13 @@ final class PrivacySafeLog {
       if (value == null || value is num || value is bool) {
         safe[entry.key] = value;
       } else if (value is String) {
-        safe[entry.key] =
-            value.length <= 64 ? value : '${value.substring(0, 64)}…';
+        safe[entry.key] = value.length <= 64
+            ? value
+            : '${value.substring(0, 64)}…';
       }
     }
     developer.log(
-      jsonEncode(<String, Object?>{
-        'event': name,
-        'fields': safe,
-      }),
+      jsonEncode(<String, Object?>{'event': name, 'fields': safe}),
       name: 'hepta_glasses',
     );
   }

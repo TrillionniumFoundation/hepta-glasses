@@ -43,7 +43,7 @@ class ReleaseGateTest(unittest.TestCase):
                 "passed": True,
                 "lc3_cross_platform_parity": True,
             },
-            "audit_contract": "file-lock-checkpoint-v1",
+            "audit_contract": "file-lock-checkpoint-v2",
             "provenance": {"sha256": "d" * 64},
             "provenance_type": "unsigned-source-provenance-v1",
             "contracts_version": "2026-08-31-g7",

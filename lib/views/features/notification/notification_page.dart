@@ -26,11 +26,14 @@ class _NotificationState extends State<NotificationPage> {
   void initState() {
     super.initState();
     final evenModel = NotifyAppModel('com.even.test', 'Even');
-    final youtubeModel =
-        NotifyAppModel('com.google.android.youtube', 'YouTube');
-    _appWhitelist =
-        NotifyWhitelistModel(<NotifyAppModel>[evenModel, youtubeModel])
-            .toShowJson();
+    final youtubeModel = NotifyAppModel(
+      'com.google.android.youtube',
+      'YouTube',
+    );
+    _appWhitelist = NotifyWhitelistModel(<NotifyAppModel>[
+      evenModel,
+      youtubeModel,
+    ]).toShowJson();
     _identifierController = TextEditingController(text: _appWhitelist);
 
     _notificationContent = NotifyModel(
@@ -47,59 +50,59 @@ class _NotificationState extends State<NotificationPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Notification')),
-        body: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            children: <Widget>[
-              Container(
-                width: double.infinity,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(8),
-                child: TextField(
-                  decoration: const InputDecoration.collapsed(hintText: ''),
-                  focusNode: _identifierFocus,
-                  controller: _identifierController,
-                  onChanged: (String value) => _appWhitelist = value,
-                  maxLines: null,
-                ),
-              ),
-              _button(
-                label: _setting ? 'Setting…' : 'Add to whitelist',
-                busy: _setting,
-                onTap: _setWhitelist,
-              ),
-              Container(
-                width: double.infinity,
-                height: 150,
-                margin: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                padding: const EdgeInsets.all(8),
-                child: TextField(
-                  decoration: const InputDecoration.collapsed(hintText: ''),
-                  focusNode: _contentFocus,
-                  controller: _contentController,
-                  onChanged: (String value) => _notificationContent = value,
-                  maxLines: null,
-                ),
-              ),
-              _button(
-                label: _sending ? 'Sending…' : 'Send notification',
-                busy: _sending,
-                onTap: _sendNotification,
-              ),
-            ],
+    appBar: AppBar(title: const Text('Notification')),
+    body: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        children: <Widget>[
+          Container(
+            width: double.infinity,
+            height: 100,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(5),
+            ),
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(8),
+            child: TextField(
+              decoration: const InputDecoration.collapsed(hintText: ''),
+              focusNode: _identifierFocus,
+              controller: _identifierController,
+              onChanged: (String value) => _appWhitelist = value,
+              maxLines: null,
+            ),
           ),
-        ),
-      );
+          _button(
+            label: _setting ? 'Setting…' : 'Add to whitelist',
+            busy: _setting,
+            onTap: _setWhitelist,
+          ),
+          Container(
+            width: double.infinity,
+            height: 150,
+            margin: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(5),
+            ),
+            padding: const EdgeInsets.all(8),
+            child: TextField(
+              decoration: const InputDecoration.collapsed(hintText: ''),
+              focusNode: _contentFocus,
+              controller: _contentController,
+              onChanged: (String value) => _notificationContent = value,
+              maxLines: null,
+            ),
+          ),
+          _button(
+            label: _sending ? 'Sending…' : 'Send notification',
+            busy: _sending,
+            onTap: _sendNotification,
+          ),
+        ],
+      ),
+    ),
+  );
 
   Widget _button({
     required String label,
@@ -163,9 +166,8 @@ class _NotificationState extends State<NotificationPage> {
       _notificationId = (_notificationId + 1) & 0xff;
       final scope = HeptaRuntime.current.beginEffectScope('notification-send');
       final document = notification.toMap().map<String, Object?>(
-            (String key, dynamic value) =>
-                MapEntry<String, Object?>(key, value),
-          );
+        (String key, dynamic value) => MapEntry<String, Object?>(key, value),
+      );
       final receipt = await HeptaRuntime.current.sendNotification(
         scope: scope,
         notification: document,

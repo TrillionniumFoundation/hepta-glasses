@@ -54,6 +54,17 @@
         "E3"
       ],
       "claim": "Converged G7 source candidate; E4 exists only after an unchanged exact-head CI artifact passes"
+    },
+    {
+      "id": "EV-SRC-G8-REMEDIATION-V1",
+      "path": "docs/development/G8_SOURCE_REMEDIATION.md",
+      "levels": [
+        "E0",
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "claim": "Full-chain audit append integrity, v2 contract convergence, current BLE documentation, and machine-readable source boundaries; E4 still requires exact-head CI"
     }
   ],
   "ci_records": {

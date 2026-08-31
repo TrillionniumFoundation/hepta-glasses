@@ -29,22 +29,29 @@ class NotifyModel {
       final message = json["message"] as String? ?? "";
       final timestamp = json["time_s"] as int? ?? 0;
       final displayName = json["display_name"] as String? ?? "";
-      return NotifyModel(msgId, appIdentifier, title, subTitle, message,
-          timestamp, displayName);
+      return NotifyModel(
+        msgId,
+        appIdentifier,
+        title,
+        subTitle,
+        message,
+        timestamp,
+        displayName,
+      );
     } catch (e) {
       return null;
     }
   }
 
   Map<String, dynamic> toMap() => {
-        "msg_id": msgId,
-        "app_identifier": appIdentifier,
-        "title": title,
-        "subtitle": subTitle,
-        "message": message,
-        "time_s": timestamp,
-        "display_name": displayName,
-      };
+    "msg_id": msgId,
+    "app_identifier": appIdentifier,
+    "title": title,
+    "subtitle": subTitle,
+    "message": message,
+    "time_s": timestamp,
+    "display_name": displayName,
+  };
 
   String toJson() => jsonEncode(toMap());
 }
@@ -70,15 +77,12 @@ class NotifyWhitelistModel {
       apps.map((app) => app.toMap()).toList();
 
   Map<String, dynamic> toMap() => {
-        "calendar_enable": false,
-        "call_enable": false,
-        "msg_enable": false,
-        "ios_mail_enable": false,
-        "app": {
-          "list": apps.map((app) => app.toMap()).toList(),
-          "enable": true,
-        }
-      };
+    "calendar_enable": false,
+    "call_enable": false,
+    "msg_enable": false,
+    "ios_mail_enable": false,
+    "app": {"list": apps.map((app) => app.toMap()).toList(), "enable": true},
+  };
 
   String toJson() => jsonEncode(toMap());
 
@@ -88,10 +92,7 @@ class NotifyWhitelistModel {
 class NotifyAppModel {
   final String identifier;
   final String displayName;
-  NotifyAppModel(
-    this.identifier,
-    this.displayName,
-  );
+  NotifyAppModel(this.identifier, this.displayName);
 
   static NotifyAppModel fromMap(Map map) {
     final id = map["id"] as String? ?? "";
@@ -110,10 +111,7 @@ class NotifyAppModel {
     }
   }
 
-  Map<String, String> toMap() => {
-        "id": identifier,
-        "name": displayName,
-      };
+  Map<String, String> toMap() => {"id": identifier, "name": displayName};
 
   String toJson() => jsonEncode(toMap());
 }

@@ -21,40 +21,40 @@ class _EvenAIListPageState extends State<EvenAIListPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: const Text('History', style: TextStyle(fontSize: 20)),
+    appBar: AppBar(
+      title: const Text('History', style: TextStyle(fontSize: 20)),
+    ),
+    body: Obx(() {
+      if (controller.items.isEmpty && !EvenAI.isEvenAISyncing.value) {
+        return const Center(
+          child: Text(
+            'Press and hold left TouchBar to engage Even AI.',
+            style: TextStyle(color: Colors.grey),
+            textAlign: TextAlign.center,
+          ),
+        );
+      }
+      return ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+        itemCount: controller.items.length,
+        itemBuilder: (BuildContext context, int index) => Obx(
+          () => GestureDetector(
+            key: ValueKey<String>('history-item-$index'),
+            onTap: () {
+              if (controller.selectedIndex.value == index) {
+                controller.deselectItem();
+              } else {
+                controller.selectItem(index);
+              }
+            },
+            child: controller.selectedIndex.value == index
+                ? _buildItemDetail(index)
+                : _buildItem(index),
+          ),
         ),
-        body: Obx(() {
-          if (controller.items.isEmpty && !EvenAI.isEvenAISyncing.value) {
-            return const Center(
-              child: Text(
-                'Press and hold left TouchBar to engage Even AI.',
-                style: TextStyle(color: Colors.grey),
-                textAlign: TextAlign.center,
-              ),
-            );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-            itemCount: controller.items.length,
-            itemBuilder: (BuildContext context, int index) => Obx(
-              () => GestureDetector(
-                key: ValueKey<String>('history-item-$index'),
-                onTap: () {
-                  if (controller.selectedIndex.value == index) {
-                    controller.deselectItem();
-                  } else {
-                    controller.selectItem(index);
-                  }
-                },
-                child: controller.selectedIndex.value == index
-                    ? _buildItemDetail(index)
-                    : _buildItem(index),
-              ),
-            ),
-          );
-        }),
       );
+    }),
+  );
 
   Widget _buildItem(int index) {
     final item = controller.items[index];
@@ -66,10 +66,7 @@ class _EvenAIListPageState extends State<EvenAIListPage> {
       ),
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(16),
-      child: Text(
-        item.title,
-        style: const TextStyle(fontSize: 20),
-      ),
+      child: Text(item.title, style: const TextStyle(fontSize: 20)),
     );
   }
 
@@ -86,15 +83,9 @@ class _EvenAIListPageState extends State<EvenAIListPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            item.title,
-            style: const TextStyle(fontSize: 20),
-          ),
+          Text(item.title, style: const TextStyle(fontSize: 20)),
           const SizedBox(height: 12),
-          Text(
-            item.content,
-            style: const TextStyle(fontSize: 15),
-          ),
+          Text(item.content, style: const TextStyle(fontSize: 15)),
         ],
       ),
     );

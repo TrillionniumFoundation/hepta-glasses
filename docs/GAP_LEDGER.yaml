@@ -669,6 +669,32 @@
         "services/qualification/release_gate.py",
         "evidence/templates/product-release-bundle.template.json"
       ]
+    },
+    {
+      "id": "HG-0052",
+      "title": "Audit checkpoint fast path could extend same-length-tampered history",
+      "status": "CLOSED_SOURCE",
+      "owner": "runtime",
+      "evidence": [
+        "lib/runtime/audit_journal.dart",
+        "test/runtime/audit_journal_v2_test.dart",
+        "tools/validate_repository.py"
+      ]
+    },
+    {
+      "id": "HG-0053",
+      "title": "BLE, platform capability, audit contract, and release documentation drifted from current source",
+      "status": "CLOSED_SOURCE",
+      "owner": "repository",
+      "evidence": [
+        "docs/G1_BLE_CONNECTION.md",
+        "docs/G1_BLE_CONNECTION.en.md",
+        "docs/PROJECT_STATE.json",
+        "docs/PLATFORM_CAPABILITIES.json",
+        "contracts/g1-ble-protocol-v1.json",
+        "docs/operations/RELEASE_AND_ROLLBACK_RUNBOOK.md",
+        "docs/development/G8_SOURCE_REMEDIATION.md"
+      ]
     }
   ]
 }

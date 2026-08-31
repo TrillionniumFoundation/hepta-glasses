@@ -21,8 +21,9 @@ The source candidate contains:
   no blind replay after a native write may have occurred;
 - a bounded BMP transfer state machine that rejects invalid size/sequence,
   native write refusal, malformed finish replies, and malformed CRC replies;
-- fail-closed durable startup, an OS-file-locked hash-chained audit journal,
-  atomic head checkpoints, torn-tail rejection, and bounded scheduler shutdown;
+- fail-closed durable startup, process-wide and OS-file serialization, full
+  hash-chain authentication before every append, bounded v2 checkpoints,
+  torn-tail rejection, and bounded scheduler shutdown;
 - atomic single-use lease consumption, in-flight idempotency coalescing,
   cancellation-aware model requests, and deterministic assistant/text paging;
 - atomic realtime ticket activation and capability execution under concurrent
@@ -41,6 +42,15 @@ The source candidate contains:
 Repository contracts and deterministic Python/native checks pass locally on the
 working candidate. This statement is E1–E3 only; it deliberately does not claim
 a successful g7 exact-head GitHub Actions run before that run exists.
+
+
+## Machine-readable current boundaries
+
+`PROJECT_STATE.json` defines source authority and external blockers without
+self-attesting a SHA. `PLATFORM_CAPABILITIES.json` records that Android voice
+ASR is unavailable fail-closed and that neither platform has physical-G1
+attestation. `contracts/g1-ble-protocol-v1.json` is the byte-level source
+contract; vendor and physical evidence remain authoritative for firmware facts.
 
 ## Truthful platform boundary
 

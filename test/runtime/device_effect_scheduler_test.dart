@@ -24,12 +24,16 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(order, <String>['first-start']);
     firstGate.complete();
-    expect(await Future.wait<String>(<Future<String>>[first, second]),
-        <String>['first', 'second']);
-    expect(
-      order,
-      <String>['first-start', 'first-end', 'second-start', 'second-end'],
-    );
+    expect(await Future.wait<String>(<Future<String>>[first, second]), <String>[
+      'first',
+      'second',
+    ]);
+    expect(order, <String>[
+      'first-start',
+      'first-end',
+      'second-start',
+      'second-end',
+    ]);
   });
 
   test('close fails closed when an effect never reaches idle', () async {

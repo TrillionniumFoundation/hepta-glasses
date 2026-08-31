@@ -16,27 +16,26 @@ class _BmpState extends State<BmpPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('BMP')),
-        body: Padding(
-          padding:
-              const EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 44),
-          child: Column(
-            children: <Widget>[
-              _action(
-                label: 'BMP 1',
-                operation: () => _features.sendBmp('assets/images/image_1.bmp'),
-              ),
-              const SizedBox(height: 16),
-              _action(
-                label: 'BMP 2',
-                operation: () => _features.sendBmp('assets/images/image_2.bmp'),
-              ),
-              const SizedBox(height: 16),
-              _action(label: 'Exit', operation: _features.exitBmp),
-            ],
+    appBar: AppBar(title: const Text('BMP')),
+    body: Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 44),
+      child: Column(
+        children: <Widget>[
+          _action(
+            label: 'BMP 1',
+            operation: () => _features.sendBmp('assets/images/image_1.bmp'),
           ),
-        ),
-      );
+          const SizedBox(height: 16),
+          _action(
+            label: 'BMP 2',
+            operation: () => _features.sendBmp('assets/images/image_2.bmp'),
+          ),
+          const SizedBox(height: 16),
+          _action(label: 'Exit', operation: _features.exitBmp),
+        ],
+      ),
+    ),
+  );
 
   Widget _action({
     required String label,
@@ -54,8 +53,9 @@ class _BmpState extends State<BmpPage> {
         alignment: Alignment.center,
         child: Text(
           _busy ? 'Working…' : label,
-          style:
-              TextStyle(color: enabled || _busy ? Colors.black : Colors.grey),
+          style: TextStyle(
+            color: enabled || _busy ? Colors.black : Colors.grey,
+          ),
         ),
       ),
     );

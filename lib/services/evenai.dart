@@ -117,10 +117,9 @@ class EvenAI {
     _currentLine = 0;
 
     try {
-      await BleManager.invokeMethod<void>(
-        'startEvenAI',
-        <String, Object?>{'generation': session.generation},
-      );
+      await BleManager.invokeMethod<void>('startEvenAI', <String, Object?>{
+        'generation': session.generation,
+      });
       final micOpened = await openEvenAIMic(session);
       if (!_isCurrent(session)) {
         return;
@@ -144,10 +143,7 @@ class EvenAI {
         fields: <String, Object?>{'generation': session.generation},
       );
     } on Object catch (error) {
-      HeptaRuntime.current.sessions.fail(
-        session,
-        'assistant_start_failed',
-      );
+      HeptaRuntime.current.sessions.fail(session, 'assistant_start_failed');
       await _stopNativeAssistant(session);
       await clear(cancelSession: false);
       isEvenAISyncing.value = false;
@@ -230,17 +226,17 @@ class EvenAI {
     try {
       answer = await ModelGatewayRegistry.current
           .answer(
-        question: combinedText,
-        taskId: session.sessionId,
-        cancellation: cancellation,
-      )
+            question: combinedText,
+            taskId: session.sessionId,
+            cancellation: cancellation,
+          )
           .timeout(
-        _modelTimeout,
-        onTimeout: () {
-          cancellation.cancel('model_deadline_exceeded');
-          throw TimeoutException('model_deadline_exceeded');
-        },
-      );
+            _modelTimeout,
+            onTimeout: () {
+              cancellation.cancel('model_deadline_exceeded');
+              throw TimeoutException('model_deadline_exceeded');
+            },
+          );
     } on TimeoutException {
       answer = 'AI service timed out.';
     } on ModelGatewayException catch (error) {
@@ -487,9 +483,7 @@ class EvenAI {
     _timer = null;
   }
 
-  Future<bool> updateReplyToOSByManual({
-    AssistantSessionToken? session,
-  }) async {
+  Future<bool> updateReplyToOSByManual({AssistantSessionToken? session}) async {
     final active = session ?? _session;
     if (active == null ||
         !_isCurrent(active) ||
@@ -506,9 +500,7 @@ class EvenAI {
     );
   }
 
-  Future<bool> manualForJustOnePage({
-    AssistantSessionToken? session,
-  }) async {
+  Future<bool> manualForJustOnePage({AssistantSessionToken? session}) async {
     final active = session ?? _session;
     if (active == null || !_isCurrent(active) || list.isEmpty) {
       return false;
@@ -552,10 +544,9 @@ class EvenAI {
 
   Future<bool> _stopNativeAssistant(AssistantSessionToken session) async {
     try {
-      await BleManager.invokeMethod<void>(
-        'stopEvenAI',
-        <String, Object?>{'generation': session.generation},
-      );
+      await BleManager.invokeMethod<void>('stopEvenAI', <String, Object?>{
+        'generation': session.generation,
+      });
       return true;
     } on Object catch (error) {
       PrivacySafeLog.event(
@@ -691,11 +682,14 @@ extension EvenAIDataMethod on EvenAI {
       )..layout(maxWidth: maxWidth);
       final lineCount = textPainter.computeLineMetrics().length;
       var start = 0;
-      for (var index = 0;
-          index < lineCount && start < paragraph.length;
-          index++) {
-        final boundary =
-            textPainter.getLineBoundary(TextPosition(offset: start));
+      for (
+        var index = 0;
+        index < lineCount && start < paragraph.length;
+        index++
+      ) {
+        final boundary = textPainter.getLineBoundary(
+          TextPosition(offset: start),
+        );
         if (boundary.end <= start) {
           break;
         }

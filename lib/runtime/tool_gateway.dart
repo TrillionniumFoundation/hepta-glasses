@@ -75,18 +75,18 @@ final class ToolAuditEnvelope {
   final String requestFingerprint;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'request_id': requestId,
-        'task_id': taskId,
-        'device_id': deviceId,
-        'action': action,
-        'risk_tier': riskTier.name,
-        'mutating': mutating,
-        'idempotency_key': idempotencyKey,
-        'deadline': deadline.toIso8601String(),
-        'origin': origin.name,
-        'argument_digest': argumentDigest,
-        'request_fingerprint': requestFingerprint,
-      };
+    'request_id': requestId,
+    'task_id': taskId,
+    'device_id': deviceId,
+    'action': action,
+    'risk_tier': riskTier.name,
+    'mutating': mutating,
+    'idempotency_key': idempotencyKey,
+    'deadline': deadline.toIso8601String(),
+    'origin': origin.name,
+    'argument_digest': argumentDigest,
+    'request_fingerprint': requestFingerprint,
+  };
 
   factory ToolAuditEnvelope.fromJson(Map<String, Object?> json) =>
       ToolAuditEnvelope(
@@ -115,18 +115,16 @@ Map<String, Object?> _objectMap(Object? value, String label) {
   if (value is! Map) {
     throw StateError('$label must be an object.');
   }
-  return value.map(
-    (key, item) => MapEntry(key.toString(), item as Object?),
-  );
+  return value.map((key, item) => MapEntry(key.toString(), item as Object?));
 }
 
 bool _isSha256(String value) =>
     value.length == 64 &&
     value.toLowerCase().runes.every(
-          (character) =>
-              (character >= 48 && character <= 57) ||
-              (character >= 97 && character <= 102),
-        );
+      (character) =>
+          (character >= 48 && character <= 57) ||
+          (character >= 97 && character <= 102),
+    );
 
 Map<String, Object?> _receiptAuditJson(ToolReceipt receipt) {
   final externalId = receipt.result['external_id'];
@@ -175,9 +173,9 @@ final class ToolGateway {
     required AuditJournal journal,
     required PolicyEngine policy,
     Clock clock = const SystemClock(),
-  })  : _journal = journal,
-        _policy = policy,
-        _clock = clock;
+  }) : _journal = journal,
+       _policy = policy,
+       _clock = clock;
 
   final AuditJournal _journal;
   final PolicyEngine _policy;
@@ -224,7 +222,8 @@ final class ToolGateway {
   Future<void> recover() async {
     if (_inFlight.isNotEmpty) {
       throw StateError(
-          'Cannot recover ToolGateway while effects are in flight.');
+        'Cannot recover ToolGateway while effects are in flight.',
+      );
     }
     await _journal.verify();
     _receipts.clear();
@@ -237,10 +236,7 @@ final class ToolGateway {
     final entries = await _journal.readAll();
     for (final entry in entries) {
       if (entry.eventType == 'tool.prepared') {
-        final envelope = _envelopeFromPayload(
-          entry.payload,
-          'tool.prepared',
-        );
+        final envelope = _envelopeFromPayload(entry.payload, 'tool.prepared');
         final startedAt = entry.payload['started_at'];
         if (startedAt is! String) {
           throw StateError('Malformed tool.prepared entry ${entry.sequence}.');
@@ -266,17 +262,15 @@ final class ToolGateway {
       }.contains(entry.eventType)) {
         continue;
       }
-      final envelope = _envelopeFromPayload(
-        entry.payload,
-        entry.eventType,
-      );
+      final envelope = _envelopeFromPayload(entry.payload, entry.eventType);
       final receipt = _receiptFromAuditJson(
         _objectMap(entry.payload['receipt'], '${entry.eventType}.receipt'),
       );
       if (receipt.idempotencyKey != envelope.idempotencyKey ||
           receipt.requestId != envelope.requestId) {
         throw StateError(
-            'Tool terminal identity mismatch at ${entry.sequence}.');
+          'Tool terminal identity mismatch at ${entry.sequence}.',
+        );
       }
       _cacheRecovered(envelope: envelope, receipt: receipt);
     }
@@ -618,11 +612,7 @@ final class ToolGateway {
         receipt: uncertain,
       );
     }
-    return _cacheLive(
-      request: request,
-      envelope: envelope,
-      receipt: receipt,
-    );
+    return _cacheLive(request: request, envelope: envelope, receipt: receipt);
   }
 
   ToolReceipt _cacheLive({

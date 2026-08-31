@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:demo_ai_even/app.dart';
 import 'package:demo_ai_even/runtime/ble_request_slot.dart';
 import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
@@ -21,11 +22,13 @@ class BleManager {
   static const String _eventBleReceive = 'eventBleReceive';
   static const MethodChannel _channel = MethodChannel('method.bluetooth');
 
-  final Stream<BleReceive> eventBleReceive = const EventChannel(
-    _eventBleReceive,
-  ).receiveBroadcastStream(_eventBleReceive).map(
-        (dynamic value) => BleReceive.fromMap(value as Map<dynamic, dynamic>),
-      );
+  final Stream<BleReceive> eventBleReceive =
+      const EventChannel(_eventBleReceive)
+          .receiveBroadcastStream(_eventBleReceive)
+          .map(
+            (dynamic value) =>
+                BleReceive.fromMap(value as Map<dynamic, dynamic>),
+          );
 
   StreamSubscription<BleReceive>? _receiveSubscription;
   static const Duration _heartbeatInterval = Duration(seconds: 8);
@@ -46,10 +49,10 @@ class BleManager {
   Stream<BleConnectionSnapshot> get connectionSnapshots =>
       _connectionController.stream;
   BleConnectionSnapshot get connectionSnapshot => BleConnectionSnapshot(
-        leftConnected: isLeftConnected,
-        rightConnected: isRightConnected,
-        generation: _connectionGeneration,
-      );
+    leftConnected: isLeftConnected,
+    rightConnected: isRightConnected,
+    generation: _connectionGeneration,
+  );
 
   void _publishConnectionSnapshot() {
     if (!_connectionController.isClosed) {
@@ -99,10 +102,7 @@ class BleManager {
   Future<void> connectToGlasses(String deviceName) async {
     beatHeartTimer?.cancel();
     beatHeartTimer = null;
-    _failPendingRequests(
-      'connection_replaced',
-      effectMayHaveOccurred: true,
-    );
+    _failPendingRequests('connection_replaced', effectMayHaveOccurred: true);
     connectionStatus = 'Connecting...';
     isLeftConnected = false;
     isRightConnected = false;
@@ -110,10 +110,9 @@ class BleManager {
     _publishConnectionSnapshot();
     onStatusChanged?.call();
     try {
-      await _channel.invokeMethod<void>(
-        'connectToGlasses',
-        <String, Object?>{'deviceName': deviceName},
-      );
+      await _channel.invokeMethod<void>('connectToGlasses', <String, Object?>{
+        'deviceName': deviceName,
+      });
     } on PlatformException catch (error) {
       connectionStatus = 'Not connected';
       _publishConnectionSnapshot();
@@ -288,15 +287,12 @@ class BleManager {
     connectionStatus = isConnected
         ? 'Connected'
         : (isLeftConnected || isRightConnected
-            ? 'Degraded connection'
-            : 'Not connected');
+              ? 'Degraded connection'
+              : 'Not connected');
     _publishConnectionSnapshot();
     beatHeartTimer?.cancel();
     beatHeartTimer = null;
-    _failPendingRequests(
-      'device_disconnected',
-      effectMayHaveOccurred: true,
-    );
+    _failPendingRequests('device_disconnected', effectMayHaveOccurred: true);
     _requestRegistry.clearQuarantine();
     onStatusChanged?.call();
     PrivacySafeLog.event(
@@ -381,8 +377,9 @@ class BleManager {
       return;
     }
 
-    final generation =
-        response.generation > 0 ? response.generation : _connectionGeneration;
+    final generation = response.generation > 0
+        ? response.generation
+        : _connectionGeneration;
     final key = BleRequestKey(
       generation: generation,
       side: response.lr,
@@ -460,33 +457,30 @@ class BleManager {
     if (pending.completer.isCompleted) {
       return;
     }
-    _requestTimeouts[key] = Timer(
-      Duration(milliseconds: timeoutMs),
-      () {
-        if (!_requestRegistry.quarantineIfOwned(key, pending)) {
-          return;
-        }
-        _requestTimeouts.remove(key)?.cancel();
-        if (!pending.completer.isCompleted) {
-          pending.completer.complete(
-            _timeoutResponse(
-              effectMayHaveOccurred: true,
-              generation: pending.generation,
-              errorCode: 'ack_timeout_after_native_write',
-            ),
-          );
-        }
-        PrivacySafeLog.event(
-          'ble_request_timeout',
-          fields: <String, Object?>{
-            'timeout_ms': timeoutMs,
-            'generation': pending.generation,
-            'side': key.side,
-            'command': key.command,
-          },
+    _requestTimeouts[key] = Timer(Duration(milliseconds: timeoutMs), () {
+      if (!_requestRegistry.quarantineIfOwned(key, pending)) {
+        return;
+      }
+      _requestTimeouts.remove(key)?.cancel();
+      if (!pending.completer.isCompleted) {
+        pending.completer.complete(
+          _timeoutResponse(
+            effectMayHaveOccurred: true,
+            generation: pending.generation,
+            errorCode: 'ack_timeout_after_native_write',
+          ),
         );
-      },
-    );
+      }
+      PrivacySafeLog.event(
+        'ble_request_timeout',
+        fields: <String, Object?>{
+          'timeout_ms': timeoutMs,
+          'generation': pending.generation,
+          'side': key.side,
+          'command': key.command,
+        },
+      );
+    });
   }
 
   void _failPendingRequests(
@@ -696,9 +690,11 @@ class BleManager {
     }
 
     try {
-      final accepted = await sendData(data, lr: side, other: other).timeout(
-        const Duration(seconds: 2),
-      );
+      final accepted = await sendData(
+        data,
+        lr: side,
+        other: other,
+      ).timeout(const Duration(seconds: 2));
       if (!accepted && !pending.completer.isCompleted) {
         _requestRegistry.releaseIfOwned(key, pending);
         pending.completer.complete(
@@ -746,8 +742,8 @@ class BleManager {
     return side == 'L'
         ? manager.isLeftConnected
         : side == 'R'
-            ? manager.isRightConnected
-            : false;
+        ? manager.isRightConnected
+        : false;
   }
 
   static bool isBothConnected() =>
@@ -797,10 +793,7 @@ class BleManager {
     beatHeartTimer?.cancel();
     beatHeartTimer = null;
     _heartbeatInFlight = false;
-    _failPendingRequests(
-      'manager_disposed',
-      effectMayHaveOccurred: true,
-    );
+    _failPendingRequests('manager_disposed', effectMayHaveOccurred: true);
     _requestRegistry.clearQuarantine();
     await _receiveSubscription?.cancel();
     _receiveSubscription = null;

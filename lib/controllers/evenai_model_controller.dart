@@ -7,7 +7,10 @@ class EvenaiModelController extends GetxController {
 
   void addItem(String title, String content) {
     final newItem = EvenaiModel(
-        title: title, content: content, createdTime: DateTime.now());
+      title: title,
+      content: content,
+      createdTime: DateTime.now(),
+    );
     items.insert(0, newItem);
   }
 

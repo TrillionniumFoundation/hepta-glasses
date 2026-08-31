@@ -10,6 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_REVISION = "2026-08-31-g7"
+AUDIT_CONTRACT = "file-lock-checkpoint-v2"
 
 REQUIRED = {
     "README.md",
@@ -17,7 +18,9 @@ REQUIRED = {
     "UPSTREAM.md",
     "docs/README.md",
     "docs/CURRENT_STATE.md",
+    "docs/PROJECT_STATE.json",
     "docs/PRODUCT_BOUNDARY.md",
+    "docs/PLATFORM_CAPABILITIES.json",
     "docs/ARCHITECTURE.md",
     "docs/THREAT_MODEL.md",
     "docs/PRIVACY_MODEL.md",
@@ -27,6 +30,7 @@ REQUIRED = {
     "docs/development/G4_SOURCE_CLOSURE.md",
     "docs/development/G5_AUDIT_CLOSURE.md",
     "docs/development/G7_SOURCE_CONVERGENCE.md",
+    "docs/development/G8_SOURCE_REMEDIATION.md",
     "docs/operations/PRODUCTION_CONTROL_PLANE_RUNBOOK.md",
     "docs/operations/REALTIME_AND_CAPABILITY_RUNBOOK.md",
     "docs/operations/DEVICE_QUALIFICATION_RUNBOOK.md",
@@ -41,6 +45,7 @@ REQUIRED = {
     "contracts/main-branch-protection-v1.json",
     "contracts/release-gates-v1.json",
     "contracts/qualification-slo-v1.json",
+    "contracts/g1-ble-protocol-v1.json",
     "contracts/history-scan-acknowledgements-v1.json",
     "lib/runtime/contracts.dart",
     "lib/runtime/audit_journal.dart",
@@ -251,6 +256,39 @@ def validate_canonical_truth() -> None:
     source = template.get("source")
     if not isinstance(source, dict) or source.get("contracts_version") != CANONICAL_REVISION:
         fail("product evidence template revision drifted")
+
+    if source.get("audit_contract") != AUDIT_CONTRACT:
+        fail("product evidence template audit contract drifted")
+    audit_source = (ROOT / "lib/runtime/audit_journal.dart").read_text(
+        encoding="utf-8"
+    )
+    if (
+        f"static const String contractVersion = '{AUDIT_CONTRACT}';"
+        not in audit_source
+    ):
+        fail("runtime audit contract drifted")
+    release_gate_source = (
+        ROOT / "services/qualification/release_gate.py"
+    ).read_text(encoding="utf-8")
+    if AUDIT_CONTRACT not in release_gate_source:
+        fail("release gate audit contract drifted")
+    evidence_builder_source = (
+        ROOT / "tools/build_source_evidence.py"
+    ).read_text(encoding="utf-8")
+    if evidence_builder_source.count(AUDIT_CONTRACT) < 2:
+        fail("source evidence audit contract drifted")
+
+    project_state = read_json(ROOT / "docs/PROJECT_STATE.json")
+    if project_state.get("plan_revision") != CANONICAL_REVISION:
+        fail("machine-readable Project State revision drifted")
+    if project_state.get("program_increment") != "G8":
+        fail("machine-readable Project State increment drifted")
+    platform = read_json(ROOT / "docs/PLATFORM_CAPABILITIES.json")
+    if platform.get("physical_qualification") != "blocked_external":
+        fail("platform capability matrix overclaims physical qualification")
+    protocol = read_json(ROOT / "contracts/g1-ble-protocol-v1.json")
+    if protocol.get("contract_id") != "hepta-g1-ble-protocol-v1":
+        fail("G1 BLE protocol contract identity drifted")
 
 
 def validate_single_ci_authority() -> None:

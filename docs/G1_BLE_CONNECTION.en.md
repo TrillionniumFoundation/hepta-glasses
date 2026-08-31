@@ -1,164 +1,118 @@
-# EvenDemoApp — G1 Bluetooth Connection Flow
+# Hepta Glasses — G1 dual-BLE connection and protocol implementation
 
-> **How this doc was written**: Same layering style as the `even-ble-logic` skill (G2/R1): **App → protocol → native GATT**. This repo is a **G1 demo**: both platforms use **Flutter `MethodChannel` + native BLE**. It does **not** use `flutter_ezw_ble` or `even_connect`.
+> Chinese: [G1_BLE_CONNECTION.md](G1_BLE_CONNECTION.md)
+>
+> Status: current source description. Hardware, firmware, and performance claims still require physical-G1 E5 evidence.
 
-> Chinese version: [G1_BLE_CONNECTION.md](G1_BLE_CONNECTION.md)
+## 1. Product boundary
 
----
+The G1 left and right legs are independent BLE peripherals. Flutter owns orchestration, request correlation, retry semantics, and session state. Native Android/iOS code owns scanning, GATT readiness, bounded writes, notifications, and LC3 decoding. This repository does not contain G1 firmware, bootloader, or signed OTA authority.
 
-## 1. Architecture overview
+## 2. Layers
 
+```text
+Flutter UI / Assistant
+        |
+        v
+BleManager + Hepta Runtime
+  generation / request owner / quarantine / receipt
+        |
+        v
+MethodChannel("method.bluetooth")
+        |
+        +-- Android BleManager.kt + BleDevice.kt
+        |
+        +-- iOS BluetoothManager.swift
+        |
+        v
+G1 Left BLE + G1 Right BLE
 ```
-lib/ble_manager.dart (Dart)
-  └─ MethodChannel("method.bluetooth")
-       ├─ Android: BleChannelHelper / BleMethodChannel → BleManager.kt
-       └─ iOS:     AppDelegate.swift → BluetoothManager.swift
 
-Downlink: Dart invokeMethod("send", { data, lr? }) → native GATT write
-Uplink:   Android EventChannel("eventBleReceive") / iOS blueInfoSink → Dart
-Status:   native methodChannel.invokeMethod → Dart setMethodCallHandler
-```
+Downlink uses `method.bluetooth`; binary uplink uses `eventBleReceive`; iOS speech finality uses `eventSpeechRecognize`. Native status reaches Flutter through `glassesConnecting`, `glassesConnected`, `glassesDisconnected`, and `foundPairedGlasses`.
 
-| Channel | Direction | Purpose |
-|---------|-----------|---------|
-| `method.bluetooth` | Bidirectional | `startScan`, `stopScan`, `connectToGlasses`, `disconnectFromGlasses`, `send`, etc. |
-| `eventBleReceive` | Native → Dart | Binary notifications and app payloads (`lr`, `data`, `type`) |
+## 3. Advertising and pairing
 
-Dart entry point: `BleManager` in `lib/ble_manager.dart`.
+Names use four components, for example `G1_45_L_xxx` and `G1_45_R_xxx`. A `Pair_<channel>` is exposed only after both sides for a channel are found. Per-leg connectivity and readiness remain independent; one-leg success is not pair success.
 
----
-
-## 2. G1 device model and advertising names
-
-G1 uses **two BLE peripherals (left and right)** paired by a **channel number**:
-
-- Example names (from Android comments): `G1_45_L_92333`, `G1_45_R_xxxx` (left contains `_L_`, right `_R_`).
-- Android scan filter (summary):
-  - Non-empty advertised name;
-  - Name matches `G` + digit(s) (e.g. `G1`);
-  - Split by `_` yields **four** segments (matches the sample shape);
-  - Only after **both** left and right exist for the same `channel` does native code notify Flutter of a **paired** set.
-
-The map sent to Flutter includes: `leftDeviceName`, `rightDeviceName`, `channelNumber`.
-
-**Connect argument**: Flutter usually passes `deviceName` as `Pair_{channelNumber}`. On Android, `BleMethodChannel.connectToGlasses` **strips the `Pair_` prefix** and passes only the channel string into `BleManager.connectToGlass`.
-
----
-
-## 3. GATT service and characteristics (Nordic UART-style)
-
-Android and iOS share the **same UART service UUIDs** (constants in `ServiceIdentifiers.swift` and `BleManager.kt`):
+## 4. GATT contract
 
 | Role | UUID |
-|------|------|
-| Service | `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` |
-| TX (phone writes) | `6E400002-B5A3-F393-E0A9-E50E24DCCA9E` |
-| RX (phone enables notify) | `6E400003-B5A3-F393-E0A9-E50E24DCCA9E` |
+|---|---|
+| UART service | `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` |
+| Phone write | `6E400002-B5A3-F393-E0A9-E50E24DCCA9E` |
+| Phone notify subscription | `6E400003-B5A3-F393-E0A9-E50E24DCCA9E` |
 
-**Android** (`onServicesDiscovered`): enable notify on RX, write the CCCD (`00002902-...`), then `requestMtu(251)`, `createBond()`, send an initial `0xF4 0x01` to **both** ears at the end of that ear’s setup path; call `glassesConnected` only when **both** `isConnect` flags are true.
+The machine-readable contract is `contracts/g1-ble-protocol-v1.json`.
 
-**iOS** (`didDiscoverCharacteristicsFor`): bind left/right `CBPeripheral`, hold `leftWChar`/`rightWChar` and `leftRChar`/`rightRChar`, `setNotifyValue(true)` on RX, then write `0x4d 0x01` per side (different first bytes from Android—platform implementation drift).
+## 5. Android readiness state machine
 
----
+1. Validate Bluetooth and runtime permission, then scan.
+2. Call `connectGatt(autoConnect=false)` independently for each leg.
+3. Discover the UART service, read/write characteristics, and CCCD; any missing component fails closed.
+4. After the CCCD write succeeds, request MTU 251; the negotiated MTU must be at least 203.
+5. Mark a leg ready only after native acceptance of initialization bytes `[0xF4, 0x01]`.
+6. Emit `glassesConnected` only when both legs are ready.
 
-## 4. Flutter (Dart) connection and state flow
+Each connection captures a generation. Stale GATT callbacks are closed rather than applied to the new session. Normal writes enter a serialized queue of capacity 128; full queue, unready GATT, or native rejection returns failure.
 
-1. **Scan**: `BleManager.startScan()` → `invokeMethod('startScan')`.
-2. **Paired set found**: native `invokeMethod('foundPairedGlasses', {...})` → `_onPairedGlassesFound`; dedupe by `channelNumber` into `pairedGlasses`.
-3. **Connect**: `connectToGlasses(deviceName)` → `invokeMethod('connectToGlasses', {'deviceName': deviceName})`; set local `connectionStatus` to `Connecting...`.
-4. **Connected**: `glassesConnected` → `_onGlassesConnected`: set `isConnected`, show left/right names, `startSendBeatHeart()` (periodic `Proto.sendHeartBeat()`).
-5. **Disconnected**: `glassesDisconnected` (when native invokes it) → `_onGlassesDisconnected`.
-6. **Receive**: listen on `EventChannel('eventBleReceive')`; `_handleReceivedData` parses commands (e.g. `0xF5` touchpad / EvenAI events).
+## 6. iOS readiness state machine
 
----
+1. Scan and form left/right pairs by channel.
+2. Connect both `CBPeripheral` objects and discover UART service and characteristics.
+3. Add a leg to the ready set only after RX notification is confirmed enabled.
+4. Enqueue initialization bytes `[0x4D, 0x01]` through the bounded write path.
+5. Emit `glassesConnected` only when both legs are ready.
 
-## 5. Android details (`BleManager.kt`)
+Intentional disconnect does not auto-reconnect. Unexpected disconnect removes readiness and pending writes and reports a degraded snapshot to Flutter. The platform initialization bytes differ and require vendor firmware documentation or physical traces for authoritative confirmation.
 
-### 5.1 Init
+## 7. Flutter request correlation
 
-`BleManager.initBluetooth(Activity)`: weak reference to `Activity`, obtain `BluetoothManager` / `Adapter`.
+A response owner is keyed by:
 
-### 5.2 Scan
+```text
+(connection generation, side L/R, command byte)
+```
 
-- `startScan`: after BT on + permission checks, `bluetoothLeScanner.startScan`.
-- `ScanCallback.onScanResult`: parse name, dedupe, group by channel; when left+right exist, `BleChannelHelper.bleMC.flutterFoundPairedGlasses(BlePairDevice(...))`.
-- `stopScan`: `stopScan(scanCallback)`.
+Only one owner may exist for a key. When native accepted a write but the ACK times out, completion is `indeterminate` and the key enters late-response quarantine; timeout is never treated as certain failure followed by blind replay. Generation replacement, disconnect, and dispose close pending requests with effect-may-have-occurred semantics.
 
-### 5.3 Connect
+Heartbeat uses one-shot rescheduling so calls cannot overlap. Pair connectivity is `left_connected && right_connected`.
 
-- `connectToGlass(deviceChannel)`: resolve left/right `BleDevice` in `bleDevices` (or current `connectedDevice`) using `_{channel}_L_` / `_{channel}_R_`; else `PeripheralNotFound`.
-- `connectGatt` on each `BluetoothDevice` with `autoConnect=false`, shared `BluetoothGattCallback`.
+## 8. Speech path
 
-### 5.4 GATT callback highlights
+- iOS: each 200-byte LC3 payload decodes to 3200-byte PCM and feeds on-device Speech. Only a framework-final transcript is emitted; timed-out partial text is discarded.
+- Android: LC3 decoding exists, but no production PCM-to-ASR adapter is configured. `startEvenAI` fails closed, so Android voice assistant availability must not be claimed.
 
-- `onConnectionStateChange`: on `STATE_CONNECTED`, `discoverServices()`.
-- `onServicesDiscovered`: attach `BluetoothGatt`, enable RX notify, write CCCD, cache write char, `requestMtu(251)`, `createBond()`, mark side connected, send `0xF4 0x01`; if `BlePairDevice.isBothConnected()`, invoke `flutterGlassesConnected` on the UI thread.
-- `onCharacteristicChanged`: infer L/R by address; `0xF1` + length 202 → LC3→PCM via `Cpp.decodeLC3`; else `BleChannelHelper.bleReceive` to Dart.
+## 9. Key commands
 
-### 5.5 Disconnect
+| Function | Command |
+|---|---|
+| Microphone control | `0x0E` |
+| Microphone data | `0xF1` |
+| TouchBar / assistant event | `0xF5` |
+| AI and text display | `0x4E` |
+| BMP packet / finish / CRC | `0x15` / `0x20` / `0x16` |
+| Heartbeat | `0x25` |
+| Exit mode | `0x18` |
+| Notification / whitelist | `0x4B` / `0x04` |
 
-`disconnectFromGlasses` currently only logs and returns success—**no** full GATT disconnect/close path (fill in for production).
+Success is `0xC9`; selected multi-packet paths also accept `0xCB` as continue/accepted. Field widths, packet sizes, and display states are normative in the machine contract.
 
----
+## 10. Disconnect and cleanup
 
-## 6. iOS details (`BluetoothManager.swift`, `AppDelegate.swift`)
+Android calls `disconnect()` and `close()`, clears the write queue, and drops characteristic references. iOS cancels peripheral connections and clears characteristics, ready identifiers, and pending writes. Flutter stops heartbeat, fail-closes pending requests, and publishes a per-leg snapshot.
 
-### 6.1 Channel wiring
+## 11. Claims not closed by source
 
-`AppDelegate` creates `FlutterMethodChannel(name: "method.bluetooth", ...)`, binds `BluetoothManager`, registers `FlutterStreamHandler` for `eventBleReceive` / `eventSpeechRecognize`, assigns the receive sink to `BluetoothManager.blueInfoSink`.
+External evidence is still required for real-G1 packet loss/reconnect, latency, power, thermal and soak; firmware compatibility; authoritative initialization commands; Android ASR; iOS locale/device coverage; and vendor firmware, bootloader, secure boot, OTA, recovery, and rollback authority.
 
-### 6.2 Scan and pairing map
+## 12. Source index
 
-`centralManager.scanForPeripherals(withServices: nil)`. In `didDiscover`, `_L_` / `_R_` populate `pairedDevices["Pair_\(channelNumber)"]`; when both slots are set, `invokeMethod("foundPairedGlasses", ...)`.
-
-### 6.3 Connect
-
-`connectToDevice(deviceName:)`: `stopScan`, read left/right `CBPeripheral` from `pairedDevices[deviceName]`, `centralManager.connect` both, store `currentConnectingDeviceName`.
-
-### 6.4 When “connected” fires (important vs Android)
-
-In `didConnect`: set peripheral delegate and `discoverServices([UARTServiceUUID])`; when **both** slots in `connectedDevices[deviceName]` hold a peripheral, immediately `invokeMethod("glassesConnected", ...)` and clear `currentConnectingDeviceName`.
-
-So on iOS, **`glassesConnected` fires after the central links both peripherals**, **without waiting** for service/characteristic discovery or notify setup. Android fires **after** both sides finish GATT discovery and notify enablement. Plan integration tests around this gap.
-
-### 6.5 Disconnect / reconnect
-
-`didDisconnectPeripheral` calls **`central.connect(peripheral)` again** (reconnect bias), unlike Android’s minimal disconnect stub.
-
-### 6.6 Receive path
-
-`didUpdateValueFor` → `getCommandValue`: `BLE_REQ_TRANSFER_MIC_DATA` goes to speech PCM pipeline; otherwise build a map and call `blueInfoSink` for Dart.
-
----
-
-## 7. Post-connect Dart behavior
-
-- **Heartbeat**: after connect, every 8s `Proto.sendHeartBeat()` with short retries (`BleManager.startSendBeatHeart`).
-- **Request/response**: `BleManager.request` / `requestRetry` sends via `send` on the method channel; first-byte command + `lr` key completes `Completer`s in `_handleReceivedData`.
-
----
-
-## 8. Known implementation caveats
-
-1. **Mismatched “connected” timing** between Android and iOS (§6.4): Flutter may think both sides are ready before iOS finishes GATT setup.
-2. **Android `disconnectFromGlasses`** does not fully tear down GATT.
-3. **`BleManager.isBothConnected()`** is hard-coded `true` in Dart (TODO)—unsafe if you rely on real link state.
-4. **First packet bytes**: Android `0xF4 0x01` vs iOS `0x4d 0x01`—align with firmware docs if the protocol is strict.
-
----
-
-## 9. Source index
-
-| Area | Path |
-|------|------|
-| Dart BLE facade | `lib/ble_manager.dart` |
-| Android BLE core | `android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt` |
-| Android channel | `android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleChannelHelper.kt` |
-| Android models | `android/app/src/main/kotlin/com/example/demo_ai_even/model/BleDevice.kt`, `BlePairDevice.kt` |
-| iOS BLE core | `ios/Runner/BluetoothManager.swift` |
-| iOS UUID constants | `ios/Runner/ServiceIdentifiers.swift` |
-| iOS channel registration | `ios/Runner/AppDelegate.swift` |
-
----
-
-*Derived from the current EvenDemoApp source tree. Update §2–§3 and first-byte notes if firmware or channel contracts change.*
+- `lib/ble_manager.dart`
+- `lib/services/proto.dart`
+- `lib/services/evenai.dart`
+- `android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt`
+- `android/app/src/main/kotlin/com/example/demo_ai_even/model/BleDevice.kt`
+- `ios/Runner/BluetoothManager.swift`
+- `ios/Runner/SpeechStreamRecognizer.swift`
+- `contracts/g1-ble-protocol-v1.json`
+- `docs/PLATFORM_CAPABILITIES.json`

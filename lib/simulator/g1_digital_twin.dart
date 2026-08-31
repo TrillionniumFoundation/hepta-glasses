@@ -20,22 +20,16 @@ final class SimulatedWrite {
 
 final class G1DigitalTwin implements GlassesTransport {
   G1DigitalTwin()
-      : _connected = <GlassesSide, bool>{
-          GlassesSide.left: true,
-          GlassesSide.right: true,
-        },
-        _timeouts = <GlassesSide, int>{
-          GlassesSide.left: 0,
-          GlassesSide.right: 0,
-        },
-        _nacks = <GlassesSide, int>{
-          GlassesSide.left: 0,
-          GlassesSide.right: 0,
-        },
-        _indeterminateAfterWrites = <GlassesSide, int>{
-          GlassesSide.left: 0,
-          GlassesSide.right: 0,
-        };
+    : _connected = <GlassesSide, bool>{
+        GlassesSide.left: true,
+        GlassesSide.right: true,
+      },
+      _timeouts = <GlassesSide, int>{GlassesSide.left: 0, GlassesSide.right: 0},
+      _nacks = <GlassesSide, int>{GlassesSide.left: 0, GlassesSide.right: 0},
+      _indeterminateAfterWrites = <GlassesSide, int>{
+        GlassesSide.left: 0,
+        GlassesSide.right: 0,
+      };
 
   final StreamController<DeviceConnectionSnapshot> _connectionController =
       StreamController<DeviceConnectionSnapshot>.broadcast();

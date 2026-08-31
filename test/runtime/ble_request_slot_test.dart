@@ -44,10 +44,7 @@ void main() {
 
   test('an old completion cannot release a newer owner', () {
     final registry = BleRequestRegistry<int>();
-    final old = BleRequestSlot<int>(
-      completer: Completer<int>(),
-      generation: 7,
-    );
+    final old = BleRequestSlot<int>(completer: Completer<int>(), generation: 7);
     final current = BleRequestSlot<int>(
       completer: Completer<int>(),
       generation: 7,

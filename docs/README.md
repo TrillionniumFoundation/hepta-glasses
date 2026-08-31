@@ -4,9 +4,11 @@
 
 1. `HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md` — normative G0–G8 sequence, invariants, gates, and evidence levels.
 2. `CURRENT_STATE.md` — demonstrated source state and explicit non-claims.
+3. `PROJECT_STATE.json` — machine-readable authority, dynamic gate, and external-blocker contract.
 3. `PRODUCT_BOUNDARY.md` — device, edge, cloud, capability, model, Codex, and release boundaries.
 4. `ARCHITECTURE.md` — data flow and authority topology.
 5. `CAPABILITY_MODEL.md` — risk tiers, exact leases, and mutation admission.
+- `PLATFORM_CAPABILITIES.json` — source capability and physical-attestation matrix.
 6. `THREAT_MODEL.md` — trust boundaries and fail-closed controls.
 7. `PRIVACY_MODEL.md` — data classes, retention defaults, consent, export, and deletion.
 8. `GAP_LEDGER.yaml` — machine-readable source gaps and external gates.
@@ -14,6 +16,7 @@
 
 ## Development
 
+- `development/G8_SOURCE_REMEDIATION.md`
 - `development/G7_SOURCE_CONVERGENCE.md`
 - `development/G5_AUDIT_CLOSURE.md`
 - `development/G4_SOURCE_CLOSURE.md`
@@ -38,3 +41,7 @@
 - `adr/ADR-0003-edge-runtime-language.md`
 
 A later plan or ADR must state what it supersedes and update Current State, Gap Ledger, Evidence Index, and affected machine contracts in the same change.
+
+## Machine contracts
+
+- `../contracts/g1-ble-protocol-v1.json` — dual-BLE UUID, readiness, framing, command, and uncertainty contract.
