@@ -1,0 +1,235 @@
+name: g8-status-final
+
+on:
+  push:
+    branches:
+      - work/hepta-g8-status-final-20260901
+    paths:
+      - .github/workflows/g8-status-final.yml
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: work/hepta-g8-status-final-20260901
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Capture current exact-head state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          import time
+          import urllib.parse
+          import urllib.request
+          from collections import Counter
+          from pathlib import Path
+
+          repository = os.environ['REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          api = 'https://api.github.com'
+          expected = {
+              'repository-contracts', 'flutter', 'android-native',
+              'ios-native', 'native-sanitizers',
+              'secret-and-boundary-scan', 'source-evidence',
+          }
+
+          def get(path):
+              req = urllib.request.Request(
+                  api + path,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  return json.loads(response.read())
+
+          pr = None
+          run = None
+          jobs = []
+          head = None
+          for _ in range(180):
+              pr = get(f'/repos/{repository}/pulls/23')
+              current = pr['head']['sha']
+              if current != head:
+                  head = current
+                  run = None
+                  jobs = []
+              encoded = urllib.parse.quote(
+                  'codex/hepta-glasses-gap-closure-g8', safe=''
+              )
+              runs = get(
+                  f'/repos/{repository}/actions/runs?branch={encoded}&event=workflow_dispatch&per_page=30'
+              )['workflow_runs']
+              matches = [
+                  item for item in runs
+                  if item.get('head_sha') == head
+                  and item.get('path') == '.github/workflows/ci.yml'
+              ]
+              if matches:
+                  run = sorted(matches, key=lambda item: item['id'], reverse=True)[0]
+                  if run.get('status') == 'completed':
+                      jobs = get(
+                          f"/repos/{repository}/actions/runs/{run['id']}/jobs?per_page=100"
+                      )['jobs']
+                      if {item['name'] for item in jobs} == expected and all(
+                          item.get('status') == 'completed' for item in jobs
+                      ):
+                          break
+              time.sleep(10)
+
+          results = {item['name']: item.get('conclusion') for item in jobs}
+          matrix_success = set(results) == expected and all(
+              value == 'success' for value in results.values()
+          )
+          artifacts = [] if run is None else get(
+              f"/repos/{repository}/actions/runs/{run['id']}/artifacts?per_page=100"
+          )['artifacts']
+          evidence_name = f'hepta-source-evidence-{head}'
+          evidence = [
+              item for item in artifacts
+              if item.get('name') == evidence_name and not item.get('expired')
+          ]
+          reviews = get(f'/repos/{repository}/pulls/23/reviews?per_page=100')
+          approvals = [
+              {
+                  'reviewer': item.get('user', {}).get('login'),
+                  'commit_id': item.get('commit_id'),
+                  'submitted_at': item.get('submitted_at'),
+              }
+              for item in reviews
+              if item.get('state') == 'APPROVED'
+              and item.get('commit_id') == head
+          ]
+
+          ledger_content = get(
+              f'/repos/{repository}/contents/docs/GAP_LEDGER.yaml?ref='
+              + urllib.parse.quote('codex/hepta-glasses-gap-closure-g8', safe='')
+          )
+          ledger = json.loads(
+              base64.b64decode(ledger_content['content']).decode('utf-8')
+          )
+          entries = next(
+              (
+                  ledger[key]
+                  for key in ('gaps', 'items', 'entries')
+                  if isinstance(ledger.get(key), list)
+              ),
+              [],
+          )
+          counts = Counter(
+              str(item.get('status', 'MISSING'))
+              for item in entries if isinstance(item, dict)
+          )
+
+          state = {
+              'schema_version': 1,
+              'captured_at_unix': int(time.time()),
+              'repository': repository,
+              'pull_request': {
+                  'number': 23,
+                  'state': pr.get('state') if pr else None,
+                  'draft': pr.get('draft') if pr else None,
+                  'head_sha': head,
+                  'base_sha': pr.get('base', {}).get('sha') if pr else None,
+                  'mergeable': pr.get('mergeable') if pr else None,
+                  'mergeable_state': pr.get('mergeable_state') if pr else None,
+                  'requested_reviewers': [
+                      item.get('login')
+                      for item in (pr.get('requested_reviewers', []) if pr else [])
+                  ],
+              },
+              'formal_ci': {
+                  'run_id': run.get('id') if run else None,
+                  'status': run.get('status') if run else None,
+                  'conclusion': run.get('conclusion') if run else None,
+                  'jobs': results,
+                  'matrix_success': matrix_success,
+              },
+              'source_evidence': {
+                  'matching_artifact_count': len(evidence),
+                  'artifacts': [
+                      {
+                          'id': item.get('id'),
+                          'name': item.get('name'),
+                          'digest': item.get('digest'),
+                          'size_in_bytes': item.get('size_in_bytes'),
+                      }
+                      for item in evidence
+                  ],
+              },
+              'repository_actionable_gate': (
+                  'PASS' if matrix_success and len(evidence) == 1 else 'FAIL'
+              ),
+              'independent_review_gate': 'PASS' if approvals else 'PENDING',
+              'head_bound_approvals': approvals,
+              'gap_ledger': {
+                  'item_count': len(entries),
+                  'status_counts': dict(sorted(counts.items())),
+                  'non_closed': [
+                      {
+                          'id': item.get('id'),
+                          'status': item.get('status'),
+                          'title': item.get('title') or item.get('summary'),
+                          'owner': item.get('owner'),
+                      }
+                      for item in entries
+                      if isinstance(item, dict)
+                      and item.get('status') not in {
+                          'CLOSED', 'MERGED', 'RELEASED',
+                          'SUPERSEDED', 'REJECTED',
+                      }
+                  ],
+              },
+          }
+          Path('status').mkdir(exist_ok=True)
+          Path('status/g8-final.json').write_text(
+              json.dumps(state, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          lines = [
+              '# Hepta Glasses G8 final live state', '',
+              f"- Head: `{head}`",
+              f"- PR draft: `{state['pull_request']['draft']}`",
+              f"- Repository-actionable gate: `{state['repository_actionable_gate']}`",
+              f"- Independent review gate: `{state['independent_review_gate']}`",
+              f"- Formal run: `{state['formal_ci']['run_id']}`",
+              f"- Source Evidence artifacts: `{len(evidence)}`", '',
+              '| Check | Conclusion |', '|---|---|',
+          ]
+          for name in sorted(expected):
+              lines.append(f"| `{name}` | `{results.get(name, 'missing')}` |")
+          lines.extend(['', '## Non-closed Gap Ledger entries', ''])
+          for item in state['gap_ledger']['non_closed']:
+              lines.append(
+                  f"- `{item['id']}` — `{item['status']}` — {item.get('title') or ''}"
+              )
+          lines.extend([
+              '',
+              'This snapshot is observational and does not substitute for independent review, physical-device evidence, deployed-system receipts, vendor authority, signing, pilot, or store approval.',
+          ])
+          Path('status/g8-final.md').write_text(
+              '\n'.join(lines) + '\n', encoding='utf-8'
+          )
+          PY
+      - name: Commit immutable snapshot
+        run: |
+          git config user.name 'hepta-g8-status'
+          git config user.email 'actions@users.noreply.github.com'
+          git add status/g8-final.json status/g8-final.md
+          git commit -m 'chore(g8): capture final live closure state'
+          git push origin HEAD:work/hepta-g8-status-final-20260901
