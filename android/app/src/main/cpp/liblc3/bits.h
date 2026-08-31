@@ -161,14 +161,6 @@ static inline void lc3_put_bit(lc3_bits_t *bits, int v);
 static inline void lc3_put_bits(lc3_bits_t *bits, unsigned v, int n);
 
 /**
- * Put arithmetic coder symbol
- * bits            Bitstream context
- * model, s        Model distribution and symbol value
- */
-static inline void lc3_put_symbol(lc3_bits_t *bits,
-    const struct lc3_ac_model *model, unsigned s);
-
-/**
  * Flush and terminate bitstream writing
  * bits            Bitstream context
  */
@@ -186,7 +178,15 @@ static inline int lc3_get_bit(lc3_bits_t *bits);
  * n               Number of bits to read (1 to 32)
  * return          The value read
  */
-static inline unsigned lc3_get_bits(lc3_bits_t *bits,  int n);
+static inline unsigned lc3_get_bits(lc3_bits_t *bits, int n);
+
+/**
+ * Put arithmetic coder symbol
+ * bits            Bitstream context
+ * model, s        Model distribution and symbol value
+ */
+static inline void lc3_put_symbol(lc3_bits_t *bits,
+    const struct lc3_ac_model *model, unsigned s);
 
 /**
  * Get arithmetic coder symbol
@@ -196,7 +196,6 @@ static inline unsigned lc3_get_bits(lc3_bits_t *bits,  int n);
  */
 static inline unsigned lc3_get_symbol(lc3_bits_t *bits,
     const struct lc3_ac_model *model);
-
 
 
 /* ----------------------------------------------------------------------------
@@ -209,6 +208,16 @@ unsigned lc3_get_bits_generic(struct lc3_bits *bits, int n);
 void lc3_ac_read_renorm(lc3_bits_t *bits);
 void lc3_ac_write_renorm(lc3_bits_t *bits);
 
+/**
+ * Return a mask for n low bits without shifting by the width of unsigned.
+ */
+static inline unsigned lc3_bits_mask(int n)
+{
+    if (n <= 0)
+        return 0;
+
+    return n >= LC3_ACCU_BITS ? ~0u : (1u << n) - 1u;
+}
 
 /**
  * Put a bit
@@ -250,7 +259,7 @@ LC3_HOT static inline unsigned lc3_get_bits(struct lc3_bits *bits, int n)
     struct lc3_bits_accu *accu = &bits->accu;
 
     if (accu->n + n <= LC3_ACCU_BITS) {
-        int v = (accu->v >> accu->n) & ((1u << n) - 1);
+        unsigned v = (accu->v >> accu->n) & lc3_bits_mask(n);
         return (accu->n += n), v;
     }
     else {

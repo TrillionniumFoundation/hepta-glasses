@@ -1,0 +1,184 @@
+name: hepta-g5-finalize-v2
+
+on:
+  push:
+    branches:
+      - codex/hepta-glasses-source-closure-g4
+    paths:
+      - tools/g5-finalize.trigger
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hepta-g5-finalize-v2-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.repository == 'TrillionniumFoundation/hepta-glasses'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: true
+      - name: Verify bounded maintenance context
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "codex/hepta-glasses-source-closure-g4"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -f tools/g5-finalize.trigger
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - run: flutter pub get
+      - name: Apply exact SDK fixes
+        run: dart fix --apply
+      - name: Close semantic lifecycle findings
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          from pathlib import Path
+
+          def replace_one(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(
+                      f'{path}: expected exactly one replacement, found {count}'
+                  )
+              target.write_text(text.replace(old, new), encoding='utf-8')
+
+          replace_one(
+              'lib/main.dart',
+              '  String? _diagnosticDetails;\n',
+              '  late final String? _diagnosticDetails;\n',
+          )
+          replace_one(
+              'lib/main.dart',
+              'EvenAI.dispose()',
+              'EvenAI.shutdown()',
+          )
+          replace_one(
+              'lib/services/evenai.dart',
+              '  List<int> audioDataBuffer = <int>[];\n',
+              '  final List<int> audioDataBuffer = <int>[];\n',
+          )
+          replace_one(
+              'lib/services/evenai.dart',
+              '  bool _pageSendInFlight = false;\n',
+              '  bool _pageSendInFlight = false;\n'
+              '  Future<void>? _disposeOperation;\n',
+          )
+          replace_one(
+              'lib/services/evenai.dart',
+              '''  static final StreamController<String> _textStreamController =
+              StreamController<String>.broadcast();
+            static Stream<String> get textStream => _textStreamController.stream;
+
+            static void updateDynamicText(String newText) {
+              _textStreamController.add(newText);
+            }
+          ''',
+              '''  final StreamController<String> _textStreamController =
+              StreamController<String>.broadcast();
+            static Stream<String> get textStream => get._textStreamController.stream;
+
+            static void updateDynamicText(String newText) {
+              final instance = _instance;
+              if (instance == null || instance._textStreamController.isClosed) {
+                return;
+              }
+              instance._textStreamController.add(newText);
+            }
+          ''',
+          )
+          replace_one(
+              'lib/services/evenai.dart',
+              '''  static Future<void> dispose() async {
+              final instance = _instance;
+              if (instance != null) {
+                instance.clear();
+                final subscription = instance._speechSubscription;
+                instance._speechSubscription = null;
+                await subscription?.cancel();
+              }
+              if (!_textStreamController.isClosed) {
+                await _textStreamController.close();
+              }
+              _instance = null;
+            }
+          ''',
+              '''  Future<void> dispose() => _disposeOperation ??= _dispose();
+
+            Future<void> _dispose() async {
+              final subscription = _speechSubscription;
+              _speechSubscription = null;
+              clear();
+              await subscription?.cancel();
+              if (!_textStreamController.isClosed) {
+                await _textStreamController.close();
+              }
+            }
+
+            static Future<void> shutdown() async {
+              final instance = _instance;
+              if (instance == null) {
+                return;
+              }
+              await instance.dispose();
+              if (identical(_instance, instance)) {
+                _instance = null;
+              }
+            }
+          ''',
+          )
+          PYCODE
+      - name: Canonical formatting and strict verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart format lib test
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze --fatal-warnings
+          flutter test
+      - name: Enforce the source-path allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff --name-only | sort)
+          expected=(
+            lib/ble_manager.dart
+            lib/controllers/bmp_update_manager.dart
+            lib/main.dart
+            lib/services/evenai.dart
+            lib/views/even_list_page.dart
+            lib/views/home_page.dart
+          )
+          if [[ "${changed[*]}" != "${expected[*]}" ]]; then
+            printf 'unexpected changed paths: %s\n' "${changed[*]}" >&2
+            exit 1
+          fi
+      - name: Commit the bounded source repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            lib/ble_manager.dart \
+            lib/controllers/bmp_update_manager.dart \
+            lib/main.dart \
+            lib/services/evenai.dart \
+            lib/views/even_list_page.dart \
+            lib/views/home_page.dart
+          git diff --cached --check
+          git commit -m "fix(g5): close strict analysis and resource lifecycle blockers"
+          git push origin HEAD:codex/hepta-glasses-source-closure-g4

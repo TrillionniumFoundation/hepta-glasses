@@ -3,31 +3,27 @@ import 'dart:collection';
 
 final class _ScheduledEffect {
   const _ScheduledEffect(this.run);
-
   final Future<void> Function() run;
 }
 
-/// Serializes physical device effects. BLE control commands, multi-packet
-/// display writes, settings mutations, and bulk transfers cannot interleave
-/// through the deterministic runtime authority.
+/// Serializes physical effects and provides bounded, awaitable shutdown.
 final class DeviceEffectScheduler {
   DeviceEffectScheduler({this.maxPending = 64}) {
     if (maxPending < 1) {
       throw ArgumentError.value(maxPending, 'maxPending', 'must be positive');
     }
+    _idle.complete();
   }
 
   final int maxPending;
   final Queue<_ScheduledEffect> _queue = Queue<_ScheduledEffect>();
   bool _draining = false;
   bool _closed = false;
+  Completer<void> _idle = Completer<void>();
 
   int get pending => _queue.length + (_draining ? 1 : 0);
 
-  Future<T> schedule<T>(
-    String operation,
-    Future<T> Function() effect,
-  ) {
+  Future<T> schedule<T>(String operation, Future<T> Function() effect) {
     if (operation.trim().isEmpty) {
       throw ArgumentError.value(operation, 'operation', 'must not be empty');
     }
@@ -49,15 +45,27 @@ final class DeviceEffectScheduler {
         }
       }),
     );
+    if (_idle.isCompleted) {
+      _idle = Completer<void>();
+    }
     unawaited(_drain());
     return completer.future;
   }
 
-  Future<void> close() async {
+  Future<void> close({
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
     _closed = true;
-    while (_draining || _queue.isNotEmpty) {
-      await Future<void>.delayed(const Duration(milliseconds: 1));
+    if (!_draining && _queue.isEmpty) {
+      return;
     }
+    await _idle.future.timeout(
+      timeout,
+      onTimeout: () => throw TimeoutException(
+        'Device effect scheduler did not become idle.',
+        timeout,
+      ),
+    );
   }
 
   Future<void> _drain() async {
@@ -67,13 +75,14 @@ final class DeviceEffectScheduler {
     _draining = true;
     try {
       while (_queue.isNotEmpty) {
-        final item = _queue.removeFirst();
-        await item.run();
+        await _queue.removeFirst().run();
       }
     } finally {
       _draining = false;
       if (_queue.isNotEmpty) {
         unawaited(_drain());
+      } else if (!_idle.isCompleted) {
+        _idle.complete();
       }
     }
   }

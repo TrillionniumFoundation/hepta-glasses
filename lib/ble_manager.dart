@@ -198,8 +198,8 @@ class BleManager {
     final leftName = values['leftDeviceName']?.toString() ?? 'left';
     final rightName = values['rightDeviceName']?.toString() ?? 'right';
     connectionStatus = 'Connected: \n$leftName \n$rightName';
-    isLeftConnected = values['left_connected'] != false;
-    isRightConnected = values['right_connected'] != false;
+    isLeftConnected = values['left_connected'] == true;
+    isRightConnected = values['right_connected'] == true;
     isConnected = isLeftConnected && isRightConnected;
     _publishConnectionSnapshot();
     onStatusChanged?.call();
@@ -212,18 +212,44 @@ class BleManager {
 
   void startSendBeatHeart() {
     beatHeartTimer?.cancel();
-    beatHeartTimer = Timer.periodic(const Duration(seconds: 8), (_) async {
-      if (!isConnected) {
-        return;
-      }
-      final success = await Proto.sendHeartBeat();
-      if (!success && tryTime < 2) {
+    final generation = _connectionGeneration;
+    beatHeartTimer = Timer(
+      const Duration(seconds: 8),
+      () => unawaited(_sendHeartbeatAndReschedule(generation)),
+    );
+  }
+
+  Future<void> _sendHeartbeatAndReschedule(int generation) async {
+    if (!isConnected || generation != _connectionGeneration) {
+      return;
+    }
+    try {
+      var success = await Proto.sendHeartBeat();
+      while (!success && tryTime < 2) {
         tryTime++;
-        await Proto.sendHeartBeat();
-      } else {
-        tryTime = 0;
+        if (!isConnected || generation != _connectionGeneration) {
+          return;
+        }
+        success = await Proto.sendHeartBeat();
       }
-    });
+      tryTime = 0;
+    } on Object catch (error) {
+      tryTime = 0;
+      PrivacySafeLog.event(
+        'ble_heartbeat_failed',
+        fields: <String, Object?>{
+          'generation': generation,
+          'error_type': error.runtimeType.toString(),
+        },
+      );
+    } finally {
+      if (isConnected && generation == _connectionGeneration) {
+        beatHeartTimer = Timer(
+          const Duration(seconds: 8),
+          () => unawaited(_sendHeartbeatAndReschedule(generation)),
+        );
+      }
+    }
   }
 
   void _onGlassesConnecting(dynamic arguments) {

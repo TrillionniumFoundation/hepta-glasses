@@ -8,6 +8,7 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
@@ -203,6 +204,7 @@ class BleManager private constructor() {
             }
             return false
         }
+
         override fun onConnectionStateChange(
             gatt: BluetoothGatt,
             status: Int,
@@ -266,7 +268,7 @@ class BleManager private constructor() {
                 gatt.writeDescriptor(
                     descriptor,
                     BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE,
-                ) == BluetoothGatt.GATT_SUCCESS
+                ) == BluetoothStatusCodes.SUCCESS
             } else {
                 @Suppress("DEPRECATION")
                 descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE

@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "components": [
+    {
+      "name": "google-liblc3",
+      "supplier": "Organization: Google LLC",
+      "license": "Apache-2.0",
+      "download_location": "https://github.com/google/liblc3",
+      "paths": [
+        "android/app/src/main/cpp/liblc3",
+        "android/app/src/main/cpp/include/lc3.h",
+        "android/app/src/main/cpp/include/lc3_private.h",
+        "ios/Runner/lc3"
+      ],
+      "exclude_paths": [
+        "ios/Runner/lc3/rnnoise.h"
+      ]
+    },
+    {
+      "name": "rnnoise",
+      "supplier": "Organization: Xiph.Org Foundation and contributors",
+      "license": "BSD-2-Clause",
+      "download_location": "https://gitlab.xiph.org/xiph/rnnoise",
+      "paths": [
+        "android/app/src/main/cpp/rnnoise",
+        "android/app/src/main/cpp/include/rnnoise.h",
+        "ios/Runner/lc3/rnnoise.h"
+      ]
+    }
+  ]
+}

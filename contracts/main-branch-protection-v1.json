@@ -6,6 +6,7 @@
       "flutter",
       "android-native",
       "ios-native",
+      "native-sanitizers",
       "secret-and-boundary-scan",
       "source-evidence"
     ]

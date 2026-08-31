@@ -278,7 +278,7 @@ LC3_HOT void lc3_put_bits_generic(struct lc3_bits *bits, unsigned v, int n)
 
     /* --- Accumulate remaining bits -- */
 
-    accu->v = v >> n1;
+    accu->v = n1 >= LC3_ACCU_BITS ? 0 : v >> n1;
     accu->n = n - n1;
 }
 
@@ -327,7 +327,7 @@ static inline void accu_load(struct lc3_bits_accu *accu,
 
     if (accu->n >= 8) {
         accu->nover = LC3_MIN(accu->nover + accu->n, LC3_ACCU_BITS);
-        accu->v >>= accu->n;
+        accu->v = accu->n >= LC3_ACCU_BITS ? 0 : accu->v >> accu->n;
         accu->n = 0;
     }
 }
@@ -346,7 +346,7 @@ LC3_HOT unsigned lc3_get_bits_generic(struct lc3_bits *bits, int n)
     accu_load(accu, buffer);
 
     int n1 = LC3_MIN(LC3_ACCU_BITS - accu->n, n);
-    unsigned v = (accu->v >> accu->n) & ((1u << n1) - 1);
+    unsigned v = (accu->v >> accu->n) & lc3_bits_mask(n1);
     accu->n += n1;
 
     /* --- Second round --- */
@@ -356,7 +356,7 @@ LC3_HOT unsigned lc3_get_bits_generic(struct lc3_bits *bits, int n)
     if (n2) {
         accu_load(accu, buffer);
 
-        v |= ((accu->v >> accu->n) & ((1u << n2) - 1)) << n1;
+        v |= ((accu->v >> accu->n) & lc3_bits_mask(n2)) << n1;
         accu->n += n2;
     }
 

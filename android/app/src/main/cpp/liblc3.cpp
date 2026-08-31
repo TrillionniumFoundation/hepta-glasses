@@ -1,140 +1,116 @@
 #include <jni.h>
 
-#include <algorithm>
 #include <cstdint>
-#include <cstring>
 #include <limits>
+#include <new>
 #include <vector>
 
-#include "include/lc3.h"
 #include "include/rnnoise.h"
+#include "lc3_decoder_core.h"
 
 namespace {
-constexpr int kFrameDurationUs = 10000;
-constexpr int kSampleRateHz = 16000;
-constexpr int kEncodedFrameBytes = 20;
-constexpr int kMaximumEncodedPayloadBytes = 4096;
 
-jbyteArray emptyByteArray(JNIEnv *env) {
+jbyteArray emptyByteArray(JNIEnv* env) {
     return env->NewByteArray(0);
 }
+
 }  // namespace
 
 extern "C" JNIEXPORT jbyteArray JNICALL
 Java_com_example_demo_1ai_1even_cpp_Cpp_decodeLC3(
-    JNIEnv *env,
+    JNIEnv* env,
     jclass,
     jbyteArray lc3Data
 ) {
     if (lc3Data == nullptr) {
         return emptyByteArray(env);
     }
+
     const jsize encodedLength = env->GetArrayLength(lc3Data);
-    if (encodedLength <= 0 ||
-        encodedLength > kMaximumEncodedPayloadBytes ||
-        encodedLength % kEncodedFrameBytes != 0) {
+    if (
+        encodedLength <= 0 ||
+        !hepta::audio::isValidLc3PayloadLength(
+            static_cast<std::size_t>(encodedLength)
+        )
+    ) {
         return emptyByteArray(env);
     }
 
-    const unsigned decoderSize = lc3_decoder_size(kFrameDurationUs, kSampleRateHz);
-    const int samplesPerFrame = lc3_frame_samples(kFrameDurationUs, kSampleRateHz);
-    if (decoderSize == 0 || samplesPerFrame <= 0) {
-        return emptyByteArray(env);
-    }
-
-    const size_t frameCount =
-        static_cast<size_t>(encodedLength / kEncodedFrameBytes);
-    const size_t decodedFrameBytes =
-        static_cast<size_t>(samplesPerFrame) * sizeof(int16_t);
-    if (frameCount >
-        std::numeric_limits<size_t>::max() / decodedFrameBytes) {
-        return emptyByteArray(env);
-    }
-    const size_t decodedLength = frameCount * decodedFrameBytes;
-    if (decodedLength > static_cast<size_t>(std::numeric_limits<jsize>::max())) {
-        return emptyByteArray(env);
-    }
-
-    jboolean isCopy = JNI_FALSE;
-    jbyte *encodedBytes = env->GetByteArrayElements(lc3Data, &isCopy);
-    if (encodedBytes == nullptr) {
-        return emptyByteArray(env);
-    }
-
-    std::vector<uint8_t> decoderMemory(decoderSize, 0);
-    std::vector<int16_t> frameBuffer(static_cast<size_t>(samplesPerFrame), 0);
-    std::vector<uint8_t> decoded(decodedLength, 0);
-    lc3_decoder_t decoder = lc3_setup_decoder(
-        kFrameDurationUs,
-        kSampleRateHz,
-        0,
-        decoderMemory.data()
-    );
-    if (decoder == nullptr) {
-        env->ReleaseByteArrayElements(lc3Data, encodedBytes, JNI_ABORT);
-        return emptyByteArray(env);
-    }
-
-    bool success = true;
-    for (size_t frame = 0; frame < frameCount; frame++) {
-        const auto *input = reinterpret_cast<const uint8_t *>(encodedBytes) +
-            frame * kEncodedFrameBytes;
-        const int status = lc3_decode(
-            decoder,
-            input,
-            kEncodedFrameBytes,
-            LC3_PCM_FORMAT_S16,
-            frameBuffer.data(),
-            1
+    try {
+        std::vector<std::uint8_t> encoded(
+            static_cast<std::size_t>(encodedLength)
         );
-        if (status < 0) {
-            success = false;
-            break;
+        env->GetByteArrayRegion(
+            lc3Data,
+            0,
+            encodedLength,
+            reinterpret_cast<jbyte*>(encoded.data())
+        );
+        if (env->ExceptionCheck()) {
+            return nullptr;
         }
-        std::memcpy(
-            decoded.data() + frame * decodedFrameBytes,
-            frameBuffer.data(),
-            decodedFrameBytes
+
+        const std::vector<std::uint8_t> decoded =
+            hepta::audio::decodeLc3Payload(
+                encoded.data(),
+                encoded.size()
+            );
+        if (decoded.empty()) {
+            return emptyByteArray(env);
+        }
+        if (
+            decoded.size() >
+            static_cast<std::size_t>(
+                std::numeric_limits<jsize>::max()
+            )
+        ) {
+            return emptyByteArray(env);
+        }
+
+        const auto decodedLength =
+            static_cast<jsize>(decoded.size());
+        jbyteArray result = env->NewByteArray(decodedLength);
+        if (result == nullptr) {
+            return nullptr;
+        }
+        env->SetByteArrayRegion(
+            result,
+            0,
+            decodedLength,
+            reinterpret_cast<const jbyte*>(decoded.data())
         );
-        std::fill(frameBuffer.begin(), frameBuffer.end(), 0);
-    }
-    env->ReleaseByteArrayElements(lc3Data, encodedBytes, JNI_ABORT);
-    if (!success) {
+        if (env->ExceptionCheck()) {
+            return nullptr;
+        }
+        return result;
+    } catch (const std::bad_alloc&) {
+        return emptyByteArray(env);
+    } catch (...) {
         return emptyByteArray(env);
     }
-
-    jbyteArray result = env->NewByteArray(static_cast<jsize>(decodedLength));
-    if (result == nullptr) {
-        return nullptr;
-    }
-    env->SetByteArrayRegion(
-        result,
-        0,
-        static_cast<jsize>(decodedLength),
-        reinterpret_cast<const jbyte *>(decoded.data())
-    );
-    if (env->ExceptionCheck()) {
-        return nullptr;
-    }
-    return result;
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_example_demo_1ai_1even_cpp_Cpp_rnNoise(
-    JNIEnv *env,
+    JNIEnv* env,
     jclass,
     jlong state,
     jfloatArray input
 ) {
-    if (state == 0 || input == nullptr || env->GetArrayLength(input) != 480) {
+    if (
+        state == 0 ||
+        input == nullptr ||
+        env->GetArrayLength(input) != 480
+    ) {
         return nullptr;
     }
-    jfloat *inputArray = env->GetFloatArrayElements(input, nullptr);
+    jfloat* inputArray =
+        env->GetFloatArrayElements(input, nullptr);
     if (inputArray == nullptr) {
         return nullptr;
     }
     rnnoise_process_frame(
-        reinterpret_cast<DenoiseState *>(state),
+        reinterpret_cast<DenoiseState*>(state),
         inputArray,
         inputArray
     );
@@ -144,7 +120,7 @@ Java_com_example_demo_1ai_1even_cpp_Cpp_rnNoise(
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_example_demo_1ai_1even_cpp_Cpp_createRNNoiseState(
-    JNIEnv *,
+    JNIEnv*,
     jclass
 ) {
     return reinterpret_cast<jlong>(rnnoise_create(nullptr));
@@ -152,11 +128,11 @@ Java_com_example_demo_1ai_1even_cpp_Cpp_createRNNoiseState(
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_example_demo_1ai_1even_cpp_Cpp_destroyRNNoiseState(
-    JNIEnv *,
+    JNIEnv*,
     jclass,
     jlong state
 ) {
     if (state != 0) {
-        rnnoise_destroy(reinterpret_cast<DenoiseState *>(state));
+        rnnoise_destroy(reinterpret_cast<DenoiseState*>(state));
     }
 }

@@ -45,7 +45,7 @@ class ReleaseGateTest(unittest.TestCase):
             "audit_contract": "file-lock-checkpoint-v1",
             "provenance": {"sha256": "d" * 64},
             "provenance_type": "unsigned-source-provenance-v1",
-            "contracts_version": "2026-08-31-g5",
+            "contracts_version": "2026-08-31-g7",
         }
 
     def test_source_mode_passes_without_claiming_product_release(self) -> None:

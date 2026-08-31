@@ -1,7 +1,7 @@
 # Hepta Glasses OS current state
 
 Last updated: 2026-08-31
-Canonical plan revision: `2026-08-31-g5`
+Canonical plan revision: `2026-08-31-g7`
 
 ## Authoritative review stack
 

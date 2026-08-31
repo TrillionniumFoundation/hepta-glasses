@@ -3,6 +3,7 @@ package com.example.demo_ai_even.model
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothStatusCodes
 import android.os.Build
 import android.util.Log
 import com.example.demo_ai_even.bluetooth.BleManager
@@ -41,7 +42,7 @@ data class BleDevice(
                     characteristic,
                     data,
                     BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE,
-                ) == BluetoothGatt.GATT_SUCCESS
+                ) == BluetoothStatusCodes.SUCCESS
             } else {
                 @Suppress("DEPRECATION")
                 characteristic.writeType =

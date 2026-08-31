@@ -7,18 +7,16 @@ class EvenAIListPage extends StatefulWidget {
   const EvenAIListPage({super.key});
 
   @override
-  _EvenAIListPageState createState() => _EvenAIListPageState();
+  State<EvenAIListPage> createState() => _EvenAIListPageState();
 }
 
 class _EvenAIListPageState extends State<EvenAIListPage> {
-  late EvenaiModelController controller;
+  late final EvenaiModelController controller;
 
   @override
   void initState() {
     super.initState();
     controller = Get.find<EvenaiModelController>();
-
-    print("controller.items--------${controller.items.length}");
   }
 
   @override
@@ -29,98 +27,69 @@ class _EvenAIListPageState extends State<EvenAIListPage> {
         body: Obx(() {
           if (controller.items.isEmpty && !EvenAI.isEvenAISyncing.value) {
             return const Center(
-              child: Text(
-                "Press and hold left TouchBar to engage Even AI.",
-                style: TextStyle(color: Colors.grey),
-                textAlign: TextAlign.center,
-              ),
-            );
-          } else {
-            return Padding(
-              padding: EdgeInsets.only(left: 16, right: 16, top: 4),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: controller.items.length,
-                      itemBuilder: (context, index) {
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              if (controller.selectedIndex.value == index) {
-                                controller.deselectItem();
-                              } else {
-                                controller.selectItem(index);
-                              }
-                            });
-                          },
-                          child: controller.selectedIndex.value == index
-                              ? buildItemDetail(index)
-                              : buildItem(index),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'Press and hold left TouchBar to engage Even AI.',
+                  style: TextStyle(color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
               ),
             );
           }
+          return ListView.separated(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            itemCount: controller.items.length,
+            separatorBuilder: (BuildContext context, int index) =>
+                const SizedBox(height: 12),
+            itemBuilder: (BuildContext context, int index) {
+              final expanded = controller.selectedIndex.value == index;
+              final item = controller.items[index];
+              return Semantics(
+                button: true,
+                label: item.title,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () {
+                    if (expanded) {
+                      controller.deselectItem();
+                    } else {
+                      controller.selectItem(index);
+                    }
+                  },
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 160),
+                    alignment: Alignment.topCenter,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF991).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            item.title,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          if (expanded) ...<Widget>[
+                            const SizedBox(height: 12),
+                            SelectableText(
+                              item.content,
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
         }),
       );
-
-  Widget buildItem(int index) {
-    final item = controller.items[index];
-    return Expanded(
-      child: Container(
-        alignment: Alignment.centerLeft,
-        decoration: BoxDecoration(
-          color: Color(0xFFFEF991).withOpacity(0.2),
-          borderRadius: BorderRadius.circular(5),
-        ),
-        margin: EdgeInsets.only(top: 8, bottom: 8),
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text(
-            item.title,
-            style: TextStyle(fontSize: 20),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget buildItemDetail(int index) {
-    final item = controller.items[index];
-
-    return Expanded(
-      child: Container(
-        decoration: BoxDecoration(
-          color: Color(0xFFFEF991).withOpacity(0.2),
-          borderRadius: BorderRadius.circular(5),
-        ),
-        margin: EdgeInsets.only(top: 8, bottom: 8),
-        child: Column(
-          children: [
-            Container(
-              alignment: Alignment.centerLeft,
-              padding: EdgeInsets.all(16),
-              child: Text(
-                item.title,
-                style: TextStyle(fontSize: 20),
-              ),
-            ),
-            Container(
-              alignment: Alignment.centerLeft,
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                item.content,
-                style: TextStyle(fontSize: 15),
-              ),
-            ),
-            SizedBox(height: 16)
-          ],
-        ),
-      ),
-    );
-  }
 }

@@ -1,39 +1,42 @@
-# Release, kill-switch, and rollback runbook
+# Release, staged rollout, and rollback runbook
 
-## Source release evidence
+## Source candidate
 
-The `source-evidence` CI job runs after repository, Flutter, and boundary jobs. It creates:
+A source candidate is eligible for independent review only when the exact PR head passes all canonical checks: repository contracts, Flutter, Android native/release configuration, iOS native/release configuration, native sanitizers/fuzzing, secret/boundary/full-history scanning, and source evidence. The artifact must bind the same commit, tree, plan revision, multi-ecosystem source inventory, vendored component digest, and credential-history digest.
 
-- `source-sbom.spdx.json`;
-- `source-provenance.json`;
-- `source-release-bundle.json`;
-- `source-evidence-summary.json`.
+Do not reuse a pre-merge artifact for the merge commit. After an independent approval and protected merge, rerun the checks on `main` and generate a new exact-head artifact.
 
-## Product release gate
+## Product release inputs
 
-Populate `evidence/templates/product-release-bundle.template.json`, then run:
+The product bundle must include:
 
-```bash
-python3 tools/evaluate_release_gate.py \
-  --bundle evidence/release/<release>.json \
-  --mode product
-```
+- verified `main` protection and required checks;
+- passing physical Android and iOS + Even G1 qualification reports;
+- production KMS/HSM, attestation, rotation, revoke, and recovery evidence;
+- production realtime/OAuth/provider receipts and timeout reconciliation;
+- closed credential incident record with provider revocation/rotation receipt;
+- independent security, privacy, legal, accessibility, safety, and supply-chain decisions;
+- signed Android and iOS artifact digests;
+- binary SBOM digest and signed artifact-attestation/provenance digest;
+- pilot cohort, crash-free rate, duplicate-effect count, privacy metrics, and support readiness;
+- witnessed kill-switch and rollback drill records.
 
-There is no override mode.
-
-## Kill-switch drill
-
-Independently disable model sessions, realtime bootstrap, mutating capabilities, a Skill, a device, and a release cohort. Confirm read-only status and user-visible recovery remain available where safe.
-
-## Rollback drill
-
-- Freeze new mutations.
-- Reconcile in-flight effects.
-- Roll mobile/control-plane configuration to the last approved release.
-- Verify schema and journal compatibility.
-- Confirm revoked sessions and devices remain revoked.
-- Re-run smoke and duplicate-effect checks.
+The product release gate has no override path. Source artifacts, synthetic traces, self-review, unsigned binaries, or source SBOMs are forbidden substitutes.
 
 ## Staged rollout
 
-Internal operators → 5–10 user cohort → 20–50 user pilot → broader cohort. Promotion requires crash-free threshold, zero duplicate effects, SLO pass, no unresolved high-severity finding, and a successful rollback rehearsal.
+1. Publish signed artifacts to an internal cohort.
+2. Confirm identity/revocation, device compatibility, BLE reconnect, cancellation, timeout reconciliation, telemetry minimization, and support paths.
+3. Expand only when the current stage satisfies the signed SLO and no un-reconciled mutation remains.
+4. Stop rollout on any duplicate side effect, unexplained audit-chain failure, credential exposure, attestation bypass, privacy breach, or inability to revoke.
+5. Record every stage decision with artifact digest, cohort, start/end time, owner, independent approver, metrics, and rollback target.
+
+## Kill switch
+
+The control plane must be able to disable provider sessions, capability mutations, affected device generations, Skill packages, and release cohorts independently. The mobile runtime must fail closed when a required revocation state cannot be established. A drill is passing only when independently witnessed and bound to production-equivalent identities and signed artifacts.
+
+## Rollback
+
+Rollback must restore the previous signed artifact and compatible server contract without replaying uncertain effects or accepting stale leases/tokens/generations. Reconcile every prepared/indeterminate mutation before resuming service. Verify audit continuity, device reconnect, token revocation, data retention/deletion, and support communication.
+
+A rollback is not complete until monitoring is stable, all affected identities are accounted for, and an independent owner approves the evidence package.
