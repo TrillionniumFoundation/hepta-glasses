@@ -1,0 +1,55 @@
+name: g7-repair
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/hepta-glasses-g7-synthesis
+    paths:
+      - .github/workflows/g7-repair.yml
+      - tools/apply_g7_repair.py
+      - tools/g7-repair.trigger
+
+permissions:
+  contents: write
+
+concurrency:
+  group: g7-repair-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: codex/hepta-glasses-g7-synthesis
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Configure bounded repair identity
+        run: |
+          git config user.name 'hepta-g7-repair[bot]'
+          git config user.email 'hepta-g7-repair[bot]@users.noreply.github.com'
+      - name: Apply deterministic qualification repairs
+        run: python3 tools/apply_g7_repair.py
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - name: Normalize Dart source and verify patch shape
+        run: |
+          flutter pub get
+          dart format lib test
+          git add -A
+          git diff --cached --check
+      - name: Commit repair candidate
+        run: |
+          if git diff --cached --quiet; then
+            echo 'No repair changes.'
+            exit 0
+          fi
+          git commit -m 'fix(g7): repair exact-head qualification blockers'
+          git push origin HEAD:codex/hepta-glasses-g7-synthesis
