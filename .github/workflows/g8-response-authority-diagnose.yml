@@ -1,0 +1,84 @@
+name: g8-response-authority-diagnose
+
+on:
+  push:
+    branches:
+      - work/hepta-g8-response-authority-orchestrator-20260901
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 67a203945918081f09f25e9f965aa72d074045ee
+          persist-credentials: false
+      - name: Count remediation anchors
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('lib/ble_manager.dart').read_text()
+          anchors = {
+              'pending-generation-wildcard': "if (pending.generation == generation || pending.generation == 0) {",
+              'request-key': """    final key = BleRequestKey(
+                generation: generation,
+                side: side,
+                command: data[0],
+              );
+          """,
+              'request-authority': """    final generation = manager._connectionGeneration;
+              final pairIdentity = manager._pairIdentity;
+              final side = lr ?? Proto.lR();
+              if (expectedGeneration != null && expectedGeneration != generation) {
+          """,
+              'send-data-authority': """    if (data.isEmpty) {
+              return false;
+            }
+            final manager = get();
+            if (expectedGeneration != null &&
+          """,
+              'ack-signature': """  static void _startAckTimeout(
+              BleRequestKey key,
+              BleRequestSlot<BleReceive> pending,
+              int requestedTimeoutMs,
+              String pairIdentity,
+            ) {
+          """,
+              'ack-call': "_startAckTimeout(key, pending, timeoutMs, pairIdentity);",
+              'fail-pending-signature': """  void _failPendingRequests(
+              String reason, {
+              required bool effectMayHaveOccurred,
+              int? generation,
+              String? side,
+            }) {
+              final entries = _requestRegistry.takePendingWhere(
+                (BleRequestKey key) =>
+                    (generation == null || key.generation == generation) &&
+                    (side == null || key.side == side),
+          """,
+              'fail-pending-pair-result': "pairIdentity: _pairIdentity,\n          errorCode: reason,",
+              'disconnect-call': """      generation: _connectionGeneration,
+              side: side == 'L' || side == 'R' ? side : null,
+          """,
+              'adopt-generation-call': """      generation: retiredGeneration,
+            );
+          """,
+              'connect-call': """      generation: _connectionGeneration,
+            );
+            _pairIdentity = normalizedPair;
+          """,
+              'test-hook': """  @visibleForTesting
+            Future<void> handleNativeMethodForTest(MethodCall call) =>
+                _methodCallHandler(call);
+
+            @visibleForTesting
+            void resetAuthorityForTest() {
+          """,
+          }
+          for label, needle in anchors.items():
+              print(f'{label}: {text.count(needle)}')
+          PY
