@@ -12,7 +12,10 @@ void main() {
     expect(end, greaterThan(start));
     final method = source.substring(start, end);
 
-    expect(method, contains('var outcome = await Proto.sendHeartBeatEffect();'));
+    expect(
+      method,
+      contains('var outcome = await Proto.sendHeartBeatEffect();'),
+    );
     expect(method, contains('outcome.retrySafe &&'));
     expect(method, contains('attempt < 2'));
     expect(method, contains('if (!outcome.committed)'));
@@ -24,7 +27,9 @@ void main() {
 
   test('heartbeat outcome distinguishes uncertain and safe failure', () {
     final protocol = File('lib/services/proto.dart').readAsStringSync();
-    final start = protocol.indexOf('static Future<DeviceEffectResult> sendHeartBeatEffect');
+    final start = protocol.indexOf(
+      'static Future<DeviceEffectResult> sendHeartBeatEffect',
+    );
     final end = protocol.indexOf('static bool _isHeartbeatAck', start);
 
     expect(start, greaterThanOrEqualTo(0));
