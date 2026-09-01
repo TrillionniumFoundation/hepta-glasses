@@ -3,6 +3,8 @@ import 'package:demo_ai_even/runtime/contracts.dart';
 import 'package:demo_ai_even/runtime/mutation_authority.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/test_mutation_authority.dart';
+
 void main() {
   final now = DateTime.utc(2026, 9, 1, 12);
 
@@ -30,24 +32,20 @@ void main() {
     expect(authorization.source, 'fail_closed');
   });
 
-  test('development authority cannot be constructed without explicit opt-in',
-      () {
+  test('test authority rejects incomplete bindings', () {
     expect(
-      () => DevelopmentMutationAuthorityProvider(
-        enabled: false,
-        subject: 'developer',
+      () => TestMutationAuthorityProvider(
+        subject: '',
         deviceId: 'test-device',
         policyHash: 'test-policy',
       ),
-      throwsStateError,
+      throwsArgumentError,
     );
   });
 
-  test('development lease is exactly task action argument and device bound',
-      () async {
-    final provider = DevelopmentMutationAuthorityProvider(
-      enabled: true,
-      subject: 'developer',
+  test('test lease is exactly task action argument and device bound', () async {
+    final provider = TestMutationAuthorityProvider(
+      subject: 'test-subject',
       deviceId: 'test-device',
       policyHash: 'test-policy',
       clock: MutableClock(now),
@@ -59,6 +57,7 @@ void main() {
     expect(authorization.context.authenticated, isTrue);
     expect(authorization.context.userPresent, isTrue);
     expect(authorization.deviceId, 'test-device');
+    expect(authorization.source, 'test_only');
     expect(lease, isNotNull);
     expect(lease!.taskId, 'task-1');
     expect(lease.deviceId, 'test-device');
@@ -66,13 +65,13 @@ void main() {
     expect(lease.argumentConstraints, const <String, Object?>{'text': 'hello'});
     expect(lease.singleUse, isTrue);
     expect(lease.policyHash, 'test-policy');
+    expect(lease.approvalProof, 'test-only-authority');
   });
 
-  test('development lease never exceeds the request deadline', () async {
+  test('test lease never exceeds the request deadline', () async {
     final deadline = now.add(const Duration(seconds: 3));
-    final provider = DevelopmentMutationAuthorityProvider(
-      enabled: true,
-      subject: 'developer',
+    final provider = TestMutationAuthorityProvider(
+      subject: 'test-subject',
       deviceId: 'test-device',
       policyHash: 'test-policy',
       clock: MutableClock(now),

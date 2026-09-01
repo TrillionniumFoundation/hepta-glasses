@@ -3,6 +3,7 @@ import 'package:demo_ai_even/bootstrap/hepta_bootstrap.dart';
 import 'package:demo_ai_even/controllers/evenai_model_controller.dart';
 import 'package:demo_ai_even/runtime/audit_checkpoint_authenticator.dart';
 import 'package:demo_ai_even/runtime/model_gateway.dart';
+import 'package:demo_ai_even/runtime/mutation_authority.dart';
 import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
 import 'package:demo_ai_even/views/home_page.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +24,7 @@ Future<void> main() async {
     await HeptaBootstrap.initialize(
       supportPath,
       checkpointAuthenticator: const PlatformAuditCheckpointAuthenticator(),
+      mutationAuthority: const FailClosedMutationAuthorityProvider(),
     );
   } on Object catch (error) {
     PrivacySafeLog.event(

@@ -34,6 +34,7 @@ jobs:
           python-version: '3.12'
       - run: python3 tools/validate_repository.py
       - run: python3 tools/validate_repository_metadata.py
+      - run: python3 tools/validate_production_authority.py
       - run: python3 -m unittest discover -s services -p 'test_*.py'
       - run: python3 -m unittest discover -s adapters -p 'test_*.py'
       - run: python3 -m compileall -q services adapters tools
@@ -69,7 +70,7 @@ jobs:
 
   android-native:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -92,6 +93,23 @@ jobs:
           cache: false
       - run: flutter pub get
       - run: flutter build apk --debug
+      - name: Build Android release graph
+        run: |
+          cd android
+          ./gradlew assembleRelease
+      - name: Inspect Android release binary for test-only authority
+        run: |
+          set -euo pipefail
+          APK="$(find build android/app/build -type f -name '*release*.apk' -print -quit)"
+          test -n "$APK"
+          test -s "$APK"
+          rm -rf /tmp/hepta-android-release
+          mkdir -p /tmp/hepta-android-release
+          unzip -q "$APK" -d /tmp/hepta-android-release
+          find /tmp/hepta-android-release -type f -print0 \
+            | xargs -0 strings > /tmp/hepta-android-release.strings
+          ! grep -E '(HEPTA_ALLOW_DEVELOPMENT_AUTHORITY|DevelopmentMutationAuthorityProvider|explicit-development-build-flag|development_build_flag|dev-lease-|development-user|development-g1-pair|TestMutationAuthorityProvider|test-only-authority|test-lease-)' \
+            /tmp/hepta-android-release.strings
       - name: Run Android native unit tests
         run: |
           cd android
@@ -101,7 +119,7 @@ jobs:
 
   ios-native:
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -123,6 +141,16 @@ jobs:
           cd ios
           pod install --deployment
       - run: flutter build ios --simulator --debug
+      - run: flutter build ios --simulator --release
+      - name: Inspect iOS release binary for test-only authority
+        run: |
+          set -euo pipefail
+          APP_BINARY="$(find build/ios -type f -name App -path '*/App.framework/App' -print -quit)"
+          test -n "$APP_BINARY"
+          test -s "$APP_BINARY"
+          strings "$APP_BINARY" > /tmp/hepta-ios-release.strings
+          ! grep -E '(HEPTA_ALLOW_DEVELOPMENT_AUTHORITY|DevelopmentMutationAuthorityProvider|explicit-development-build-flag|development_build_flag|dev-lease-|development-user|development-g1-pair|TestMutationAuthorityProvider|test-only-authority|test-lease-)' \
+            /tmp/hepta-ios-release.strings
       - name: Run iOS native tests
         run: |
           DEVICE_ID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(device["udid"] for runtime in sorted(devices, reverse=True) for device in devices[runtime] if device.get("isAvailable") and device.get("name", "").startswith("iPhone")))')"
@@ -172,6 +200,7 @@ jobs:
           set -euo pipefail
           ! grep -RInE '(DASHSCOPE_API_KEY|DEEPSEEK_API_KEY|OPENAI_API_KEY|api\.deepseek\.com|dashscope\.aliyuncs\.com|api\.openai\.com)' lib android ios services adapters plugins
           ! grep -RInE '(dangerously-bypass-approvals-and-sandbox|--yolo|danger-full-access)' services plugins adapters lib
+          ! grep -RInE '(HEPTA_ALLOW_DEVELOPMENT_AUTHORITY|DevelopmentMutationAuthorityProvider|explicit-development-build-flag|development_build_flag|dev-lease-|development-user|development-g1-pair|TestMutationAuthorityProvider|test-only-authority|test-lease-)' lib
           ! grep -RInE --exclude-dir=.git -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{30,}' lib android ios services adapters plugins evidence
       - name: Scan every fetched Git ref without emitting secret material
         run: python3 tools/scan_git_history.py --output build/evidence/source-history-scan.json

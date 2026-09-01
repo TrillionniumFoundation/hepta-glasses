@@ -13,16 +13,16 @@ import 'package:demo_ai_even/utils/utils.dart';
 ///
 /// Widgets and feature services consume [HeptaRuntime.current]; they do not
 /// construct journals, policy engines, mutation authority, or native effects.
-/// The process entry point injects the platform-backed checkpoint authenticator;
-/// no key material enters Dart. Production startup remains fail closed until an
-/// authenticated mutation-authority provider is injected. The development
-/// provider is available only through an explicit compile-time flag.
+/// Production callers must inject an identity/attestation-backed authority or
+/// the fail-closed provider. Test lease factories live outside `lib/` and are
+/// unreachable from the product dependency graph.
 final class HeptaBootstrap {
   const HeptaBootstrap._();
 
   static Future<void> initialize(
     String applicationSupportPath, {
     required AuditCheckpointAuthenticator checkpointAuthenticator,
+    required MutationAuthorityProvider mutationAuthority,
   }) async {
     final supportPath = applicationSupportPath.trim();
     if (supportPath.isEmpty) {
@@ -38,18 +38,6 @@ final class HeptaBootstrap {
       checkpointAuthenticator: checkpointAuthenticator,
     );
     final bitmapManager = BmpUpdateManager();
-    const allowDevelopmentAuthority = bool.fromEnvironment(
-      'HEPTA_ALLOW_DEVELOPMENT_AUTHORITY',
-    );
-    final MutationAuthorityProvider mutationAuthority =
-        allowDevelopmentAuthority
-            ? DevelopmentMutationAuthorityProvider(
-                enabled: true,
-                subject: 'development-user',
-                deviceId: 'development-g1-pair',
-                policyHash: 'hepta-edge-policy-development-v1',
-              )
-            : const FailClosedMutationAuthorityProvider();
 
     await HeptaRuntime.initialize(
       journal: auditJournal,
