@@ -92,10 +92,12 @@ void main() {
 
     expect(left.accepted, isTrue);
     expect(right.accepted, isTrue);
-    expect(calls.map((Map<String, Object> call) => call['side']), <String>['L', 'R']);
+    expect(calls.map((Map<String, Object> call) => call['side']),
+        <String>['L', 'R']);
   });
 
-  test('same caller key is a new authority after reconnect generation', () async {
+  test('same caller key is a new authority after reconnect generation',
+      () async {
     final bytes = Uint8List.fromList(<int>[0x25, 0x01]);
     await transport.send(
       side: GlassesSide.left,

@@ -52,7 +52,8 @@ void main() {
     );
   });
 
-  test('two journal instances share process and operating-system locks', () async {
+  test('two journal instances share process and operating-system locks',
+      () async {
     final directory = await Directory.systemTemp.createTemp(
       'hepta-audit-cross-instance-',
     );
@@ -140,7 +141,8 @@ void main() {
     checkpoint['sequence'] = 0;
     checkpoint['hash'] = '';
     checkpoint['byte_length'] = 0;
-    await checkpointFile.writeAsString('${jsonEncode(checkpoint)}\n', flush: true);
+    await checkpointFile.writeAsString('${jsonEncode(checkpoint)}\n',
+        flush: true);
 
     await expectLater(journalFor(file).verify(), throwsStateError);
   });

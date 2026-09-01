@@ -101,7 +101,7 @@ class ReleaseGate:
             and sanitizer.get("passed") is True
             and sanitizer.get("lc3_cross_platform_parity") is True,
             "audit_contract": source.get("audit_contract")
-            == "file-lock-checkpoint-v2",
+            == "authenticated-checkpoint-v3",
             "provenance": self._digest(
                 self._nested(source, "provenance", "sha256"), 64
             ),

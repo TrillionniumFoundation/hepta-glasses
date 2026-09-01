@@ -203,7 +203,9 @@ class Proto {
 
   static Future<DeviceEffectResult> exitEffect() async =>
       _sendSequenceToBothLegs(
-        <Uint8List>[Uint8List.fromList(<int>[0x18])],
+        <Uint8List>[
+          Uint8List.fromList(<int>[0x18])
+        ],
         operation: 'exit-mode',
         timeoutMs: 1500,
       );
@@ -399,8 +401,7 @@ class Proto {
         response,
         externalId: '$operation:$side:$index',
         accepts: accepts ??
-            (BleReceive value) =>
-                !value.isTimeout && _isAck(value.data),
+            (BleReceive value) => !value.isTimeout && _isAck(value.data),
       );
       outcomes.add(outcome);
       if (!outcome.committed) {
@@ -465,8 +466,8 @@ class Proto {
   }
 
   static DeviceEffectResult _effectFromReceipt(ToolReceipt receipt) {
-    final code = receipt.result['error_code']?.toString() ??
-        receipt.policyReason;
+    final code =
+        receipt.result['error_code']?.toString() ?? receipt.policyReason;
     final externalId = receipt.result['external_id']?.toString();
     if (receipt.status == ToolReceiptStatus.succeeded) {
       return DeviceEffectResult.committed(

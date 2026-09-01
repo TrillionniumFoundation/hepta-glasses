@@ -73,7 +73,8 @@ void main() {
     expect(registry.reserve(newer, newSlot), isTrue);
   });
 
-  test('one-leg disconnect selection cannot release opposite-leg quarantine', () {
+  test('one-leg disconnect selection cannot release opposite-leg quarantine',
+      () {
     final registry = BleRequestRegistry<int>();
     const left = BleRequestKey(generation: 9, side: 'L', command: 0x4e);
     const right = BleRequestKey(generation: 9, side: 'R', command: 0x4e);

@@ -51,15 +51,14 @@ Future<void> _initializeRuntime(String supportPath) async {
   const allowDevelopmentAuthority = bool.fromEnvironment(
     'HEPTA_ALLOW_DEVELOPMENT_AUTHORITY',
   );
-  final MutationAuthorityProvider mutationAuthority =
-      allowDevelopmentAuthority
-          ? DevelopmentMutationAuthorityProvider(
-              enabled: true,
-              subject: 'development-user',
-              deviceId: 'development-g1-pair',
-              policyHash: 'hepta-edge-policy-development-v1',
-            )
-          : const FailClosedMutationAuthorityProvider();
+  final MutationAuthorityProvider mutationAuthority = allowDevelopmentAuthority
+      ? DevelopmentMutationAuthorityProvider(
+          enabled: true,
+          subject: 'development-user',
+          deviceId: 'development-g1-pair',
+          policyHash: 'hepta-edge-policy-development-v1',
+        )
+      : const FailClosedMutationAuthorityProvider();
 
   await HeptaRuntime.initialize(
     journal: auditJournal,

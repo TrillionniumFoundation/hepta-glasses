@@ -25,7 +25,7 @@
       "passed": false,
       "lc3_cross_platform_parity": false
     },
-    "audit_contract": "file-lock-checkpoint-v2",
+    "audit_contract": "authenticated-checkpoint-v3",
     "provenance": {
       "sha256": "REPLACE_WITH_64_HEX"
     },

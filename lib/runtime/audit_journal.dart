@@ -161,7 +161,8 @@ final class InMemoryAuditJournal
   }
 
   @override
-  Future<List<AuditEntry>> readAll() async => List<AuditEntry>.unmodifiable(_entries);
+  Future<List<AuditEntry>> readAll() async =>
+      List<AuditEntry>.unmodifiable(_entries);
 
   @override
   Future<void> verify() async => verifyEntries(_entries);
@@ -638,9 +639,8 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
     if (length == 0) {
       return null;
     }
-    final readLength = length > maximumEntryBytes + 1
-        ? maximumEntryBytes + 1
-        : length;
+    final readLength =
+        length > maximumEntryBytes + 1 ? maximumEntryBytes + 1 : length;
     final start = length - readLength;
     final handle = await file.open();
     final Uint8List bytes;
@@ -772,7 +772,8 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
     final index = checkpoint.sequence - 1;
     if (journal.entries[index].hash != checkpoint.hash ||
         journal.recordEnds[index] != checkpoint.byteLength) {
-      throw StateError('Audit checkpoint does not authenticate its journal prefix.');
+      throw StateError(
+          'Audit checkpoint does not authenticate its journal prefix.');
     }
   }
 
@@ -832,7 +833,8 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
     required FileStat stat,
   }) async {
     if (head.byteLength != stat.size) {
-      throw StateError('Audit checkpoint byte length does not match the journal.');
+      throw StateError(
+          'Audit checkpoint byte length does not match the journal.');
     }
     final unsigned = _AuthenticatedCheckpoint(
       sequence: head.sequence,
@@ -847,7 +849,8 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
       Uint8List.fromList(utf8.encode(canonicalJson(unsigned.unsignedJson()))),
     );
     if (mac.length != 32) {
-      throw StateError('Audit checkpoint authenticator returned invalid output.');
+      throw StateError(
+          'Audit checkpoint authenticator returned invalid output.');
     }
     final checkpoint = _AuthenticatedCheckpoint(
       sequence: unsigned.sequence,
@@ -901,9 +904,8 @@ bool _isSha256(String value) => RegExp(r'^[0-9a-f]{64}$').hasMatch(value);
 
 int _micros(DateTime value) => value.toUtc().microsecondsSinceEpoch;
 
-String _hex(List<int> bytes) => bytes
-    .map((int value) => value.toRadixString(16).padLeft(2, '0'))
-    .join();
+String _hex(List<int> bytes) =>
+    bytes.map((int value) => value.toRadixString(16).padLeft(2, '0')).join();
 
 Uint8List _hexDecode(String value) {
   if (value.length.isOdd || !RegExp(r'^[0-9a-f]*$').hasMatch(value)) {

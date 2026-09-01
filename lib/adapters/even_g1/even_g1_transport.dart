@@ -172,7 +172,8 @@ final class EvenG1Transport implements GlassesTransport {
     if (active != null) {
       return active;
     }
-    if (claimedDigest == null && _claimedDigests.length >= maxAuthorityEntries) {
+    if (claimedDigest == null &&
+        _claimedDigests.length >= maxAuthorityEntries) {
       return Future<TransportAck>.value(
         _preWriteRejection('idempotency_authority_capacity_exhausted'),
       );
@@ -224,7 +225,7 @@ final class EvenG1Transport implements GlassesTransport {
         response.generation == 0 || response.generation == identity.generation;
     final responsePairMatches =
         response.pairIdentity == unselectedBlePairIdentity ||
-        response.pairIdentity == identity.pairIdentity;
+            response.pairIdentity == identity.pairIdentity;
     if (!responseGenerationMatches || !responsePairMatches) {
       final uncertain = TransportAck(
         accepted: false,

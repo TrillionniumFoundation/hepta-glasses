@@ -6,6 +6,13 @@ OUTPUT="${1:-$ROOT/build/evidence/source-native-sanitizer.json}"
 BUILD="$(mktemp -d)"
 trap 'rm -rf "$BUILD"' EXIT
 CC_BIN="${CC:-clang}"
+ASAN_LEAKS=1
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  # LeakSanitizer is unavailable on the hosted macOS arm64 runtime. Address
+  # and undefined-behaviour sanitizers remain enabled; Linux retains leak
+  # detection as the authoritative leak-check lane.
+  ASAN_LEAKS=0
+fi
 
 COMMON_FLAGS=(
   -std=c11
@@ -24,12 +31,15 @@ compile_lc3() {
   local include_dir="$2"
   local source_dir="$3"
   local binary="$BUILD/$label"
-  mapfile -t sources < <(find "$source_dir" -maxdepth 1 -type f -name '*.c' | sort)
+  local sources=()
+  while IFS= read -r source; do
+    sources+=("$source")
+  done < <(find "$source_dir" -maxdepth 1 -type f -name '*.c' | sort)
   "$CC_BIN" "${COMMON_FLAGS[@]}" \
     -I"$include_dir" -I"$source_dir" \
     "$ROOT/tools/native/lc3_sanitizer_harness.c" \
     "${sources[@]}" -lm -o "$binary"
-  ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+  ASAN_OPTIONS="detect_leaks=$ASAN_LEAKS:halt_on_error=1" \
     UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
     "$binary"
 }
@@ -43,7 +53,10 @@ ios_digest="$(compile_lc3 \
   "$ROOT/ios/Runner/lc3" \
   "$ROOT/ios/Runner/lc3")"
 
-mapfile -t rnnoise_sources < <(
+rnnoise_sources=()
+while IFS= read -r source; do
+  rnnoise_sources+=("$source")
+done < <(
   find "$ROOT/android/app/src/main/cpp/rnnoise" \
     -maxdepth 1 -type f -name '*.c' ! -name 'rnn_reader.c' | sort
 )
@@ -52,7 +65,7 @@ mapfile -t rnnoise_sources < <(
   -I"$ROOT/android/app/src/main/cpp/include" \
   "$ROOT/tools/native/rnnoise_sanitizer_harness.c" \
   "${rnnoise_sources[@]}" -lm -o "$BUILD/rnnoise"
-ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+ASAN_OPTIONS="detect_leaks=$ASAN_LEAKS:halt_on_error=1" \
   UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
   "$BUILD/rnnoise" >/dev/null
 

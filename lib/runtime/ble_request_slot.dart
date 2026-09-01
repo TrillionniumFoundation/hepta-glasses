@@ -93,9 +93,8 @@ final class BleRequestRegistry<T> {
   }) {
     final selected = _pending.entries
         .where((MapEntry<BleRequestKey, BleRequestSlot<T>> entry) {
-          return predicate(entry.key);
-        })
-        .toList(growable: false);
+      return predicate(entry.key);
+    }).toList(growable: false);
     for (final entry in selected) {
       _pending.remove(entry.key);
       if (quarantine) {
@@ -124,8 +123,7 @@ final class BleRequestRegistry<T> {
   void clearQuarantineForGenerationSide(int generation, String side) {
     assert(side == 'L' || side == 'R');
     clearQuarantineWhere(
-      (BleRequestKey key) =>
-          key.generation == generation && key.side == side,
+      (BleRequestKey key) => key.generation == generation && key.side == side,
     );
   }
 

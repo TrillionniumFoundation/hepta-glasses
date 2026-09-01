@@ -30,12 +30,11 @@ final class BleConnectionSnapshot {
 
   bool get bothConnected => leftConnected && rightConnected;
 
-  bool isSideConnected(String side) =>
-      side == 'L'
-          ? leftConnected
-          : side == 'R'
-              ? rightConnected
-              : false;
+  bool isSideConnected(String side) => side == 'L'
+      ? leftConnected
+      : side == 'R'
+          ? rightConnected
+          : false;
 
   bool get hasAuthoritativeIdentity =>
       generation > 0 && pairIdentity != unselectedBlePairIdentity;

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:demo_ai_even/app.dart';
 import 'package:demo_ai_even/runtime/ble_request_slot.dart';
@@ -278,14 +277,22 @@ class BleManager implements BleConnectionSource {
     }
     _heartbeatInFlight = true;
     try {
-      var success = await Proto.sendHeartBeat();
-      for (var attempt = 0; !success && attempt < 2 && isConnected; attempt++) {
-        success = await Proto.sendHeartBeat();
+      var outcome = await Proto.sendHeartBeatEffect();
+      for (var attempt = 0;
+          outcome.retrySafe && attempt < 2 && isConnected;
+          attempt++) {
+        outcome = await Proto.sendHeartBeatEffect();
       }
-      if (!success) {
+      if (!outcome.committed) {
         PrivacySafeLog.event(
-          'ble_heartbeat_failed',
-          fields: <String, Object?>{'generation': _connectionGeneration},
+          outcome.effectMayHaveOccurred
+              ? 'ble_heartbeat_reconciliation_required'
+              : 'ble_heartbeat_failed',
+          fields: <String, Object?>{
+            'generation': _connectionGeneration,
+            'disposition': outcome.disposition.name,
+            'code': outcome.code,
+          },
         );
       }
     } finally {
@@ -673,8 +680,7 @@ class BleManager implements BleConnectionSource {
     final parameters = <String, dynamic>{
       'data': data,
       'expectedGeneration': expectedGeneration ?? manager._connectionGeneration,
-      'expectedPairIdentity':
-          expectedPairIdentity ?? manager._pairIdentity,
+      'expectedPairIdentity': expectedPairIdentity ?? manager._pairIdentity,
       ...?other,
     };
     if (lr != null) {

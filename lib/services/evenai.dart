@@ -597,18 +597,33 @@ class EvenAI {
       if (!_isCurrent(session)) {
         return false;
       }
-      final (_, isStartSuccess) = await Proto.micOn(lr: 'R');
+      final (_, outcome) = await Proto.micOnResult(
+        lr: 'R',
+        attempt: attempt,
+      );
       if (!_isCurrent(session)) {
         return false;
       }
-      if (isStartSuccess) {
+      if (outcome.committed) {
         PrivacySafeLog.event(
           'microphone_opened',
           fields: <String, Object?>{'attempt': attempt},
         );
         return true;
       }
-      await Future<void>.delayed(const Duration(seconds: 1));
+      if (!outcome.retrySafe) {
+        PrivacySafeLog.event(
+          'microphone_open_reconciliation_required',
+          fields: <String, Object?>{
+            'attempt': attempt,
+            'code': outcome.code,
+          },
+        );
+        return false;
+      }
+      if (attempt < 3) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+      }
     }
     PrivacySafeLog.event('microphone_open_failed');
     return false;

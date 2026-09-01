@@ -17,7 +17,8 @@ void main() {
         deadline: deadline ?? now.add(const Duration(minutes: 1)),
       );
 
-  test('default authority is unauthenticated and cannot mint a lease', () async {
+  test('default authority is unauthenticated and cannot mint a lease',
+      () async {
     const provider = FailClosedMutationAuthorityProvider();
 
     final authorization = await provider.authorize(request());

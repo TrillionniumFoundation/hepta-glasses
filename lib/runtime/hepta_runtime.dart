@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'assistant_session.dart';
+import 'audit_checkpoint_authenticator.dart';
 import 'audit_journal.dart';
 import 'canonical_json.dart';
 import 'clock.dart';
@@ -52,7 +53,8 @@ typedef NotificationEffect = Future<DeviceEffectResult> Function(
   Map<String, Object?> notification,
   int notificationId,
 );
-typedef BitmapAssetEffect = Future<DeviceEffectResult> Function(String assetPath);
+typedef BitmapAssetEffect = Future<DeviceEffectResult> Function(
+    String assetPath);
 
 final class HeptaRuntime {
   HeptaRuntime._({
@@ -110,6 +112,7 @@ final class HeptaRuntime {
           File(
             '${Directory.systemTemp.path}/hepta-glasses-runtime/audit.jsonl',
           ),
+          checkpointAuthenticator: const PlatformAuditCheckpointAuthenticator(),
           clock: clock,
         );
     if (effectiveJournal is JsonlAuditJournal) {
@@ -167,8 +170,7 @@ final class HeptaRuntime {
           );
         case DeviceEffectDisposition.indeterminate:
           throw IndeterminateToolEffect(
-            outcome.externalId ??
-                '${request.action}:${request.idempotencyKey}',
+            outcome.externalId ?? '${request.action}:${request.idempotencyKey}',
             code: outcome.code,
             details: outcome.details,
           );
@@ -528,8 +530,7 @@ final class HeptaRuntime {
         deadline: expiresAt,
       ),
     );
-    final idempotencyKey =
-        '$action:${authorization.deviceId}:${scope.scopeId}:'
+    final idempotencyKey = '$action:${authorization.deviceId}:${scope.scopeId}:'
         '${scope.generation}:$digest';
     final request = ToolRequest(
       requestId: idempotencyKey,

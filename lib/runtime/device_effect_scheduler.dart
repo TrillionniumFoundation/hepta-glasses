@@ -38,8 +38,7 @@ final class DeviceEffectCircuitOpenException implements Exception {
   final String indeterminateOperation;
 
   @override
-  String toString() =>
-      'DeviceEffectCircuitOpenException('
+  String toString() => 'DeviceEffectCircuitOpenException('
       'indeterminateOperation: $indeterminateOperation)';
 }
 

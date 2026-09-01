@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_REVISION = "2026-09-01-g8"
-AUDIT_CONTRACT = "file-lock-checkpoint-v2"
+AUDIT_CONTRACT = "authenticated-checkpoint-v3"
 
 REQUIRED = {
     "README.md",
@@ -49,6 +49,7 @@ REQUIRED = {
     "contracts/history-scan-acknowledgements-v1.json",
     "lib/runtime/contracts.dart",
     "lib/runtime/audit_journal.dart",
+    "lib/runtime/audit_checkpoint_authenticator.dart",
     "lib/runtime/task_engine.dart",
     "lib/runtime/policy_engine.dart",
     "lib/runtime/tool_gateway.dart",
@@ -84,12 +85,15 @@ REQUIRED = {
     "evidence/templates/product-release-bundle.template.json",
     ".github/workflows/ci.yml",
     "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt",
+    "android/app/src/main/kotlin/com/example/demo_ai_even/security/AuditCheckpointSigner.kt",
     "android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt",
     "ios/Runner/BluetoothManager.swift",
+    "ios/Runner/AuditCheckpointSigner.swift",
     "ios/RunnerTests/RunnerTests.swift",
     "test/runtime/ble_request_slot_test.dart",
     "test/runtime/ble_manager_authority_test.dart",
     "test/runtime/even_g1_transport_authority_test.dart",
+    "test/runtime/audit_journal_v3_test.dart",
 }
 
 FORBIDDEN_PATTERNS = {
@@ -213,9 +217,9 @@ def validate_gap_ledger() -> None:
     source_open = [gap["id"] for gap in gaps if gap["status"] == "OPEN"]
     if source_open:
         fail(f"actionable source gaps remain open: {source_open}")
-    for gap_id in ("HG-0055", "HG-0056", "HG-0057"):
+    for gap_id in ("HG-0055", "HG-0056", "HG-0057", "HG-0058", "HG-0059", "HG-0060", "HG-0061", "HG-0062", "HG-0063", "HG-0064"):
         if by_id.get(gap_id, {}).get("status") != "CLOSED_SOURCE":
-            fail(f"{gap_id} BLE authority remediation is not source-closed")
+            fail(f"{gap_id} terminal G8 remediation is not source-closed")
 
 
 def iter_text_files(base: Path):
@@ -419,6 +423,90 @@ def validate_ble_authority() -> None:
         fail("BLE contract permits opposite-leg quarantine release")
 
 
+
+
+def validate_heartbeat_retry_safety() -> None:
+    source = (ROOT / "lib/ble_manager.dart").read_text(encoding="utf-8")
+    required = (
+        "Proto.sendHeartBeatEffect()",
+        "outcome.retrySafe",
+        "outcome.effectMayHaveOccurred",
+        "ble_heartbeat_reconciliation_required",
+    )
+    if any(fragment not in source for fragment in required):
+        fail("heartbeat retry-safety contract drifted")
+    forbidden = (
+        "var success = await Proto.sendHeartBeat()",
+        "success = await Proto.sendHeartBeat()",
+    )
+    if any(fragment in source for fragment in forbidden):
+        fail("heartbeat still blindly retries a Boolean completion result")
+
+
+def validate_checkpoint_authority() -> None:
+    main = (ROOT / "lib/main.dart").read_text(encoding="utf-8")
+    runtime = (ROOT / "lib/runtime/hepta_runtime.dart").read_text(
+        encoding="utf-8"
+    )
+    authenticator = (
+        ROOT / "lib/runtime/audit_checkpoint_authenticator.dart"
+    ).read_text(encoding="utf-8")
+    android_channel = (
+        ROOT
+        / "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleChannelHelper.kt"
+    ).read_text(encoding="utf-8")
+    android_signer = (
+        ROOT
+        / "android/app/src/main/kotlin/com/example/demo_ai_even/security/AuditCheckpointSigner.kt"
+    ).read_text(encoding="utf-8")
+    ios_delegate = (ROOT / "ios/Runner/AppDelegate.swift").read_text(
+        encoding="utf-8"
+    )
+    ios_signer = (ROOT / "ios/Runner/AuditCheckpointSigner.swift").read_text(
+        encoding="utf-8"
+    )
+
+    injection = (
+        "checkpointAuthenticator: "
+        "const PlatformAuditCheckpointAuthenticator()"
+    )
+    if injection not in main or injection not in runtime:
+        fail("production and fallback audit journals are not securely authenticated")
+    dart_fragments = (
+        "PlatformAuditCheckpointAuthenticator",
+        "auditCheckpointMac",
+        "result.length != 32",
+        "constantTimeBytesEqual",
+    )
+    if any(fragment not in authenticator for fragment in dart_fragments):
+        fail("Dart audit checkpoint authentication contract drifted")
+    android_fragments = (
+        '"auditCheckpointMac"',
+        "AuditCheckpointSigner.authenticate",
+    )
+    if any(fragment not in android_channel for fragment in android_fragments):
+        fail("Android audit checkpoint method-channel authority drifted")
+    if "AndroidKeyStore" not in android_signer or "HmacSHA256" not in android_signer:
+        fail("Android audit checkpoint signer is not Keystore-backed HMAC-SHA256")
+    ios_fragments = (
+        'case "auditCheckpointMac"',
+        "AuditCheckpointSigner.shared.authenticate",
+    )
+    if any(fragment not in ios_delegate for fragment in ios_fragments):
+        fail("iOS audit checkpoint method-channel authority drifted")
+    if (
+        "HMAC<SHA256>" not in ios_signer
+        or "kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly" not in ios_signer
+    ):
+        fail("iOS audit checkpoint signer is not device-bound Keychain HMAC-SHA256")
+    xcode_project = (
+        ROOT / "ios/Runner.xcodeproj/project.pbxproj"
+    ).read_text(encoding="utf-8")
+    if "AuditCheckpointSigner.swift" not in xcode_project:
+        fail("iOS audit checkpoint signer is absent from the Xcode project")
+    if "AuditCheckpointSigner.swift in Sources" not in xcode_project:
+        fail("iOS audit checkpoint signer is absent from the Runner Sources phase")
+
 def validate_single_ci_authority() -> None:
     workflows = sorted(
         str(path.relative_to(ROOT))
@@ -429,6 +517,17 @@ def validate_single_ci_authority() -> None:
     sanitizer = ROOT / "tools/run_native_sanitizers.sh"
     if sanitizer.stat().st_mode & 0o111 == 0:
         fail("native sanitizer runner is not executable")
+    sanitizer_source = sanitizer.read_text(encoding="utf-8")
+    if "mapfile" in sanitizer_source:
+        fail("native sanitizer runner requires Bash 4 and is not macOS-portable")
+    if sanitizer_source.count("while IFS= read -r source") < 2:
+        fail("native sanitizer runner lacks portable source enumeration")
+    if 'if [[ "$(uname -s)" == "Darwin" ]]' not in sanitizer_source:
+        fail("native sanitizer runner lacks a macOS LeakSanitizer guard")
+    if sanitizer_source.count(
+        'ASAN_OPTIONS="detect_leaks=$ASAN_LEAKS:halt_on_error=1"'
+    ) != 2:
+        fail("native sanitizer runner does not bind platform leak policy")
 
 
 def validate_history_gate() -> None:
@@ -555,6 +654,8 @@ def main() -> int:
         validate_boundaries,
         validate_canonical_truth,
         validate_ble_authority,
+        validate_heartbeat_retry_safety,
+        validate_checkpoint_authority,
         validate_single_ci_authority,
         validate_history_gate,
         validate_codex_policy,

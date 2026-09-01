@@ -144,7 +144,7 @@ def main() -> int:
     ecosystems = list(package_ecosystems(sbom))
     bundle = {
         "source": {
-            "audit_contract": "file-lock-checkpoint-v2",
+            "audit_contract": "authenticated-checkpoint-v3",
             "ci_checks": checks,
             "commit": commit,
             "contracts_version": contracts_version,
@@ -175,7 +175,7 @@ def main() -> int:
     }
     write_json(output / "source-release-bundle.json", bundle)
     summary = {
-        "audit_contract": "file-lock-checkpoint-v2",
+        "audit_contract": "authenticated-checkpoint-v3",
         "commit": commit,
         "contracts_version": contracts_version,
         "file_count": len(sbom["files"]),

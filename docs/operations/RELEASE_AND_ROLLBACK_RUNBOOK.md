@@ -22,7 +22,7 @@ The final job emits `hepta-source-evidence-<exact-head-sha>` containing:
 - `source-evidence-summary.json`
 - `source-gate-result.json`
 
-The artifact must bind the exact commit and tree, report zero unacknowledged history findings and zero unscanned blobs, use audit contract `file-lock-checkpoint-v2`, and pass content re-verification. A parent run, local export, skipped job, manually written SHA, or artifact from another branch is not E4 evidence.
+The artifact must bind the exact commit and tree, report zero unacknowledged history findings and zero unscanned blobs, use audit contract `authenticated-checkpoint-v3`, and pass content re-verification. A parent run, local export, skipped job, manually written SHA, or artifact from another branch is not E4 evidence.
 
 ## 2. Product release gate
 

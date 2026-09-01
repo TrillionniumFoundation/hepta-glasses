@@ -9,9 +9,9 @@ Canonical revision: `2026-09-01-g8`
 ### Durable audit and evidence integrity
 
 - restored full hash-chain authentication before every durable audit append;
-- retained process-wide per-path serialization, OS file locking, bounded entry/file sizes, and atomic v2 checkpoints;
+- retained process-wide per-path serialization, OS file locking, bounded entry/file sizes, and atomic platform-authenticated checkpoints;
 - added a negative regression proving equal-length middle-record tampering blocks append without changing journal bytes or checkpoint;
-- aligned runtime, source evidence, product template, release gate, tests, and validator on `file-lock-checkpoint-v2`;
+- aligned runtime, source evidence, product template, release gate, tests, and validator on `authenticated-checkpoint-v3`;
 - retained exact synthetic-fixture history acknowledgements while leaving provider-side credential revocation as an external gate.
 
 ### BLE effect authority

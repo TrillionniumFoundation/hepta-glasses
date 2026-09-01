@@ -25,6 +25,7 @@
 		04D9653B2CCFB80800F794C2 /* GattProtocal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D965392CCFB80800F794C2 /* GattProtocal.swift */; };
 		04D9653C2CCFB80800F794C2 /* BluetoothManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D9653A2CCFB80800F794C2 /* BluetoothManager.swift */; };
 		04D9653E2CCFB81400F794C2 /* SpeechStreamRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D9653D2CCFB81400F794C2 /* SpeechStreamRecognizer.swift */; };
+		A8D17C402F00000100A11D17 /* AuditCheckpointSigner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8D17C3F2F00000100A11D17 /* AuditCheckpointSigner.swift */; };
 		04D965622CCFB8A600F794C2 /* ServiceIdentifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D965612CCFB8A600F794C2 /* ServiceIdentifiers.swift */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
@@ -100,6 +101,7 @@
 		04D965392CCFB80800F794C2 /* GattProtocal.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GattProtocal.swift; sourceTree = "<group>"; };
 		04D9653A2CCFB80800F794C2 /* BluetoothManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BluetoothManager.swift; sourceTree = "<group>"; };
 		04D9653D2CCFB81400F794C2 /* SpeechStreamRecognizer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SpeechStreamRecognizer.swift; sourceTree = "<group>"; };
+		A8D17C3F2F00000100A11D17 /* AuditCheckpointSigner.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AuditCheckpointSigner.swift; sourceTree = "<group>"; };
 		04D965612CCFB8A600F794C2 /* ServiceIdentifiers.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ServiceIdentifiers.swift; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
@@ -262,6 +264,7 @@
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				04D9653A2CCFB80800F794C2 /* BluetoothManager.swift */,
 				04D9653D2CCFB81400F794C2 /* SpeechStreamRecognizer.swift */,
+				A8D17C3F2F00000100A11D17 /* AuditCheckpointSigner.swift */,
 				04D965392CCFB80800F794C2 /* GattProtocal.swift */,
 				04D965612CCFB8A600F794C2 /* ServiceIdentifiers.swift */,
 				04D965362CCFB7F900F794C2 /* PcmConverter.h */,
@@ -483,6 +486,7 @@
 				0404456A2CD0891F002753AD /* tables.c in Sources */,
 				04D965382CCFB7F900F794C2 /* PcmConverter.m in Sources */,
 				04D9653E2CCFB81400F794C2 /* SpeechStreamRecognizer.swift in Sources */,
+				A8D17C402F00000100A11D17 /* AuditCheckpointSigner.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				04D9653C2CCFB80800F794C2 /* BluetoothManager.swift in Sources */,
 				0404455E2CD0891F002753AD /* attdet.c in Sources */,
