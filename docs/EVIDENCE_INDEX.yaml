@@ -1,6 +1,6 @@
 {
-  "schema_version": 4,
-  "plan_revision": "2026-08-31-g7",
+  "schema_version": 5,
+  "plan_revision": "2026-09-01-g8",
   "source_records": [
     {
       "id": "EV-SRC-FOUNDATION-V1",
@@ -31,7 +31,7 @@
         "E3",
         "E4"
       ],
-      "claim": "Historical G4 exact-head source evidence only; it does not attest the current G7/G8 tree"
+      "claim": "Historical G4 exact-head source evidence only; it does not attest the current G8 tree"
     },
     {
       "id": "EV-SRC-G5-AUDIT-V1",
@@ -53,10 +53,10 @@
         "E2",
         "E3"
       ],
-      "claim": "Converged G7 source candidate; E4 exists only after an unchanged exact-head CI artifact passes"
+      "claim": "Historical converged G7 source candidate; current E4 must be regenerated for G8"
     },
     {
-      "id": "EV-SRC-G8-REMEDIATION-V1",
+      "id": "EV-SRC-G8-REMEDIATION-V2",
       "path": "docs/development/G8_SOURCE_REMEDIATION.md",
       "levels": [
         "E0",
@@ -64,7 +64,7 @@
         "E2",
         "E3"
       ],
-      "claim": "Full-chain audit append integrity, v2 contract convergence, current BLE documentation, machine-readable source boundaries, and opt-in process-memory assistant history; E4 still requires exact-head CI"
+      "claim": "Audit integrity, privacy consent, immutable iOS BLE callback ownership, pair/generation/side-scoped idempotency, per-leg uncertain-write quarantine, hostile regressions, canonical documentation convergence, and probe cleanup; E4 still requires exact-head CI"
     }
   ],
   "ci_records": {
@@ -79,7 +79,7 @@
       "source-evidence-summary.json",
       "source-gate-result.json"
     ],
-    "rule": "The successful CI record must name the unchanged exact PR-head commit and tree. A source export, parent run, local result, or PR description is not E4 evidence."
+    "rule": "The successful CI record must name the unchanged exact PR-head commit and tree. A source export, parent run, local result, cancelled run, or PR description is not E4 evidence."
   },
   "external_slots": {
     "governance": "evidence/governance/<date>.json",
@@ -98,6 +98,8 @@
     "Production and release claims require the product release gate to pass.",
     "Self-review is not independent review.",
     "A source CI pass does not close an external gate.",
-    "No skipped history blob may be represented as a clean history scan."
+    "No skipped history blob may be represented as a clean history scan.",
+    "A caller idempotency string without pair, generation, side, and payload binding is not device authority.",
+    "One-leg disconnect evidence cannot be used to release or close the surviving leg's uncertain write."
   ]
 }
