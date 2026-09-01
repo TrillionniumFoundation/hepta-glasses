@@ -20,7 +20,7 @@ Deterministic lease tests use `TestMutationAuthorityProvider` from `test/support
 
 `tools/validate_production_authority.py` independently enforces the same product graph, entry-point and test-separation rules. The repository-contracts lane executes it on the exact head.
 
-The Android lane builds the debug application, runs `assembleRelease`, expands the release APK and rejects every forbidden authority token from the resulting files. The iOS lane builds both debug and release simulator applications and rejects the same tokens from the release `App.framework` binary. Both lanes remain read-only and exact-head bound.
+The Android lane builds the debug application, runs `assembleRelease`, expands the release APK and rejects every forbidden authority token from the resulting files. The iOS lane builds a debug simulator application plus an unsigned device-target release/AOT application and rejects the same tokens from the release `App.framework` binary. Both lanes remain read-only and exact-head bound.
 
 ## Single exact-head CI authority
 
