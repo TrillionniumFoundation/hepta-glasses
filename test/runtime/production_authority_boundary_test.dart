@@ -23,9 +23,8 @@ void main() {
         .where((File file) => file.path.endsWith('.dart'))
         .toList(growable: false)
       ..sort((File left, File right) => left.path.compareTo(right.path));
-    final productSource = productFiles
-        .map((File file) => file.readAsStringSync())
-        .join('\n');
+    final productSource =
+        productFiles.map((File file) => file.readAsStringSync()).join('\n');
 
     for (final token in forbiddenProductTokens) {
       expect(
