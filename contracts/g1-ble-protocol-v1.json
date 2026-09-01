@@ -5,6 +5,41 @@
     "recording_complete": 24,
     "start": 23
   },
+  "authority": {
+    "callback_owner": [
+      "peripheral_identity",
+      "connection_generation",
+      "side",
+      "attempt_nonce"
+    ],
+    "idempotency_identity": [
+      "pair_identity",
+      "connection_generation",
+      "side",
+      "caller_idempotency_key",
+      "payload_sha256"
+    ],
+    "native_prewrite_assertion": [
+      "expected_pair_identity_equals_current_pair",
+      "expected_generation_equals_current_generation",
+      "selected_side_is_ready"
+    ],
+    "same_peripheral_reconnect_rule": "consume_retired_attempt_terminal_callback_before_new_attempt",
+    "uncertain_write_quarantine": {
+      "identity": [
+        "connection_generation",
+        "side",
+        "command"
+      ],
+      "opposite_leg_disconnect_releases": false,
+      "release_events": [
+        "matching_late_response_observed",
+        "authoritative_reconciliation",
+        "exact_generation_retired",
+        "terminal_process_disposal"
+      ]
+    }
+  },
   "commands": {
     "bitmap_crc": "0x16",
     "bitmap_finish": "0x20",
@@ -75,5 +110,5 @@
     "topology": "independent_left_and_right_ble_peripherals"
   },
   "uncertainty_rule": "missing_ack_after_native_acceptance_is_indeterminate_not_failure",
-  "version": 1
+  "version": 2
 }
