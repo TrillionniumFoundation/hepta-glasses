@@ -5,7 +5,9 @@ import 'audit_journal.dart';
 import 'canonical_json.dart';
 import 'clock.dart';
 import 'contracts.dart';
+import 'device_effect_result.dart';
 import 'device_effect_scheduler.dart';
+import 'mutation_authority.dart';
 import 'policy_engine.dart';
 import 'tool_gateway.dart';
 
@@ -38,23 +40,29 @@ final class DisplayTextCommand {
   final int maxPageNumber;
 }
 
-typedef DisplayTextEffect = Future<bool> Function(DisplayTextCommand command);
-typedef MicrophoneEffect = Future<bool> Function(String side);
-typedef ExitDeviceModeEffect = Future<bool> Function();
-typedef NotificationWhitelistEffect = Future<bool> Function(String document);
-typedef NotificationEffect = Future<bool> Function(
+typedef DisplayTextEffect = Future<DeviceEffectResult> Function(
+  DisplayTextCommand command,
+);
+typedef MicrophoneEffect = Future<DeviceEffectResult> Function(String side);
+typedef ExitDeviceModeEffect = Future<DeviceEffectResult> Function();
+typedef NotificationWhitelistEffect = Future<DeviceEffectResult> Function(
+  String document,
+);
+typedef NotificationEffect = Future<DeviceEffectResult> Function(
   Map<String, Object?> notification,
   int notificationId,
 );
-typedef BitmapAssetEffect = Future<bool> Function(String assetPath);
+typedef BitmapAssetEffect = Future<DeviceEffectResult> Function(String assetPath);
 
 final class HeptaRuntime {
   HeptaRuntime._({
     required ToolGateway gateway,
     required Clock clock,
+    required MutationAuthorityProvider mutationAuthority,
     required this.sessions,
   })  : _gateway = gateway,
-        _clock = clock;
+        _clock = clock,
+        _mutationAuthority = mutationAuthority;
 
   static const String _displayTextAction = 'device.display_text';
   static const String _microphoneOnAction = 'device.microphone_on';
@@ -63,14 +71,12 @@ final class HeptaRuntime {
       'device.notification_whitelist';
   static const String _notificationAction = 'device.send_notification';
   static const String _bitmapAction = 'device.display_bitmap_asset';
-  static const String _subject = 'local-user';
-  static const String _deviceId = 'local-g1-pair';
-  static const String _policyHash = 'hepta-edge-policy-v3';
 
   static HeptaRuntime? _instance;
 
   final ToolGateway _gateway;
   final Clock _clock;
+  final MutationAuthorityProvider _mutationAuthority;
   final AssistantSessionCoordinator sessions;
   int _scopeGeneration = 0;
 
@@ -91,7 +97,9 @@ final class HeptaRuntime {
     required NotificationWhitelistEffect notificationWhitelistEffect,
     required NotificationEffect notificationEffect,
     required BitmapAssetEffect bitmapAssetEffect,
+    required MutationAuthorityProvider mutationAuthority,
     AuditJournal? journal,
+    DeviceEffectScheduler? effectScheduler,
     Clock clock = const SystemClock(),
   }) async {
     if (_instance != null) {
@@ -108,7 +116,7 @@ final class HeptaRuntime {
       await effectiveJournal.initialize();
     }
 
-    final scheduler = DeviceEffectScheduler();
+    final scheduler = effectScheduler ?? DeviceEffectScheduler();
     final policy = PolicyEngine(clock: clock);
     final gateway = ToolGateway(
       journal: effectiveJournal,
@@ -116,21 +124,66 @@ final class HeptaRuntime {
       clock: clock,
     );
 
-    Future<Map<String, Object?>> applyBooleanEffect(
+    Future<Map<String, Object?>> applyDeviceEffect(
       ToolRequest request,
-      Future<bool> Function() effect,
+      Future<DeviceEffectResult> Function() effect,
     ) async {
-      final success = await scheduler.schedule(request.action, effect);
-      if (!success) {
+      final remaining = request.deadline.difference(clock.now());
+      if (remaining <= Duration.zero) {
         throw IndeterminateToolEffect(
           '${request.action}:${request.idempotencyKey}',
+          code: 'effect_deadline_elapsed_before_schedule',
         );
       }
-      return <String, Object?>{
-        'applied': true,
-        'argument_digest': request.argumentDigest,
-      };
+      final DeviceEffectResult outcome;
+      try {
+        outcome = await scheduler.schedule(
+          request.action,
+          effect,
+          executionTimeout: remaining,
+        );
+      } on DeviceEffectTimeoutException catch (error) {
+        throw IndeterminateToolEffect(
+          '${request.action}:${request.idempotencyKey}',
+          code: 'effect_scheduler_timeout',
+          details: <String, Object?>{
+            'operation': error.operation,
+            'timeout_ms': error.timeout.inMilliseconds,
+          },
+        );
+      }
+      switch (outcome.disposition) {
+        case DeviceEffectDisposition.committed:
+          return <String, Object?>{
+            'applied': true,
+            'argument_digest': request.argumentDigest,
+            ...outcome.toResultJson(),
+          };
+        case DeviceEffectDisposition.rejectedBeforeWrite:
+          throw RejectedToolEffect(
+            outcome.code,
+            externalId: outcome.externalId,
+            details: outcome.details,
+          );
+        case DeviceEffectDisposition.indeterminate:
+          throw IndeterminateToolEffect(
+            outcome.externalId ??
+                '${request.action}:${request.idempotencyKey}',
+            code: outcome.code,
+            details: outcome.details,
+          );
+      }
     }
+
+    Map<String, Object?> unavailableReconciliation(
+      String externalId,
+      String reason,
+    ) =>
+        <String, Object?>{
+          'authoritative': false,
+          'external_id': externalId,
+          'reason': reason,
+        };
 
     gateway.register(
       const ToolSpec(
@@ -152,7 +205,7 @@ final class HeptaRuntime {
             maxPage is! int) {
           throw const FormatException('display_text_arguments_invalid');
         }
-        return applyBooleanEffect(
+        return applyDeviceEffect(
           request,
           () => displayTextEffect(
             DisplayTextCommand(
@@ -166,18 +219,16 @@ final class HeptaRuntime {
         );
       },
       reconciler: (ToolRequest request, String externalId) async =>
-          <String, Object?>{
-        'authoritative': false,
-        'external_id': externalId,
-        'reason': 'firmware_display_readback_unavailable',
-      },
+          unavailableReconciliation(
+        externalId,
+        'firmware_display_readback_unavailable',
+      ),
       recoveryReconciler:
           (ToolAuditEnvelope request, String externalId) async =>
-              <String, Object?>{
-        'authoritative': false,
-        'external_id': externalId,
-        'reason': 'firmware_display_readback_unavailable',
-      },
+              unavailableReconciliation(
+        externalId,
+        'firmware_display_readback_unavailable',
+      ),
     );
 
     gateway.register(
@@ -188,11 +239,27 @@ final class HeptaRuntime {
       ),
       (ToolRequest request) async {
         final side = request.arguments['side'];
-        if (side is! String || !<String>{'L', 'R'}.contains(side)) {
-          throw const FormatException('microphone_side_invalid');
+        final attempt = request.arguments['attempt'];
+        if (side is! String ||
+            !<String>{'L', 'R'}.contains(side) ||
+            attempt is! int ||
+            attempt < 1 ||
+            attempt > 3) {
+          throw const FormatException('microphone_arguments_invalid');
         }
-        return applyBooleanEffect(request, () => microphoneEffect(side));
+        return applyDeviceEffect(request, () => microphoneEffect(side));
       },
+      reconciler: (ToolRequest request, String externalId) async =>
+          unavailableReconciliation(
+        externalId,
+        'microphone_state_readback_unavailable',
+      ),
+      recoveryReconciler:
+          (ToolAuditEnvelope request, String externalId) async =>
+              unavailableReconciliation(
+        externalId,
+        'microphone_state_readback_unavailable',
+      ),
     );
 
     gateway.register(
@@ -201,8 +268,18 @@ final class HeptaRuntime {
         riskTier: RiskTier.r1,
         mutating: true,
       ),
-      (ToolRequest request) =>
-          applyBooleanEffect(request, exitDeviceModeEffect),
+      (ToolRequest request) => applyDeviceEffect(request, exitDeviceModeEffect),
+      reconciler: (ToolRequest request, String externalId) async =>
+          unavailableReconciliation(
+        externalId,
+        'device_mode_readback_unavailable',
+      ),
+      recoveryReconciler:
+          (ToolAuditEnvelope request, String externalId) async =>
+              unavailableReconciliation(
+        externalId,
+        'device_mode_readback_unavailable',
+      ),
     );
 
     gateway.register(
@@ -216,11 +293,22 @@ final class HeptaRuntime {
         if (document is! String || document.length > 32768) {
           throw const FormatException('notification_whitelist_invalid');
         }
-        return applyBooleanEffect(
+        return applyDeviceEffect(
           request,
           () => notificationWhitelistEffect(document),
         );
       },
+      reconciler: (ToolRequest request, String externalId) async =>
+          unavailableReconciliation(
+        externalId,
+        'notification_whitelist_readback_unavailable',
+      ),
+      recoveryReconciler:
+          (ToolAuditEnvelope request, String externalId) async =>
+              unavailableReconciliation(
+        externalId,
+        'notification_whitelist_readback_unavailable',
+      ),
     );
 
     gateway.register(
@@ -238,11 +326,22 @@ final class HeptaRuntime {
         final notification = rawNotification.map(
           (key, value) => MapEntry(key.toString(), value as Object?),
         );
-        return applyBooleanEffect(
+        return applyDeviceEffect(
           request,
           () => notificationEffect(notification, notificationId),
         );
       },
+      reconciler: (ToolRequest request, String externalId) async =>
+          unavailableReconciliation(
+        externalId,
+        'notification_delivery_readback_unavailable',
+      ),
+      recoveryReconciler:
+          (ToolAuditEnvelope request, String externalId) async =>
+              unavailableReconciliation(
+        externalId,
+        'notification_delivery_readback_unavailable',
+      ),
     );
 
     gateway.register(
@@ -258,14 +357,26 @@ final class HeptaRuntime {
                 .hasMatch(assetPath)) {
           throw const FormatException('bitmap_asset_path_invalid');
         }
-        return applyBooleanEffect(request, () => bitmapAssetEffect(assetPath));
+        return applyDeviceEffect(request, () => bitmapAssetEffect(assetPath));
       },
+      reconciler: (ToolRequest request, String externalId) async =>
+          unavailableReconciliation(
+        externalId,
+        'bitmap_crc_readback_unavailable_after_session',
+      ),
+      recoveryReconciler:
+          (ToolAuditEnvelope request, String externalId) async =>
+              unavailableReconciliation(
+        externalId,
+        'bitmap_crc_readback_unavailable_after_session',
+      ),
     );
 
     await gateway.recover();
     _instance = HeptaRuntime._(
       gateway: gateway,
       clock: clock,
+      mutationAuthority: mutationAuthority,
       sessions: AssistantSessionCoordinator(clock: clock),
     );
   }
@@ -330,12 +441,16 @@ final class HeptaRuntime {
   Future<ToolReceipt> openMicrophone({
     required AssistantSessionToken session,
     String side = 'R',
+    int attempt = 1,
   }) =>
       _executeMutation(
         scope: RuntimeEffectScope.assistant(session),
         action: _microphoneOnAction,
         riskTier: RiskTier.r2,
-        arguments: <String, Object?>{'side': side},
+        arguments: <String, Object?>{
+          'side': side,
+          'attempt': attempt,
+        },
         origin: TrustClass.user,
       );
 
@@ -389,6 +504,9 @@ final class HeptaRuntime {
         deadline: const Duration(minutes: 2),
       );
 
+  Future<ToolReceipt> reconcileEffect(String idempotencyKey) =>
+      _gateway.reconcile(idempotencyKey: idempotencyKey);
+
   Future<ToolReceipt> _executeMutation({
     required RuntimeEffectScope scope,
     required String action,
@@ -397,46 +515,39 @@ final class HeptaRuntime {
     TrustClass origin = TrustClass.user,
     String? humanConfirmationDigest,
     Duration deadline = const Duration(seconds: 20),
-  }) {
+  }) async {
     final digest = sha256CanonicalJson(arguments);
-    final idempotencyKey =
-        '$action:${scope.scopeId}:${scope.generation}:$digest';
     final now = _clock.now();
+    final expiresAt = now.add(deadline);
+    final authorization = await _mutationAuthority.authorize(
+      MutationAuthorizationRequest(
+        taskId: scope.scopeId,
+        action: action,
+        arguments: arguments,
+        riskTier: riskTier,
+        deadline: expiresAt,
+      ),
+    );
+    final idempotencyKey =
+        '$action:${authorization.deviceId}:${scope.scopeId}:'
+        '${scope.generation}:$digest';
     final request = ToolRequest(
       requestId: idempotencyKey,
       taskId: scope.scopeId,
-      deviceId: _deviceId,
+      deviceId: authorization.deviceId,
       action: action,
       arguments: arguments,
       riskTier: riskTier,
       mutating: true,
       idempotencyKey: idempotencyKey,
-      deadline: now.add(deadline),
+      deadline: expiresAt,
       origin: origin,
       humanConfirmationDigest: humanConfirmationDigest,
     );
-    final lease = DecisionLease(
-      leaseId: 'lease:$idempotencyKey',
-      subject: _subject,
-      taskId: request.taskId,
-      deviceId: request.deviceId,
-      allowedActions: <String>{action},
-      argumentConstraints: arguments,
-      issuedAt: now,
-      expiresAt: now.add(deadline + const Duration(seconds: 5)),
-      singleUse: true,
-      policyHash: _policyHash,
-    );
     return _gateway.execute(
       request: request,
-      context: const PolicyContext(
-        subject: _subject,
-        authenticated: true,
-        userPresent: true,
-        biometricVerified: false,
-        policyHash: _policyHash,
-      ),
-      lease: lease,
+      context: authorization.context,
+      lease: authorization.lease,
     );
   }
 }
