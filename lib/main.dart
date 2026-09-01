@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:demo_ai_even/ble_manager.dart';
 import 'package:demo_ai_even/controllers/bmp_update_manager.dart';
 import 'package:demo_ai_even/controllers/evenai_model_controller.dart';
+import 'package:demo_ai_even/runtime/audit_checkpoint_authenticator.dart';
 import 'package:demo_ai_even/runtime/audit_journal.dart';
 import 'package:demo_ai_even/runtime/device_effect_result.dart';
 import 'package:demo_ai_even/runtime/hepta_runtime.dart';
@@ -44,6 +45,7 @@ Future<void> main() async {
 Future<void> _initializeRuntime(String supportPath) async {
   final auditJournal = JsonlAuditJournal(
     File('$supportPath/hepta-glasses-runtime/audit.jsonl'),
+    checkpointAuthenticator: const PlatformAuditCheckpointAuthenticator(),
   );
   final bitmapManager = BmpUpdateManager();
   const allowDevelopmentAuthority = bool.fromEnvironment(
