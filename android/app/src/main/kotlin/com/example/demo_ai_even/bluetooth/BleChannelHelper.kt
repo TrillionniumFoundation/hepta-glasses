@@ -2,6 +2,7 @@ package com.example.demo_ai_even.bluetooth
 
 import com.example.demo_ai_even.MainActivity
 import com.example.demo_ai_even.model.BlePairDevice
+import com.example.demo_ai_even.security.AuditCheckpointSigner
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.EventChannel.EventSink
@@ -71,6 +72,7 @@ class BleMethodChannel(
             "stopEvenAI" -> result.success(true)
             "getApplicationSupportPath" ->
                 result.success(context.filesDir.absolutePath)
+            "auditCheckpointMac" -> authenticateAuditCheckpoint(call, result)
             else -> result.notImplemented()
         }
     }
@@ -98,6 +100,31 @@ class BleMethodChannel(
             return
         }
         result.success(BleManager.instance.sendData(arguments))
+    }
+
+    private fun authenticateAuditCheckpoint(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
+        val payload =
+            (call.arguments as? Map<*, *>)?.get("payload") as? ByteArray
+        if (payload == null || payload.isEmpty()) {
+            result.error(
+                "InvalidArguments",
+                "audit checkpoint payload is required",
+                null,
+            )
+            return
+        }
+        try {
+            result.success(AuditCheckpointSigner.authenticate(payload))
+        } catch (error: Exception) {
+            result.error(
+                "AuditCheckpointAuthenticationFailed",
+                error::class.java.simpleName,
+                null,
+            )
+        }
     }
 
     fun flutterFoundPairedGlasses(device: BlePairDevice) =
