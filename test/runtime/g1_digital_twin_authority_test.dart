@@ -38,50 +38,47 @@ void main() {
     );
 
     expect(twin.writes, hasLength(4));
-    expect(
-      twin.writes.map((write) => write.side),
-      <GlassesSide>[
-        GlassesSide.left,
-        GlassesSide.right,
-        GlassesSide.left,
-        GlassesSide.left,
-      ],
-    );
+    expect(twin.writes.map((write) => write.side), <GlassesSide>[
+      GlassesSide.left,
+      GlassesSide.right,
+      GlassesSide.left,
+      GlassesSide.left,
+    ]);
     expect(twin.writes.map((write) => write.generation), <int>[1, 1, 2, 3]);
-    expect(
-      twin.writes.map((write) => write.pairIdentity),
-      <String>[
-        'digital-twin-pair-1',
-        'digital-twin-pair-1',
-        'digital-twin-pair-1',
-        'digital-twin-pair-2',
-      ],
-    );
+    expect(twin.writes.map((write) => write.pairIdentity), <String>[
+      'digital-twin-pair-1',
+      'digital-twin-pair-1',
+      'digital-twin-pair-1',
+      'digital-twin-pair-2',
+    ]);
   });
 
-  test('same complete identity returns receipt without another write', () async {
-    final twin = G1DigitalTwin();
-    addTearDown(twin.dispose);
-    final bytes = Uint8List.fromList(<int>[0x25, 0x01]);
+  test(
+    'same complete identity returns receipt without another write',
+    () async {
+      final twin = G1DigitalTwin();
+      addTearDown(twin.dispose);
+      final bytes = Uint8List.fromList(<int>[0x25, 0x01]);
 
-    final first = await twin.send(
-      side: GlassesSide.left,
-      bytes: bytes,
-      timeout: const Duration(seconds: 1),
-      idempotencyKey: 'receipt-key',
-    );
-    final replay = await twin.send(
-      side: GlassesSide.left,
-      bytes: bytes,
-      timeout: const Duration(seconds: 1),
-      idempotencyKey: 'receipt-key',
-    );
+      final first = await twin.send(
+        side: GlassesSide.left,
+        bytes: bytes,
+        timeout: const Duration(seconds: 1),
+        idempotencyKey: 'receipt-key',
+      );
+      final replay = await twin.send(
+        side: GlassesSide.left,
+        bytes: bytes,
+        timeout: const Duration(seconds: 1),
+        idempotencyKey: 'receipt-key',
+      );
 
-    expect(first.accepted, isTrue);
-    expect(replay.sequence, first.sequence);
-    expect(twin.writes, hasLength(1));
-    expect(twin.sendAttempts, 1);
-  });
+      expect(first.accepted, isTrue);
+      expect(replay.sequence, first.sequence);
+      expect(twin.writes, hasLength(1));
+      expect(twin.sendAttempts, 1);
+    },
+  );
 
   test('payload drift in the same authority scope fails closed', () async {
     final twin = G1DigitalTwin();
