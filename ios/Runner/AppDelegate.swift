@@ -137,6 +137,35 @@ import UIKit
                         )
                     )
                 }
+            case "auditCheckpointMac":
+                guard
+                    let arguments = call.arguments as? [String: Any],
+                    let typedData = arguments["payload"] as? FlutterStandardTypedData,
+                    !typedData.data.isEmpty
+                else {
+                    result(
+                        FlutterError(
+                            code: "InvalidArguments",
+                            message: "audit checkpoint payload is required",
+                            details: nil
+                        )
+                    )
+                    return
+                }
+                do {
+                    let mac = try AuditCheckpointSigner.shared.authenticate(
+                        typedData.data
+                    )
+                    result(FlutterStandardTypedData(bytes: mac))
+                } catch {
+                    result(
+                        FlutterError(
+                            code: "AuditCheckpointAuthenticationFailed",
+                            message: "Local checkpoint authentication failed",
+                            details: nil
+                        )
+                    )
+                }
             default:
                 result(FlutterMethodNotImplemented)
             }
