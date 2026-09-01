@@ -1,7 +1,7 @@
 # Hepta Glasses canonical development plan
 
-Revision: `2026-08-31-g7`
-Supersedes: `2026-08-31-g5`, `2026-08-30-g4`, `2026-08-30-g3`, `2026-08-30-g2`, and `2026-08-30-g1`
+Revision: `2026-09-01-g8`
+Supersedes: `2026-08-31-g7`, `2026-08-31-g5`, `2026-08-30-g4`, `2026-08-30-g3`, `2026-08-30-g2`, and `2026-08-30-g1`
 
 ## 1. Mission and product boundary
 
@@ -17,14 +17,17 @@ The repository does not contain vendor G1 firmware or bootloader source. “OS�
 4. Timeout, disconnect, process death, or missing acknowledgement is not proof of failure after a native write.
 5. Decision leases are subject/device/task/action/argument/policy/time bound and single-use for mutations; a lease is atomically consumed before the first asynchronous effect boundary.
 6. Untrusted notification, document, webpage, transcript, model, or tool content cannot grant authority.
-7. Left and right glasses legs retain independent readiness and receipts; pair-level success requires both legs.
+7. Left and right glasses legs retain independent readiness, request ownership, quarantine, and receipts; pair-level success requires both legs.
 8. Connection, assistant, realtime, callback, paging, and cancellation generations fence stale asynchronous work.
-9. Raw audio, credentials, secrets, and sensitive transcript content are not long-term Memory or audit payload classes.
-10. R4 capabilities, unrestricted shell, credential reads, firmware flashing, payment, and account mutation are unavailable in the consumer profile.
-11. Exact-head CI and digital twins are source evidence only; they cannot substitute for physical-device, deployed-infrastructure, independent-review, pilot, signing, or release evidence.
-12. A clean worktree is not a clean Git history. Every fetched ref and every bounded blob must pass the redacted history gate; unscanned blobs fail closed.
-13. Development servers fail closed when authentication or isolation prerequisites are absent.
-14. The implementing agent does not self-approve or self-merge its own change.
+9. Every native BLE callback is bound to an immutable selected-peripheral attempt containing peripheral identity, side, generation, and nonce. A callback from generation N cannot mutate generation N+1.
+10. A caller idempotency string is never sufficient device authority. BLE write identity is `(pair identity, connection generation, side, caller key, payload digest)`.
+11. A one-leg disconnect cannot release an uncertain-write quarantine owned by the surviving leg. Quarantine is released only by a matching late response, authoritative reconciliation, retirement of that exact generation, or terminal process disposal.
+12. Raw audio, credentials, secrets, and sensitive transcript content are not long-term Memory or audit payload classes.
+13. R4 capabilities, unrestricted shell, credential reads, firmware flashing, payment, and account mutation are unavailable in the consumer profile.
+14. Exact-head CI and digital twins are source evidence only; they cannot substitute for physical-device, deployed-infrastructure, independent-review, pilot, signing, or release evidence.
+15. A clean worktree is not a clean Git history. Every fetched ref and every bounded blob must pass the redacted history gate; unscanned blobs fail closed.
+16. Development servers fail closed when authentication or isolation prerequisites are absent.
+17. The implementing agent does not self-approve or self-merge its own change.
 
 ## 3. Gate sequence
 
@@ -32,13 +35,13 @@ The repository does not contain vendor G1 firmware or bootloader source. “OS�
 
 Maintain the product boundary, architecture, threat/privacy/capability models, canonical plan, current state, Gap Ledger, Evidence Index, schemas, CODEOWNERS, a single read-only CI workflow, and the branch-protection contract.
 
-Source exit: validators pass, all canonical revisions agree, and no actionable source gap is `OPEN`. Product exit: GitHub verifies the canonical `main` protection contract.
+Source exit: validators pass, all canonical revisions agree, no transient probe file remains, and no actionable source gap is `OPEN`. Product exit: GitHub verifies the complete canonical `main` protection contract, not merely that the branch reports `protected=true`.
 
 ### G1 — deterministic device substrate
 
-Maintain protocol codecs, native transport adapters, independent per-leg readiness, connection generations, bounded write queues, exact response correlation, dual-leg receipts, retry safety, late-response quarantine, reconciliation, and deterministic fault injection.
+Maintain protocol codecs, native transport adapters, independent per-leg readiness, immutable connection-attempt ownership, connection generations, pair identity, bounded write queues, exact response correlation, dual-leg receipts, scoped idempotency, retry safety, per-leg late-response quarantine, reconciliation, and deterministic fault injection.
 
-Source exit: malformed packets fail closed; an uncertain write is never blindly replayed; partial pair completion is explicit; bulk BMP transfer validates every native acceptance and terminal response. Product exit: physical Android/iOS G1 qualification passes.
+Source exit: malformed packets fail closed; an uncertain write is never blindly replayed; stale iOS callbacks cannot affect a newer attempt; the same caller key cannot alias another side, generation, or pair; partial pair completion is explicit; bulk BMP transfer validates every native acceptance and terminal response. Product exit: physical Android/iOS G1 qualification passes.
 
 ### G2 — edge execution authority
 
@@ -78,7 +81,7 @@ Source exit: package substitution, tampering, R4 admission, missing consent, una
 
 ### G8 — qualification, pilot, and release
 
-Maintain physical trace evaluators, fault matrices, Android/iOS native tests, exact-head source SBOM/provenance, redacted complete-history scanning, native sanitizers, source/product release gates, governance automation, signing/review templates, rollout, kill-switch, and rollback runbooks.
+Maintain physical trace evaluators, fault matrices, Android/iOS native tests, hostile BLE authority tests, exact-head source SBOM/provenance, redacted complete-history scanning, native sanitizers, source/product release gates, governance automation, signing/review templates, rollout, kill-switch, and rollback runbooks.
 
 Source exit: exact-head repository, Flutter, Android, iOS, native-sanitizer, boundary/history, and source-evidence checks pass on one unchanged commit. Product exit: a signed product release bundle passes without overrides.
 
@@ -86,7 +89,7 @@ Source exit: exact-head repository, Flutter, Android, iOS, native-sanitizer, bou
 
 - **E0 — Contract evidence:** plans, ADRs, schemas, policies, runbooks, and machine-readable ledgers.
 - **E1 — Static source evidence:** formatting, compilation, static analysis, boundary scans, and deterministic validators.
-- **E2 — Deterministic test evidence:** unit, negative, concurrency, property, replay, crash-window, and digital-twin tests.
+- **E2 — Deterministic test evidence:** unit, negative, concurrency, property, replay, crash-window, hostile callback, quarantine, and digital-twin tests.
 - **E3 — Platform build/test evidence:** Android native unit tests, iOS XCTest, simulator builds, native sanitizers, and reproducible dependency locks.
 - **E4 — Exact-head CI evidence:** a successful CI run and content-addressed SBOM/provenance/history/native/source-gate artifact bound to one unchanged commit and tree.
 - **E5 — Physical/deployed evidence:** real device traces, deployed services, KMS/HSM, attestation, OAuth/provider receipts, credential-rotation records, and operational telemetry.
@@ -95,12 +98,14 @@ Source exit: exact-head repository, Flutter, Android, iOS, native-sanitizer, bou
 
 Evidence cannot be promoted by renaming it. E0–E4 never close a gate that explicitly requires E5–E7.
 
-## 5. Revision g7 source-convergence order
+## 5. Revision g8 source-convergence order
 
-1. Preserve the strongest invariant from the G4, G5, and G6 branches without force-replacing reviewed history.
-2. Remove temporary self-modifying remediation workflows and stale exact-head marker files; retain one read-only CI authority.
-3. Close Flutter formatting, UI crash, BLE/BMP, assistant cancellation, lease, scheduler, concurrency, package-integrity, worker-isolation, and native UB blockers.
-4. Make the history gate redacted and complete: findings or unscanned bounded objects fail the source gate.
-5. Keep historical credential rotation/revocation, physical devices, production infrastructure, repository administration, vendor firmware, independent assurance, signing, pilot, and release explicitly external.
-6. Run the complete matrix on one unchanged exact head, generate content-addressed evidence, and obtain independent review bound to that head.
-7. Merge only through the protected review path. The implementing agent never self-approves, bypasses, or self-merges.
+1. Preserve the strongest invariant from the G4, G5, G6, and G7 source lines without force-replacing reviewed history.
+2. Remove transient connector probes, self-modifying remediation workflows, and stale exact-head marker files; retain one read-only CI authority.
+3. Bind iOS callbacks to immutable connection-attempt tokens and delay same-peripheral reuse until the retired terminal callback is consumed.
+4. Bind public BLE transport receipts and in-flight owners to pair identity, generation, side, caller key, and payload digest; enforce the captured pair and generation again at the native write boundary.
+5. Preserve uncertain-write quarantine per generation/side/command. A disconnect on one side may fail or quarantine only that side's pending owners and must not release the opposite side.
+6. Prove the three authority invariants with hostile Dart and XCTest regressions, and fail repository validation if their implementation or tests disappear.
+7. Keep historical credential rotation/revocation, physical devices, production infrastructure, incomplete repository administration, vendor firmware, independent assurance, signing, pilot, and release explicitly external.
+8. Run the complete matrix on one unchanged exact head, generate content-addressed evidence, and obtain independent review bound to that head.
+9. Merge only through the protected review path. The implementing agent never self-approves, bypasses, or self-merges.
