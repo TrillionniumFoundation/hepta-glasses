@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'audit_checkpoint_authenticator.dart';
 import 'canonical_json.dart';
 import 'clock.dart';
 
@@ -57,18 +59,25 @@ final class AuditEntry {
     final previousHash = json['previous_hash'];
     final hash = json['hash'];
     if (sequence is! int ||
+        sequence < 1 ||
         timestamp is! String ||
         eventType is! String ||
+        eventType.trim().isEmpty ||
         previousHash is! String ||
-        hash is! String) {
-      throw const FormatException('Audit entry has invalid field types.');
+        hash is! String ||
+        !_isSha256(hash) ||
+        (sequence > 1 && !_isSha256(previousHash)) ||
+        (sequence == 1 && previousHash.isNotEmpty)) {
+      throw const FormatException('Audit entry has invalid field values.');
     }
     return AuditEntry(
       sequence: sequence,
       timestamp: DateTime.parse(timestamp),
       eventType: eventType,
-      payload: rawPayload.map(
-        (key, value) => MapEntry(key.toString(), value as Object?),
+      payload: Map<String, Object?>.unmodifiable(
+        rawPayload.map(
+          (key, value) => MapEntry(key.toString(), value as Object?),
+        ),
       ),
       previousHash: previousHash,
       hash: hash,
@@ -131,18 +140,19 @@ final class InMemoryAuditJournal
     final sequence = _entries.length + 1;
     final previousHash = _entries.isEmpty ? '' : _entries.last.hash;
     final timestamp = _clock.now().toUtc();
+    final immutablePayload = Map<String, Object?>.unmodifiable(payload);
     final hash = AuditEntry.calculateHash(
       sequence: sequence,
       timestamp: timestamp,
       eventType: eventType,
-      payload: payload,
+      payload: immutablePayload,
       previousHash: previousHash,
     );
     final entry = AuditEntry(
       sequence: sequence,
       timestamp: timestamp,
       eventType: eventType,
-      payload: Map.unmodifiable(payload),
+      payload: immutablePayload,
       previousHash: previousHash,
       hash: hash,
     );
@@ -151,10 +161,27 @@ final class InMemoryAuditJournal
   }
 
   @override
-  Future<List<AuditEntry>> readAll() async => List.unmodifiable(_entries);
+  Future<List<AuditEntry>> readAll() async => List<AuditEntry>.unmodifiable(_entries);
 
   @override
   Future<void> verify() async => verifyEntries(_entries);
+}
+
+final class _VerifiedJournal {
+  const _VerifiedJournal({required this.entries, required this.recordEnds});
+
+  final List<AuditEntry> entries;
+  final List<int> recordEnds;
+
+  int get byteLength => recordEnds.isEmpty ? 0 : recordEnds.last;
+
+  _AuditHead get head => entries.isEmpty
+      ? const _AuditHead(sequence: 0, hash: '', byteLength: 0)
+      : _AuditHead(
+          sequence: entries.last.sequence,
+          hash: entries.last.hash,
+          byteLength: byteLength,
+        );
 }
 
 final class _AuditHead {
@@ -167,21 +194,55 @@ final class _AuditHead {
   final int sequence;
   final String hash;
   final int byteLength;
+}
 
-  Map<String, Object?> toJson() => <String, Object?>{
-        'schema_version': 2,
+final class _AuthenticatedCheckpoint {
+  const _AuthenticatedCheckpoint({
+    required this.sequence,
+    required this.hash,
+    required this.byteLength,
+    required this.modifiedMicros,
+    required this.changedMicros,
+    required this.authenticatorId,
+    required this.mac,
+  });
+
+  final int sequence;
+  final String hash;
+  final int byteLength;
+  final int modifiedMicros;
+  final int changedMicros;
+  final String authenticatorId;
+  final Uint8List mac;
+
+  _AuditHead get head => _AuditHead(
+        sequence: sequence,
+        hash: hash,
+        byteLength: byteLength,
+      );
+
+  Map<String, Object?> unsignedJson() => <String, Object?>{
+        'schema_version': 3,
         'sequence': sequence,
         'hash': hash,
         'byte_length': byteLength,
+        'modified_micros': modifiedMicros,
+        'changed_micros': changedMicros,
+        'authenticator_id': authenticatorId,
+      };
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        ...unsignedJson(),
+        'mac': _hex(mac),
       };
 }
 
-final class _DecodedCheckpoint {
-  const _DecodedCheckpoint({
+final class _LegacyCheckpoint {
+  const _LegacyCheckpoint({
     required this.schemaVersion,
     required this.sequence,
     required this.hash,
-    this.byteLength,
+    required this.byteLength,
   });
 
   final int schemaVersion;
@@ -190,20 +251,32 @@ final class _DecodedCheckpoint {
   final int? byteLength;
 }
 
-/// A process-safe bounded JSONL journal.
+/// A process-safe, bounded, tamper-evident JSONL journal.
 ///
-/// Startup, recovery, explicit verification, full reads, and every append
-/// validate the complete hash chain. The v2 checkpoint and exact byte length are
-/// crash-recovery hints, never standalone integrity roots. A crash after journal
-/// flush but before checkpoint replacement is repaired only after the full chain
-/// has been authenticated under both the process lane and the OS file lock.
+/// The append head is authenticated by a platform-secure HMAC checkpoint. On a
+/// normal append, the process cache, authenticated checkpoint, file size,
+/// change timestamps, and terminal record must all agree; only the terminal
+/// record is then read. Any cache miss, metadata change, or stale checkpoint
+/// triggers complete hash-chain verification before another fact is appended.
+/// Explicit [initialize], [verify], and [readAll] always verify the full chain.
+///
+/// This changes normal append cost from repeatedly scanning all prior records to
+/// a bounded authenticated-tail path while retaining fail-closed recovery after
+/// ordinary file mutation. An attacker capable of restoring filesystem metadata
+/// can defer detection of middle-record damage until the next explicit full
+/// verification, but cannot forge or advance the checkpoint without the
+/// platform-secure key.
 final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
   JsonlAuditJournal(
     this.file, {
+    required AuditCheckpointAuthenticator checkpointAuthenticator,
     Clock clock = const SystemClock(),
     this.maximumFileBytes = 64 * 1024 * 1024,
     this.maximumEntryBytes = 256 * 1024,
-  }) : _clock = clock {
+    this.maximumRecordCount = 500000,
+    this.allowLegacyCheckpointMigration = false,
+  })  : _checkpointAuthenticator = checkpointAuthenticator,
+        _clock = clock {
     if (maximumEntryBytes < 1024) {
       throw ArgumentError.value(
         maximumEntryBytes,
@@ -218,21 +291,45 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
         'must be at least maximumEntryBytes',
       );
     }
+    if (maximumRecordCount < 1) {
+      throw ArgumentError.value(
+        maximumRecordCount,
+        'maximumRecordCount',
+        'must be positive',
+      );
+    }
+    if (_checkpointAuthenticator.authenticatorId.trim().isEmpty) {
+      throw ArgumentError.value(
+        _checkpointAuthenticator.authenticatorId,
+        'checkpointAuthenticator.authenticatorId',
+        'must not be empty',
+      );
+    }
   }
 
-  static const String contractVersion = 'file-lock-checkpoint-v2';
+  static const String contractVersion = 'authenticated-checkpoint-v3';
 
   final File file;
+  final AuditCheckpointAuthenticator _checkpointAuthenticator;
   final Clock _clock;
   final int maximumFileBytes;
   final int maximumEntryBytes;
+  final int maximumRecordCount;
+  final bool allowLegacyCheckpointMigration;
 
-  // POSIX advisory locks can be process-associated on some runtimes, so two
-  // File handles opened by the same process must also share a Dart-level lane.
-  // The absolute path makes separate journal instances serialize before taking
-  // the operating-system lock.
   static final Map<String, Future<void>> _processTails =
       <String, Future<void>>{};
+  static final Map<String, _AuthenticatedCheckpoint> _trustedHeads =
+      <String, _AuthenticatedCheckpoint>{};
+
+  int _fullVerificationCount = 0;
+  int _fastAppendCount = 0;
+
+  /// Exposed for deterministic performance-contract tests.
+  int get fullVerificationCount => _fullVerificationCount;
+
+  /// Exposed for deterministic performance-contract tests.
+  int get fastAppendCount => _fastAppendCount;
 
   static File lockFileFor(File file) => File('${file.path}.lock');
   static File checkpointFileFor(File file) => File('${file.path}.head.json');
@@ -246,6 +343,7 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
       try {
         completer.complete(await _withFileLock(operation));
       } on Object catch (error, stackTrace) {
+        _trustedHeads.remove(key);
         completer.completeError(error, stackTrace);
       }
     }).whenComplete(() {
@@ -278,8 +376,7 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
 
   Future<void> initialize() => _exclusive(() async {
         await _ensureDataFileUnlocked();
-        final entries = await _readAndVerifyUnlocked();
-        await _verifyOrRepairCheckpointUnlocked(entries);
+        await _fullVerifyAndSynchronizeCheckpointUnlocked();
       });
 
   @override
@@ -293,27 +390,29 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
           );
         }
         await _ensureDataFileUnlocked();
-        // Authenticate all prior records before creating a new audit fact. A
-        // checkpoint that matches only the file length and terminal record is
-        // insufficient because a same-length middle record may have changed.
-        final entries = await _readAndVerifyUnlocked();
-        await _verifyOrRepairCheckpointUnlocked(entries);
-        final head = await _loadAppendHeadUnlocked();
+        final head = await _appendHeadUnlocked();
+        if (head.sequence >= maximumRecordCount) {
+          throw StateError(
+            'Audit journal reached its bounded record capacity of '
+            '$maximumRecordCount records.',
+          );
+        }
 
         final sequence = head.sequence + 1;
         final timestamp = _clock.now().toUtc();
+        final immutablePayload = Map<String, Object?>.unmodifiable(payload);
         final hash = AuditEntry.calculateHash(
           sequence: sequence,
           timestamp: timestamp,
           eventType: eventType,
-          payload: payload,
+          payload: immutablePayload,
           previousHash: head.hash,
         );
         final entry = AuditEntry(
           sequence: sequence,
           timestamp: timestamp,
           eventType: eventType,
-          payload: Map.unmodifiable(payload),
+          payload: immutablePayload,
           previousHash: head.hash,
           hash: hash,
         );
@@ -339,25 +438,35 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
         } finally {
           await handle.close();
         }
-        await _writeCheckpointUnlocked(
-          _AuditHead(sequence: sequence, hash: hash, byteLength: nextLength),
-        );
+
+        try {
+          final stat = await file.stat();
+          await _writeCheckpointUnlocked(
+            head: _AuditHead(
+              sequence: sequence,
+              hash: hash,
+              byteLength: nextLength,
+            ),
+            stat: stat,
+          );
+        } on Object {
+          _trustedHeads.remove(file.absolute.path);
+          rethrow;
+        }
         return entry;
       });
 
   @override
   Future<List<AuditEntry>> readAll() => _exclusive(() async {
         await _ensureDataFileUnlocked();
-        final entries = await _readAndVerifyUnlocked();
-        await _verifyOrRepairCheckpointUnlocked(entries);
-        return List.unmodifiable(entries);
+        final verified = await _fullVerifyAndSynchronizeCheckpointUnlocked();
+        return List<AuditEntry>.unmodifiable(verified.entries);
       });
 
   @override
   Future<void> verify() => _exclusive(() async {
         await _ensureDataFileUnlocked();
-        final entries = await _readAndVerifyUnlocked();
-        await _verifyOrRepairCheckpointUnlocked(entries);
+        await _fullVerifyAndSynchronizeCheckpointUnlocked();
       });
 
   Future<void> _ensureDataFileUnlocked() async {
@@ -371,115 +480,157 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
     }
   }
 
-  Future<_AuditHead> _loadAppendHeadUnlocked() async {
+  Future<_AuditHead> _appendHeadUnlocked() async {
     final checkpointFile = checkpointFileFor(file);
     if (!await checkpointFile.exists()) {
-      return _rebuildAppendHeadUnlocked();
-    }
-
-    final checkpoint = await _decodeCheckpointUnlocked(checkpointFile);
-    if (checkpoint.schemaVersion != 2 || checkpoint.byteLength == null) {
-      return _rebuildAppendHeadUnlocked(expected: checkpoint);
-    }
-
-    final actualLength = await file.length();
-    final checkpointLength = checkpoint.byteLength!;
-    if (checkpointLength < 0 || checkpointLength > maximumFileBytes) {
-      throw StateError('Audit checkpoint byte length is invalid.');
-    }
-    if (actualLength < checkpointLength) {
-      throw StateError('Audit journal is shorter than its checkpoint.');
-    }
-    if (actualLength > checkpointLength) {
-      return _rebuildAppendHeadUnlocked(expected: checkpoint);
-    }
-
-    if (checkpoint.sequence == 0) {
-      if (checkpoint.hash.isNotEmpty || actualLength != 0) {
-        throw StateError('Empty audit checkpoint does not match the journal.');
+      final length = await file.length();
+      if (length != 0) {
+        throw StateError(
+          'Authenticated audit checkpoint is missing for a non-empty journal.',
+        );
       }
-      return const _AuditHead(sequence: 0, hash: '', byteLength: 0);
-    }
-    if (checkpoint.sequence < 0 || checkpoint.hash.isEmpty) {
-      throw StateError('Audit checkpoint head is invalid.');
+      final verified = await _fullVerifyAndSynchronizeCheckpointUnlocked();
+      return verified.head;
     }
 
-    final tail = await _readTerminalEntryUnlocked();
-    if (tail == null ||
-        tail.sequence != checkpoint.sequence ||
-        tail.hash != checkpoint.hash) {
-      throw StateError('Audit checkpoint does not match the terminal record.');
+    final decoded = await _decodeCheckpointUnlocked(checkpointFile);
+    if (decoded is _LegacyCheckpoint) {
+      final verified = await _fullVerifyAndSynchronizeCheckpointUnlocked();
+      return verified.head;
     }
-    final calculated = AuditEntry.calculateHash(
-      sequence: tail.sequence,
-      timestamp: tail.timestamp,
-      eventType: tail.eventType,
-      payload: tail.payload,
-      previousHash: tail.previousHash,
-    );
-    if (calculated != tail.hash) {
-      throw StateError('Audit terminal record hash is invalid.');
+    final checkpoint = decoded as _AuthenticatedCheckpoint;
+    final stat = await file.stat();
+    final trusted = _trustedHeads[file.absolute.path];
+    if (_checkpointMatchesStat(checkpoint, stat) &&
+        trusted != null &&
+        _sameCheckpoint(trusted, checkpoint)) {
+      final tail = await _readTerminalEntryUnlocked();
+      _verifyTerminalAgainstCheckpoint(tail, checkpoint);
+      _fastAppendCount++;
+      return checkpoint.head;
     }
-    return _AuditHead(
-      sequence: checkpoint.sequence,
-      hash: checkpoint.hash,
-      byteLength: actualLength,
+
+    final verified = await _fullVerifyAndSynchronizeCheckpointUnlocked(
+      decodedCheckpoint: decoded,
     );
+    return verified.head;
   }
 
-  Future<_AuditHead> _rebuildAppendHeadUnlocked({
-    _DecodedCheckpoint? expected,
+  Future<_VerifiedJournal> _fullVerifyAndSynchronizeCheckpointUnlocked({
+    Object? decodedCheckpoint,
   }) async {
-    final entries = await _readAndVerifyUnlocked();
-    if (expected != null) {
-      _verifyCheckpointAgainstEntries(expected, entries);
+    _fullVerificationCount++;
+    final verified = await _readAndVerifyUnlocked();
+    final checkpointFile = checkpointFileFor(file);
+    Object? decoded = decodedCheckpoint;
+    if (decoded == null && await checkpointFile.exists()) {
+      decoded = await _decodeCheckpointUnlocked(checkpointFile);
     }
-    final head = await _headForEntriesUnlocked(entries);
-    await _writeCheckpointUnlocked(head);
-    return head;
+
+    if (decoded == null) {
+      if (verified.entries.isNotEmpty) {
+        throw StateError(
+          'Authenticated audit checkpoint is missing for a non-empty journal.',
+        );
+      }
+      await _writeCheckpointUnlocked(
+        head: verified.head,
+        stat: await file.stat(),
+      );
+      return verified;
+    }
+
+    if (decoded is _LegacyCheckpoint) {
+      if (!allowLegacyCheckpointMigration) {
+        throw StateError(
+          'Legacy audit checkpoint requires explicit offline migration.',
+        );
+      }
+      _verifyLegacyCheckpointAgainstJournal(decoded, verified);
+      await _writeCheckpointUnlocked(
+        head: verified.head,
+        stat: await file.stat(),
+      );
+      return verified;
+    }
+
+    final checkpoint = decoded as _AuthenticatedCheckpoint;
+    _verifyCheckpointAnchor(checkpoint, verified);
+    final stat = await file.stat();
+    final currentHead = verified.head;
+    final isCurrentHead = checkpoint.sequence == currentHead.sequence &&
+        checkpoint.hash == currentHead.hash &&
+        checkpoint.byteLength == currentHead.byteLength;
+    if (!isCurrentHead || !_checkpointMatchesStat(checkpoint, stat)) {
+      await _writeCheckpointUnlocked(head: currentHead, stat: stat);
+    } else {
+      _trustedHeads[file.absolute.path] = checkpoint;
+    }
+    return verified;
   }
 
-  Future<List<AuditEntry>> _readAndVerifyUnlocked() async {
-    final entries = await _readAllUnlocked();
-    await verifyEntries(entries);
-    return entries;
+  Future<_VerifiedJournal> _readAndVerifyUnlocked() async {
+    final verified = await _readAllUnlocked();
+    await verifyEntries(verified.entries);
+    return verified;
   }
 
-  Future<List<AuditEntry>> _readAllUnlocked() async {
-    if (!await file.exists()) {
-      return const <AuditEntry>[];
+  Future<_VerifiedJournal> _readAllUnlocked() async {
+    final bytes = await file.readAsBytes();
+    if (bytes.length > maximumFileBytes) {
+      throw StateError('Audit journal exceeds its bounded capacity.');
     }
-    final contents = await file.readAsString();
-    if (contents.isNotEmpty && !contents.endsWith('\n')) {
+    if (bytes.isNotEmpty && bytes.last != 0x0a) {
       throw StateError('Audit journal has a torn final record.');
     }
+
     final entries = <AuditEntry>[];
-    final lines = contents.split('\n');
-    for (var index = 0; index < lines.length; index++) {
-      final line = lines[index].trim();
-      if (line.isEmpty) {
+    final recordEnds = <int>[];
+    var recordStart = 0;
+    for (var index = 0; index < bytes.length; index++) {
+      if (bytes[index] != 0x0a) {
         continue;
       }
-      if (utf8.encode(line).length + 1 > maximumEntryBytes) {
-        throw StateError('Audit journal line ${index + 1} is oversized.');
+      final recordLength = index - recordStart + 1;
+      if (recordLength <= 1) {
+        throw StateError('Audit journal contains an empty record.');
       }
-      try {
-        final decoded = jsonDecode(line);
-        if (decoded is! Map) {
-          throw const FormatException('Audit line is not a JSON object.');
-        }
-        entries.add(
-          AuditEntry.fromJson(
-            decoded.map(
-              (key, value) => MapEntry(key.toString(), value as Object?),
-            ),
-          ),
+      if (recordLength > maximumEntryBytes) {
+        throw StateError(
+          'Audit journal record ${entries.length + 1} is oversized.',
         );
-      } on Object catch (error) {
-        throw StateError('Invalid audit journal line ${index + 1}: $error');
       }
+      if (entries.length >= maximumRecordCount) {
+        throw StateError('Audit journal exceeds its bounded record capacity.');
+      }
+      final line = utf8.decode(bytes.sublist(recordStart, index));
+      entries.add(_decodeEntry(line, entries.length + 1));
+      recordEnds.add(index + 1);
+      recordStart = index + 1;
     }
-    return entries;
+    if (recordStart != bytes.length) {
+      throw StateError('Audit journal has a torn final record.');
+    }
+    return _VerifiedJournal(
+      entries: List<AuditEntry>.unmodifiable(entries),
+      recordEnds: List<int>.unmodifiable(recordEnds),
+    );
+  }
+
+  AuditEntry _decodeEntry(String line, int lineNumber) {
+    try {
+      final decoded = jsonDecode(line);
+      if (decoded is! Map) {
+        throw const FormatException('Audit line is not a JSON object.');
+      }
+      return AuditEntry.fromJson(
+        decoded.map(
+          (key, value) => MapEntry(key.toString(), value as Object?),
+        ),
+      );
+    } on Object catch (error) {
+      throw StateError('Invalid audit journal line $lineNumber: $error');
+    }
   }
 
   Future<AuditEntry?> _readTerminalEntryUnlocked() async {
@@ -487,123 +638,231 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
     if (length == 0) {
       return null;
     }
-    final tailBytes = maximumEntryBytes + 1;
-    final start = length > tailBytes ? length - tailBytes : 0;
+    final readLength = length > maximumEntryBytes + 1
+        ? maximumEntryBytes + 1
+        : length;
+    final start = length - readLength;
     final handle = await file.open();
-    final List<int> bytes;
+    final Uint8List bytes;
     try {
       await handle.setPosition(start);
-      bytes = await handle.read(length - start);
+      bytes = await handle.read(readLength);
     } finally {
       await handle.close();
     }
     if (bytes.isEmpty || bytes.last != 0x0a) {
       throw StateError('Audit journal has a torn final record.');
     }
-    final text = utf8.decode(bytes);
-    final lines = text.split('\n');
-    if (start > 0 && lines.isNotEmpty) {
-      lines.removeAt(0);
-    }
-    final line = lines.reversed.firstWhere(
-      (candidate) => candidate.trim().isNotEmpty,
-      orElse: () => '',
-    );
-    if (line.isEmpty) {
-      throw StateError('Audit terminal record exceeds the bounded entry size.');
-    }
-    final decoded = jsonDecode(line);
-    if (decoded is! Map) {
-      throw StateError('Audit terminal record is not an object.');
-    }
-    return AuditEntry.fromJson(
-      decoded.map((key, value) => MapEntry(key.toString(), value as Object?)),
-    );
-  }
-
-  Future<void> _verifyOrRepairCheckpointUnlocked(
-    List<AuditEntry> entries,
-  ) async {
-    final checkpointFile = checkpointFileFor(file);
-    final head = await _headForEntriesUnlocked(entries);
-    if (!await checkpointFile.exists()) {
-      await _writeCheckpointUnlocked(head);
-      return;
-    }
-
-    final checkpoint = await _decodeCheckpointUnlocked(checkpointFile);
-    _verifyCheckpointAgainstEntries(checkpoint, entries);
-    if (checkpoint.schemaVersion != 2 ||
-        checkpoint.byteLength != head.byteLength ||
-        checkpoint.sequence != head.sequence ||
-        checkpoint.hash != head.hash) {
-      await _writeCheckpointUnlocked(head);
-    }
-  }
-
-  void _verifyCheckpointAgainstEntries(
-    _DecodedCheckpoint checkpoint,
-    List<AuditEntry> entries,
-  ) {
-    if (checkpoint.sequence < 0 || checkpoint.sequence > entries.length) {
-      throw StateError('Audit checkpoint sequence is outside the journal.');
-    }
-    if (checkpoint.sequence == 0) {
-      if (checkpoint.hash.isNotEmpty) {
-        throw StateError('Empty audit checkpoint has a non-empty hash.');
+    var previousNewline = -1;
+    for (var index = bytes.length - 2; index >= 0; index--) {
+      if (bytes[index] == 0x0a) {
+        previousNewline = index;
+        break;
       }
-    } else if (entries[checkpoint.sequence - 1].hash != checkpoint.hash) {
-      throw StateError('Audit checkpoint does not match the hash chain.');
     }
+    if (start > 0 && previousNewline < 0) {
+      throw StateError('Audit terminal record exceeds its bounded size.');
+    }
+    final recordStart = previousNewline + 1;
+    final recordLength = bytes.length - recordStart;
+    if (recordLength <= 1 || recordLength > maximumEntryBytes) {
+      throw StateError('Audit terminal record has an invalid size.');
+    }
+    final line = utf8.decode(bytes.sublist(recordStart, bytes.length - 1));
+    return _decodeEntry(line, -1);
   }
 
-  Future<_AuditHead> _headForEntriesUnlocked(List<AuditEntry> entries) async {
-    final length = await file.length();
-    return entries.isEmpty
-        ? _AuditHead(sequence: 0, hash: '', byteLength: length)
-        : _AuditHead(
-            sequence: entries.length,
-            hash: entries.last.hash,
-            byteLength: length,
-          );
-  }
-
-  Future<_DecodedCheckpoint> _decodeCheckpointUnlocked(File checkpoint) async {
-    final Object? decoded;
+  Future<Object> _decodeCheckpointUnlocked(File checkpointFile) async {
+    final text = await checkpointFile.readAsString();
+    final Object? decodedJson;
     try {
-      decoded = jsonDecode(await checkpoint.readAsString());
+      decodedJson = jsonDecode(text.trim());
     } on Object catch (error) {
-      throw StateError('Audit checkpoint is unreadable: $error');
+      throw StateError('Audit checkpoint is invalid JSON: $error');
     }
-    if (decoded is! Map) {
+    if (decodedJson is! Map) {
       throw StateError('Audit checkpoint is not an object.');
     }
-    final schemaVersion = decoded['schema_version'];
-    final sequence = decoded['sequence'];
-    final hash = decoded['hash'];
-    final byteLength = decoded['byte_length'];
-    if ((schemaVersion != 1 && schemaVersion != 2) ||
-        sequence is! int ||
-        hash is! String ||
-        (schemaVersion == 2 && byteLength is! int)) {
-      throw StateError('Audit checkpoint has invalid fields.');
+    final document = decodedJson.map(
+      (key, value) => MapEntry(key.toString(), value as Object?),
+    );
+    final schemaVersion = document['schema_version'];
+    if (schemaVersion is! int) {
+      throw StateError('Audit checkpoint schema version is invalid.');
     }
-    return _DecodedCheckpoint(
-      schemaVersion: schemaVersion as int,
+    if (schemaVersion == 1 || schemaVersion == 2) {
+      final sequence = document['sequence'];
+      final hash = document['hash'];
+      final byteLength = document['byte_length'];
+      if (sequence is! int ||
+          sequence < 0 ||
+          hash is! String ||
+          (sequence == 0 && hash.isNotEmpty) ||
+          (sequence > 0 && !_isSha256(hash)) ||
+          (byteLength != null && (byteLength is! int || byteLength < 0))) {
+        throw StateError('Legacy audit checkpoint fields are invalid.');
+      }
+      return _LegacyCheckpoint(
+        schemaVersion: schemaVersion,
+        sequence: sequence,
+        hash: hash,
+        byteLength: byteLength as int?,
+      );
+    }
+    if (schemaVersion != 3) {
+      throw StateError('Unsupported audit checkpoint schema $schemaVersion.');
+    }
+
+    final sequence = document['sequence'];
+    final hash = document['hash'];
+    final byteLength = document['byte_length'];
+    final modifiedMicros = document['modified_micros'];
+    final changedMicros = document['changed_micros'];
+    final authenticatorId = document['authenticator_id'];
+    final macHex = document['mac'];
+    if (sequence is! int ||
+        sequence < 0 ||
+        hash is! String ||
+        (sequence == 0 && hash.isNotEmpty) ||
+        (sequence > 0 && !_isSha256(hash)) ||
+        byteLength is! int ||
+        byteLength < 0 ||
+        byteLength > maximumFileBytes ||
+        modifiedMicros is! int ||
+        modifiedMicros < 0 ||
+        changedMicros is! int ||
+        changedMicros < 0 ||
+        authenticatorId is! String ||
+        authenticatorId != _checkpointAuthenticator.authenticatorId ||
+        macHex is! String ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(macHex)) {
+      throw StateError('Authenticated audit checkpoint fields are invalid.');
+    }
+    final checkpoint = _AuthenticatedCheckpoint(
       sequence: sequence,
       hash: hash,
-      byteLength: byteLength is int ? byteLength : null,
+      byteLength: byteLength,
+      modifiedMicros: modifiedMicros,
+      changedMicros: changedMicros,
+      authenticatorId: authenticatorId,
+      mac: _hexDecode(macHex),
     );
+    final expected = await _checkpointAuthenticator.authenticate(
+      Uint8List.fromList(utf8.encode(canonicalJson(checkpoint.unsignedJson()))),
+    );
+    if (!constantTimeBytesEqual(expected, checkpoint.mac)) {
+      throw StateError('Audit checkpoint authentication failed.');
+    }
+    return checkpoint;
   }
 
-  Future<void> _writeCheckpointUnlocked(_AuditHead head) async {
+  void _verifyCheckpointAnchor(
+    _AuthenticatedCheckpoint checkpoint,
+    _VerifiedJournal journal,
+  ) {
+    if (checkpoint.sequence == 0) {
+      if (checkpoint.hash.isNotEmpty || checkpoint.byteLength != 0) {
+        throw StateError('Empty audit checkpoint is malformed.');
+      }
+      return;
+    }
+    if (checkpoint.sequence > journal.entries.length) {
+      throw StateError('Audit journal is shorter than its checkpoint.');
+    }
+    final index = checkpoint.sequence - 1;
+    if (journal.entries[index].hash != checkpoint.hash ||
+        journal.recordEnds[index] != checkpoint.byteLength) {
+      throw StateError('Audit checkpoint does not authenticate its journal prefix.');
+    }
+  }
+
+  void _verifyLegacyCheckpointAgainstJournal(
+    _LegacyCheckpoint checkpoint,
+    _VerifiedJournal journal,
+  ) {
+    if (checkpoint.sequence == 0) {
+      if (checkpoint.hash.isNotEmpty ||
+          (checkpoint.byteLength != null && checkpoint.byteLength != 0)) {
+        throw StateError('Legacy empty audit checkpoint is malformed.');
+      }
+      return;
+    }
+    if (checkpoint.sequence > journal.entries.length) {
+      throw StateError('Audit journal is shorter than its legacy checkpoint.');
+    }
+    final index = checkpoint.sequence - 1;
+    if (journal.entries[index].hash != checkpoint.hash) {
+      throw StateError('Legacy audit checkpoint hash mismatch.');
+    }
+    if (checkpoint.schemaVersion == 2 &&
+        checkpoint.byteLength != journal.recordEnds[index]) {
+      throw StateError('Legacy audit checkpoint byte-length mismatch.');
+    }
+  }
+
+  void _verifyTerminalAgainstCheckpoint(
+    AuditEntry? terminal,
+    _AuthenticatedCheckpoint checkpoint,
+  ) {
+    if (checkpoint.sequence == 0) {
+      if (terminal != null || checkpoint.byteLength != 0) {
+        throw StateError('Empty checkpoint does not match the journal.');
+      }
+      return;
+    }
+    if (terminal == null ||
+        terminal.sequence != checkpoint.sequence ||
+        terminal.hash != checkpoint.hash) {
+      throw StateError('Audit checkpoint does not match the terminal record.');
+    }
+    final calculated = AuditEntry.calculateHash(
+      sequence: terminal.sequence,
+      timestamp: terminal.timestamp,
+      eventType: terminal.eventType,
+      payload: terminal.payload,
+      previousHash: terminal.previousHash,
+    );
+    if (calculated != terminal.hash) {
+      throw StateError('Audit terminal record hash is invalid.');
+    }
+  }
+
+  Future<void> _writeCheckpointUnlocked({
+    required _AuditHead head,
+    required FileStat stat,
+  }) async {
+    if (head.byteLength != stat.size) {
+      throw StateError('Audit checkpoint byte length does not match the journal.');
+    }
+    final unsigned = _AuthenticatedCheckpoint(
+      sequence: head.sequence,
+      hash: head.hash,
+      byteLength: head.byteLength,
+      modifiedMicros: _micros(stat.modified),
+      changedMicros: _micros(stat.changed),
+      authenticatorId: _checkpointAuthenticator.authenticatorId,
+      mac: Uint8List(0),
+    );
+    final mac = await _checkpointAuthenticator.authenticate(
+      Uint8List.fromList(utf8.encode(canonicalJson(unsigned.unsignedJson()))),
+    );
+    if (mac.length != 32) {
+      throw StateError('Audit checkpoint authenticator returned invalid output.');
+    }
+    final checkpoint = _AuthenticatedCheckpoint(
+      sequence: unsigned.sequence,
+      hash: unsigned.hash,
+      byteLength: unsigned.byteLength,
+      modifiedMicros: unsigned.modifiedMicros,
+      changedMicros: unsigned.changedMicros,
+      authenticatorId: unsigned.authenticatorId,
+      mac: Uint8List.fromList(mac),
+    );
     final checkpointFile = checkpointFileFor(file);
     await checkpointFile.parent.create(recursive: true);
-    final temporary = File(
-      '${checkpointFile.path}.tmp.$pid.${DateTime.now().microsecondsSinceEpoch}',
-    );
+    final temporary = File('${checkpointFile.path}.tmp');
     await temporary.writeAsString(
-      '${canonicalJson(head.toJson())}\n',
+      '${canonicalJson(checkpoint.toJson())}\n',
       flush: true,
     );
     try {
@@ -614,5 +873,50 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
       }
       await temporary.rename(checkpointFile.path);
     }
+    _trustedHeads[file.absolute.path] = checkpoint;
   }
+
+  bool _checkpointMatchesStat(
+    _AuthenticatedCheckpoint checkpoint,
+    FileStat stat,
+  ) =>
+      checkpoint.byteLength == stat.size &&
+      checkpoint.modifiedMicros == _micros(stat.modified) &&
+      checkpoint.changedMicros == _micros(stat.changed);
+
+  bool _sameCheckpoint(
+    _AuthenticatedCheckpoint left,
+    _AuthenticatedCheckpoint right,
+  ) =>
+      left.sequence == right.sequence &&
+      left.hash == right.hash &&
+      left.byteLength == right.byteLength &&
+      left.modifiedMicros == right.modifiedMicros &&
+      left.changedMicros == right.changedMicros &&
+      left.authenticatorId == right.authenticatorId &&
+      constantTimeBytesEqual(left.mac, right.mac);
+}
+
+bool _isSha256(String value) => RegExp(r'^[0-9a-f]{64}$').hasMatch(value);
+
+int _micros(DateTime value) => value.toUtc().microsecondsSinceEpoch;
+
+String _hex(List<int> bytes) => bytes
+    .map((int value) => value.toRadixString(16).padLeft(2, '0'))
+    .join();
+
+Uint8List _hexDecode(String value) {
+  if (value.length.isOdd || !RegExp(r'^[0-9a-f]*$').hasMatch(value)) {
+    throw const FormatException('Invalid hexadecimal value.');
+  }
+  return Uint8List.fromList(
+    List<int>.generate(
+      value.length ~/ 2,
+      (int index) => int.parse(
+        value.substring(index * 2, index * 2 + 2),
+        radix: 16,
+      ),
+      growable: false,
+    ),
+  );
 }
