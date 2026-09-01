@@ -15,11 +15,16 @@ final class DeviceConnectionSnapshot {
     required this.left,
     required this.right,
     required this.observedAt,
-  });
+    this.generation = 0,
+    this.pairIdentity = 'unselected',
+  })  : assert(generation >= 0),
+        assert(pairIdentity != '');
 
   final DeviceLinkState left;
   final DeviceLinkState right;
   final DateTime observedAt;
+  final int generation;
+  final String pairIdentity;
 
   bool get bothConnected =>
       left == DeviceLinkState.connected && right == DeviceLinkState.connected;
@@ -29,6 +34,11 @@ final class DeviceConnectionSnapshot {
       right == DeviceLinkState.degraded ||
       (left == DeviceLinkState.connected) !=
           (right == DeviceLinkState.connected);
+
+  bool isSideConnected(GlassesSide side) => switch (side) {
+        GlassesSide.left => left == DeviceLinkState.connected,
+        GlassesSide.right => right == DeviceLinkState.connected,
+      };
 }
 
 /// A transport acknowledgement separates delivery certainty from protocol
