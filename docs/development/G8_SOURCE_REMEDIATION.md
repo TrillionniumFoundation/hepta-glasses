@@ -1,4 +1,4 @@
-# G8 source-integrity and documentation remediation
+# G8 source-integrity, privacy, and documentation remediation
 
 Status: repository-side implementation record. It is not independent approval or product-release evidence.
 
@@ -11,8 +11,10 @@ Status: repository-side implementation record. It is not independent approval or
 - retained exact synthetic-fixture history acknowledgements while leaving provider-side credential revocation as an external gate;
 - replaced stale Android/iOS G1 BLE documentation with current readiness, disconnect, request-correlation, and speech behavior;
 - added machine-readable Project State, platform capability matrix, and G1 BLE protocol contract;
-- expanded the release runbook to the actual seven-job and seven-artifact contract.
+- expanded the release runbook to the actual seven-job and seven-artifact contract;
+- made assistant transcript/answer history explicit opt-in, disabled it by default on every application start, limited it to process memory, and made opt-out immediately destructive;
+- added controller and widget regression tests plus a repository contract test for the history-consent boundary.
 
 ## Evidence ceiling
 
-These changes are E0–E3 until the exact PR head completes all required jobs and produces a content-verified artifact. Physical G1, production identity/attestation, provider revocation, repository administration, vendor firmware/OTA, production OAuth/realtime, independent assurance, signing, pilot, rollout, and store release remain E5–E7 gates.
+These source changes are E0–E3 until the exact PR head completes all required jobs and produces a content-verified artifact. Physical G1, production identity/attestation, provider revocation, repository administration, vendor firmware/OTA, production OAuth/realtime, independent assurance, signing, pilot, rollout, and store release remain E5–E7 gates.

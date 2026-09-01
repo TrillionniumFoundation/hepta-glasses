@@ -31,7 +31,7 @@
         "E3",
         "E4"
       ],
-      "claim": "Historical G4 exact-head source evidence only; it does not attest the current G7 tree"
+      "claim": "Historical G4 exact-head source evidence only; it does not attest the current G7/G8 tree"
     },
     {
       "id": "EV-SRC-G5-AUDIT-V1",
@@ -42,7 +42,7 @@
         "E2",
         "E3"
       ],
-      "claim": "G5 audit controls incorporated into G7; the G5/G6 red CI runs are not E4 evidence"
+      "claim": "G5 audit controls incorporated into the converged candidate; historical red CI runs are not current E4 evidence"
     },
     {
       "id": "EV-SRC-G7-CANDIDATE-V1",
@@ -64,7 +64,7 @@
         "E2",
         "E3"
       ],
-      "claim": "Full-chain audit append integrity, v2 contract convergence, current BLE documentation, and machine-readable source boundaries; E4 still requires exact-head CI"
+      "claim": "Full-chain audit append integrity, v2 contract convergence, current BLE documentation, machine-readable source boundaries, and opt-in process-memory assistant history; E4 still requires exact-head CI"
     }
   ],
   "ci_records": {
@@ -94,6 +94,7 @@
   "rules": [
     "Digital-twin or synthetic trace evidence cannot be indexed as physical-device evidence.",
     "No evidence file may contain raw credentials, signing material, raw audio, or sensitive transcript content.",
+    "Assistant transcript or answer history requires direct user opt-in and cannot be inferred from use of the assistant.",
     "Production and release claims require the product release gate to pass.",
     "Self-review is not independent review.",
     "A source CI pass does not close an external gate.",

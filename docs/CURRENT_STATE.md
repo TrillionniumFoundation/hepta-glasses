@@ -1,16 +1,17 @@
 # Hepta Glasses OS current state
 
-Last updated: 2026-08-31
+Last updated: 2026-09-01
 Canonical plan revision: `2026-08-31-g7`
 
 ## Authoritative source candidate
 
 Revision g7 converges the strongest repository-side controls from the prior G4,
-G5, and G6 lines. Its authoritative identity is not this prose: E4 exists only
-when the unchanged candidate commit and tree complete every required CI job and
-the resulting `hepta-source-evidence-<sha>` artifact passes content verification.
-A local run, source export, parent-commit result, PR description, or manually
-written SHA is not exact-head evidence.
+G5, and G6 lines, with G8 source remediations recorded separately. Its
+authoritative identity is not this prose: E4 exists only when the unchanged
+candidate commit and tree complete every required CI job and the resulting
+`hepta-source-evidence-<sha>` artifact passes content verification. A local run,
+source export, parent-commit result, PR description, or manually written SHA is
+not exact-head evidence.
 
 ## Demonstrated repository-side state
 
@@ -26,6 +27,9 @@ The source candidate contains:
   torn-tail rejection, and bounded scheduler shutdown;
 - atomic single-use lease consumption, in-flight idempotency coalescing,
   cancellation-aware model requests, and deterministic assistant/text paging;
+- assistant transcript/answer history that is disabled by default, enabled only
+  by a direct user control, retained only in process memory, and deleted
+  immediately on opt-out;
 - atomic realtime ticket activation and capability execution under concurrent
   requests;
 - package-byte verification for Skills and a Codex worker that requires network
@@ -39,10 +43,10 @@ The source candidate contains:
 - one read-only CI workflow. Temporary self-modifying remediation workflows and
   stale exact-head marker files are not part of the candidate authority.
 
-Repository contracts and deterministic Python/native checks pass locally on the
-working candidate. This statement is E1–E3 only; it deliberately does not claim
-a successful g7 exact-head GitHub Actions run before that run exists.
-
+Repository contracts and deterministic tests can establish E1–E3 for a working
+candidate. E4 is determined only by GitHub's successful exact-head run and its
+content-addressed evidence artifact; any later source push invalidates the prior
+E4 record until the full matrix succeeds again.
 
 ## Machine-readable current boundaries
 

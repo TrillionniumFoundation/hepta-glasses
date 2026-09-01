@@ -24,37 +24,74 @@ class _EvenAIListPageState extends State<EvenAIListPage> {
         appBar: AppBar(
           title: const Text('History', style: TextStyle(fontSize: 20)),
         ),
-        body: Obx(() {
-          if (controller.items.isEmpty && !EvenAI.isEvenAISyncing.value) {
-            return const Center(
-              child: Text(
-                'Press and hold left TouchBar to engage Even AI.',
-                style: TextStyle(color: Colors.grey),
-                textAlign: TextAlign.center,
+        body: Obx(
+          () => Column(
+            children: <Widget>[
+              SwitchListTile(
+                key: const ValueKey<String>('history-consent-switch'),
+                title: const Text('Save assistant history'),
+                subtitle: Text(
+                  controller.historyEnabled.value
+                      ? 'Enabled for this app process only. Turning it off '
+                          'immediately clears all saved questions and answers.'
+                      : 'Off by default. Questions and answers are not retained.',
+                ),
+                value: controller.historyEnabled.value,
+                onChanged: controller.setHistoryEnabled,
               ),
-            );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-            itemCount: controller.items.length,
-            itemBuilder: (BuildContext context, int index) => Obx(
-              () => GestureDetector(
-                key: ValueKey<String>('history-item-$index'),
-                onTap: () {
-                  if (controller.selectedIndex.value == index) {
-                    controller.deselectItem();
-                  } else {
-                    controller.selectItem(index);
-                  }
-                },
-                child: controller.selectedIndex.value == index
-                    ? _buildItemDetail(index)
-                    : _buildItem(index),
-              ),
-            ),
-          );
-        }),
+              const Divider(height: 1),
+              Expanded(child: _buildHistoryBody()),
+            ],
+          ),
+        ),
       );
+
+  Widget _buildHistoryBody() {
+    if (!controller.historyEnabled.value) {
+      return const Center(
+        key: ValueKey<String>('history-disabled'),
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Assistant history is off. Enable it above to retain questions '
+            'and answers temporarily in this app process.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+    if (controller.items.isEmpty && !EvenAI.isEvenAISyncing.value) {
+      return const Center(
+        key: ValueKey<String>('history-enabled-empty'),
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'History is enabled. Press and hold the left TouchBar to engage '
+            'Even AI.',
+            style: TextStyle(color: Colors.grey),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      itemCount: controller.items.length,
+      itemBuilder: (BuildContext context, int index) => GestureDetector(
+        key: ValueKey<String>('history-item-$index'),
+        onTap: () {
+          if (controller.selectedIndex.value == index) {
+            controller.deselectItem();
+          } else {
+            controller.selectItem(index);
+          }
+        },
+        child: controller.selectedIndex.value == index
+            ? _buildItemDetail(index)
+            : _buildItem(index),
+      ),
+    );
+  }
 
   Widget _buildItem(int index) {
     final item = controller.items[index];
