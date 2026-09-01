@@ -21,21 +21,24 @@ void main() {
     expect(controller.items, isEmpty);
   });
 
-  test('disabling assistant history deletes retained content and selection', () {
-    final controller = EvenaiModelController();
+  test(
+    'disabling assistant history deletes retained content and selection',
+    () {
+      final controller = EvenaiModelController();
 
-    controller.setHistoryEnabled(true);
-    expect(controller.addItem('Question', 'Answer'), isTrue);
-    controller.selectItem(0);
-    expect(controller.items, hasLength(1));
-    expect(controller.selectedIndex.value, 0);
+      controller.setHistoryEnabled(true);
+      expect(controller.addItem('Question', 'Answer'), isTrue);
+      controller.selectItem(0);
+      expect(controller.items, hasLength(1));
+      expect(controller.selectedIndex.value, 0);
 
-    controller.setHistoryEnabled(false);
+      controller.setHistoryEnabled(false);
 
-    expect(controller.historyEnabled.value, isFalse);
-    expect(controller.items, isEmpty);
-    expect(controller.selectedIndex.value, isNull);
-  });
+      expect(controller.historyEnabled.value, isFalse);
+      expect(controller.items, isEmpty);
+      expect(controller.selectedIndex.value, isNull);
+    },
+  );
 
   testWidgets('history consent control gates and clears UI history', (
     WidgetTester tester,
