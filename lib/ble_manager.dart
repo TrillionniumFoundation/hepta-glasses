@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:demo_ai_even/app.dart';
 import 'package:demo_ai_even/runtime/ble_request_slot.dart';
@@ -6,11 +7,12 @@ import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
 import 'package:demo_ai_even/services/ble.dart';
 import 'package:demo_ai_even/services/evenai.dart';
 import 'package:demo_ai_even/services/proto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 typedef SendResultParse = bool Function(Uint8List value);
 
-class BleManager {
+class BleManager implements BleConnectionSource {
   BleManager._();
 
   Function()? onStatusChanged;
@@ -40,18 +42,25 @@ class BleManager {
   bool isConnected = false;
   String connectionStatus = 'Not connected';
   int _connectionGeneration = 0;
+  String _pairIdentity = unselectedBlePairIdentity;
   bool isLeftConnected = false;
   bool isRightConnected = false;
   final StreamController<BleConnectionSnapshot> _connectionController =
       StreamController<BleConnectionSnapshot>.broadcast();
 
   int get connectionGeneration => _connectionGeneration;
+  String get pairIdentity => _pairIdentity;
+
+  @override
   Stream<BleConnectionSnapshot> get connectionSnapshots =>
       _connectionController.stream;
+
+  @override
   BleConnectionSnapshot get connectionSnapshot => BleConnectionSnapshot(
         leftConnected: isLeftConnected,
         rightConnected: isRightConnected,
         generation: _connectionGeneration,
+        pairIdentity: _pairIdentity,
       );
 
   void _publishConnectionSnapshot() {
@@ -100,9 +109,18 @@ class BleManager {
   }
 
   Future<void> connectToGlasses(String deviceName) async {
+    final normalizedPair = deviceName.trim();
+    if (normalizedPair.isEmpty) {
+      throw ArgumentError.value(deviceName, 'deviceName');
+    }
     beatHeartTimer?.cancel();
     beatHeartTimer = null;
-    _failPendingRequests('connection_replaced', effectMayHaveOccurred: true);
+    _failPendingRequests(
+      'connection_replaced',
+      effectMayHaveOccurred: true,
+      generation: _connectionGeneration,
+    );
+    _pairIdentity = normalizedPair;
     connectionStatus = 'Connecting...';
     isLeftConnected = false;
     isRightConnected = false;
@@ -111,7 +129,7 @@ class BleManager {
     onStatusChanged?.call();
     try {
       await _channel.invokeMethod<void>('connectToGlasses', <String, Object?>{
-        'deviceName': deviceName,
+        'deviceName': normalizedPair,
       });
     } on PlatformException catch (error) {
       connectionStatus = 'Not connected';
@@ -178,16 +196,30 @@ class BleManager {
     return 0;
   }
 
+  String _pairIdentityFrom(dynamic arguments) {
+    if (arguments is Map) {
+      final raw = arguments['pairIdentity'];
+      if (raw is String && raw.trim().isNotEmpty) {
+        return raw.trim();
+      }
+    }
+    return _pairIdentity;
+  }
+
   void _adoptGeneration(int generation) {
     if (generation <= 0 || generation == _connectionGeneration) {
       return;
     }
-    _connectionGeneration = generation;
+    final retiredGeneration = _connectionGeneration;
     _failPendingRequests(
       'connection_generation_changed',
       effectMayHaveOccurred: true,
+      generation: retiredGeneration,
     );
-    _requestRegistry.clearQuarantine();
+    _connectionGeneration = generation;
+    if (retiredGeneration > 0) {
+      _requestRegistry.clearQuarantineForGeneration(retiredGeneration);
+    }
   }
 
   bool _isStaleGeneration(int generation) =>
@@ -201,6 +233,7 @@ class BleManager {
       return;
     }
     _adoptGeneration(generation);
+    _pairIdentity = _pairIdentityFrom(arguments);
     final values = arguments is Map ? arguments : const <Object?, Object?>{};
     final leftName = values['leftDeviceName']?.toString() ?? 'left';
     final rightName = values['rightDeviceName']?.toString() ?? 'right';
@@ -220,7 +253,10 @@ class BleManager {
     }
     PrivacySafeLog.event(
       'ble_connected',
-      fields: <String, Object?>{'generation': _connectionGeneration},
+      fields: <String, Object?>{
+        'generation': _connectionGeneration,
+        'pair_identity': _pairIdentity,
+      },
     );
   }
 
@@ -266,6 +302,7 @@ class BleManager {
       return;
     }
     _adoptGeneration(generation);
+    _pairIdentity = _pairIdentityFrom(arguments);
     connectionStatus = 'Connecting...';
     isLeftConnected = false;
     isRightConnected = false;
@@ -280,7 +317,9 @@ class BleManager {
       return;
     }
     _adoptGeneration(generation);
+    _pairIdentity = _pairIdentityFrom(arguments);
     final values = arguments is Map ? arguments : const <Object?, Object?>{};
+    final side = values['side']?.toString();
     isLeftConnected = values['left_connected'] == true;
     isRightConnected = values['right_connected'] == true;
     isConnected = isLeftConnected && isRightConnected;
@@ -292,13 +331,19 @@ class BleManager {
     _publishConnectionSnapshot();
     beatHeartTimer?.cancel();
     beatHeartTimer = null;
-    _failPendingRequests('device_disconnected', effectMayHaveOccurred: true);
-    _requestRegistry.clearQuarantine();
+    _failPendingRequests(
+      'device_disconnected',
+      effectMayHaveOccurred: true,
+      generation: _connectionGeneration,
+      side: side == 'L' || side == 'R' ? side : null,
+    );
     onStatusChanged?.call();
     PrivacySafeLog.event(
       'ble_disconnected',
       fields: <String, Object?>{
         'generation': _connectionGeneration,
+        'pair_identity': _pairIdentity,
+        'side': side ?? 'unknown',
         'left_connected': isLeftConnected,
         'right_connected': isRightConnected,
       },
@@ -335,6 +380,17 @@ class BleManager {
         fields: <String, Object?>{
           'response_generation': response.generation,
           'current_generation': _connectionGeneration,
+        },
+      );
+      return;
+    }
+    if (response.pairIdentity != unselectedBlePairIdentity &&
+        response.pairIdentity != _pairIdentity) {
+      PrivacySafeLog.event(
+        'ble_stale_pair_response',
+        fields: <String, Object?>{
+          'response_pair_identity': response.pairIdentity,
+          'current_pair_identity': _pairIdentity,
         },
       );
       return;
@@ -417,6 +473,7 @@ class BleManager {
         _timeoutResponse(
           effectMayHaveOccurred: true,
           generation: pending.generation,
+          pairIdentity: _pairIdentity,
           errorCode: 'connection_generation_changed',
         ),
       );
@@ -436,12 +493,15 @@ class BleManager {
   static BleReceive _timeoutResponse({
     bool effectMayHaveOccurred = false,
     int? generation,
+    String? pairIdentity,
     String? errorCode,
   }) {
+    final manager = get();
     final response = BleReceive()
       ..isTimeout = true
       ..effectMayHaveOccurred = effectMayHaveOccurred
-      ..generation = generation ?? get()._connectionGeneration
+      ..generation = generation ?? manager._connectionGeneration
+      ..pairIdentity = pairIdentity ?? manager._pairIdentity
       ..errorCode = errorCode;
     return response;
   }
@@ -450,6 +510,7 @@ class BleManager {
     BleRequestKey key,
     BleRequestSlot<BleReceive> pending,
     int requestedTimeoutMs,
+    String pairIdentity,
   ) {
     final timeoutMs = requestedTimeoutMs > 0 ? requestedTimeoutMs : 1000;
     _requestTimeouts.remove(key)?.cancel();
@@ -466,6 +527,7 @@ class BleManager {
           _timeoutResponse(
             effectMayHaveOccurred: true,
             generation: pending.generation,
+            pairIdentity: pairIdentity,
             errorCode: 'ack_timeout_after_native_write',
           ),
         );
@@ -475,6 +537,7 @@ class BleManager {
         fields: <String, Object?>{
           'timeout_ms': timeoutMs,
           'generation': pending.generation,
+          'pair_identity': pairIdentity,
           'side': key.side,
           'command': key.command,
         },
@@ -485,19 +548,24 @@ class BleManager {
   void _failPendingRequests(
     String reason, {
     required bool effectMayHaveOccurred,
+    int? generation,
+    String? side,
   }) {
-    final entries = _requestRegistry.takeAllPending();
-    for (final timer in _requestTimeouts.values) {
-      timer.cancel();
-    }
-    _requestTimeouts.clear();
+    final entries = _requestRegistry.takePendingWhere(
+      (BleRequestKey key) =>
+          (generation == null || key.generation == generation) &&
+          (side == null || key.side == side),
+      quarantine: effectMayHaveOccurred,
+    );
     for (final entry in entries) {
+      _requestTimeouts.remove(entry.key)?.cancel();
       final pending = entry.value;
       if (!pending.completer.isCompleted) {
         pending.completer.complete(
           _timeoutResponse(
             effectMayHaveOccurred: effectMayHaveOccurred,
             generation: pending.generation,
+            pairIdentity: _pairIdentity,
             errorCode: reason,
           ),
         );
@@ -508,6 +576,8 @@ class BleManager {
       fields: <String, Object?>{
         'reason': reason,
         'request_count': entries.length,
+        'generation': generation,
+        'side': side,
       },
     );
   }
@@ -522,6 +592,8 @@ class BleManager {
     int timeoutMs = 200,
     bool useNext = false,
     int retry = 3,
+    int? expectedGeneration,
+    String? expectedPairIdentity,
   }) async {
     for (var attempt = 0; attempt <= retry; attempt++) {
       final response = await request(
@@ -530,6 +602,8 @@ class BleManager {
         other: other,
         timeoutMs: timeoutMs,
         useNext: useNext,
+        expectedGeneration: expectedGeneration,
+        expectedPairIdentity: expectedPairIdentity,
       );
       if (!response.isTimeout ||
           response.effectMayHaveOccurred ||
@@ -539,6 +613,8 @@ class BleManager {
     }
     return _timeoutResponse(
       effectMayHaveOccurred: false,
+      generation: expectedGeneration,
+      pairIdentity: expectedPairIdentity,
       errorCode: 'retry_budget_exhausted_before_write',
     );
   }
@@ -579,11 +655,28 @@ class BleManager {
     String? lr,
     Map<String, dynamic>? other,
     int secondDelay = 100,
+    int? expectedGeneration,
+    String? expectedPairIdentity,
   }) async {
     if (data.isEmpty) {
       return false;
     }
-    final parameters = <String, dynamic>{'data': data, ...?other};
+    final manager = get();
+    if (expectedGeneration != null &&
+        manager._connectionGeneration != expectedGeneration) {
+      return false;
+    }
+    if (expectedPairIdentity != null &&
+        manager._pairIdentity != expectedPairIdentity) {
+      return false;
+    }
+    final parameters = <String, dynamic>{
+      'data': data,
+      'expectedGeneration': expectedGeneration ?? manager._connectionGeneration,
+      'expectedPairIdentity':
+          expectedPairIdentity ?? manager._pairIdentity,
+      ...?other,
+    };
     if (lr != null) {
       if (lr != 'L' && lr != 'R') {
         return false;
@@ -600,6 +693,14 @@ class BleManager {
     if (secondDelay > 0) {
       await Future<void>.delayed(Duration(milliseconds: secondDelay));
     }
+    if (expectedGeneration != null &&
+        manager._connectionGeneration != expectedGeneration) {
+      return false;
+    }
+    if (expectedPairIdentity != null &&
+        manager._pairIdentity != expectedPairIdentity) {
+      return false;
+    }
     parameters['lr'] = 'R';
     return await invokeMethod<bool>(methodSend, parameters) == true;
   }
@@ -610,17 +711,37 @@ class BleManager {
     Map<String, dynamic>? other,
     int timeoutMs = 1000,
     bool useNext = false,
+    int? expectedGeneration,
+    String? expectedPairIdentity,
   }) async {
     if (data.isEmpty) {
       throw ArgumentError.value(data, 'data', 'must contain a command byte');
     }
     final manager = get();
     final generation = manager._connectionGeneration;
+    final pairIdentity = manager._pairIdentity;
     final side = lr ?? Proto.lR();
+    if (expectedGeneration != null && expectedGeneration != generation) {
+      return _timeoutResponse(
+        effectMayHaveOccurred: false,
+        generation: generation,
+        pairIdentity: pairIdentity,
+        errorCode: 'expected_generation_mismatch_before_write',
+      );
+    }
+    if (expectedPairIdentity != null && expectedPairIdentity != pairIdentity) {
+      return _timeoutResponse(
+        effectMayHaveOccurred: false,
+        generation: generation,
+        pairIdentity: pairIdentity,
+        errorCode: 'expected_pair_mismatch_before_write',
+      );
+    }
     if (side != 'L' && side != 'R') {
       return _timeoutResponse(
         effectMayHaveOccurred: false,
         generation: generation,
+        pairIdentity: pairIdentity,
         errorCode: 'invalid_side',
       );
     }
@@ -628,6 +749,7 @@ class BleManager {
       return _timeoutResponse(
         effectMayHaveOccurred: false,
         generation: generation,
+        pairIdentity: pairIdentity,
         errorCode: 'side_not_ready',
       );
     }
@@ -641,33 +763,41 @@ class BleManager {
       return _timeoutResponse(
         effectMayHaveOccurred: true,
         generation: generation,
+        pairIdentity: pairIdentity,
         errorCode: 'request_slot_quarantined',
       );
     }
 
+    bool authorityChanged() =>
+        manager._connectionGeneration != generation ||
+        manager._pairIdentity != pairIdentity;
+
     final slotDeadline = DateTime.now().add(const Duration(seconds: 3));
     while (_requestRegistry.contains(key)) {
-      if (manager._connectionGeneration != generation) {
+      if (authorityChanged()) {
         return _timeoutResponse(
           effectMayHaveOccurred: false,
           generation: generation,
-          errorCode: 'connection_generation_changed_before_write',
+          pairIdentity: pairIdentity,
+          errorCode: 'connection_authority_changed_before_write',
         );
       }
       if (DateTime.now().isAfter(slotDeadline)) {
         return _timeoutResponse(
           effectMayHaveOccurred: false,
           generation: generation,
+          pairIdentity: pairIdentity,
           errorCode: 'request_slot_busy',
         );
       }
       await Future<void>.delayed(const Duration(milliseconds: 5));
     }
 
-    if (manager._connectionGeneration != generation || !_isSideReady(side)) {
+    if (authorityChanged() || !_isSideReady(side)) {
       return _timeoutResponse(
         effectMayHaveOccurred: false,
         generation: generation,
+        pairIdentity: pairIdentity,
         errorCode: 'connection_changed_before_write',
       );
     }
@@ -682,6 +812,7 @@ class BleManager {
       return _timeoutResponse(
         effectMayHaveOccurred: _requestRegistry.isQuarantined(key),
         generation: generation,
+        pairIdentity: pairIdentity,
         errorCode: _requestRegistry.isQuarantined(key)
             ? 'request_slot_quarantined'
             : 'request_slot_busy',
@@ -689,22 +820,37 @@ class BleManager {
     }
 
     try {
-      final accepted = await sendData(
-        data,
-        lr: side,
-        other: other,
-      ).timeout(const Duration(seconds: 2));
-      if (!accepted && !pending.completer.isCompleted) {
+      if (authorityChanged() || !_isSideReady(side)) {
         _requestRegistry.releaseIfOwned(key, pending);
         pending.completer.complete(
           _timeoutResponse(
             effectMayHaveOccurred: false,
             generation: generation,
-            errorCode: 'native_write_not_accepted',
+            pairIdentity: pairIdentity,
+            errorCode: 'connection_changed_before_native_write',
           ),
         );
-      } else if (accepted && !pending.completer.isCompleted) {
-        _startAckTimeout(key, pending, timeoutMs);
+      } else {
+        final accepted = await sendData(
+          data,
+          lr: side,
+          other: other,
+          expectedGeneration: generation,
+          expectedPairIdentity: pairIdentity,
+        ).timeout(const Duration(seconds: 2));
+        if (!accepted && !pending.completer.isCompleted) {
+          _requestRegistry.releaseIfOwned(key, pending);
+          pending.completer.complete(
+            _timeoutResponse(
+              effectMayHaveOccurred: false,
+              generation: generation,
+              pairIdentity: pairIdentity,
+              errorCode: 'native_write_not_accepted',
+            ),
+          );
+        } else if (accepted && !pending.completer.isCompleted) {
+          _startAckTimeout(key, pending, timeoutMs, pairIdentity);
+        }
       }
     } on Object catch (error) {
       if (!pending.completer.isCompleted) {
@@ -715,6 +861,7 @@ class BleManager {
             _timeoutResponse(
               effectMayHaveOccurred: true,
               generation: generation,
+              pairIdentity: pairIdentity,
               errorCode: 'native_write_result_unknown',
             ),
           );
@@ -724,6 +871,7 @@ class BleManager {
         'ble_native_write_error',
         fields: <String, Object?>{
           'generation': generation,
+          'pair_identity': pairIdentity,
           'side': side,
           'error_type': error.runtimeType.toString(),
         },
@@ -788,11 +936,43 @@ class BleManager {
     return true;
   }
 
+  @visibleForTesting
+  Future<void> handleNativeMethodForTest(MethodCall call) =>
+      _methodCallHandler(call);
+
+  @visibleForTesting
+  void resetAuthorityForTest() {
+    beatHeartTimer?.cancel();
+    beatHeartTimer = null;
+    _heartbeatInFlight = false;
+    _failPendingRequests(
+      'test_reset',
+      effectMayHaveOccurred: true,
+    );
+    for (final timer in _requestTimeouts.values) {
+      timer.cancel();
+    }
+    _requestTimeouts.clear();
+    _requestRegistry.clearQuarantine();
+    _connectionGeneration = 0;
+    _pairIdentity = unselectedBlePairIdentity;
+    isLeftConnected = false;
+    isRightConnected = false;
+    isConnected = false;
+    connectionStatus = 'Not connected';
+    pairedGlasses.clear();
+    _publishConnectionSnapshot();
+  }
+
   Future<void> dispose() async {
     beatHeartTimer?.cancel();
     beatHeartTimer = null;
     _heartbeatInFlight = false;
     _failPendingRequests('manager_disposed', effectMayHaveOccurred: true);
+    for (final timer in _requestTimeouts.values) {
+      timer.cancel();
+    }
+    _requestTimeouts.clear();
     _requestRegistry.clearQuarantine();
     await _receiveSubscription?.cancel();
     _receiveSubscription = null;
