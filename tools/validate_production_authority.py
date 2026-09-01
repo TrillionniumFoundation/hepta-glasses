@@ -81,7 +81,7 @@ def validate_ci_release_proof() -> None:
         "python3 tools/validate_production_authority.py",
         "Build Android release graph",
         "Inspect Android release binary for test-only authority",
-        "flutter build ios --simulator --release",
+        "flutter build ios --release --no-codesign",
         "Inspect iOS release binary for test-only authority",
     )
     if any(fragment not in workflow for fragment in required):
