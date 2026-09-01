@@ -57,6 +57,12 @@ jobs:
         run: |
           set -euo pipefail
           python3 ../orchestrator/tools/run_response_authority_patch.py .
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('docs/development/G8_SOURCE_REMEDIATION.md')
+          path.write_text(path.read_text(encoding='utf-8').rstrip() + '\n', encoding='utf-8')
+          PY
           dart format \
             lib/services/ble.dart \
             lib/runtime/ble_request_slot.dart \
