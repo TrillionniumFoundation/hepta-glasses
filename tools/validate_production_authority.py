@@ -88,6 +88,10 @@ def validate_ci_release_proof() -> None:
         fail("CI lacks production authority release-build or binary-absence proof")
     if "--dart-define=HEPTA_ALLOW_DEVELOPMENT_AUTHORITY" in workflow:
         fail("CI can still request the removed development authority switch")
+    if "- 'codex/**'" in workflow or '- "codex/**"' in workflow:
+        fail("CI duplicates pull_request matrices with codex-branch push matrices")
+    if "pull_request:" not in workflow or "push:\n    branches:\n      - main" not in workflow:
+        fail("CI trigger authority must be pull_request for PRs and push for main only")
 
 
 def main() -> int:
@@ -103,6 +107,8 @@ def main() -> int:
                 "production_authority": "fail_closed_only",
                 "test_authority_location": "test/support/test_mutation_authority.dart",
                 "release_binary_absence_checks": ["android", "ios"],
+                "ci_pr_trigger": "pull_request_only",
+                "ci_main_trigger": "push_only",
             },
             separators=(",", ":"),
         )

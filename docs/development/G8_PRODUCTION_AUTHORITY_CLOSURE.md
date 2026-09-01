@@ -22,6 +22,10 @@ Deterministic lease tests use `TestMutationAuthorityProvider` from `test/support
 
 The Android lane builds the debug application, runs `assembleRelease`, expands the release APK and rejects every forbidden authority token from the resulting files. The iOS lane builds both debug and release simulator applications and rejects the same tokens from the release `App.framework` binary. Both lanes remain read-only and exact-head bound.
 
+## Single exact-head CI authority
+
+PR branches execute the canonical workflow through the `pull_request` event only. The `push` trigger is restricted to `main`. This prevents a branch push and the associated PR synchronization event from launching two matrices with the same concurrency identity and cancelling one another mid-lane. `tools/validate_production_authority.py` fails if a `codex/**` push trigger is reintroduced.
+
 ## Evidence ceiling
 
 These checks close the repository-actionable escape hatch and establish E1-E4 source/build evidence after exact-head CI succeeds. They do not supply production identity, KMS/HSM, Apple/Android attestation, physical-device qualification, signed store binaries, pilot or independent release approval. Until those external gates close, production mutation requests remain fail closed.
