@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CANONICAL_REVISION = "2026-08-31-g7"
+CANONICAL_REVISION = "2026-09-01-g8"
 AUDIT_CONTRACT = "file-lock-checkpoint-v2"
 
 REQUIRED = {
@@ -59,6 +59,10 @@ REQUIRED = {
     "lib/runtime/assistant_session.dart",
     "lib/runtime/device_effect_scheduler.dart",
     "lib/runtime/hepta_runtime.dart",
+    "lib/runtime/ble_request_slot.dart",
+    "lib/adapters/even_g1/even_g1_transport.dart",
+    "lib/ble_manager.dart",
+    "lib/services/ble.dart",
     "lib/simulator/g1_digital_twin.dart",
     "services/control_plane/identity.py",
     "services/control_plane/realtime.py",
@@ -79,8 +83,13 @@ REQUIRED = {
     "evidence/templates/ios-g1-qualification-scenario.json",
     "evidence/templates/product-release-bundle.template.json",
     ".github/workflows/ci.yml",
+    "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt",
     "android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt",
+    "ios/Runner/BluetoothManager.swift",
     "ios/RunnerTests/RunnerTests.swift",
+    "test/runtime/ble_request_slot_test.dart",
+    "test/runtime/ble_manager_authority_test.dart",
+    "test/runtime/even_g1_transport_authority_test.dart",
 }
 
 FORBIDDEN_PATTERNS = {
@@ -143,6 +152,13 @@ def validate_required() -> None:
         fail(f"missing required files: {missing}")
     if len((ROOT / "README.md").read_text(encoding="utf-8").strip()) < 500:
         fail("README.md is not a meaningful product entry point")
+    probes = sorted(
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "docs/development").glob(".*probe*")
+        if path.is_file()
+    )
+    if probes:
+        fail(f"transient connector probes remain in source authority: {probes}")
 
 
 def validate_json_contracts() -> None:
@@ -161,6 +177,7 @@ def validate_json_contracts() -> None:
         "main-branch-protection-v1.json",
         "release-gates-v1.json",
         "qualification-slo-v1.json",
+        "g1-ble-protocol-v1.json",
         "history-scan-acknowledgements-v1.json",
     ):
         read_json(ROOT / "contracts" / name)
@@ -171,15 +188,17 @@ def validate_gap_ledger() -> None:
     if ledger.get("plan_revision") != CANONICAL_REVISION:
         fail("Gap Ledger is not bound to the canonical revision")
     gaps = ledger.get("gaps")
-    if not isinstance(gaps, list) or len(gaps) < 51:
+    if not isinstance(gaps, list) or len(gaps) < 57:
         fail("Gap Ledger does not contain the complete source/external gate set")
     seen = set()
+    by_id = {}
     for gap in gaps:
         gap_id = gap.get("id")
         status = gap.get("status")
         if not isinstance(gap_id, str) or gap_id in seen:
             fail(f"invalid or duplicate gap id: {gap_id!r}")
         seen.add(gap_id)
+        by_id[gap_id] = gap
         if status not in ALLOWED_GAP_STATUSES:
             fail(f"{gap_id} has invalid status {status!r}")
         if status.startswith("CLOSED") and not gap.get("evidence"):
@@ -194,6 +213,9 @@ def validate_gap_ledger() -> None:
     source_open = [gap["id"] for gap in gaps if gap["status"] == "OPEN"]
     if source_open:
         fail(f"actionable source gaps remain open: {source_open}")
+    for gap_id in ("HG-0055", "HG-0056", "HG-0057"):
+        if by_id.get(gap_id, {}).get("status") != "CLOSED_SOURCE":
+            fail(f"{gap_id} BLE authority remediation is not source-closed")
 
 
 def iter_text_files(base: Path):
@@ -291,6 +313,112 @@ def validate_canonical_truth() -> None:
         fail("G1 BLE protocol contract identity drifted")
 
 
+def validate_ble_authority() -> None:
+    transport = (
+        ROOT / "lib/adapters/even_g1/even_g1_transport.dart"
+    ).read_text(encoding="utf-8")
+    manager = (ROOT / "lib/ble_manager.dart").read_text(encoding="utf-8")
+    slots = (ROOT / "lib/runtime/ble_request_slot.dart").read_text(
+        encoding="utf-8"
+    )
+    ios = (ROOT / "ios/Runner/BluetoothManager.swift").read_text(
+        encoding="utf-8"
+    )
+    android = (
+        ROOT
+        / "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt"
+    ).read_text(encoding="utf-8")
+    transport_test = (
+        ROOT / "test/runtime/even_g1_transport_authority_test.dart"
+    ).read_text(encoding="utf-8")
+    manager_test = (
+        ROOT / "test/runtime/ble_manager_authority_test.dart"
+    ).read_text(encoding="utf-8")
+    ios_test = (ROOT / "ios/RunnerTests/RunnerTests.swift").read_text(
+        encoding="utf-8"
+    )
+
+    transport_fragments = (
+        "pairIdentity",
+        "generation",
+        "side",
+        "payloadDigest",
+        "expectedGeneration",
+        "expectedPairIdentity",
+        "idempotency_authority_capacity_exhausted",
+    )
+    if any(fragment not in transport for fragment in transport_fragments):
+        fail("public BLE transport does not bind complete idempotency authority")
+
+    manager_fragments = (
+        "clearQuarantineForGeneration(retiredGeneration)",
+        "takePendingWhere",
+        "expected_generation_mismatch_before_write",
+        "expected_pair_mismatch_before_write",
+        "request_slot_quarantined",
+    )
+    if any(fragment not in manager for fragment in manager_fragments):
+        fail("Flutter BLE request authority or scoped quarantine drifted")
+    disconnect_section = manager.split("void _onGlassesDisconnected", 1)[1].split(
+        "void _onPairedGlassesFound", 1
+    )[0]
+    if "clearQuarantine" in disconnect_section:
+        fail("disconnect path globally clears uncertain-write quarantine")
+    if "clearQuarantineForGenerationSide" not in slots:
+        fail("BLE request registry lacks exact-leg reconciliation release")
+
+    ios_fragments = (
+        "PeripheralAttemptToken",
+        "ConnectionAttemptAuthority",
+        "RetiredConnectionBarrier",
+        "PeripheralAttemptDelegate",
+        "guard owns(peripheral, token: token)",
+        "expectedAuthorityMatches",
+    )
+    if any(fragment not in ios for fragment in ios_fragments):
+        fail("iOS callbacks are not bound to immutable connection attempts")
+    if "else { return \"R\" }" in ios or "? \"L\" : \"R\"" in ios:
+        fail("iOS callback side has an unsafe right-leg fallback")
+
+    for native_source, name in ((android, "Android"), (ios, "iOS")):
+        if (
+            "expectedGeneration" not in native_source
+            or "expectedPairIdentity" not in native_source
+        ):
+            fail(f"{name} native writer does not enforce captured authority")
+
+    test_fragments = (
+        "same caller key cannot alias left and right legs",
+        "same caller key is a new authority after reconnect generation",
+        "same caller key is a new authority for a different pair",
+        "same scoped authority rejects argument drift",
+    )
+    if any(fragment not in transport_test for fragment in test_fragments):
+        fail("hostile transport authority regression set is incomplete")
+    if "left disconnect cannot release an uncertain right-leg write" not in manager_test:
+        fail("one-leg disconnect quarantine regression is missing")
+    if "testGenerationNTokenCannotOwnGenerationNPlusOne" not in ios_test:
+        fail("iOS stale-attempt regression is missing")
+
+    protocol = read_json(ROOT / "contracts/g1-ble-protocol-v1.json")
+    authority = protocol.get("authority")
+    if protocol.get("version", 0) < 2 or not isinstance(authority, dict):
+        fail("machine-readable BLE authority contract is missing")
+    idempotency = authority.get("idempotency_identity", [])
+    required_identity = {
+        "pair_identity",
+        "connection_generation",
+        "side",
+        "caller_idempotency_key",
+        "payload_sha256",
+    }
+    if set(idempotency) != required_identity:
+        fail("machine-readable BLE idempotency identity drifted")
+    quarantine = authority.get("uncertain_write_quarantine", {})
+    if quarantine.get("opposite_leg_disconnect_releases") is not False:
+        fail("BLE contract permits opposite-leg quarantine release")
+
+
 def validate_single_ci_authority() -> None:
     workflows = sorted(
         str(path.relative_to(ROOT))
@@ -304,22 +432,28 @@ def validate_single_ci_authority() -> None:
 
 
 def validate_history_gate() -> None:
-    acknowledgement_contract = read_json(ROOT / "contracts/history-scan-acknowledgements-v1.json")
+    acknowledgement_contract = read_json(
+        ROOT / "contracts/history-scan-acknowledgements-v1.json"
+    )
     acknowledgements = acknowledgement_contract.get("acknowledgements")
-    if acknowledgement_contract.get("schema_version") != 1 or not isinstance(acknowledgements, list):
+    if acknowledgement_contract.get("schema_version") != 1 or not isinstance(
+        acknowledgements, list
+    ):
         fail("history acknowledgement contract is malformed")
     if not acknowledgements:
         fail("history acknowledgement contract is unexpectedly empty")
     for acknowledgement in acknowledgements:
         if acknowledgement.get("classification") != "synthetic_test_fixture":
             fail("history acknowledgement is broader than a synthetic fixture")
-        if not re.fullmatch(r"[0-9a-f]{64}", str(acknowledgement.get("fingerprint", ""))):
+        if not re.fullmatch(
+            r"[0-9a-f]{64}", str(acknowledgement.get("fingerprint", ""))
+        ):
             fail("history acknowledgement lacks an exact SHA-256 fingerprint")
     scanner = (ROOT / "tools/scan_git_history.py").read_text(encoding="utf-8")
     required = (
         "unscanned_blob_count",
         "MAX_BLOB_BYTES = 16 * 1024 * 1024",
-        "report[\"unscanned_blob_count\"]",
+        'report["unscanned_blob_count"]',
         "unused_acknowledgement_count",
         "synthetic_test_fixture",
     )
@@ -420,6 +554,7 @@ def main() -> int:
         validate_gap_ledger,
         validate_boundaries,
         validate_canonical_truth,
+        validate_ble_authority,
         validate_single_ci_authority,
         validate_history_gate,
         validate_codex_policy,
