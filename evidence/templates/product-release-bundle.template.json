@@ -30,7 +30,7 @@
       "sha256": "REPLACE_WITH_64_HEX"
     },
     "provenance_type": "unsigned-source-provenance-v1",
-    "contracts_version": "2026-08-31-g7"
+    "contracts_version": "2026-09-01-g8"
   },
   "branch_protection": {
     "protected": false,
