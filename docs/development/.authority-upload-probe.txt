@@ -1,0 +1,1 @@
+This transient probe verifies the connector's file-write path before the atomic source candidate is built.
