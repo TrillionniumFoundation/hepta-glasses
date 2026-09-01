@@ -1,0 +1,568 @@
+{
+  "schema_version": 1,
+  "plan_revision": "2026-09-01-g8",
+  "documentation_contract": "module-guide-v1",
+  "rules": {
+    "source_root_must_exist": true,
+    "documentation_reference_must_exist": true,
+    "module_marker_required": true,
+    "test_reference_must_exist": true,
+    "contract_reference_must_exist": true,
+    "external_gates_are_not_source_closed": true
+  },
+  "modules": [
+    {
+      "id": "mobile-shell",
+      "owner": "mobile",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        "lib/main.dart",
+        "lib/bootstrap/hepta_bootstrap.dart",
+        "lib/app.dart",
+        "lib/views",
+        "lib/controllers",
+        "lib/models"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#mobile-shell"
+      ],
+      "tests": [
+        "test/widget_test.dart",
+        "test/runtime/even_ai_history_page_test.dart"
+      ],
+      "contracts": [
+        "schemas/display-card.schema.json"
+      ],
+      "external_gates": [
+        "release signing, store packaging, accessibility and device-matrix evidence"
+      ]
+    },
+    {
+      "id": "edge-runtime",
+      "owner": "runtime",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        "lib/runtime/hepta_runtime.dart",
+        "lib/runtime/task_engine.dart",
+        "lib/runtime/device_effect_scheduler.dart",
+        "lib/runtime/display_composer.dart",
+        "lib/runtime/contracts.dart",
+        "lib/runtime/canonical_json.dart",
+        "lib/runtime/clock.dart"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#edge-runtime"
+      ],
+      "tests": [
+        "test/runtime/task_engine_test.dart",
+        "test/runtime/device_effect_scheduler_test.dart",
+        "test/runtime/display_composer_test.dart"
+      ],
+      "contracts": [
+        "contracts/hepta-glasses-runtime-v1.json",
+        "schemas/display-card.schema.json"
+      ],
+      "external_gates": [
+        "production identity-backed authority and physical effect qualification"
+      ]
+    },
+    {
+      "id": "policy-tool-gateway",
+      "owner": "runtime-security",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        "lib/runtime/policy_engine.dart",
+        "lib/runtime/tool_gateway.dart",
+        "lib/runtime/mutation_authority.dart",
+        "lib/runtime/device_effect_result.dart"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#policy-tool-gateway"
+      ],
+      "tests": [
+        "test/runtime/policy_engine_test.dart",
+        "test/runtime/tool_gateway_test.dart",
+        "test/runtime/tool_effect_semantics_test.dart",
+        "test/runtime/mutation_authority_test.dart"
+      ],
+      "contracts": [
+        "schemas/decision-lease.schema.json",
+        "schemas/tool-request.schema.json",
+        "schemas/tool-receipt.schema.json"
+      ],
+      "external_gates": [
+        "production issuer, attestation, biometric proof and authoritative reconcilers"
+      ]
+    },
+    {
+      "id": "audit-journal",
+      "owner": "runtime-security",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        "lib/runtime/audit_journal.dart",
+        "lib/runtime/audit_checkpoint_authenticator.dart",
+        "android/app/src/main/kotlin/com/example/demo_ai_even/security/AuditCheckpointSigner.kt",
+        "ios/Runner/AuditCheckpointSigner.swift"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#audit-journal"
+      ],
+      "tests": [
+        "test/runtime/audit_journal_test.dart",
+        "test/runtime/audit_journal_v3_test.dart"
+      ],
+      "contracts": [
+        "contracts/hepta-glasses-runtime-v1.json",
+        "contracts/release-gates-v1.json"
+      ],
+      "external_gates": [
+        "production retention, export, rotation, WORM or remote-root anchoring policy"
+      ]
+    },
+    {
+      "id": "g1-transport",
+      "owner": "device",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        "lib/ble_manager.dart",
+        "lib/adapters/even_g1",
+        "lib/runtime/ble_request_slot.dart",
+        "lib/runtime/device_hal.dart",
+        "lib/runtime/dual_leg_coordinator.dart",
+        "lib/services/ble.dart",
+        "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth",
+        "ios/Runner/BluetoothManager.swift"
+      ],
+      "documentation": [
+        "docs/G1_BLE_CONNECTION.md",
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#g1-transport"
+      ],
+      "tests": [
+        "test/runtime/ble_manager_authority_test.dart",
+        "test/runtime/ble_request_slot_test.dart",
+        "test/runtime/even_g1_transport_authority_test.dart",
+        "test/runtime/dual_leg_coordinator_test.dart",
+        "ios/RunnerTests/RunnerTests.swift",
+        "android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt"
+      ],
+      "contracts": [
+        "contracts/g1-ble-protocol-v1.json",
+        "schemas/glasses-event.schema.json"
+      ],
+      "external_gates": [
+        "physical Android/iOS G1 qualification and vendor protocol authority"
+      ]
+    },
+    {
+      "id": "g1-protocol-features",
+      "owner": "device-runtime",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        "lib/services/proto.dart",
+        "lib/services/evenai_proto.dart",
+        "lib/controllers/bmp_update_manager.dart",
+        "lib/services/features_services.dart",
+        "lib/services/text_service.dart",
+        "lib/views/features"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#g1-protocol-features",
+        "docs/G1_BLE_CONNECTION.md"
+      ],
+      "tests": [
+        "test/runtime/bmp_update_manager_test.dart",
+        "test/runtime/heartbeat_retry_contract_test.dart",
+        "test/runtime/tool_effect_semantics_test.dart"
+      ],
+      "contracts": [
+        "contracts/g1-ble-protocol-v1.json"
+      ],
+      "external_gates": [
+        "firmware command confirmation, readback support and physical display/notification qualification"
+      ]
+    },
+    {
+      "id": "assistant-speech",
+      "owner": "mobile-ai",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        "lib/services/evenai.dart",
+        "lib/runtime/assistant_session.dart",
+        "lib/runtime/model_gateway.dart",
+        "lib/services/api_services.dart",
+        "lib/services/api_services_deepseek.dart",
+        "ios/Runner/SpeechStreamRecognizer.swift"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#assistant-speech"
+      ],
+      "tests": [
+        "test/runtime/assistant_session_test.dart",
+        "test/runtime/model_gateway_test.dart",
+        "test/runtime/ios_speech_finalization_contract_test.dart",
+        "test/runtime/microphone_retry_contract_test.dart"
+      ],
+      "contracts": [
+        "schemas/realtime-ticket.schema.json",
+        "schemas/display-card.schema.json"
+      ],
+      "external_gates": [
+        "Android PCM-to-ASR, production model/realtime tenancy and physical latency/privacy qualification"
+      ]
+    },
+    {
+      "id": "android-native",
+      "owner": "android",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        "android/app/src/main/kotlin",
+        "android/app/src/main/cpp",
+        "android/app/src/main/AndroidManifest.xml",
+        "android/app/build.gradle"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#android-native",
+        "docs/G1_BLE_CONNECTION.md"
+      ],
+      "tests": [
+        "android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt",
+        "test/runtime/heartbeat_retry_contract_test.dart"
+      ],
+      "contracts": [
+        "contracts/g1-ble-protocol-v1.json",
+        "docs/PLATFORM_CAPABILITIES.json"
+      ],
+      "external_gates": [
+        "physical G1, Android ASR, signing, Play Integrity and release-device matrix"
+      ]
+    },
+    {
+      "id": "ios-native",
+      "owner": "ios",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        "ios/Runner",
+        "ios/Runner.xcodeproj"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#ios-native",
+        "docs/G1_BLE_CONNECTION.md"
+      ],
+      "tests": [
+        "ios/RunnerTests/RunnerTests.swift",
+        "test/runtime/ios_speech_finalization_contract_test.dart"
+      ],
+      "contracts": [
+        "contracts/g1-ble-protocol-v1.json",
+        "docs/PLATFORM_CAPABILITIES.json"
+      ],
+      "external_gates": [
+        "physical G1, locale/device speech qualification, App Attest and release signing"
+      ]
+    },
+    {
+      "id": "digital-twin",
+      "owner": "device",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        "lib/simulator/g1_digital_twin.dart"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#digital-twin"
+      ],
+      "tests": [
+        "test/runtime/g1_digital_twin_authority_test.dart",
+        "test/runtime/dual_leg_coordinator_test.dart"
+      ],
+      "contracts": [
+        "contracts/g1-ble-protocol-v1.json"
+      ],
+      "external_gates": [
+        "never substitutes for physical E5 evidence"
+      ]
+    },
+    {
+      "id": "model-gateway-service",
+      "owner": "ai-platform",
+      "lifecycle": "development_reference",
+      "source_roots": [
+        "services/model_gateway"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#model-gateway-service",
+        "services/model_gateway/README.md"
+      ],
+      "tests": [
+        "services/model_gateway/test_app.py"
+      ],
+      "contracts": [
+        "contracts/control-plane-v1.json"
+      ],
+      "external_gates": [
+        "production provider tenancy, KMS secret reference, quotas, retention and observability"
+      ]
+    },
+    {
+      "id": "identity-control-plane",
+      "owner": "cloud-security",
+      "lifecycle": "development_reference",
+      "source_roots": [
+        "services/control_plane/identity.py"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#identity-control-plane",
+        "docs/operations/PRODUCTION_CONTROL_PLANE_RUNBOOK.md"
+      ],
+      "tests": [
+        "services/control_plane/test_identity.py"
+      ],
+      "contracts": [
+        "contracts/control-plane-v1.json",
+        "schemas/access-token-claims.schema.json"
+      ],
+      "external_gates": [
+        "persistent database, KMS/HSM, platform attestation, multi-instance revocation and recovery drills"
+      ]
+    },
+    {
+      "id": "realtime-control-plane",
+      "owner": "cloud",
+      "lifecycle": "development_reference",
+      "source_roots": [
+        "services/control_plane/realtime.py"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#realtime-control-plane",
+        "docs/operations/REALTIME_AND_CAPABILITY_RUNBOOK.md"
+      ],
+      "tests": [
+        "services/control_plane/test_realtime.py"
+      ],
+      "contracts": [
+        "contracts/control-plane-v1.json",
+        "schemas/realtime-ticket.schema.json"
+      ],
+      "external_gates": [
+        "production realtime provider, OAuth registration, broker persistence and provider-side revoke"
+      ]
+    },
+    {
+      "id": "capability-control-plane",
+      "owner": "capabilities",
+      "lifecycle": "development_reference",
+      "source_roots": [
+        "services/control_plane/capabilities.py"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#capability-control-plane",
+        "docs/operations/REALTIME_AND_CAPABILITY_RUNBOOK.md"
+      ],
+      "tests": [
+        "services/control_plane/test_capabilities.py"
+      ],
+      "contracts": [
+        "contracts/control-plane-v1.json",
+        "schemas/decision-lease.schema.json",
+        "schemas/tool-receipt.schema.json"
+      ],
+      "external_gates": [
+        "production OAuth adapters, opaque credential vault, authoritative receipts and timeout reconciliation"
+      ]
+    },
+    {
+      "id": "skills-registry",
+      "owner": "skills",
+      "lifecycle": "development_reference",
+      "source_roots": [
+        "services/skills/registry.py"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#skills-registry",
+        "docs/CAPABILITY_MODEL.md"
+      ],
+      "tests": [
+        "services/skills/test_registry.py"
+      ],
+      "contracts": [
+        "schemas/skill-manifest.schema.json"
+      ],
+      "external_gates": [
+        "asymmetric trust roots, encrypted package store, execution sandbox and independent review"
+      ]
+    },
+    {
+      "id": "memory",
+      "owner": "privacy",
+      "lifecycle": "development_reference",
+      "source_roots": [
+        "services/skills/memory.py",
+        "lib/controllers/evenai_model_controller.dart"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#memory",
+        "docs/PRIVACY_MODEL.md"
+      ],
+      "tests": [
+        "services/skills/test_memory.py",
+        "test/runtime/even_ai_history_page_test.dart",
+        "services/qualification/test_history_consent_contract.py"
+      ],
+      "contracts": [
+        "schemas/memory-record.schema.json"
+      ],
+      "external_gates": [
+        "encrypted persistent storage, deletion/backup drills, regional retention and independent privacy review"
+      ]
+    },
+    {
+      "id": "codex-worker",
+      "owner": "developer-platform",
+      "lifecycle": "development_reference",
+      "source_roots": [
+        "services/codex_worker"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#codex-worker",
+        "services/codex_worker/README.md"
+      ],
+      "tests": [
+        "services/codex_worker/test_worker.py"
+      ],
+      "contracts": [
+        "services/codex_worker/policy.json"
+      ],
+      "external_gates": [
+        "deployed isolation, per-task identity, egress proxy, resource quotas and compromise exercise"
+      ]
+    },
+    {
+      "id": "mcp-adapter",
+      "owner": "developer-platform",
+      "lifecycle": "development_reference",
+      "source_roots": [
+        "adapters/mcp"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#mcp-adapter",
+        "adapters/mcp/README.md"
+      ],
+      "tests": [
+        "adapters/mcp/test_mcp_server.py"
+      ],
+      "contracts": [
+        "schemas/tool-request.schema.json",
+        "schemas/tool-receipt.schema.json"
+      ],
+      "external_gates": [
+        "production registration and authorization profile if a mutating MCP surface is ever introduced"
+      ]
+    },
+    {
+      "id": "qualification-release",
+      "owner": "release",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        "services/qualification",
+        "tools/qualify_device_trace.py",
+        "tools/build_source_evidence.py",
+        "tools/evaluate_release_gate.py",
+        "tools/run_native_sanitizers.sh",
+        "tools/scan_git_history.py",
+        "evidence/templates"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#qualification-release",
+        "docs/operations/DEVICE_QUALIFICATION_RUNBOOK.md",
+        "docs/operations/RELEASE_AND_ROLLBACK_RUNBOOK.md"
+      ],
+      "tests": [
+        "services/qualification/test_device_report.py",
+        "services/qualification/test_release_gate.py",
+        "services/qualification/test_history_scan.py"
+      ],
+      "contracts": [
+        "contracts/qualification-slo-v1.json",
+        "contracts/release-gates-v1.json",
+        "schemas/device-qualification-report.schema.json",
+        "schemas/release-evidence-bundle.schema.json"
+      ],
+      "external_gates": [
+        "physical traces, independent assurance, signing, pilot, rollout, rollback and store approval"
+      ]
+    },
+    {
+      "id": "contracts-compatibility",
+      "owner": "architecture",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        "contracts",
+        "schemas"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#contracts-compatibility"
+      ],
+      "tests": [
+        "tools/validate_repository.py",
+        "tools/validate_repository_metadata.py"
+      ],
+      "contracts": [
+        "contracts/hepta-glasses-runtime-v1.json",
+        "contracts/control-plane-v1.json",
+        "contracts/g1-ble-protocol-v1.json",
+        "contracts/release-gates-v1.json"
+      ],
+      "external_gates": [
+        "consumer/provider compatibility evidence when contracts are deployed across independently versioned services"
+      ]
+    },
+    {
+      "id": "repository-governance",
+      "owner": "repository-admin",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        ".github",
+        "tools/repository_governance.py",
+        "docs/GAP_LEDGER.yaml",
+        "docs/EVIDENCE_INDEX.yaml",
+        "docs/MODULES.json"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#repository-governance",
+        "docs/operations/REPOSITORY_GOVERNANCE_RUNBOOK.md"
+      ],
+      "tests": [
+        "services/qualification/test_governance.py",
+        "tools/validate_repository.py",
+        "tools/validate_repository_metadata.py"
+      ],
+      "contracts": [
+        "contracts/main-branch-protection-v1.json"
+      ],
+      "external_gates": [
+        "administrator-applied and API-verified branch protection plus eligible latest-head approval"
+      ]
+    },
+    {
+      "id": "native-dependencies",
+      "owner": "native-tooling",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        "android/app/src/main/cpp",
+        "ios/Runner/PcmConverter.h",
+        "ios/Runner/PcmConverter.m"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#native-dependencies"
+      ],
+      "tests": [
+        "tools/run_native_sanitizers.sh"
+      ],
+      "contracts": [
+        "contracts/release-gates-v1.json"
+      ],
+      "external_gates": [
+        "supplier/version confirmation, license review, vulnerability response and binary provenance"
+      ]
+    }
+  ]
+}
