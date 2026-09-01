@@ -40,6 +40,7 @@ class BleManager private constructor() {
             "00002902-0000-1000-8000-00805f9b34fb"
         private const val REQUIRED_MTU = 203
         private const val REQUESTED_MTU = 251
+        private const val UNSELECTED_PAIR = "unselected"
 
         val instance: BleManager by lazy { BleManager() }
     }
@@ -56,6 +57,9 @@ class BleManager private constructor() {
 
     @Volatile
     private var connectionGeneration = 0
+
+    @Volatile
+    private var currentPairIdentity = UNSELECTED_PAIR
 
     private val decodeScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -140,6 +144,7 @@ class BleManager private constructor() {
 
         disconnectCurrent(notifyFlutter = false)
         connectionGeneration += 1
+        currentPairIdentity = "Pair_$deviceChannel"
         intentionalDisconnectAddresses.clear()
         notificationReadyAddresses.clear()
         readyAddresses.clear()
@@ -150,12 +155,14 @@ class BleManager private constructor() {
                 "leftDeviceName" to left.name,
                 "rightDeviceName" to right.name,
                 "generation" to connectionGeneration,
+                "pairIdentity" to currentPairIdentity,
             ),
         )
 
         val activity = weakActivity.get()
         if (activity == null) {
             connectedDevice = null
+            currentPairIdentity = UNSELECTED_PAIR
             result.error("ActivityUnavailable", "Activity is unavailable", null)
             return
         }
@@ -186,7 +193,17 @@ class BleManager private constructor() {
     }
 
     fun sendData(params: Map<*, *>?): Boolean {
-        val rawData = params?.get("data")
+        params ?: return false
+        val expectedGeneration = (params["expectedGeneration"] as? Number)?.toInt()
+        if (expectedGeneration != null && expectedGeneration != connectionGeneration) {
+            return false
+        }
+        val expectedPairIdentity = params["expectedPairIdentity"] as? String
+        if (expectedPairIdentity != null && expectedPairIdentity != currentPairIdentity) {
+            return false
+        }
+        if (currentPairIdentity == UNSELECTED_PAIR) return false
+        val rawData = params["data"]
         val data = when (rawData) {
             is ByteArray -> rawData
             else -> return false
@@ -383,14 +400,20 @@ class BleManager private constructor() {
         readyAddresses.add(address)
 
         if (pair.isBothConnected() && readyAddresses.size == 2) {
+            val generation = connectionGeneration
+            val pairIdentity = currentPairIdentity
             weakActivity.get()?.runOnUiThread {
-                if (pair === connectedDevice) {
+                if (pair === connectedDevice &&
+                    generation == connectionGeneration &&
+                    pairIdentity == currentPairIdentity
+                ) {
                     BleChannelHelper.bleMC.flutterGlassesConnected(
                         pair.toConnectedJson() +
                             mapOf(
                                 "left_connected" to true,
                                 "right_connected" to true,
-                                "generation" to connectionGeneration,
+                                "generation" to generation,
+                                "pairIdentity" to pairIdentity,
                             ),
                     )
                 }
@@ -408,6 +431,7 @@ class BleManager private constructor() {
         }
         val frame = value.copyOf()
         val generation = connectionGeneration
+        val pairIdentity = currentPairIdentity
 
         decodeScope.launch {
             val microphoneData = frame[0] == 0xF1.toByte()
@@ -415,15 +439,20 @@ class BleManager private constructor() {
                 if (frame.size != 202) return@launch
                 Cpp.decodeLC3(frame.copyOfRange(2, 202))
             }
-            if (generation != connectionGeneration) return@launch
+            if (generation != connectionGeneration ||
+                pairIdentity != currentPairIdentity
+            ) return@launch
             weakActivity.get()?.runOnUiThread {
-                if (generation != connectionGeneration) return@runOnUiThread
+                if (generation != connectionGeneration ||
+                    pairIdentity != currentPairIdentity
+                ) return@runOnUiThread
                 BleChannelHelper.bleReceive(
                     mapOf(
                         "lr" to side,
                         "data" to frame,
                         "type" to if (microphoneData) "VoiceChunk" else "Receive",
                         "generation" to generation,
+                        "pairIdentity" to pairIdentity,
                     ),
                 )
             }
@@ -463,7 +492,7 @@ class BleManager private constructor() {
             else -> "unknown"
         }
         closeGatt(gatt)
-        notifyDisconnected(reason, side, pair)
+        notifyDisconnected(reason, side, pair, currentPairIdentity)
     }
 
     private fun closeGatt(gatt: BluetoothGatt) {
@@ -476,9 +505,11 @@ class BleManager private constructor() {
 
     private fun disconnectCurrent(notifyFlutter: Boolean) {
         val pair = connectedDevice
+        val pairIdentity = currentPairIdentity
         if (pair == null) {
             notificationReadyAddresses.clear()
             readyAddresses.clear()
+            currentPairIdentity = UNSELECTED_PAIR
             return
         }
         pair.leftDevice?.address?.let(intentionalDisconnectAddresses::add)
@@ -489,16 +520,19 @@ class BleManager private constructor() {
         readyAddresses.clear()
         connectedDevice = null
         if (notifyFlutter) {
-            notifyDisconnected("user_requested", "both", pair)
+            notifyDisconnected("user_requested", "both", pair, pairIdentity)
         }
+        currentPairIdentity = UNSELECTED_PAIR
     }
 
     private fun notifyDisconnected(
         reason: String,
         side: String,
         snapshot: BlePairDevice? = connectedDevice,
+        pairIdentity: String = currentPairIdentity,
     ) {
         val pair = snapshot
+        val generation = connectionGeneration
         weakActivity.get()?.runOnUiThread {
             BleChannelHelper.bleMC.flutterGlassesDisconnected(
                 mapOf(
@@ -508,7 +542,8 @@ class BleManager private constructor() {
                     "side" to side,
                     "left_connected" to (pair?.leftDevice?.isConnect == true),
                     "right_connected" to (pair?.rightDevice?.isConnect == true),
-                    "generation" to connectionGeneration,
+                    "generation" to generation,
+                    "pairIdentity" to pairIdentity,
                 ),
             )
         }
