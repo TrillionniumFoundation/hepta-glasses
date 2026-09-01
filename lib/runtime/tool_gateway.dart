@@ -20,13 +20,39 @@ typedef ToolRecoveryReconciler = Future<Map<String, Object?>> Function(
   String externalId,
 );
 
-final class IndeterminateToolEffect implements Exception {
-  const IndeterminateToolEffect(this.externalId);
+/// The effect was rejected before the physical write boundary. A caller may
+/// create a new request only after fixing the stated precondition and obtaining
+/// fresh authority.
+final class RejectedToolEffect implements Exception {
+  const RejectedToolEffect(
+    this.code, {
+    this.externalId,
+    this.details = const <String, Object?>{},
+  });
 
-  final String externalId;
+  final String code;
+  final String? externalId;
+  final Map<String, Object?> details;
 
   @override
-  String toString() => 'IndeterminateToolEffect($externalId)';
+  String toString() => 'RejectedToolEffect($code, $externalId)';
+}
+
+/// The physical effect may have occurred and cannot be retried until an
+/// authoritative reconciler resolves the external state.
+final class IndeterminateToolEffect implements Exception {
+  const IndeterminateToolEffect(
+    this.externalId, {
+    this.code = 'tool_effect_indeterminate',
+    this.details = const <String, Object?>{},
+  });
+
+  final String externalId;
+  final String code;
+  final Map<String, Object?> details;
+
+  @override
+  String toString() => 'IndeterminateToolEffect($code, $externalId)';
 }
 
 /// Metadata-only request representation. It is sufficient for replay conflict
@@ -128,6 +154,9 @@ bool _isSha256(String value) =>
 
 Map<String, Object?> _receiptAuditJson(ToolReceipt receipt) {
   final externalId = receipt.result['external_id'];
+  final retrySafe = receipt.result['retry_safe'];
+  final effectMayHaveOccurred = receipt.result['effect_may_have_occurred'];
+  final errorCode = receipt.result['error_code'];
   return <String, Object?>{
     'request_id': receipt.requestId,
     'idempotency_key': receipt.idempotencyKey,
@@ -138,6 +167,10 @@ Map<String, Object?> _receiptAuditJson(ToolReceipt receipt) {
     'result_digest': sha256CanonicalJson(receipt.result),
     if (externalId is String && externalId.isNotEmpty)
       'external_id': externalId,
+    if (retrySafe is bool) 'retry_safe': retrySafe,
+    if (effectMayHaveOccurred is bool)
+      'effect_may_have_occurred': effectMayHaveOccurred,
+    if (errorCode is String && errorCode.isNotEmpty) 'error_code': errorCode,
   };
 }
 
@@ -151,6 +184,9 @@ ToolReceipt _receiptFromAuditJson(Map<String, Object?> json) {
     throw StateError('Recovered tool receipt has an invalid result digest.');
   }
   final externalId = json['external_id'];
+  final retrySafe = json['retry_safe'];
+  final effectMayHaveOccurred = json['effect_may_have_occurred'];
+  final errorCode = json['error_code'];
   return ToolReceipt(
     requestId: json['request_id']! as String,
     idempotencyKey: json['idempotency_key']! as String,
@@ -161,6 +197,10 @@ ToolReceipt _receiptFromAuditJson(Map<String, Object?> json) {
       'result_digest': resultDigest,
       if (externalId is String && externalId.isNotEmpty)
         'external_id': externalId,
+      if (retrySafe is bool) 'retry_safe': retrySafe,
+      if (effectMayHaveOccurred is bool)
+        'effect_may_have_occurred': effectMayHaveOccurred,
+      if (errorCode is String && errorCode.isNotEmpty) 'error_code': errorCode,
     },
     startedAt: DateTime.parse(json['started_at']! as String),
     completedAt: DateTime.parse(json['completed_at']! as String),
@@ -289,7 +329,10 @@ final class ToolGateway {
           policyReason: 'recovered_prepared_without_terminal',
           result: <String, Object?>{
             'error': 'authoritative_reconciliation_required',
+            'error_code': 'prepared_without_terminal',
             'external_id': value.envelope.idempotencyKey,
+            'retry_safe': false,
+            'effect_may_have_occurred': true,
           },
           startedAt: value.startedAt,
           completedAt: _clock.now(),
@@ -421,7 +464,10 @@ final class ToolGateway {
         idempotencyKey: request.idempotencyKey,
         status: ToolReceiptStatus.rejected,
         policyReason: decision.reason,
-        result: const <String, Object?>{},
+        result: const <String, Object?>{
+          'retry_safe': true,
+          'effect_may_have_occurred': false,
+        },
         startedAt: startedAt,
         completedAt: _clock.now(),
       );
@@ -445,12 +491,14 @@ final class ToolGateway {
       if (remaining <= Duration.zero) {
         throw IndeterminateToolEffect(
           '${request.action}:${request.idempotencyKey}',
+          code: 'tool_deadline_elapsed_after_prepare',
         );
       }
       final result = await handler(request).timeout(
         remaining,
         onTimeout: () => throw IndeterminateToolEffect(
           '${request.action}:${request.idempotencyKey}',
+          code: 'tool_handler_timeout_after_prepare',
         ),
       );
       final receipt = ToolReceipt(
@@ -467,6 +515,28 @@ final class ToolGateway {
         request: request,
         receipt: receipt,
       );
+    } on RejectedToolEffect catch (error) {
+      final receipt = ToolReceipt(
+        requestId: request.requestId,
+        idempotencyKey: request.idempotencyKey,
+        status: ToolReceiptStatus.failed,
+        policyReason: decision.reason,
+        result: <String, Object?>{
+          ...error.details,
+          'error': 'tool_effect_rejected_before_write',
+          'error_code': error.code,
+          if (error.externalId != null) 'external_id': error.externalId,
+          'retry_safe': true,
+          'effect_may_have_occurred': false,
+        },
+        startedAt: startedAt,
+        completedAt: _clock.now(),
+      );
+      return _recordTerminal(
+        eventType: 'tool.failed',
+        request: request,
+        receipt: receipt,
+      );
     } on IndeterminateToolEffect catch (error) {
       final receipt = ToolReceipt(
         requestId: request.requestId,
@@ -474,8 +544,12 @@ final class ToolGateway {
         status: ToolReceiptStatus.indeterminate,
         policyReason: decision.reason,
         result: <String, Object?>{
+          ...error.details,
           'error': 'tool_effect_indeterminate',
+          'error_code': error.code,
           'external_id': error.externalId,
+          'retry_safe': false,
+          'effect_may_have_occurred': true,
         },
         startedAt: startedAt,
         completedAt: _clock.now(),
@@ -494,6 +568,8 @@ final class ToolGateway {
         result: <String, Object?>{
           'error': 'tool_execution_failed',
           'error_type': error.runtimeType.toString(),
+          'retry_safe': false,
+          'effect_may_have_occurred': request.mutating,
         },
         startedAt: startedAt,
         completedAt: _clock.now(),
@@ -538,7 +614,11 @@ final class ToolGateway {
           ? ToolReceiptStatus.succeeded
           : ToolReceiptStatus.indeterminate,
       policyReason: prior.policyReason,
-      result: Map.unmodifiable(result),
+      result: Map.unmodifiable(<String, Object?>{
+        ...result,
+        'retry_safe': authoritative,
+        'effect_may_have_occurred': !authoritative,
+      }),
       startedAt: prior.startedAt,
       completedAt: _clock.now(),
     );
@@ -567,7 +647,10 @@ final class ToolGateway {
       idempotencyKey: request.idempotencyKey,
       status: status,
       policyReason: policyReason,
-      result: const <String, Object?>{},
+      result: const <String, Object?>{
+        'retry_safe': true,
+        'effect_may_have_occurred': false,
+      },
       startedAt: startedAt,
       completedAt: _clock.now(),
     );
@@ -602,6 +685,8 @@ final class ToolGateway {
           'error': 'terminal_journal_write_failed',
           'error_type': error.runtimeType.toString(),
           'external_id': '${request.action}:${request.idempotencyKey}',
+          'retry_safe': false,
+          'effect_may_have_occurred': true,
         },
         startedAt: receipt.startedAt,
         completedAt: _clock.now(),
