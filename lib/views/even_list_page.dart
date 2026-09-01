@@ -77,18 +77,21 @@ class _EvenAIListPageState extends State<EvenAIListPage> {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
       itemCount: controller.items.length,
-      itemBuilder: (BuildContext context, int index) => GestureDetector(
-        key: ValueKey<String>('history-item-$index'),
-        onTap: () {
-          if (controller.selectedIndex.value == index) {
-            controller.deselectItem();
-          } else {
-            controller.selectItem(index);
-          }
+      itemBuilder: (BuildContext context, int index) => Obx(
+        () {
+          final selected = controller.selectedIndex.value == index;
+          return GestureDetector(
+            key: ValueKey<String>('history-item-$index'),
+            onTap: () {
+              if (selected) {
+                controller.deselectItem();
+              } else {
+                controller.selectItem(index);
+              }
+            },
+            child: selected ? _buildItemDetail(index) : _buildItem(index),
+          );
         },
-        child: controller.selectedIndex.value == index
-            ? _buildItemDetail(index)
-            : _buildItem(index),
       ),
     );
   }
