@@ -100,6 +100,26 @@ def main() -> int:
         )
     module.write(root, relative, text.replace(old, new, 1))
     print("POSTCONDITION exact pair identity preserved", flush=True)
+
+    # The manager hostile tests exercise BleReceive and the placeholder pair
+    # sentinel directly, so bind them to the production parser contract.
+    relative = "test/runtime/ble_manager_authority_test.dart"
+    text = module.read(root, relative)
+    old = """import 'package:demo_ai_even/ble_manager.dart';
+import 'package:flutter/services.dart';
+"""
+    new = """import 'package:demo_ai_even/ble_manager.dart';
+import 'package:demo_ai_even/services/ble.dart';
+import 'package:flutter/services.dart';
+"""
+    count = text.count(old)
+    if count != 1:
+        fail(
+            "test/runtime/ble_manager_authority_test.dart: BLE contract import "
+            f"matched {count} times"
+        )
+    module.write(root, relative, text.replace(old, new, 1))
+    print("POSTCONDITION hostile manager tests import BLE authority", flush=True)
     return result
 
 
