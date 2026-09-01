@@ -1,6 +1,6 @@
 # Hepta Glasses OS current state
 
-Last updated: 2026-09-01
+Last updated: 2026-09-02
 Canonical plan revision: `2026-09-01-g8`
 
 ## Authoritative source candidate
@@ -21,6 +21,7 @@ The source candidate contains:
 - a digital twin whose authority domain now matches the production transport across pair, positive generation, side, caller key, and payload digest, while remaining E2-only synthetic evidence;
 - a bounded BMP transfer state machine that rejects invalid size/sequence, native write refusal, malformed finish replies, and malformed CRC replies;
 - a single mobile composition root in `lib/bootstrap/hepta_bootstrap.dart`; durable runtime or platform-authenticator failure leaves all assistant and device actions disabled;
+- a production mobile dependency graph with no development/test lease provider or forgeable authority define; Android release APK and unsigned iOS device-target release AOT binaries are inspected for forbidden authority material;
 - process-wide and OS-file audit serialization, full-chain verification on startup/read/explicit verify and whenever append trust metadata drifts, a platform-authenticated bounded-tail append fast path, v3 checkpoints, torn-tail rejection, and bounded scheduler shutdown;
 - atomic single-use lease consumption, in-flight idempotency coalescing, cancellation-aware model requests, microphone and heartbeat retry-safety regressions, and deterministic assistant/text paging;
 - assistant transcript/answer history that is disabled by default, enabled only by a direct user control, retained only in process memory, and deleted immediately on opt-out;
@@ -28,8 +29,8 @@ The source candidate contains:
 - package-byte verification for Skills and a Codex worker that requires network isolation, bounds streamed output, rejects workspace escape, and redacts credential-shaped output;
 - ASAN/UBSAN execution of Android/iOS LC3 plus RNNoise and required cross-platform PCM parity;
 - deterministic Pub/Gradle/CocoaPods/vendored-native SPDX evidence, redacted all-ref history scanning, and source/product release gates that re-read the evidence content;
-- one read-only CI workflow and no retained connector probe files;
-- a v6 Gap Ledger whose closed and blocked resume references are checked for existence rather than accepted as prose;
+- one read-only CI workflow; PR branches execute one pull_request matrix, main alone uses push, and no retained connector probe files;
+- a v6 Gap Ledger with 72 rows: 60 source-closed, 12 externally/admin/upstream blocked, and zero repository-actionable OPEN rows; every evidence and resume reference is checked for existence;
 - a 22-module machine-readable ownership/test/contract/documentation registry and a detailed technical development guide, both enforced by `tools/validate_repository_metadata.py` in CI.
 
 Repository contracts and deterministic tests can establish E1–E3 for a working candidate. E4 is determined only by GitHub's successful exact-head run and its content-addressed evidence artifact; any later source push invalidates the prior E4 record until the full matrix succeeds again.

@@ -5,43 +5,76 @@
     {
       "id": "EV-SRC-FOUNDATION-V1",
       "path": "docs/evidence/2026-08-30-foundation-source-closure.md",
-      "levels": ["E0", "E1", "E2"],
+      "levels": [
+        "E0",
+        "E1",
+        "E2"
+      ],
       "claim": "G0, G1/G2 substrate, model boundary, Codex and MCP source foundation"
     },
     {
       "id": "EV-SRC-G3-G8-V1",
       "path": "docs/development/G3_G8_SOURCE_CLOSURE.md",
-      "levels": ["E0", "E1"],
+      "levels": [
+        "E0",
+        "E1"
+      ],
       "claim": "G3-G8 repository contracts, reference implementations, tests, and evidence harness"
     },
     {
       "id": "EV-SRC-G4-EXACT-HEAD-V1",
       "path": "docs/development/G4_SOURCE_CLOSURE.md",
-      "levels": ["E0", "E1", "E2", "E3", "E4"],
+      "levels": [
+        "E0",
+        "E1",
+        "E2",
+        "E3",
+        "E4"
+      ],
       "claim": "Historical G4 exact-head source evidence only; it does not attest the current G8 tree"
     },
     {
       "id": "EV-SRC-G5-AUDIT-V1",
       "path": "docs/development/G5_AUDIT_CLOSURE.md",
-      "levels": ["E0", "E1", "E2", "E3"],
+      "levels": [
+        "E0",
+        "E1",
+        "E2",
+        "E3"
+      ],
       "claim": "G5 audit controls incorporated into the converged candidate; historical red CI runs are not current E4 evidence"
     },
     {
       "id": "EV-SRC-G7-CANDIDATE-V1",
       "path": "docs/development/G7_SOURCE_CONVERGENCE.md",
-      "levels": ["E0", "E1", "E2", "E3"],
+      "levels": [
+        "E0",
+        "E1",
+        "E2",
+        "E3"
+      ],
       "claim": "Historical converged G7 source candidate; current E4 must be regenerated for G8"
     },
     {
       "id": "EV-SRC-G8-REMEDIATION-V2",
       "path": "docs/development/G8_SOURCE_REMEDIATION.md",
-      "levels": ["E0", "E1", "E2", "E3"],
+      "levels": [
+        "E0",
+        "E1",
+        "E2",
+        "E3"
+      ],
       "claim": "Audit integrity, privacy consent, immutable iOS BLE callback ownership, pair/generation/side-scoped idempotency, per-leg uncertain-write quarantine, hostile regressions, canonical documentation convergence, and probe cleanup; current E4 still requires exact-head CI"
     },
     {
       "id": "EV-SRC-G8-METADATA-MODULES-V1",
       "path": "docs/development/G8_METADATA_AND_DOCUMENTATION_CLOSURE.md",
-      "levels": ["E0", "E1", "E2", "E3"],
+      "levels": [
+        "E0",
+        "E1",
+        "E2",
+        "E3"
+      ],
       "claim": "Gap Ledger v6 reference integrity, tools/validate_repository_metadata.py, docs/MODULES.json, detailed module development documentation, mobile composition root, microphone and heartbeat retry-safety tests, digital-twin authority parity, and audit fast-path truth reconciliation; current E4 still requires exact-head CI",
       "supporting_paths": [
         "docs/MODULES.json",
@@ -51,6 +84,26 @@
         "test/runtime/microphone_retry_contract_test.dart",
         "test/runtime/heartbeat_retry_contract_test.dart",
         "test/runtime/g1_digital_twin_authority_test.dart"
+      ]
+    },
+    {
+      "id": "EV-SRC-G8-PRODUCTION-AUTHORITY-V1",
+      "path": "docs/development/G8_PRODUCTION_AUTHORITY_CLOSURE.md",
+      "levels": [
+        "E0",
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "claim": "Production mobile graph excludes forgeable development/test mutation authority; Android release APK and unsigned iOS device-target release AOT binaries are inspected; PR CI has one pull_request matrix. Current E4 still requires exact-head CI.",
+      "supporting_paths": [
+        "lib/runtime/mutation_authority.dart",
+        "lib/bootstrap/hepta_bootstrap.dart",
+        "lib/main.dart",
+        "test/support/test_mutation_authority.dart",
+        "test/runtime/production_authority_boundary_test.dart",
+        "tools/validate_production_authority.py",
+        ".github/workflows/ci.yml"
       ]
     }
   ],
@@ -101,6 +154,8 @@
     "No skipped history blob may be represented as a clean history scan.",
     "A caller idempotency string without pair, generation, side, and payload binding is not device authority.",
     "One-leg disconnect evidence cannot be used to release or close the surviving leg's uncertain write.",
-    "Authenticated audit tail append is not represented as a full historical rescan on every ordinary append."
+    "Authenticated audit tail append is not represented as a full historical rescan on every ordinary append.",
+    "Product source under lib/ cannot contain a development/test mutation-authority provider, forgeable authority define, or local lease factory.",
+    "A PR head has one canonical pull_request matrix; push-triggered canonical CI is restricted to main."
   ]
 }
