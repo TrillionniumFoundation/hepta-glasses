@@ -94,8 +94,8 @@ void main() {
       idempotencyKey: 'drift-key',
     );
 
-    expect(
-      () => twin.send(
+    await expectLater(
+      twin.send(
         side: GlassesSide.right,
         bytes: Uint8List.fromList(<int>[1, 2, 4]),
         timeout: const Duration(seconds: 1),
