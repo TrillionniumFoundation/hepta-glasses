@@ -1,5 +1,3 @@
-
-
 import 'package:demo_ai_even/services/evenai.dart';
 
 class App {

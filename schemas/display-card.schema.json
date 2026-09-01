@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hepta.invalid/schemas/display-card-v1.json",
+  "title": "DisplayCard",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "card_id",
+    "task_id",
+    "kind",
+    "title",
+    "body",
+    "actions",
+    "expires_at",
+    "sensitivity",
+    "interruptible"
+  ],
+  "properties": {
+    "card_id": {
+      "type": "string"
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "status",
+        "answer",
+        "list",
+        "progress",
+        "confirm",
+        "warning",
+        "result",
+        "error"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "body": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 4
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sensitivity": {
+      "enum": [
+        "public",
+        "personal",
+        "sensitive"
+      ]
+    },
+    "interruptible": {
+      "type": "boolean"
+    }
+  }
+}

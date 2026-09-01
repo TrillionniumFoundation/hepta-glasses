@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "acknowledgements": [
+    {
+      "id": "synthetic-provider-token-history-scan-test",
+      "pattern": "provider_token",
+      "path": "services/qualification/test_history_scan.py",
+      "fingerprint": "82be8a4d9cdebab78235e6d0618fdea34065fcb6f498073283ff4ec7376e551a",
+      "classification": "synthetic_test_fixture",
+      "reason": "Exact non-production token used to verify redacted provider-token detection."
+    },
+    {
+      "id": "synthetic-provider-token-g7-history-patch",
+      "pattern": "provider_token",
+      "path": "tools/g7-history-fixture.patch",
+      "fingerprint": "82be8a4d9cdebab78235e6d0618fdea34065fcb6f498073283ff4ec7376e551a",
+      "classification": "synthetic_test_fixture",
+      "reason": "Historical patch fixture contains the same exact non-production detector token."
+    }
+  ]
+}

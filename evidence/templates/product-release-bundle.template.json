@@ -1,0 +1,70 @@
+{
+  "source": {
+    "commit": "REPLACE_WITH_40_HEX_COMMIT",
+    "tree": "REPLACE_WITH_40_HEX_TREE",
+    "ci_checks": [],
+    "sbom": {
+      "sha256": "REPLACE_WITH_64_HEX"
+    },
+    "sbom_ecosystems": [
+      "android/gradle",
+      "dart/pub",
+      "ios/cocoapods",
+      "native/vendored"
+    ],
+    "history_scan": {
+      "sha256": "REPLACE_WITH_64_HEX",
+      "scope": "all-fetched-refs-and-deduplicated-blobs",
+      "commit_count": 0,
+      "scanned_blob_count": 0,
+      "finding_count": -1,
+      "unscanned_blob_count": -1
+    },
+    "native_sanitizer": {
+      "sha256": "REPLACE_WITH_64_HEX",
+      "passed": false,
+      "lc3_cross_platform_parity": false
+    },
+    "audit_contract": "authenticated-checkpoint-v3",
+    "provenance": {
+      "sha256": "REPLACE_WITH_64_HEX"
+    },
+    "provenance_type": "unsigned-source-provenance-v1",
+    "contracts_version": "2026-09-01-g8"
+  },
+  "branch_protection": {
+    "protected": false,
+    "required_approvals": 0,
+    "force_pushes_allowed": true,
+    "required_checks": []
+  },
+  "device_qualification": [],
+  "production": {
+    "identity": "pending",
+    "attestation": "pending",
+    "capabilities": "pending",
+    "firmware_authority": "pending"
+  },
+  "reviews": {
+    "security": "pending",
+    "privacy": "pending",
+    "legal": "pending",
+    "accessibility": "pending"
+  },
+  "drills": {
+    "kill_switch": "pending",
+    "rollback": "pending",
+    "credential_rotation": "pending"
+  },
+  "signing": {
+    "android_digest": "",
+    "ios_digest": "",
+    "provenance_digest": "",
+    "attestation_verified": false
+  },
+  "pilot": {
+    "cohort_size": 0,
+    "crash_free_rate": 0,
+    "duplicate_effects": 0
+  }
+}
