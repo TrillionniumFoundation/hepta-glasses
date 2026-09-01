@@ -1,7 +1,7 @@
 {
   "contract_id": "hepta-glasses-release-gates-v1",
-  "version": 2,
-  "contracts_version": "2026-08-31-g7",
+  "version": 3,
+  "contracts_version": "2026-09-01-g8",
   "source_gate": {
     "required": [
       "exact_commit",
