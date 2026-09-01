@@ -47,24 +47,21 @@ final class G1DigitalTwin implements GlassesTransport {
     String pairIdentity = 'digital-twin-pair-1',
     int generation = 1,
     this.maxAuthorityEntries = 512,
-  })  : _pairIdentity = pairIdentity.trim(),
-        _generation = generation,
-        _connected = <GlassesSide, bool>{
-          GlassesSide.left: true,
-          GlassesSide.right: true,
-        },
-        _timeouts = <GlassesSide, int>{
-          GlassesSide.left: 0,
-          GlassesSide.right: 0,
-        },
-        _nacks = <GlassesSide, int>{
-          GlassesSide.left: 0,
-          GlassesSide.right: 0,
-        },
-        _indeterminateAfterWrites = <GlassesSide, int>{
-          GlassesSide.left: 0,
-          GlassesSide.right: 0,
-        } {
+  }) : _pairIdentity = pairIdentity.trim(),
+       _generation = generation,
+       _connected = <GlassesSide, bool>{
+         GlassesSide.left: true,
+         GlassesSide.right: true,
+       },
+       _timeouts = <GlassesSide, int>{
+         GlassesSide.left: 0,
+         GlassesSide.right: 0,
+       },
+       _nacks = <GlassesSide, int>{GlassesSide.left: 0, GlassesSide.right: 0},
+       _indeterminateAfterWrites = <GlassesSide, int>{
+         GlassesSide.left: 0,
+         GlassesSide.right: 0,
+       } {
     if (_generation < 1) {
       throw ArgumentError.value(generation, 'generation', 'must be positive');
     }
@@ -105,12 +102,12 @@ final class G1DigitalTwin implements GlassesTransport {
   String get pairIdentity => _pairIdentity;
 
   DeviceConnectionSnapshot get connectionSnapshot => DeviceConnectionSnapshot(
-        left: _stateFor(GlassesSide.left),
-        right: _stateFor(GlassesSide.right),
-        observedAt: DateTime.now().toUtc(),
-        generation: _generation,
-        pairIdentity: _pairIdentity,
-      );
+    left: _stateFor(GlassesSide.left),
+    right: _stateFor(GlassesSide.right),
+    observedAt: DateTime.now().toUtc(),
+    generation: _generation,
+    pairIdentity: _pairIdentity,
+  );
 
   @override
   Stream<DeviceConnectionSnapshot> get connectionSnapshots =>
@@ -126,8 +123,7 @@ final class G1DigitalTwin implements GlassesTransport {
   /// as the production adapter retires old pair/generation authority.
   void advanceGeneration({String? pairIdentity}) {
     final nextPair = pairIdentity?.trim();
-    if (nextPair != null &&
-        (nextPair.isEmpty || nextPair == 'unselected')) {
+    if (nextPair != null && (nextPair.isEmpty || nextPair == 'unselected')) {
       throw ArgumentError.value(
         pairIdentity,
         'pairIdentity',
