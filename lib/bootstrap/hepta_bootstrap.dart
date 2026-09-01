@@ -13,13 +13,17 @@ import 'package:demo_ai_even/utils/utils.dart';
 ///
 /// Widgets and feature services consume [HeptaRuntime.current]; they do not
 /// construct journals, policy engines, mutation authority, or native effects.
-/// Production startup remains fail closed until an authenticated authority
-/// provider is injected. The development provider is available only through an
-/// explicit compile-time flag.
+/// The process entry point injects the platform-backed checkpoint authenticator;
+/// no key material enters Dart. Production startup remains fail closed until an
+/// authenticated mutation-authority provider is injected. The development
+/// provider is available only through an explicit compile-time flag.
 final class HeptaBootstrap {
   const HeptaBootstrap._();
 
-  static Future<void> initialize(String applicationSupportPath) async {
+  static Future<void> initialize(
+    String applicationSupportPath, {
+    required AuditCheckpointAuthenticator checkpointAuthenticator,
+  }) async {
     final supportPath = applicationSupportPath.trim();
     if (supportPath.isEmpty) {
       throw ArgumentError.value(
@@ -31,7 +35,7 @@ final class HeptaBootstrap {
 
     final auditJournal = JsonlAuditJournal(
       File('$supportPath/hepta-glasses-runtime/audit.jsonl'),
-      checkpointAuthenticator: const PlatformAuditCheckpointAuthenticator(),
+      checkpointAuthenticator: checkpointAuthenticator,
     );
     final bitmapManager = BmpUpdateManager();
     const allowDevelopmentAuthority = bool.fromEnvironment(
