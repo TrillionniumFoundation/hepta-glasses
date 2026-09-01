@@ -2,7 +2,7 @@
   "claim_ceiling": "E4 only after exact-head CI; E5-E7 require external evidence",
   "external_gates": {
     "independent_assurance": "blocked_external",
-    "main_protection": "blocked_admin_setting",
+    "main_protection": "blocked_admin_setting_canonical_contract_incomplete_or_unverified",
     "physical_g1": "blocked_external",
     "production_identity_and_attestation": "blocked_external",
     "production_realtime_oauth": "blocked_external",
@@ -10,7 +10,7 @@
     "signing_pilot_release": "blocked_external",
     "vendor_firmware_ota": "blocked_upstream"
   },
-  "plan_revision": "2026-08-31-g7",
+  "plan_revision": "2026-09-01-g8",
   "program_increment": "G8",
   "repository_actionable_gate": {
     "independent_latest_head_approval_required": true,
@@ -23,9 +23,9 @@
       "secret-and-boundary-scan",
       "source-evidence"
     ],
-    "status": "derive_from_exact_head_ci"
+    "status": "derive_from_exact_head_ci_and_latest_head_review"
   },
-  "schema_version": 1,
+  "schema_version": 2,
   "source_authority": {
     "branch": "codex/hepta-glasses-gap-closure-g8",
     "identity_rule": "live_pr_head_and_tree",
