@@ -180,7 +180,6 @@ final class EvenG1Transport implements GlassesTransport {
 
     _claimedDigests[scope] = payloadDigest;
     final operation = _sendOnce(
-      side: side,
       sideCode: sideCode,
       bytes: Uint8List.fromList(bytes),
       timeout: timeout,
@@ -201,7 +200,6 @@ final class EvenG1Transport implements GlassesTransport {
   }
 
   Future<TransportAck> _sendOnce({
-    required GlassesSide side,
     required String sideCode,
     required Uint8List bytes,
     required Duration timeout,
