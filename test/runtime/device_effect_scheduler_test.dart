@@ -48,7 +48,7 @@ void main() {
     );
     await expectLater(
       scheduler.schedule<void>('late', () async {}),
-      throwsStateError,
+      throwsA(isA<DeviceEffectSchedulerClosedException>()),
     );
     release.complete();
     await effect;
@@ -62,9 +62,56 @@ void main() {
 
     await expectLater(
       scheduler.schedule<void>('second', () async {}),
-      throwsStateError,
+      throwsA(isA<DeviceEffectQueueFullException>()),
     );
     release.complete();
     await first;
+  });
+
+  test('uncooperative effect times out and permanently opens the circuit',
+      () async {
+    final scheduler = DeviceEffectScheduler(
+      defaultExecutionTimeout: const Duration(milliseconds: 10),
+    );
+    final never = Completer<void>();
+    var laterEffectRan = false;
+
+    await expectLater(
+      scheduler.schedule<void>('uncertain-write', () => never.future),
+      throwsA(isA<DeviceEffectTimeoutException>()),
+    );
+
+    expect(scheduler.circuitOpen, isTrue);
+    expect(scheduler.indeterminateOperation, 'uncertain-write');
+    expect(scheduler.pending, 0);
+    await expectLater(
+      scheduler.schedule<void>('later-write', () async {
+        laterEffectRan = true;
+      }),
+      throwsA(isA<DeviceEffectCircuitOpenException>()),
+    );
+    expect(laterEffectRan, isFalse);
+    await scheduler.close(timeout: const Duration(milliseconds: 50));
+  });
+
+  test('queued work is rejected rather than overlapping a timed-out effect',
+      () async {
+    final scheduler = DeviceEffectScheduler(
+      maxPending: 2,
+      defaultExecutionTimeout: const Duration(milliseconds: 10),
+    );
+    final never = Completer<void>();
+    var secondRan = false;
+    final first = scheduler.schedule<void>('first', () => never.future);
+    final second = scheduler.schedule<void>('second', () async {
+      secondRan = true;
+    });
+
+    await expectLater(first, throwsA(isA<DeviceEffectTimeoutException>()));
+    await expectLater(
+      second,
+      throwsA(isA<DeviceEffectCircuitOpenException>()),
+    );
+    expect(secondRan, isFalse);
   });
 }
