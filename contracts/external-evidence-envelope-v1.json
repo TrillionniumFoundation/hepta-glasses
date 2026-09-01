@@ -1,0 +1,189 @@
+{
+  "contract_id": "hepta-external-evidence-envelope-v1",
+  "contract_revision": "2026-09-02-g9",
+  "extends_plan_revision": "2026-09-01-g8",
+  "schema": "schemas/external-evidence-envelope.schema.json",
+  "candidate_binding": {
+    "required": [
+      "repository",
+      "source_commit",
+      "source_tree",
+      "contracts_revision",
+      "collected_at"
+    ],
+    "repository": "TrillionniumFoundation/hepta-glasses",
+    "source_commit_pattern": "^[0-9a-f]{40}$",
+    "source_tree_pattern": "^[0-9a-f]{40}$",
+    "contracts_revision": "2026-09-01-g8"
+  },
+  "allowed_gap_ids": [
+    "HG-0010",
+    "HG-0011",
+    "HG-0012",
+    "HG-0013",
+    "HG-0014",
+    "HG-0015",
+    "HG-0016",
+    "HG-0017",
+    "HG-0018",
+    "HG-0021",
+    "HG-0022",
+    "HG-0044"
+  ],
+  "allowed_levels": ["E5", "E6", "E7", "ADMIN", "UPSTREAM"],
+  "authority_classes": {
+    "HG-0010": ["physical_device_lab", "mobile_release_owner"],
+    "HG-0011": ["independent_assurance"],
+    "HG-0012": ["release_signing_authority", "pilot_operator", "store_authority"],
+    "HG-0013": ["credential_provider", "security_incident_owner"],
+    "HG-0014": ["model_provider_tenant_owner", "cloud_security"],
+    "HG-0015": ["kms_hsm_owner", "platform_attestation_owner", "cloud_security"],
+    "HG-0016": ["firmware_vendor"],
+    "HG-0017": ["repository_administrator", "github_api_observer"],
+    "HG-0018": ["speech_provider_owner", "physical_device_lab"],
+    "HG-0021": ["realtime_provider_tenant_owner", "oauth_registration_owner"],
+    "HG-0022": ["capability_provider_owner", "privacy_owner"],
+    "HG-0044": ["independent_code_reviewer"]
+  },
+  "required_claims": {
+    "HG-0010": [
+      "android_physical_report_passed",
+      "ios_physical_report_passed",
+      "firmware_matrix_declared",
+      "protocol_passed",
+      "loss_reconnect_passed",
+      "latency_passed",
+      "power_passed",
+      "thermal_passed",
+      "cancellation_passed",
+      "barge_in_passed",
+      "soak_passed"
+    ],
+    "HG-0011": [
+      "security_approved",
+      "privacy_approved",
+      "legal_approved",
+      "accessibility_approved",
+      "safety_approved",
+      "findings_disposition_complete",
+      "residual_risk_accepted"
+    ],
+    "HG-0012": [
+      "android_signed",
+      "ios_signed",
+      "binary_sbom_verified",
+      "binary_provenance_verified",
+      "binary_attestation_verified",
+      "pilot_exit_passed",
+      "kill_switch_drill_passed",
+      "rollback_drill_passed",
+      "staged_rollout_passed",
+      "store_approvals_received"
+    ],
+    "HG-0013": [
+      "old_credential_revoked",
+      "revocation_timestamp_verified",
+      "replacement_kid_verified",
+      "replacement_scope_verified",
+      "old_credential_unusable",
+      "incident_owner_approved"
+    ],
+    "HG-0014": [
+      "production_tenancy_active",
+      "kms_secret_reference_verified",
+      "quota_controls_verified",
+      "retention_controls_verified",
+      "redacted_observability_verified",
+      "live_receipts_passed"
+    ],
+    "HG-0015": [
+      "kms_hsm_keys_deployed",
+      "android_attestation_passed",
+      "apple_attestation_passed",
+      "rotation_drill_passed",
+      "revocation_drill_passed",
+      "lost_device_drill_passed",
+      "recovery_drill_passed"
+    ],
+    "HG-0016": [
+      "vendor_authority_granted",
+      "firmware_source_build_access_verified",
+      "secure_boot_chain_verified",
+      "signing_authority_verified",
+      "ota_drill_passed",
+      "recovery_drill_passed",
+      "rollback_drill_passed"
+    ],
+    "HG-0017": [
+      "seven_checks_required",
+      "strict_status_checks",
+      "administrator_enforcement",
+      "codeowner_review_required",
+      "last_push_approval_required",
+      "stale_review_dismissal",
+      "conversation_resolution",
+      "linear_history",
+      "force_push_disabled",
+      "branch_deletion_disabled",
+      "fresh_api_readback_matches_contract"
+    ],
+    "HG-0018": [
+      "android_pcm_asr_active",
+      "android_physical_speech_passed",
+      "ios_locale_device_matrix_passed",
+      "finality_passed",
+      "latency_passed",
+      "cancellation_passed",
+      "privacy_controls_passed"
+    ],
+    "HG-0021": [
+      "production_realtime_tenancy_active",
+      "oauth_registrations_verified",
+      "scope_review_passed",
+      "one_time_bootstrap_passed",
+      "revoke_drill_passed",
+      "timeout_reconciliation_passed"
+    ],
+    "HG-0022": [
+      "calendar_adapter_passed",
+      "reminder_adapter_passed",
+      "notification_adapter_passed",
+      "location_adapter_passed",
+      "storage_adapter_passed",
+      "accessibility_adapter_passed",
+      "opaque_credentials_verified",
+      "consent_records_verified",
+      "authoritative_receipts_verified",
+      "reconciliation_passed",
+      "revocation_passed",
+      "audit_export_passed"
+    ],
+    "HG-0044": [
+      "exact_head_ci_passed",
+      "source_artifact_verified",
+      "eligible_non_pusher_approved",
+      "approval_bound_to_current_head",
+      "all_conversations_resolved",
+      "head_unchanged_after_approval"
+    ]
+  },
+  "independence_required": ["HG-0011", "HG-0044"],
+  "physical_evidence_only": ["HG-0010", "HG-0018"],
+  "prohibited_payload_classes": [
+    "raw_credential",
+    "private_key",
+    "signing_key",
+    "raw_audio",
+    "sensitive_transcript",
+    "oauth_refresh_token"
+  ],
+  "closure_states": [
+    "incomplete",
+    "eligible_for_review",
+    "accepted",
+    "rejected",
+    "expired",
+    "revoked"
+  ],
+  "closure_rule": "Only an accepted envelope with every required claim true, verified artifact digests, exact candidate binding, permitted issuer authority, and an independent acceptance record may support CLOSED_VERIFIED."
+}
