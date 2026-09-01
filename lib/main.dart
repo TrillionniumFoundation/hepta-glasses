@@ -1,6 +1,7 @@
 import 'package:demo_ai_even/ble_manager.dart';
 import 'package:demo_ai_even/bootstrap/hepta_bootstrap.dart';
 import 'package:demo_ai_even/controllers/evenai_model_controller.dart';
+import 'package:demo_ai_even/runtime/audit_checkpoint_authenticator.dart';
 import 'package:demo_ai_even/runtime/model_gateway.dart';
 import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
 import 'package:demo_ai_even/views/home_page.dart';
@@ -19,7 +20,10 @@ Future<void> main() async {
     if (supportPath == null || supportPath.trim().isEmpty) {
       throw StateError('durable_application_support_path_unavailable');
     }
-    await HeptaBootstrap.initialize(supportPath);
+    await HeptaBootstrap.initialize(
+      supportPath,
+      checkpointAuthenticator: const PlatformAuditCheckpointAuthenticator(),
+    );
   } on Object catch (error) {
     PrivacySafeLog.event(
       'runtime_startup_failed',
