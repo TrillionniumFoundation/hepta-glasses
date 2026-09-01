@@ -140,11 +140,11 @@ jobs:
           cd ios
           pod install --deployment
       - run: flutter build ios --simulator --debug
-      - run: flutter build ios --simulator --release
+      - run: flutter build ios --release --no-codesign
       - name: Inspect iOS release binary for test-only authority
         run: |
           set -euo pipefail
-          APP_BINARY="$(find build/ios -type f -name App -path '*/App.framework/App' -print -quit)"
+          APP_BINARY="$(find build/ios/iphoneos -type f -name App -path '*/App.framework/App' -print -quit)"
           test -n "$APP_BINARY"
           test -s "$APP_BINARY"
           strings "$APP_BINARY" > /tmp/hepta-ios-release.strings
