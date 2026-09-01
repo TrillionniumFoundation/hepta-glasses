@@ -73,7 +73,34 @@ def main() -> int:
 
     module.replace_once = structural_replace
     sys.argv = [str(driver), str(root)]
-    return int(module.main())
+    result = int(module.main())
+
+    # Pair identity is an exact security authority. Preserve the native value so
+    # leading/trailing whitespace remains malformed and is rejected by the
+    # generated hasAuthoritativeIdentity predicate instead of being normalized
+    # into a valid current identity.
+    relative = "lib/services/ble.dart"
+    text = module.read(root, relative)
+    old = """    if (rawPairIdentity is String) {
+      final normalizedPairIdentity = rawPairIdentity.trim();
+      if (normalizedPairIdentity.isNotEmpty) {
+        response.pairIdentity = normalizedPairIdentity;
+      }
+    }
+"""
+    new = """    if (rawPairIdentity is String && rawPairIdentity.isNotEmpty) {
+      response.pairIdentity = rawPairIdentity;
+    }
+"""
+    count = text.count(old)
+    if count != 1:
+        fail(
+            "lib/services/ble.dart: strict pair-identity postcondition "
+            f"matched {count} times"
+        )
+    module.write(root, relative, text.replace(old, new, 1))
+    print("POSTCONDITION exact pair identity preserved", flush=True)
+    return result
 
 
 if __name__ == "__main__":
