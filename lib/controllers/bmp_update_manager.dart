@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:crclib/catalog.dart';
 import 'package:demo_ai_even/ble_manager.dart';
+import 'package:demo_ai_even/runtime/device_effect_result.dart';
 import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
 import 'package:demo_ai_even/services/ble.dart';
 import 'package:demo_ai_even/utils/utils.dart';
@@ -33,19 +34,43 @@ final class BmpUpdateManager {
   final BmpRequester _request;
   final BmpDelay _delay;
 
-  Future<bool> updateBmp(String side, Uint8List image, {int? seq}) async {
-    if (!_isValidSide(side) ||
-        image.isEmpty ||
-        image.length > maximumImageBytes) {
-      return false;
+  Future<bool> updateBmp(String side, Uint8List image, {int? seq}) async =>
+      (await updateBmpEffect(side, image, seq: seq)).committed;
+
+  Future<DeviceEffectResult> updateBmpEffect(
+    String side,
+    Uint8List image, {
+    int? seq,
+  }) async {
+    final externalId = 'bitmap:$side';
+    if (!_isValidSide(side)) {
+      return DeviceEffectResult.rejectedBeforeWrite(
+        code: 'bitmap_side_invalid',
+        externalId: externalId,
+      );
+    }
+    if (image.isEmpty || image.length > maximumImageBytes) {
+      return DeviceEffectResult.rejectedBeforeWrite(
+        code: 'bitmap_size_invalid',
+        externalId: externalId,
+        details: <String, Object?>{'image_bytes': image.length},
+      );
     }
 
     final packets = _splitPackets(image);
     final startSequence = seq ?? 0;
     if (startSequence < 0 || startSequence >= packets.length) {
-      return false;
+      return DeviceEffectResult.rejectedBeforeWrite(
+        code: 'bitmap_start_sequence_invalid',
+        externalId: externalId,
+        details: <String, Object?>{
+          'start_sequence': startSequence,
+          'packet_count': packets.length,
+        },
+      );
     }
 
+    var acceptedPackets = 0;
     for (var index = startSequence; index < packets.length; index++) {
       final packet = buildDataPacket(index, packets[index]);
       final accepted = await _sendPacket(packet, side);
@@ -56,10 +81,30 @@ final class BmpUpdateManager {
             'side': side,
             'sequence': index,
             'packet_count': packets.length,
+            'accepted_packets': acceptedPackets,
           },
         );
-        return false;
+        if (acceptedPackets == 0) {
+          return DeviceEffectResult.rejectedBeforeWrite(
+            code: 'bitmap_packet_not_accepted',
+            externalId: '$externalId:$index',
+            details: <String, Object?>{
+              'sequence': index,
+              'packet_count': packets.length,
+            },
+          );
+        }
+        return DeviceEffectResult.indeterminate(
+          code: 'bitmap_partial_packet_transfer',
+          externalId: '$externalId:$index',
+          details: <String, Object?>{
+            'sequence': index,
+            'accepted_packets': acceptedPackets,
+            'packet_count': packets.length,
+          },
+        );
       }
+      acceptedPackets++;
       _reportProgress(side, index + 1, packets.length);
       if (index + 1 < packets.length) {
         await _delay(Duration(milliseconds: Platform.isIOS ? 8 : 5));
@@ -76,11 +121,18 @@ final class BmpUpdateManager {
         'bmp_finish_not_acknowledged',
         fields: <String, Object?>{
           'side': side,
-          'indeterminate': finished.effectMayHaveOccurred,
+          'indeterminate': true,
           'error_code': finished.errorCode,
         },
       );
-      return false;
+      return DeviceEffectResult.indeterminate(
+        code: finished.errorCode ?? 'bitmap_finish_not_acknowledged',
+        externalId: '$externalId:finish',
+        details: <String, Object?>{
+          'accepted_packets': acceptedPackets,
+          'packet_count': packets.length,
+        },
+      );
     }
 
     final crcResponse = await _request(buildCrcCommand(image), side, 1000);
@@ -90,12 +142,27 @@ final class BmpUpdateManager {
         'bmp_crc_not_acknowledged',
         fields: <String, Object?>{
           'side': side,
-          'indeterminate': crcResponse.effectMayHaveOccurred,
+          'indeterminate': true,
           'error_code': crcResponse.errorCode,
         },
       );
+      return DeviceEffectResult.indeterminate(
+        code: crcResponse.errorCode ?? 'bitmap_crc_not_acknowledged',
+        externalId: '$externalId:crc',
+        details: <String, Object?>{
+          'accepted_packets': acceptedPackets,
+          'packet_count': packets.length,
+        },
+      );
     }
-    return crcAccepted;
+    return DeviceEffectResult.committed(
+      code: 'bitmap_crc_verified',
+      externalId: '$externalId:crc',
+      details: <String, Object?>{
+        'packet_count': packets.length,
+        'image_bytes': image.length,
+      },
+    );
   }
 
   static Uint8List buildDataPacket(int sequence, Uint8List payload) {
