@@ -72,4 +72,78 @@ void main() {
     expect(registry.reserve(key, oldSlot), isTrue);
     expect(registry.reserve(newer, newSlot), isTrue);
   });
+
+  test('one-leg disconnect selection cannot release opposite-leg quarantine', () {
+    final registry = BleRequestRegistry<int>();
+    const left = BleRequestKey(generation: 9, side: 'L', command: 0x4e);
+    const right = BleRequestKey(generation: 9, side: 'R', command: 0x4e);
+    final leftSlot = BleRequestSlot<int>(
+      completer: Completer<int>(),
+      generation: 9,
+    );
+    final rightSlot = BleRequestSlot<int>(
+      completer: Completer<int>(),
+      generation: 9,
+    );
+
+    expect(registry.reserve(left, leftSlot), isTrue);
+    expect(registry.reserve(right, rightSlot), isTrue);
+    expect(registry.quarantineIfOwned(left, leftSlot), isTrue);
+    expect(registry.quarantineIfOwned(right, rightSlot), isTrue);
+
+    registry.clearQuarantineForGenerationSide(9, 'L');
+
+    expect(registry.isQuarantined(left), isFalse);
+    expect(registry.isQuarantined(right), isTrue);
+  });
+
+  test('generation replacement clears only the retired namespace', () {
+    final registry = BleRequestRegistry<int>();
+    const retired = BleRequestKey(generation: 12, side: 'R', command: 0x25);
+    const current = BleRequestKey(generation: 13, side: 'R', command: 0x25);
+    final retiredSlot = BleRequestSlot<int>(
+      completer: Completer<int>(),
+      generation: 12,
+    );
+    final currentSlot = BleRequestSlot<int>(
+      completer: Completer<int>(),
+      generation: 13,
+    );
+
+    expect(registry.reserve(retired, retiredSlot), isTrue);
+    expect(registry.reserve(current, currentSlot), isTrue);
+    expect(registry.quarantineIfOwned(retired, retiredSlot), isTrue);
+    expect(registry.quarantineIfOwned(current, currentSlot), isTrue);
+
+    registry.clearQuarantineForGeneration(12);
+
+    expect(registry.isQuarantined(retired), isFalse);
+    expect(registry.isQuarantined(current), isTrue);
+  });
+
+  test('disconnect can quarantine only selected pending owners', () {
+    final registry = BleRequestRegistry<int>();
+    const left = BleRequestKey(generation: 21, side: 'L', command: 0x0e);
+    const right = BleRequestKey(generation: 21, side: 'R', command: 0x0e);
+    final leftSlot = BleRequestSlot<int>(
+      completer: Completer<int>(),
+      generation: 21,
+    );
+    final rightSlot = BleRequestSlot<int>(
+      completer: Completer<int>(),
+      generation: 21,
+    );
+    registry.reserve(left, leftSlot);
+    registry.reserve(right, rightSlot);
+
+    final removed = registry.takePendingWhere(
+      (BleRequestKey candidate) => candidate.side == 'L',
+      quarantine: true,
+    );
+
+    expect(removed.single.key, left);
+    expect(registry.isQuarantined(left), isTrue);
+    expect(registry.contains(right), isTrue);
+    expect(registry.isQuarantined(right), isFalse);
+  });
 }
