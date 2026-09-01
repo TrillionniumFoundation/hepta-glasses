@@ -1,0 +1,165 @@
+name: g8-response-authority-remediation-v2
+
+on:
+  push:
+    branches:
+      - work/hepta-g8-response-authority-orchestrator-v2-20260901
+
+permissions:
+  contents: write
+
+jobs:
+  remediate:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      TARGET_BRANCH: codex/hepta-glasses-gap-closure-g8
+      EXPECTED_BASE: 67a203945918081f09f25e9f965aa72d074045ee
+    steps:
+      - name: Checkout isolated remediation driver
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: orchestrator
+          persist-credentials: false
+
+      - name: Checkout immutable PR source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          path: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Assert immutable remediation base
+        working-directory: repo
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_BASE"
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: repo/android/**/*.gradle*
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+
+      - name: Resolve locked dependencies
+        working-directory: repo
+        run: flutter pub get
+
+      - name: Apply structurally anchored response authority remediation
+        working-directory: repo
+        run: |
+          set -euo pipefail
+          python3 ../orchestrator/tools/run_response_authority_patch.py .
+          dart format \
+            lib/services/ble.dart \
+            lib/runtime/ble_request_slot.dart \
+            lib/ble_manager.dart \
+            lib/adapters/even_g1/even_g1_transport.dart \
+            test/runtime/ble_receive_test.dart \
+            test/runtime/ble_request_slot_test.dart \
+            test/runtime/ble_manager_authority_test.dart \
+            test/runtime/even_g1_transport_authority_test.dart
+          git diff --check
+
+      - name: Repository and Python qualification
+        working-directory: repo
+        run: |
+          set -euo pipefail
+          python3 tools/validate_repository.py
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+
+      - name: Native sanitizer qualification
+        working-directory: repo
+        run: ./tools/run_native_sanitizers.sh
+
+      - name: Flutter qualification
+        working-directory: repo
+        run: |
+          set -euo pipefail
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze --no-fatal-infos
+          flutter test
+
+      - name: Android qualification
+        working-directory: repo
+        run: |
+          set -euo pipefail
+          flutter build apk --debug
+          cd android
+          ./gradlew testDebugUnitTest
+
+      - name: iOS qualification
+        working-directory: repo
+        run: |
+          set -euo pipefail
+          cd ios
+          pod install --deployment
+          cd ..
+          flutter build ios --simulator --debug
+          DEVICE_ID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(device["udid"] for runtime in sorted(devices, reverse=True) for device in devices[runtime] if device.get("isAvailable") and device.get("name", "").startswith("iPhone")))')"
+          xcrun simctl boot "$DEVICE_ID" || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcodebuild test \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Assert bounded production diff
+        working-directory: repo
+        run: |
+          set -euo pipefail
+          git diff --name-only | sort > /tmp/actual-paths.txt
+          printf '%s\n' \
+            'contracts/g1-ble-protocol-v1.json' \
+            'docs/GAP_LEDGER.yaml' \
+            'docs/development/G8_SOURCE_REMEDIATION.md' \
+            'lib/adapters/even_g1/even_g1_transport.dart' \
+            'lib/ble_manager.dart' \
+            'lib/runtime/ble_request_slot.dart' \
+            'lib/services/ble.dart' \
+            'test/runtime/ble_manager_authority_test.dart' \
+            'test/runtime/ble_receive_test.dart' \
+            'test/runtime/ble_request_slot_test.dart' \
+            'test/runtime/even_g1_transport_authority_test.dart' \
+            'tools/validate_repository.py' \
+            | sort > /tmp/expected-paths.txt
+          diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
+
+      - name: Commit verified remediation to PR branch
+        working-directory: repo
+        run: |
+          set -euo pipefail
+          git config user.name 'hepta-g8-response-authority-bot'
+          git config user.email 'hepta-g8-response-authority-bot@users.noreply.github.com'
+          git add --pathspec-from-file=/tmp/expected-paths.txt
+          git diff --cached --name-only | sort > /tmp/staged-paths.txt
+          diff -u /tmp/expected-paths.txt /tmp/staged-paths.txt
+          git diff --cached --quiet && { echo 'expected non-empty remediation'; exit 1; } || true
+          git commit -m 'fix(g8): reject unscoped native BLE responses'
+          git push origin HEAD:"$TARGET_BRANCH"
+          git rev-parse HEAD > /tmp/new-head-sha.txt
+          git format-patch -1 --stdout > /tmp/response-authority.patch
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: hepta-g8-response-authority-v2-${{ github.sha }}
+          path: |
+            /tmp/actual-paths.txt
+            /tmp/expected-paths.txt
+            /tmp/staged-paths.txt
+            /tmp/new-head-sha.txt
+            /tmp/response-authority.patch
+          if-no-files-found: warn
+          retention-days: 7
