@@ -221,12 +221,10 @@ final class EvenG1Transport implements GlassesTransport {
       expectedPairIdentity: identity.pairIdentity,
     );
 
-    final responseGenerationMatches =
-        response.generation == 0 || response.generation == identity.generation;
-    final responsePairMatches =
-        response.pairIdentity == unselectedBlePairIdentity ||
-            response.pairIdentity == identity.pairIdentity;
-    if (!responseGenerationMatches || !responsePairMatches) {
+    final responseAuthorityMatches = response.hasAuthoritativeIdentity &&
+        response.generation == identity.generation &&
+        response.pairIdentity == identity.pairIdentity;
+    if (!responseAuthorityMatches) {
       final uncertain = TransportAck(
         accepted: false,
         timeout: true,

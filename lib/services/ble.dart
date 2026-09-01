@@ -50,6 +50,11 @@ class BleReceive {
   String pairIdentity = unselectedBlePairIdentity;
   String? errorCode;
 
+  bool get hasAuthoritativeIdentity =>
+      generation > 0 &&
+      pairIdentity.trim().isNotEmpty &&
+      pairIdentity != unselectedBlePairIdentity;
+
   int getCmd() {
     if (data.isEmpty) {
       throw StateError('BLE response does not contain a command byte.');
@@ -76,8 +81,11 @@ class BleReceive {
       response.generation = rawGeneration;
     }
     final rawPairIdentity = map['pairIdentity'];
-    if (rawPairIdentity is String && rawPairIdentity.isNotEmpty) {
-      response.pairIdentity = rawPairIdentity;
+    if (rawPairIdentity is String) {
+      final normalizedPairIdentity = rawPairIdentity.trim();
+      if (normalizedPairIdentity.isNotEmpty) {
+        response.pairIdentity = normalizedPairIdentity;
+      }
     }
     return response;
   }

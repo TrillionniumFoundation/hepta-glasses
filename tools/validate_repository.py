@@ -217,7 +217,7 @@ def validate_gap_ledger() -> None:
     source_open = [gap["id"] for gap in gaps if gap["status"] == "OPEN"]
     if source_open:
         fail(f"actionable source gaps remain open: {source_open}")
-    for gap_id in ("HG-0055", "HG-0056", "HG-0057", "HG-0058", "HG-0059", "HG-0060", "HG-0061", "HG-0062", "HG-0063", "HG-0064"):
+    for gap_id in ("HG-0055", "HG-0056", "HG-0057", "HG-0058", "HG-0059", "HG-0060", "HG-0061", "HG-0062", "HG-0063", "HG-0064", "HG-0065"):
         if by_id.get(gap_id, {}).get("status") != "CLOSED_SOURCE":
             fail(f"{gap_id} terminal G8 remediation is not source-closed")
 
@@ -353,6 +353,19 @@ def validate_ble_authority() -> None:
     )
     if any(fragment not in transport for fragment in transport_fragments):
         fail("public BLE transport does not bind complete idempotency authority")
+    strict_response_fragments = (
+        "response.hasAuthoritativeIdentity",
+        "response.generation == identity.generation",
+        "response.pairIdentity == identity.pairIdentity",
+    )
+    if any(fragment not in transport for fragment in strict_response_fragments):
+        fail("transport accepts a native response without exact authority")
+    wildcard_transport_fragments = (
+        "response.generation == 0 ||",
+        "response.pairIdentity == unselectedBlePairIdentity ||",
+    )
+    if any(fragment in transport for fragment in wildcard_transport_fragments):
+        fail("transport retains native response authority wildcards")
 
     manager_fragments = (
         "clearQuarantineForGeneration(retiredGeneration)",
@@ -363,6 +376,20 @@ def validate_ble_authority() -> None:
     )
     if any(fragment not in manager for fragment in manager_fragments):
         fail("Flutter BLE request authority or scoped quarantine drifted")
+    strict_manager_fragments = (
+        "!response.hasAuthoritativeIdentity",
+        "final generation = response.generation;",
+        "pending.generation != generation",
+        "ble_unscoped_authority_response",
+    )
+    if any(fragment not in manager for fragment in strict_manager_fragments):
+        fail("Flutter BLE response path does not fail closed on missing authority")
+    wildcard_manager_fragments = (
+        "response.generation > 0 ? response.generation : _connectionGeneration",
+        "pending.generation == generation || pending.generation == 0",
+    )
+    if any(fragment in manager for fragment in wildcard_manager_fragments):
+        fail("Flutter BLE response path retains authority compatibility wildcards")
     disconnect_section = manager.split("void _onGlassesDisconnected", 1)[1].split(
         "void _onPairedGlassesFound", 1
     )[0]
@@ -399,8 +426,15 @@ def validate_ble_authority() -> None:
     )
     if any(fragment not in transport_test for fragment in test_fragments):
         fail("hostile transport authority regression set is incomplete")
-    if "left disconnect cannot release an uncertain right-leg write" not in manager_test:
-        fail("one-leg disconnect quarantine regression is missing")
+    manager_test_fragments = (
+        "left disconnect cannot release an uncertain right-leg write",
+        "unscoped or mismatched responses cannot complete a current slot",
+        "delayed unscoped response cannot cross into generation N plus one",
+    )
+    if any(fragment not in manager_test for fragment in manager_test_fragments):
+        fail("strict Flutter BLE response regressions are incomplete")
+    if "unscoped native response is never promoted to current authority" not in transport_test:
+        fail("strict transport response regression is missing")
     if "testGenerationNTokenCannotOwnGenerationNPlusOne" not in ios_test:
         fail("iOS stale-attempt regression is missing")
 

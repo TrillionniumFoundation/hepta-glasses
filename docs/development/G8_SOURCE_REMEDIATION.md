@@ -25,13 +25,15 @@ Canonical revision: `2026-09-01-g8`
 - changed `EvenG1Transport` receipt, in-flight, and fingerprint authority from caller string alone to `(pair identity, generation, side, caller key, payload SHA-256)`;
 - made authority storage bounded and fail closed at capacity rather than evicting a same-generation receipt that could suppress duplicate-effect protection;
 - changed disconnect cleanup to select pending owners by generation and leg; one-leg disconnect never clears the opposite leg's existing uncertain-write quarantine;
-- limited quarantine release to matching late response, explicit exact-leg reconciliation, retirement of the exact generation, or terminal disposal.
+- limited quarantine release to matching late response, explicit exact-leg reconciliation, retirement of the exact generation, or terminal disposal;
+- rejected every command/ack response lacking a positive generation and exact non-placeholder pair identity before it can touch a pending slot or uncertain-write quarantine.
 
 ### Hostile regression evidence
 
 - `test/runtime/even_g1_transport_authority_test.dart` proves cross-side, cross-generation, and cross-pair key separation, payload-drift rejection, captured native authority, and pre-write failure without authority;
 - `test/runtime/ble_request_slot_test.dart` proves per-leg and per-generation quarantine isolation and selective disconnect cleanup;
-- `test/runtime/ble_manager_authority_test.dart` drives a native-accepted right-leg write to ACK timeout, reports a left-leg disconnect, and proves the right-leg replay remains quarantined;
+- `test/runtime/ble_manager_authority_test.dart` drives a native-accepted right-leg write to ACK timeout, reports a left-leg disconnect, proves the right-leg replay remains quarantined, and rejects missing, zero, stale, wrong-pair, and cross-generation response authority;
+- `test/runtime/even_g1_transport_authority_test.dart` proves an unscoped or mismatched native response is indeterminate rather than promoted to the captured connection authority;
 - `ios/RunnerTests/RunnerTests.swift` proves a generation-N token cannot own generation N+1, an unknown peripheral cannot fall through to right-leg authority, the retired-peripheral barrier must be consumed, and retiring one leg does not retire the other.
 
 ### Privacy and documentation

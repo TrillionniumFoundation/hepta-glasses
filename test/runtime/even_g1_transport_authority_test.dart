@@ -212,4 +212,100 @@ void main() {
     expect(result.errorCode, 'connection_authority_unavailable');
     expect(calls, isEmpty);
   });
+
+  test('unscoped native response is never promoted to current authority',
+      () async {
+    final variants = <({String name, BleReceive response})>[
+      (
+        name: 'missing generation',
+        response: BleReceive()
+          ..lr = 'L'
+          ..data = Uint8List.fromList(<int>[0x25, 0xc9])
+          ..pairIdentity = 'Pair_45',
+      ),
+      (
+        name: 'zero generation',
+        response: BleReceive()
+          ..lr = 'L'
+          ..data = Uint8List.fromList(<int>[0x25, 0xc9])
+          ..generation = 0
+          ..pairIdentity = 'Pair_45',
+      ),
+      (
+        name: 'missing pair identity',
+        response: BleReceive()
+          ..lr = 'L'
+          ..data = Uint8List.fromList(<int>[0x25, 0xc9])
+          ..generation = 7,
+      ),
+      (
+        name: 'placeholder pair identity',
+        response: BleReceive()
+          ..lr = 'L'
+          ..data = Uint8List.fromList(<int>[0x25, 0xc9])
+          ..generation = 7
+          ..pairIdentity = unselectedBlePairIdentity,
+      ),
+      (
+        name: 'stale generation',
+        response: BleReceive()
+          ..lr = 'L'
+          ..data = Uint8List.fromList(<int>[0x25, 0xc9])
+          ..generation = 6
+          ..pairIdentity = 'Pair_45',
+      ),
+      (
+        name: 'wrong pair identity',
+        response: BleReceive()
+          ..lr = 'L'
+          ..data = Uint8List.fromList(<int>[0x25, 0xc9])
+          ..generation = 7
+          ..pairIdentity = 'Pair_91',
+      ),
+    ];
+
+    for (final variant in variants) {
+      var sends = 0;
+      final localSource = _FakeConnectionSource(
+        const BleConnectionSnapshot(
+          leftConnected: true,
+          rightConnected: true,
+          generation: 7,
+          pairIdentity: 'Pair_45',
+        ),
+      );
+      final localTransport = EvenG1Transport(
+        manager: localSource,
+        requestSender: (
+          Uint8List _, {
+          required String lr,
+          required int timeoutMs,
+          required int expectedGeneration,
+          required String expectedPairIdentity,
+        }) async {
+          sends++;
+          return variant.response;
+        },
+      );
+      try {
+        final result = await localTransport.send(
+          side: GlassesSide.left,
+          bytes: Uint8List.fromList(<int>[0x25, 0x01]),
+          timeout: const Duration(milliseconds: 200),
+          idempotencyKey: 'strict-${variant.name}',
+        );
+        expect(result.accepted, isFalse, reason: variant.name);
+        expect(result.requiresReconciliation, isTrue, reason: variant.name);
+        expect(
+          result.errorCode,
+          'native_response_authority_mismatch',
+          reason: variant.name,
+        );
+        expect(sends, 1, reason: variant.name);
+      } finally {
+        await localTransport.dispose();
+        await localSource.close();
+      }
+    }
+  });
 }

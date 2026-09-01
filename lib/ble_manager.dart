@@ -379,9 +379,22 @@ class BleManager implements BleConnectionSource {
     if (response.type == 'VoiceChunk' || response.data.isEmpty) {
       return;
     }
-    if (response.generation > 0 &&
-        _connectionGeneration > 0 &&
-        response.generation != _connectionGeneration) {
+    if (!response.hasAuthoritativeIdentity) {
+      PrivacySafeLog.event(
+        'ble_unscoped_authority_response',
+        fields: <String, Object?>{
+          'response_generation': response.generation,
+          'response_pair_identity': response.pairIdentity,
+        },
+      );
+      return;
+    }
+    if (_connectionGeneration <= 0 ||
+        _pairIdentity == unselectedBlePairIdentity) {
+      PrivacySafeLog.event('ble_response_without_current_authority');
+      return;
+    }
+    if (response.generation != _connectionGeneration) {
       PrivacySafeLog.event(
         'ble_stale_generation_response',
         fields: <String, Object?>{
@@ -391,8 +404,7 @@ class BleManager implements BleConnectionSource {
       );
       return;
     }
-    if (response.pairIdentity != unselectedBlePairIdentity &&
-        response.pairIdentity != _pairIdentity) {
+    if (response.pairIdentity != _pairIdentity) {
       PrivacySafeLog.event(
         'ble_stale_pair_response',
         fields: <String, Object?>{
@@ -440,8 +452,7 @@ class BleManager implements BleConnectionSource {
       return;
     }
 
-    final generation =
-        response.generation > 0 ? response.generation : _connectionGeneration;
+    final generation = response.generation;
     final key = BleRequestKey(
       generation: generation,
       side: response.lr,
@@ -473,9 +484,7 @@ class BleManager implements BleConnectionSource {
       );
       return;
     }
-    if (pending.generation == generation || pending.generation == 0) {
-      pending.completer.complete(response);
-    } else {
+    if (pending.generation != generation) {
       pending.completer.complete(
         _timeoutResponse(
           effectMayHaveOccurred: true,
@@ -484,7 +493,9 @@ class BleManager implements BleConnectionSource {
           errorCode: 'connection_generation_changed',
         ),
       );
+      return;
     }
+    pending.completer.complete(response);
   }
 
   String getConnectionStatus() => connectionStatus;
@@ -945,6 +956,10 @@ class BleManager implements BleConnectionSource {
   @visibleForTesting
   Future<void> handleNativeMethodForTest(MethodCall call) =>
       _methodCallHandler(call);
+
+  @visibleForTesting
+  void handleReceivedDataForTest(BleReceive response) =>
+      _handleReceivedData(response);
 
   @visibleForTesting
   void resetAuthorityForTest() {
