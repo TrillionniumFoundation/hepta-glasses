@@ -9,6 +9,8 @@ Convert the imported Even G1 companion demo into the deterministic mobile edge o
 
 The repository does not contain vendor G1 firmware or bootloader source. “OS” therefore does not imply firmware ownership until vendor-authorized firmware, secure-boot, signing, OTA, recovery, and rollback access exists.
 
+Legacy social-post, mobile OCR, and a separate `hepta_dashboard` are not current supported capabilities. A requirement removed from the current product boundary must be recorded as removal, not as an implemented feature.
+
 ## 2. Non-negotiable invariants
 
 1. Model, realtime model, MCP, Skill, and Codex output are proposals, never final mutation authority.
@@ -28,26 +30,32 @@ The repository does not contain vendor G1 firmware or bootloader source. “OS�
 15. A clean worktree is not a clean Git history. Every fetched ref and every bounded blob must pass the redacted history gate; unscanned blobs fail closed.
 16. Development servers fail closed when authentication or isolation prerequisites are absent.
 17. The implementing agent does not self-approve or self-merge its own change.
+18. A closed Gap Ledger row is invalid unless every cited exact-head evidence path exists. A blocked row is invalid unless its resume package exists and its unblock condition is concrete.
+19. Every registered module has an owner, existing source roots, detailed technical documentation, existing tests, existing contracts, lifecycle truth, and explicit external gates.
+20. A digital twin or simulator must not use a weaker authority or idempotency domain than the production interface it models.
+21. Audit documentation states the actual verification strategy. An authenticated-tail append optimization is not described as a complete historical rescan on every ordinary append.
 
 ## 3. Gate sequence
 
 ### G0 — canonical truth and governance
 
-Maintain the product boundary, architecture, threat/privacy/capability models, canonical plan, current state, Gap Ledger, Evidence Index, schemas, CODEOWNERS, a single read-only CI workflow, and the branch-protection contract.
+Maintain the product boundary, architecture, threat/privacy/capability models, canonical plan, current state, machine-readable Module Registry, detailed Module Development Guide, Gap Ledger, Evidence Index, schemas, CODEOWNERS, a single read-only CI workflow, metadata validator, and branch-protection contract.
 
-Source exit: validators pass, all canonical revisions agree, no transient probe file remains, and no actionable source gap is `OPEN`. Product exit: GitHub verifies the complete canonical `main` protection contract, not merely that the branch reports `protected=true`.
+Source exit: both repository validators pass; every closed evidence and blocked resume path exists; every registered module has source/document/test/contract coverage; all canonical revisions agree; no transient probe file remains; and no actionable source gap is `OPEN`. Product exit: GitHub verifies the complete canonical `main` protection contract, not merely that the branch reports `protected=true`.
 
 ### G1 — deterministic device substrate
 
 Maintain protocol codecs, native transport adapters, independent per-leg readiness, immutable connection-attempt ownership, connection generations, pair identity, bounded write queues, exact response correlation, dual-leg receipts, scoped idempotency, retry safety, per-leg late-response quarantine, reconciliation, and deterministic fault injection.
 
-Source exit: malformed packets fail closed; an uncertain write is never blindly replayed; stale iOS callbacks cannot affect a newer attempt; the same caller key cannot alias another side, generation, or pair; partial pair completion is explicit; bulk BMP transfer validates every native acceptance and terminal response. Product exit: physical Android/iOS G1 qualification passes.
+The digital twin uses the same pair/generation/side/caller-key/payload-digest authority domain as production transport and may model only deterministic source behavior.
+
+Source exit: malformed packets fail closed; an uncertain write is never blindly replayed; stale iOS callbacks cannot affect a newer attempt; the same caller key cannot alias another side, generation, or pair; partial pair completion is explicit; bulk BMP transfer validates every native acceptance and terminal response; and digital-twin authority cannot suppress a required cross-side/generation/pair write. Product exit: physical Android/iOS G1 qualification passes.
 
 ### G2 — edge execution authority
 
-Maintain durable tasks, serialized hash-chained audit, exact-key in-flight de-duplication, bounded physical-effect scheduling, policy, exact leases, Tool Gateway recovery, journal-before-effect execution, receipts, deadlines, cancellation, and reconciliation.
+Maintain one mobile composition root, durable tasks, serialized hash-chained audit, platform-authenticated checkpoints, exact-key in-flight de-duplication, bounded physical-effect scheduling, policy, exact leases, Tool Gateway recovery, journal-before-effect execution, receipts, deadlines, cancellation, and reconciliation.
 
-Source exit: corrupt journals, duplicate concurrent requests, stale generations, argument drift, expired/consumed leases, unknown tools, crash windows, cancellation races, and blocked shutdowns fail closed.
+Source exit: corrupt journals, duplicate concurrent requests, stale generations, argument drift, expired/consumed leases, unknown tools, crash windows, cancellation races, blocked shutdowns, missing durable state, and unavailable production mutation authority fail closed. Audit startup/read/verify authenticates the complete chain; append may use only the documented authenticated-tail fast path and must fall back to full verification on trust or metadata drift.
 
 ### G3 — identity and cloud control
 
@@ -57,9 +65,9 @@ Source exit: deterministic identity tests pass. Product exit: deployed KMS/HSM, 
 
 ### G4 — realtime and assistant lifecycle
 
-Maintain one-time realtime bootstrap, bounded scopes/provider profiles, privacy indicators, cancellation, barge-in fencing, final-ASR waiting, model cancellation boundaries, and delivery-truth state transitions.
+Maintain one-time realtime bootstrap, bounded scopes/provider profiles, privacy indicators, cancellation, barge-in fencing, final-ASR waiting, model cancellation boundaries, delivery-truth state transitions, and typed microphone retry safety.
 
-Source exit: replay, concurrent ticket consumption, stale generation, unavailable ASR, late transcript, overlapping paging, and unacknowledged final display fail closed. Product exit: physical latency, loss, battery, thermal, cancellation, and barge-in thresholds pass.
+Source exit: replay, concurrent ticket consumption, stale generation, unavailable ASR, late transcript, overlapping paging, uncertain microphone writes, and unacknowledged final display fail closed. Product exit: physical latency, loss, battery, thermal, cancellation, and barge-in thresholds pass.
 
 ### G5 — capability tool OS
 
@@ -81,15 +89,15 @@ Source exit: package substitution, tampering, R4 admission, missing consent, una
 
 ### G8 — qualification, pilot, and release
 
-Maintain physical trace evaluators, fault matrices, Android/iOS native tests, hostile BLE authority tests, exact-head source SBOM/provenance, redacted complete-history scanning, native sanitizers, source/product release gates, governance automation, signing/review templates, rollout, kill-switch, and rollback runbooks.
+Maintain physical trace evaluators, fault matrices, Android/iOS native tests, hostile BLE authority tests, metadata/module coverage tests, exact-head source SBOM/provenance, redacted complete-history scanning, native sanitizers, source/product release gates, governance automation, signing/review templates, rollout, kill-switch, and rollback runbooks.
 
-Source exit: exact-head repository, Flutter, Android, iOS, native-sanitizer, boundary/history, and source-evidence checks pass on one unchanged commit. Product exit: a signed product release bundle passes without overrides.
+Source exit: exact-head repository, metadata/module, Flutter, Android, iOS, native-sanitizer, boundary/history, and source-evidence checks pass on one unchanged commit. Product exit: a signed product release bundle passes without overrides.
 
 ## 4. Evidence levels
 
-- **E0 — Contract evidence:** plans, ADRs, schemas, policies, runbooks, and machine-readable ledgers.
-- **E1 — Static source evidence:** formatting, compilation, static analysis, boundary scans, and deterministic validators.
-- **E2 — Deterministic test evidence:** unit, negative, concurrency, property, replay, crash-window, hostile callback, quarantine, and digital-twin tests.
+- **E0 — Contract evidence:** plans, ADRs, schemas, policies, module documentation, runbooks, and machine-readable ledgers.
+- **E1 — Static source evidence:** formatting, compilation, static analysis, evidence-path validation, module coverage validation, boundary scans, and deterministic validators.
+- **E2 — Deterministic test evidence:** unit, negative, concurrency, property, replay, crash-window, hostile callback, quarantine, retry-safety, and digital-twin tests.
 - **E3 — Platform build/test evidence:** Android native unit tests, iOS XCTest, simulator builds, native sanitizers, and reproducible dependency locks.
 - **E4 — Exact-head CI evidence:** a successful CI run and content-addressed SBOM/provenance/history/native/source-gate artifact bound to one unchanged commit and tree.
 - **E5 — Physical/deployed evidence:** real device traces, deployed services, KMS/HSM, attestation, OAuth/provider receipts, credential-rotation records, and operational telemetry.
@@ -106,6 +114,18 @@ Evidence cannot be promoted by renaming it. E0–E4 never close a gate that expl
 4. Bind public BLE transport receipts and in-flight owners to pair identity, generation, side, caller key, and payload digest; enforce the captured pair and generation again at the native write boundary.
 5. Preserve uncertain-write quarantine per generation/side/command. A disconnect on one side may fail or quarantine only that side's pending owners and must not release the opposite side.
 6. Prove the three authority invariants with hostile Dart and XCTest regressions, and fail repository validation if their implementation or tests disappear.
-7. Keep historical credential rotation/revocation, physical devices, production infrastructure, incomplete repository administration, vendor firmware, independent assurance, signing, pilot, and release explicitly external.
-8. Run the complete matrix on one unchanged exact head, generate content-addressed evidence, and obtain independent review bound to that head.
-9. Merge only through the protected review path. The implementing agent never self-approves, bypasses, or self-merges.
+7. Introduce one mobile composition root and keep production mutation authority fail closed until identity/attestation-backed authority exists.
+8. Align digital-twin pair/generation/side/payload authority with production transport and prove cross-domain separation.
+9. Replace stale Gap Ledger paths with existing source/tests or an explicit removal-from-product-boundary record.
+10. Register every major module with owner, source roots, detailed technical documentation, tests, contracts, lifecycle, and external gates.
+11. Run a separate metadata validator that verifies all gap evidence, blocked resume packages, module references, and documentation markers on the exact tree.
+12. Reconcile Current State and module documentation with the actual authenticated-checkpoint-v3 append/full-verification behavior.
+13. Keep historical credential rotation/revocation, physical devices, production infrastructure, incomplete repository administration, vendor firmware, independent assurance, signing, pilot, and release explicitly external.
+14. Run the complete matrix on one unchanged exact head, generate content-addressed evidence, and obtain independent review bound to that head.
+15. Merge only through the protected review path. The implementing agent never self-approves, bypasses, or self-merges.
+
+## 6. Terminal source package
+
+The repository-side implementation record for steps 7–12 is `docs/development/G8_METADATA_AND_DOCUMENTATION_CLOSURE.md`. `docs/MODULES.json`, `docs/MODULE_DEVELOPMENT_GUIDE.md`, `docs/GAP_LEDGER.yaml`, `docs/EVIDENCE_INDEX.yaml`, `docs/CURRENT_STATE.md`, and affected source/tests are one change set. None is authoritative in isolation.
+
+The current tree remains E0–E3 until exact-head CI, artifact inspection, and an eligible independent latest-head review complete. An older successful artifact does not attest a later push.
