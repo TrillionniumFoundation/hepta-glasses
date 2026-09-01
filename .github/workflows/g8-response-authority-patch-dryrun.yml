@@ -1,0 +1,56 @@
+name: g8-response-authority-patch-dryrun
+
+on:
+  push:
+    branches:
+      - work/hepta-g8-response-authority-orchestrator-20260901
+
+permissions:
+  contents: read
+
+jobs:
+  dryrun:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout patch driver
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: orchestrator
+          persist-credentials: false
+      - name: Checkout exact target
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 67a203945918081f09f25e9f965aa72d074045ee
+          path: repo
+          persist-credentials: false
+      - name: Execute labelled patch dry-run
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          import sys
+          from pathlib import Path
+
+          script = Path('orchestrator/tools/apply_response_authority.py')
+          spec = importlib.util.spec_from_file_location('response_patch', script)
+          module = importlib.util.module_from_spec(spec)
+          assert spec.loader is not None
+          spec.loader.exec_module(module)
+
+          original = module.replace_once
+          counter = 0
+
+          def labelled(root, relative, old, new):
+              global counter
+              counter += 1
+              text = module.read(root, relative)
+              count = text.count(old)
+              first = old.splitlines()[0] if old.splitlines() else old
+              print(f'ANCHOR {counter:02d} {relative} count={count} first={first!r}')
+              return original(root, relative, old, new)
+
+          module.replace_once = labelled
+          sys.argv = [str(script), str(Path('repo').resolve())]
+          raise SystemExit(module.main())
+          PY
