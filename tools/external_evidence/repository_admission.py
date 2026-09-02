@@ -147,19 +147,24 @@ def _parse_object(payload: bytes) -> dict[str, Any] | None:
 def discover_accepted_envelopes(base: Path) -> list[DiscoveredAcceptedEnvelope]:
     """Recursively discover accepted envelopes without following mutable names.
 
-    The root and every child directory are opened through no-follow directory
-    descriptors. Lexical, opened, and post-traversal identities must agree.
-    Any symbolic link, special object, ordinary replacement, unstable read, or
-    resource-bound violation below the evidence root fails the repository gate
-    instead of being ignored as a possible hidden package.
+    The lexical root and every child directory are opened through no-follow
+    directory descriptors. Lexical, opened, post-traversal, and final-name
+    identities must agree. Any symbolic link, special object, ordinary
+    replacement, unstable read, or resource-bound violation at or below the
+    evidence root fails the repository gate instead of being ignored as a
+    possible hidden package.
     """
 
+    lexical_base = Path(os.path.abspath(os.fspath(base)))
     try:
-        resolved_base = base.resolve(strict=True)
+        root_lexical_before = os.lstat(lexical_base)
     except OSError as error:
         fail(f"committed evidence root is unavailable: {error}")
+    if not stat.S_ISDIR(root_lexical_before.st_mode):
+        fail("committed evidence root must be a real directory, not a link or special object")
+
     root_fd = _open_absolute_directory_nofollow(
-        resolved_base,
+        lexical_base,
         label="committed evidence root",
         fail=fail,
     )
@@ -167,6 +172,9 @@ def discover_accepted_envelopes(base: Path) -> list[DiscoveredAcceptedEnvelope]:
     if not stat.S_ISDIR(root_opened.st_mode):
         os.close(root_fd)
         fail("committed evidence root must be a directory")
+    if _identity(root_opened) != _identity(root_lexical_before):
+        os.close(root_fd)
+        fail("committed evidence root changed between lexical inspection and open")
 
     results: list[DiscoveredAcceptedEnvelope] = []
     entry_count = 0
@@ -253,7 +261,7 @@ def discover_accepted_envelopes(base: Path) -> list[DiscoveredAcceptedEnvelope]:
             ):
                 results.append(
                     DiscoveredAcceptedEnvelope(
-                        path=resolved_base / relative / name,
+                        path=lexical_base / relative / name,
                         document=document,
                         sha256=hashlib.sha256(payload).hexdigest(),
                     )
@@ -268,6 +276,12 @@ def discover_accepted_envelopes(base: Path) -> list[DiscoveredAcceptedEnvelope]:
         root_after = os.fstat(root_fd)
         if _identity(root_after) != _identity(root_opened):
             fail("committed evidence root changed during traversal")
+        try:
+            root_lexical_after = os.lstat(lexical_base)
+        except OSError as error:
+            fail(f"committed evidence root disappeared after traversal: {error}")
+        if _identity(root_lexical_after) != _identity(root_opened):
+            fail("committed evidence root name no longer identifies the traversed directory")
     finally:
         os.close(root_fd)
     return results
