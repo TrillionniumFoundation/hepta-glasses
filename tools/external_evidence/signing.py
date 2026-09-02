@@ -5,14 +5,19 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import stat
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .core import (
+    ARTIFACT_URI,
     EvidenceError,
     MAX_JSON_BYTES,
+    MAX_SIGNATURE_BYTES,
+    _stable_read_target,
     canonical_bundle_digest,
     canonical_review_statement,
     canonical_submission_statement,
@@ -54,44 +59,138 @@ def normalize_time(value: str | None) -> str:
     return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _resolved_custody_root(root: Any) -> Path:
+    if not isinstance(root, Path):
+        raise ValueError("--custody-root is required")
+    try:
+        resolved = root.resolve(strict=True)
+    except OSError as error:
+        raise ValueError(f"custody root is unavailable: {error}") from error
+    if not resolved.is_dir():
+        raise ValueError("custody root must be a directory")
+    return resolved
+
+
+def _require_bundle_inside_custody(snapshot: Any, root: Any) -> Path:
+    resolved = _resolved_custody_root(root)
+    try:
+        snapshot.path.relative_to(resolved)
+    except ValueError as error:
+        raise ValueError(
+            "input evidence bundle must be located below --custody-root"
+        ) from error
+    return resolved
+
+
+def _canonical_output_uri(value: Any, *, label: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{label} must be a non-empty artifact URI")
+    match = ARTIFACT_URI.fullmatch(value)
+    if match is None:
+        raise ValueError(f"{label} must use artifact:// with a scoped relative path")
+    raw = match.group(1)
+    relative = PurePosixPath(raw)
+    if (
+        relative.is_absolute()
+        or any(part in {"", ".", ".."} for part in relative.parts)
+        or relative.as_posix() != raw
+    ):
+        raise ValueError(f"{label} must use a canonical scoped relative path")
+    return value
+
+
+def _preflight_output_uris(args: argparse.Namespace, *, include_signature: bool) -> None:
+    successor_uri = _canonical_output_uri(
+        getattr(args, "output_bundle_uri", None),
+        label="output bundle",
+    )
+    if not include_signature:
+        return
+    signature_uri = _canonical_output_uri(
+        getattr(args, "signature_uri", None),
+        label="detached signature",
+    )
+    if signature_uri == successor_uri:
+        raise ValueError("detached signature and output bundle must use distinct URIs")
+
+
+def _verify_created_output(
+    *,
+    custody_root: Path,
+    path: Path,
+    expected: bytes,
+    maximum: int,
+    label: str,
+) -> str:
+    """Re-read the visible canonical output before reporting command success."""
+
+    lexical = Path(os.path.abspath(os.fspath(path)))
+    try:
+        resolved = lexical.resolve(strict=True)
+    except OSError as error:
+        raise RuntimeError(f"{label} is not visible after creation: {error}") from error
+    if resolved != lexical:
+        raise RuntimeError(f"{label} was redirected after creation")
+    try:
+        resolved.relative_to(custody_root)
+    except ValueError as error:
+        raise RuntimeError(f"{label} escaped custody after creation") from error
+    state = os.stat(lexical, follow_symlinks=False)
+    if not stat.S_ISREG(state.st_mode):
+        raise RuntimeError(f"{label} is no longer a regular file")
+    if state.st_mode & 0o077:
+        raise RuntimeError(f"{label} permissions are not private")
+    observed = _stable_read_target(
+        lexical,
+        label=label,
+        maximum=maximum,
+    )
+    if observed != expected:
+        raise RuntimeError(f"{label} changed before command completion")
+    return hashlib.sha256(observed).hexdigest()
+
+
 def _commit_bundle(
     args: argparse.Namespace,
     snapshot: Any,
-    bundle: dict[str, Any],
+    serialized: bytes,
+    custody_root: Path,
 ) -> tuple[Path, str, bool]:
     """Create an immutable successor and leave the signed input untouched.
 
     Portable POSIX rename operations do not provide a conditional
-    compare-and-swap against an expected inode. A check followed by replacement
-    can therefore overwrite a name that another actor changed after the check.
-    Authority-bearing evidence never uses that ambiguous in-place operation:
-    every signing/finalization command must select a fresh exclusive successor
-    URI below the already declared custody root.
+    compare-and-swap against an expected inode. Authority-bearing evidence
+    therefore advances only through fresh, exclusive successor objects.
     """
 
-    del snapshot  # The input snapshot is still required before mutation/signing.
-    output_uri = getattr(args, "output_bundle_uri", None)
-    custody_root = getattr(args, "custody_root", None)
-    if not isinstance(output_uri, str) or not output_uri:
-        raise ValueError(
-            "authoritative evidence signing requires --output-bundle-uri; "
-            "in-place bundle mutation is unsupported"
-        )
-    if not isinstance(custody_root, Path):
-        raise ValueError("--custody-root is required with --output-bundle-uri")
-    data = bundle_bytes(bundle)
+    del snapshot
+    output_uri = _canonical_output_uri(
+        getattr(args, "output_bundle_uri", None),
+        label="output bundle",
+    )
     path, digest = create_scoped_uri_exclusive(
         custody_root,
         output_uri,
-        data,
+        serialized,
         MAX_JSON_BYTES,
         label="output bundle",
     )
+    observed_digest = _verify_created_output(
+        custody_root=custody_root,
+        path=path,
+        expected=serialized,
+        maximum=MAX_JSON_BYTES,
+        label="output bundle",
+    )
+    if observed_digest != digest:
+        raise RuntimeError("output bundle digest changed before command completion")
     return path, digest, True
 
 
 def sign_submission(args: argparse.Namespace) -> dict[str, Any]:
     snapshot = load_bundle_snapshot(args.bundle)
+    custody_root = _require_bundle_inside_custody(snapshot, args.custody_root)
+    _preflight_output_uris(args, include_signature=True)
     bundle = snapshot.value
     submissions = bundle.get("submissions")
     if not isinstance(submissions, list) or not 0 <= args.index < len(submissions):
@@ -117,16 +216,33 @@ def sign_submission(args: argparse.Namespace) -> dict[str, Any]:
     signature = sign_ed25519(
         args.private_key,
         statement,
-        forbidden_root=args.custody_root,
+        forbidden_root=custody_root,
     )
     submission["attestation"]["statement_digest"] = hashlib.sha256(statement).hexdigest()
     submission["attestation"]["signature_sha256"] = hashlib.sha256(signature).hexdigest()
+    serialized = bundle_bytes(bundle)
+
     signature_path, signature_digest = write_signature(
-        args.custody_root,
+        custody_root,
         args.signature_uri,
         signature,
     )
-    bundle_path, bundle_digest, immutable = _commit_bundle(args, snapshot, bundle)
+    observed_signature_digest = _verify_created_output(
+        custody_root=custody_root,
+        path=signature_path,
+        expected=signature,
+        maximum=MAX_SIGNATURE_BYTES,
+        label="detached signature",
+    )
+    if observed_signature_digest != signature_digest:
+        raise RuntimeError("detached signature digest changed before command completion")
+
+    bundle_path, bundle_digest, immutable = _commit_bundle(
+        args,
+        snapshot,
+        serialized,
+        custody_root,
+    )
     return {
         "ok": True,
         "kind": "submission",
@@ -143,6 +259,8 @@ def sign_submission(args: argparse.Namespace) -> dict[str, Any]:
 
 def sign_reviewer(args: argparse.Namespace) -> dict[str, Any]:
     snapshot = load_bundle_snapshot(args.bundle)
+    custody_root = _require_bundle_inside_custody(snapshot, args.custody_root)
+    _preflight_output_uris(args, include_signature=True)
     bundle = snapshot.value
     acceptance = bundle.get("acceptance")
     reviewers = acceptance.get("reviewers") if isinstance(acceptance, dict) else None
@@ -173,16 +291,33 @@ def sign_reviewer(args: argparse.Namespace) -> dict[str, Any]:
     signature = sign_ed25519(
         args.private_key,
         statement,
-        forbidden_root=args.custody_root,
+        forbidden_root=custody_root,
     )
     reviewer["statement_digest"] = hashlib.sha256(statement).hexdigest()
     reviewer["signature_sha256"] = hashlib.sha256(signature).hexdigest()
+    serialized = bundle_bytes(bundle)
+
     signature_path, signature_digest = write_signature(
-        args.custody_root,
+        custody_root,
         args.signature_uri,
         signature,
     )
-    bundle_path, bundle_digest, immutable = _commit_bundle(args, snapshot, bundle)
+    observed_signature_digest = _verify_created_output(
+        custody_root=custody_root,
+        path=signature_path,
+        expected=signature,
+        maximum=MAX_SIGNATURE_BYTES,
+        label="detached signature",
+    )
+    if observed_signature_digest != signature_digest:
+        raise RuntimeError("detached signature digest changed before command completion")
+
+    bundle_path, bundle_digest, immutable = _commit_bundle(
+        args,
+        snapshot,
+        serialized,
+        custody_root,
+    )
     return {
         "ok": True,
         "kind": "reviewer",
@@ -199,13 +334,21 @@ def sign_reviewer(args: argparse.Namespace) -> dict[str, Any]:
 
 def finalize(args: argparse.Namespace) -> dict[str, Any]:
     snapshot = load_bundle_snapshot(args.bundle)
+    custody_root = _require_bundle_inside_custody(snapshot, args.custody_root)
+    _preflight_output_uris(args, include_signature=False)
     bundle = snapshot.value
     acceptance = bundle.get("acceptance")
     if not isinstance(acceptance, dict):
         raise ValueError("acceptance must be an object")
     acceptance["bundle_digest"] = None
     acceptance["bundle_digest"] = canonical_bundle_digest(bundle)
-    path, digest, immutable = _commit_bundle(args, snapshot, bundle)
+    serialized = bundle_bytes(bundle)
+    path, digest, immutable = _commit_bundle(
+        args,
+        snapshot,
+        serialized,
+        custody_root,
+    )
     return {
         "ok": True,
         "kind": "bundle-digest",
