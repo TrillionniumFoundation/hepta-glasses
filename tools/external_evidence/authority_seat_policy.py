@@ -13,12 +13,16 @@ def install_global_authority_seat_policy(
     """Prevent one key or identity pair from impersonating different roles.
 
     The G10 base policy already requires distinct seats inside each gap. This
-    installation adds the cross-gap invariant: one issuer key ID and one
-    identity/organization pair may be reused only for the *same* authority
-    class. A physical-device lab can therefore attest multiple physical gaps
-    with one narrowly scoped key, while an omnipotent key cannot also act as a
-    credential provider, cloud-security owner, store authority, or any other
-    distinct role in the same complete package.
+    installation adds a complete-package cross-gap invariant: one issuer key ID
+    and one identity/organization pair may be reused only for the *same*
+    authority class. A physical-device lab can therefore attest multiple
+    physical gaps with one narrowly scoped key, while an omnipotent key cannot
+    also act as a credential provider, cloud-security owner, store authority,
+    or another unrelated role.
+
+    Partial collection remains possible. The cross-gap rule is activated only
+    after every allowed gap and every named authority class are represented;
+    incomplete bundles cannot report closure in any case.
     """
 
     base_coverage = complete_closure._issuer_authority_coverage
@@ -32,6 +36,20 @@ def install_global_authority_seat_policy(
             submissions,
             contract=contract,
         )
+
+        allowed_gaps = contract.get("allowed_gap_ids")
+        if not isinstance(allowed_gaps, list):
+            core.fail("evidence contract allowed_gap_ids must be an array")
+        submitted_gaps = {
+            core.require_string(
+                submission.get("gap_id"),
+                label=f"validated_submissions[{index}].gap_id",
+                maximum=20,
+            )
+            for index, submission in enumerate(submissions)
+        }
+        if missing or submitted_gaps != set(allowed_gaps):
+            return coverage, missing
 
         class_by_key: dict[str, str] = {}
         class_by_identity: dict[tuple[str, str], str] = {}
