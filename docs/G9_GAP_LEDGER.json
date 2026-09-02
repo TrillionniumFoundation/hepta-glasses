@@ -4,7 +4,7 @@
   "extends_ledger": "docs/GAP_LEDGER.yaml",
   "source_summary": {
     "repository_actionable_open": 0,
-    "closed_source": 2,
+    "closed_source": 3,
     "inherited_authority_owned_blocked": 12
   },
   "gaps": [
@@ -47,6 +47,23 @@
         "docs/adr/ADR-0005-latest-head-ci-concurrency.md"
       ],
       "close_criteria": "Workflow concurrency is keyed by pull-request number or branch identity with cancel-in-progress enabled, never by commit SHA; every canonical job independently checks out and verifies the exact SOURCE_HEAD_SHA; a new push cancels the previous run for that PR without weakening exact-head artifact identity or granting CI source-write authority."
+    },
+    {
+      "id": "HG-0075",
+      "title": "External evidence filesystem reads and detached-signature writes are TOCTOU-safe",
+      "owner": "release-security",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        "tools/external_evidence/snapshot_io.py",
+        "tools/external_evidence/__init__.py",
+        "tools/sign_external_evidence.py",
+        "services/qualification/test_external_evidence_snapshot.py",
+        "services/qualification/test_external_evidence_scoped_snapshot.py",
+        "services/qualification/test_external_evidence_signing.py",
+        "docs/adr/ADR-0006-external-evidence-filesystem-custody.md",
+        "evidence/external/README.md"
+      ],
+      "close_criteria": "One top-level validation uses one immutable byte view keyed by normalized lexical absolute path; every existing scoped artifact or public-key input is pinned by a stable bounded regular-file descriptor at path selection, so replacement or symbolic-link retargeting before repeated reads or before the first later consumer cannot change bytes used by hashing, parsing, secret scanning, key normalization or signature verification; resolved targets must remain inside the custody root; detached signatures are created only as new mode-0600 regular files through directory-descriptor traversal that rejects symbolic-link directory components and uses no-follow plus exclusive-create semantics; existing files, dangling links, output redirects, partial writes, unsupported secure directory APIs and overwrite attempts fail closed and have hostile deterministic tests."
     }
   ],
   "inherited_authority_owned_gap_ids": [
