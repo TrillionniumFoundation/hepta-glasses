@@ -17,13 +17,15 @@ A statement signed under the predecessor revision does not satisfy the G10 polic
 
 Authority-bearing validation owns its clock and cryptographic command selection:
 
-- the package API, direct `complete_closure` module, and executable CLI capture the current timezone-aware UTC time inside the trusted verifier;
-- a public caller-supplied `now` value is rejected before any evidence read;
+- the supported package API, direct `complete_closure` module, package-name compatibility import, and executable CLI capture the current timezone-aware UTC time inside the trusted verifier;
+- a supported caller-supplied `now` value is rejected before any evidence read;
 - validation accepts only the canonical `openssl` command and exposes no `--openssl-binary` override;
-- a private fixed-clock hook exists only for deterministic repository tests, is absent from the public export list, requires a timezone-aware `datetime`, and still rejects custom OpenSSL selection; and
-- the verifier host, system clock, installed OpenSSL, process, kernel, and protected registry pin remain trusted operational dependencies.
+- an underscored fixed-clock hook exists only for deterministic repository tests, is absent from the public export list, requires a timezone-aware `datetime`, and still rejects custom OpenSSL selection; and
+- the verifier host, system clock, installed OpenSSL, Python process, source object, kernel, and protected registry pin remain trusted operational dependencies.
 
-Run validation on a controlled host. Do not attempt to make expired, revoked, or future-dated evidence current by changing process arguments. Do not substitute another executable as the signature verifier. The normative boundary is `docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md`.
+The fixed-clock fixture is API hygiene, not a sandbox against arbitrary Python already executing inside the verifier process. Code that can load source under forged module names or monkey-patch module globals already has equivalent process authority and is outside the verifier threat model. Run release validation in a controlled process that executes no untrusted Python.
+
+Do not attempt to make expired, revoked, or future-dated evidence current by changing process arguments. Do not substitute another executable as the signature verifier. The normative boundary is `docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md`.
 
 ## Required package layout
 
@@ -93,7 +95,7 @@ Each later command uses the verified successor as input and allocates fresh outp
 
 The normative filesystem decisions are `docs/adr/ADR-0006-external-evidence-filesystem-custody.md` and `docs/adr/ADR-0007-evidence-object-identity-and-bounded-custody.md`.
 
-## Complete issuer quorum
+## Complete issuer quorum and cross-gap role scope
 
 A complete package requires a valid submission from **every authority class** listed for each gap in `contracts/external-evidence-envelope-v1.json`. Multiple submissions per gap are expected.
 
@@ -102,7 +104,13 @@ Within one gap, every authority seat uses:
 - a distinct trust-registry key ID; and
 - a distinct `(identity, organization)` pair.
 
-A broadly scoped key cannot fill two seats by changing the class label.
+Across the complete package:
+
+- one key ID may appear in multiple gaps only under one unchanged authority class;
+- one `(identity, organization)` pair may appear in multiple gaps only under one unchanged authority class; and
+- same-class reuse is allowed only when the registry explicitly authorizes that class and every referenced gap.
+
+A narrowly scoped physical-device lab may therefore attest related physical gaps. A broadly enrolled key or identity cannot also act as a credential provider, cloud-security owner, repository administrator, firmware vendor, store authority, or another unrelated role merely because the seats occur in different gaps.
 
 ## Exact authority-scoped claims
 
@@ -152,11 +160,9 @@ Every final review artifact is UTF-8 JSON containing:
 }
 ```
 
-The review artifact may also contain a summary and content-addressed references to a separate report. Set `review_uri` and `review_sha256` to this final JSON artifact, then issue the reviewer signature.
+The artifact digest is inside the reviewer Ed25519 statement. Removing, adding, replacing, or reordering a final reviewer, changing acceptance state or limitations, or substituting another policy revision invalidates every surviving manifest. The requirement applies to every `accepted` bundle even when a caller does not request complete validation.
 
-All final reviewers bind the same roster and context. Adding, removing, replacing, or reordering a reviewer—or changing state, `reviewed_at`, `decision_reference`, or limitations—invalidates every surviving manifest. Recomputing the unsigned bundle digest cannot repair the mismatch.
-
-The manifest protects the final roster that its members co-signed. It cannot discover a review never admitted to the roster; reviewer selection and any external transparency register remain governance responsibilities.
+This guarantees the final roster its members co-signed. It does not discover a review never admitted to the roster; accountable reviewer selection and any external transparency register remain governance gates.
 
 The normative complete-closure decision is `docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md`.
 
@@ -181,13 +187,18 @@ python3 tools/validate_external_evidence.py \
   --output evidence/external/<commit>/validation-result.json
 ```
 
-For committed accepted packages, CI requires the protected out-of-band registry pin. Repository qualification recursively inspects every bounded regular file under `evidence/external/` and identifies accepted envelopes by canonical content—not filename, extension, or directory depth. Discovery uses `O_NOFOLLOW` and requires lexical, opened, and post-read file identities to match. An opaque immutable successor cannot avoid validation by being renamed or nested, and a replacement between lexical inspection and descriptor open cannot inject an accepted package.
+For committed accepted packages, CI requires the protected out-of-band registry pin. Repository qualification recursively inspects every bounded regular file under `evidence/external/` and identifies accepted envelopes by canonical content—not filename, extension, or directory depth.
+
+The authoritative discovery pass opens the evidence root from the filesystem anchor and walks every child directory relative to an already-open no-follow descriptor. For directories, lexical, opened, post-recursion, and final-name identities must match. For files, lexical, opened, post-read, and final-name identities must match. Symbolic links and special objects anywhere below the evidence root fail the gate. Ordinary file replacement, ordinary parent-directory replacement, unstable reads, excessive depth, excessive entries, per-file overflow, and aggregate-byte overflow fail rather than hiding or injecting an accepted package.
+
+Every discovered accepted envelope is then passed to the complete G10 validator under the protected registry pin. An opaque immutable successor cannot avoid validation by being renamed or nested.
 
 ## Ledger update rule
 
 A Gap Ledger row changes to `CLOSED_VERIFIED` only in a separate reviewed commit after:
 
-- every required issuer class has participated through a distinct key and identity/organization pair;
+- every required issuer class has participated through a distinct key and identity/organization pair inside each gap;
+- no key or identity/organization pair represents different authority classes across the complete package;
 - every class signs exactly its assigned claims and evidence;
 - every issuer and reviewer signature binds the exact canonical contract digest;
 - the complete package passes under the out-of-band registry pin on a trusted current-time verifier;
