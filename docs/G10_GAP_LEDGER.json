@@ -16,14 +16,17 @@
       "evidence": [
         "contracts/external-evidence-envelope-v1.json",
         "tools/external_evidence/complete_closure.py",
+        "tools/external_evidence/authority_seat_policy.py",
         "tools/external_evidence/__init__.py",
         "services/qualification/external_evidence_test_support.py",
         "services/qualification/test_external_evidence.py",
+        "services/qualification/test_external_evidence_authority_seat_scope.py",
         "services/qualification/test_external_evidence_complete_closure.py",
         "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+        "docs/development/G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md",
         "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md"
       ],
-      "close_criteria": "A complete bundle may contain multiple submissions for one gap and is eligible only when every authority class listed by the canonical contract is represented by a cryptographically valid submission. Within one gap, authority seats use distinct trust-registry key IDs and distinct identity/organization pairs; one omnipotent key or identity cannot fill multiple seats. Partial bundles report missing classes and never produce all_authority_owned_gaps_closed=true."
+      "close_criteria": "A complete bundle may contain multiple submissions for one gap and is eligible only when every authority class listed by the canonical contract is represented by a cryptographically valid submission. Within one gap, authority seats use distinct trust-registry key IDs and distinct identity/organization pairs. Across the complete package, one key ID and one identity/organization pair may be reused only for the same narrowly scoped authority class; one omnipotent key or identity cannot fill unrelated roles merely because they occur in different gaps. Same-class reuse across related gaps remains permitted and tested. Partial or aliased bundles never produce all_authority_owned_gaps_closed=true."
     },
     {
       "id": "HG-0077",
@@ -69,13 +72,16 @@
       "owner": "quality-gates",
       "status": "CLOSED_SOURCE",
       "evidence": [
+        "tools/external_evidence/repository_admission.py",
         "services/qualification/test_external_evidence_repository.py",
+        "services/qualification/test_external_evidence_repository_admission.py",
         "tools/external_evidence/signing.py",
         "tools/external_evidence/complete_closure.py",
         "evidence/external/README.md",
-        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md"
+        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+        "docs/development/G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md"
       ],
-      "close_criteria": "Repository qualification recursively inspects bounded regular files under evidence/external by canonical envelope content rather than only matching a top-level bundle.json filename. Candidate discovery uses O_NOFOLLOW and one stable descriptor whose lexical, opened and post-read device/inode/mode/size/mtime/ctime identities agree; symbolic links, ordinary replacement between lstat and open, special objects, oversized files, unsupported no-follow APIs and unstable reads are never promoted. Every discovered envelope whose contract_id is canonical and acceptance.state is accepted is mapped to its enclosing custody root and revalidated as complete and accepted under a protected out-of-band trust-registry pin. Filename, extension, nesting, successor placement, or a discovery-time replacement cannot hide or inject an accepted package."
+      "close_criteria": "Repository qualification recursively inspects bounded regular files under evidence/external by canonical envelope content rather than only matching a top-level bundle.json filename. The authoritative scanner opens the root from the filesystem anchor and traverses every child through no-follow directory descriptors. Lexical, opened and post-traversal directory identities and lexical, opened and post-read file identities must agree. Symbolic links, special objects, ordinary file or parent-directory replacement, unstable reads, oversized files, excessive aggregate bytes, excessive entries, excessive depth and unsupported no-follow APIs fail the gate rather than being ignored. Every discovered envelope whose contract_id is canonical and acceptance.state is accepted is revalidated as complete and accepted under a protected out-of-band trust-registry pin. Filename, extension, nesting, successor placement or ancestor replacement cannot hide or inject an accepted package."
     },
     {
       "id": "HG-0080",
@@ -91,7 +97,7 @@
         "docs/development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md",
         "docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md"
       ],
-      "close_criteria": "The package API, direct complete_closure module and executable CLI use the trusted current system clock and the canonical OpenSSL command. They reject a caller-supplied validation time and any custom OpenSSL executable before reading evidence. The CLI exposes no cryptographic-binary override. A private deterministic clock hook is absent from __all__, used only by the historical qualification fixture, requires a timezone-aware datetime, and still rejects custom OpenSSL selection. Expired, revoked or future-dated evidence cannot be made current by public argument injection, and an attacker-selected executable cannot manufacture cryptographic success through an authority-bearing entrypoint."
+      "close_criteria": "The supported package API, direct complete_closure module, package-name compatibility import and executable CLI use the trusted current system clock and canonical OpenSSL command. They reject a caller-supplied validation time and any custom OpenSSL executable before reading evidence. The CLI exposes no cryptographic-binary override. The deterministic underscored clock hook is test-only and not a security sandbox against arbitrary code already executing inside the trusted verifier process; operational validation must run in a controlled process that executes no untrusted Python. Expired, revoked or future-dated evidence cannot be made current through a supported authority-bearing entrypoint, and an attacker-selected executable cannot manufacture cryptographic success."
     },
     {
       "id": "HG-0081",
