@@ -23,8 +23,10 @@
         "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
         "docs/development/G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md",
         "docs/development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md",
+        "docs/development/G10_LEXICAL_VALIDATION_CUSTODY.md",
         "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md",
         "docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md",
+        "docs/adr/ADR-0010-lexical-validation-custody.md",
         "evidence/external/README.md"
       ],
       "tests": [
