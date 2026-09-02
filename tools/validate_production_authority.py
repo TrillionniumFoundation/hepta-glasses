@@ -93,6 +93,19 @@ def validate_ci_release_proof() -> None:
     if "pull_request:" not in workflow or "push:\n    branches:\n      - main" not in workflow:
         fail("CI trigger authority must be pull_request for PRs and push for main only")
 
+    try:
+        concurrency = workflow.split("concurrency:\n", 1)[1].split("\njobs:\n", 1)[0]
+    except IndexError:
+        fail("CI lacks an explicit concurrency custody block")
+    required_concurrency = (
+        "group: hepta-glasses-${{ github.workflow }}-"
+        "${{ github.event.pull_request.number || github.ref_name }}"
+    )
+    if required_concurrency not in concurrency or "cancel-in-progress: true" not in concurrency:
+        fail("CI does not cancel obsolete runs for the same pull request or branch")
+    if "github.event.pull_request.head.sha" in concurrency or "github.sha" in concurrency:
+        fail("CI concurrency is keyed by commit SHA and cannot cancel obsolete PR heads")
+
 
 def main() -> int:
     validate_product_graph()
@@ -109,6 +122,8 @@ def main() -> int:
                 "release_binary_absence_checks": ["android", "ios"],
                 "ci_pr_trigger": "pull_request_only",
                 "ci_main_trigger": "push_only",
+                "ci_concurrency": "latest_pull_request_or_branch_only",
+                "exact_head_identity": "verified_inside_every_job",
             },
             separators=(",", ":"),
         )
