@@ -15,7 +15,8 @@
     "closed_source": [
       "HG-0076",
       "HG-0077",
-      "HG-0078"
+      "HG-0078",
+      "HG-0079"
     ],
     "module_registry": "docs/G10_MODULES.json",
     "gap_ledger": "docs/G10_GAP_LEDGER.json",
@@ -26,7 +27,8 @@
       "predecessor_contract_revision": "2026-09-02-g9-authenticated-1",
       "issuer_authority_mode": "all_named_classes",
       "issuer_claim_mode": "exact_class_scoped_claims",
-      "review_manifest_schema_version": 1
+      "review_manifest_schema_version": 1,
+      "committed_accepted_envelope_discovery": "recursive content identity under evidence/external"
     }
   },
   "authority_owned": {
@@ -45,7 +47,7 @@
       "HG-0022",
       "HG-0044"
     ],
-    "closure_rule": "Every authority class named for a gap signs exactly its versioned class-scoped claims through a distinct pinned key and identity/organization pair; every final reviewer binds the same policy, review roster and acceptance context; real external evidence and independent acceptance remain required."
+    "closure_rule": "Every authority class named for a gap signs exactly its versioned class-scoped claims through a distinct pinned key and identity/organization pair; every final reviewer binds the same policy, review roster and acceptance context; every committed accepted envelope is discovered recursively by content and revalidated under an out-of-band pin; real external evidence and independent acceptance remain required."
   },
-  "claim_ceiling": "G10 closes repository-controlled authority quorum, claim-scope/version binding, and final-review-set integrity only; it cannot manufacture E5-E7, administrative, upstream, physical, provider, vendor, independent-assurance, signing, pilot, store, or release authority."
+  "claim_ceiling": "G10 closes repository-controlled authority quorum, claim-scope/version binding, final-review-set integrity, and committed accepted-envelope discovery only; it cannot manufacture E5-E7, administrative, upstream, physical, provider, vendor, independent-assurance, signing, pilot, store, or release authority."
 }
