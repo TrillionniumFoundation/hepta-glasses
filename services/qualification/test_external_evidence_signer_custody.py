@@ -22,9 +22,15 @@ class ExternalEvidenceSignerCustodyTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
 
-    def _generate_keypair(self, stem: str) -> tuple[Path, Path]:
-        private = self.root / f"{stem}-private.pem"
-        public = self.root / f"{stem}-public.pem"
+    def _generate_keypair(
+        self,
+        stem: str,
+        directory: Path | None = None,
+    ) -> tuple[Path, Path]:
+        root = directory or self.root
+        root.mkdir(parents=True, exist_ok=True)
+        private = root / f"{stem}-private.pem"
+        public = root / f"{stem}-public.pem"
         subprocess.run(
             ["openssl", "genpkey", "-algorithm", "ED25519", "-out", str(private)],
             check=True,
@@ -103,6 +109,46 @@ class ExternalEvidenceSignerCustodyTest(unittest.TestCase):
                 signature,
                 label="second-key",
             )
+
+    def test_private_key_inside_custody_root_is_rejected(self) -> None:
+        custody = self.root / "custody"
+        private, _ = self._generate_keypair("inside", custody)
+        with self.assertRaisesRegex(ValueError, "outside evidence custody"):
+            signing_io.sign_ed25519(
+                private,
+                b"statement",
+                forbidden_root=custody,
+            )
+
+    def test_signature_root_replacement_after_identity_capture_is_rejected(self) -> None:
+        custody = self.root / "custody"
+        custody.mkdir()
+        retired = self.root / "retired"
+        resolved = custody.resolve()
+        original_open = signing_io._open_absolute_directory_nofollow
+        raced = False
+
+        def replace_then_open(target: Path, **kwargs: object) -> int:
+            nonlocal raced
+            if not raced and Path(target) == resolved:
+                raced = True
+                custody.rename(retired)
+                custody.mkdir()
+            return original_open(target, **kwargs)
+
+        with patch.object(
+            signing_io,
+            "_open_absolute_directory_nofollow",
+            side_effect=replace_then_open,
+        ):
+            with self.assertRaisesRegex(ValueError, "directory identity changed"):
+                signing_io.write_signature(
+                    custody,
+                    "artifact://signatures/test.sig",
+                    b"signature",
+                )
+        self.assertFalse((custody / "signatures" / "test.sig").exists())
+        self.assertFalse((retired / "signatures" / "test.sig").exists())
 
     def test_finalize_atomically_replaces_the_exact_input_object(self) -> None:
         bundle_path = self._write_bundle()
