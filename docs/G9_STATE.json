@@ -28,8 +28,8 @@
       "aggregate_snapshot_limit_bytes": 536870912,
       "public_key_spki_uses_pinned_bytes": true,
       "private_key_type_check_and_sign_use_one_snapshot": true,
-      "exact_object_atomic_bundle_update": true,
-      "immutable_bundle_successor_supported": true,
+      "in_place_authority_bundle_update_supported": false,
+      "immutable_bundle_successor_required": true,
       "normative_adr": "docs/adr/ADR-0007-evidence-object-identity-and-bounded-custody.md"
     }
   },
