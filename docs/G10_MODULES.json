@@ -13,6 +13,7 @@
         "tools/external_evidence/repository_admission.py",
         "tools/external_evidence/semantic_binding.py",
         "tools/external_evidence/runtime_policy.py",
+        "tools/external_evidence/openssl_policy.py",
         "tools/external_evidence/cli.py",
         "tools/external_evidence/__init__.py",
         "tools/validate_external_evidence.py"
@@ -50,7 +51,7 @@
         "real authority participation for every required issuer class",
         "final reviewer roster selection and independent acceptance",
         "protected CI pin for every committed accepted envelope",
-        "trusted verifier host, system clock and canonical OpenSSL installation",
+        "trusted verifier host, correct system clock, root-owned immutable /usr/bin/openssl and controlled operating-system runtime dependencies",
         "physical, provider, administrator, vendor, assurance, signing, pilot and store evidence"
       ]
     }
