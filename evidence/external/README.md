@@ -43,12 +43,23 @@ Private keys never enter repository or evidence custody. The signing helper read
 
 Detached signatures are always new files. The helper walks the custody root with directory descriptors, rejects symbolic-link directory components, creates missing directories with mode `0700`, and creates the final signature with no-follow and exclusive-create semantics at mode `0600`. Existing regular files, dangling links, output links, overwrite attempts, partial writes, and unsupported secure directory APIs fail closed.
 
-The helper supports two bundle-output modes:
+Authority-bearing bundle operations are immutable-only. Every `submission`, `reviewer`, and `finalize` command requires a fresh `--output-bundle-uri artifact://successors/<name>.json`. The helper creates one exclusive mode-0600 successor and leaves the input bundle byte-for-byte unchanged. In-place bundle mutation is rejected because portable POSIX rename cannot atomically assert that a visible name still references an expected inode at the instant of replacement.
 
-- default compatibility mode verifies the exact unchanged parent chain, input object, and input bytes, stages a complete mode-0600 successor, and atomically replaces that exact input name;
-- `--output-bundle-uri artifact://successors/<name>.json` creates a new exclusive successor and leaves the input bundle byte-for-byte unchanged. This mode is preferred for independently reviewed custody.
+Example:
 
-If a signature is created but a later bundle commit fails, no bundle success is reported. An unreferenced signature may remain and must not be represented as accepted evidence.
+```bash
+python3 tools/sign_external_evidence.py submission \
+  --bundle <custody-root>/bundle.json \
+  --custody-root <custody-root> \
+  --output-bundle-uri artifact://successors/submission-001.json \
+  --index 0 \
+  --private-key <authority-private-key-outside-custody.pem> \
+  --signature-uri artifact://signatures/submission-001.sig
+```
+
+The next command uses the verified successor as its input and allocates new bundle and signature URIs. Existing output names are never overwritten.
+
+If a signature is created but a later bundle successor creation fails, no bundle success is reported. An unreferenced signature may remain and must not be represented as accepted evidence.
 
 The normative decisions and negative-test requirements are recorded in `docs/adr/ADR-0006-external-evidence-filesystem-custody.md` and `docs/adr/ADR-0007-evidence-object-identity-and-bounded-custody.md`. These controls protect local evidence I/O; they do not make repository custody an external trust anchor.
 
@@ -62,7 +73,7 @@ Use opaque KIDs, tenant IDs, receipt IDs, revocation timestamps, hashes, redacte
 
 ```bash
 python3 tools/validate_external_evidence.py \
-  --bundle evidence/external/<commit>/bundle.json \
+  --bundle evidence/external/<commit>/successors/finalized.json \
   --artifact-root evidence/external/<commit>/artifacts \
   --trust-registry evidence/external/<commit>/trust-registry.json \
   --expected-trust-registry-sha256 "$HEPTA_EXTERNAL_TRUST_REGISTRY_SHA256" \
