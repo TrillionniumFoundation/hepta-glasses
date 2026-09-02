@@ -15,7 +15,7 @@ Second, public-key byte hashing and key-type verification used the pinned byte s
 
 Third, each input had a per-file byte bound but the transaction had no aggregate snapshot-memory ceiling. A syntactically valid bundle containing many maximum-sized artifacts could make the validator retain an excessive amount of memory.
 
-Fourth, the signing helper validated keys and bundles and then reused mutable pathnames for signing or bundle rewrite. That created replacement windows for the private key and for the bundle object that receives signed metadata.
+Fourth, the signing helper validated keys and bundles and then reused mutable pathnames for signing or bundle rewrite. Private-key reuse created a substitution window. A path check followed by an ordinary in-place replacement also could not provide a portable atomic compare-and-swap against the expected input inode: another actor could change the visible name between the final check and `rename`/`replace`.
 
 ## Decision
 
@@ -52,24 +52,15 @@ The signing helper reads the private key once through a stable bounded descripto
 
 Private-key bytes remain outside repository and evidence custody. The temporary copy is process-local, mode 0600, and deleted with its temporary directory.
 
-### Exact-object bundle update and immutable successor mode
+### Immutable bundle successors are mandatory
 
-The helper snapshots the input bundle bytes and exact ancestor/file identities before preparing a signature or digest update.
+The helper snapshots the input bundle bytes and exact ancestor/file identities before preparing a signature or digest update. The input object is never rewritten by an authority-bearing signing or finalization command.
 
-For backwards-compatible in-place operation, it:
+Every successful command requires both `--custody-root` and a fresh canonical `--output-bundle-uri`. The successor is created below the already selected custody root through descriptor-relative directory traversal, no-follow semantics, and exclusive creation as one mode-0600 regular file. Existing names, dangling links, symbolic-link parents, scope escapes, partial writes, and unsupported secure filesystem operations fail closed. The unsigned input and each signed successor therefore remain independently addressable and content-verifiable.
 
-1. reopens the exact captured parent-directory chain and input file and verifies every identity;
-2. verifies that the current bytes still match the captured input digest;
-3. writes the complete successor bytes to one exclusive mode-0600 staging file in the already opened parent;
-4. flushes the staging file;
-5. rechecks the visible input name against the captured file identity;
-6. atomically replaces that exact name through descriptor-relative rename semantics;
-7. flushes the parent directory; and
-8. verifies that the visible successor has the expected bytes.
+In-place bundle mutation is deliberately unsupported. Portable POSIX `rename`/`replace` does not offer an atomic “replace this name only when it still references the expected inode” primitive. A stat/open verification followed by rename leaves a final check-to-replacement race. Treating that sequence as an exact-object compare-and-swap would overstate the source guarantee and could overwrite a name changed by another actor.
 
-The helper also accepts `--output-bundle-uri`. In this mode it creates an exclusive immutable successor below the custody root and leaves the input bundle byte-for-byte unchanged. This mode is preferred for externally reviewed evidence because the unsigned input and signed successor remain independently addressable.
-
-A detached signature is still written before the bundle successor is committed. If the later bundle commit fails, no bundle success is reported; an unreferenced signature object may remain and may be garbage-collected only by an operator that verifies its path and digest. The helper never represents such an orphan as accepted evidence.
+A detached signature is written before the immutable bundle successor is committed. If the later successor creation fails, no bundle success is reported; an unreferenced signature object may remain and may be garbage-collected only by an operator that verifies its path and digest. The helper never represents such an orphan as accepted evidence.
 
 ## Required hostile tests
 
@@ -81,13 +72,23 @@ The deterministic test suite must prove at least:
 - cumulative snapshots above the aggregate transaction ceiling are rejected;
 - public-key retargeting cannot change the SPKI digest used for key-alias detection;
 - private-key replacement after initial capture cannot change the key that signs;
-- a symbolic-link bundle input is not rewritten;
-- parent-directory replacement before bundle commit is rejected without changing either object;
-- in-place bundle update produces one complete mode-0600 successor through atomic replacement; and
-- immutable successor mode leaves the input unchanged and rejects symbolic-link output parents.
+- a symbolic-link bundle input is not accepted;
+- signing and finalization without a new output-bundle URI fail without changing the input;
+- immutable successor mode leaves the input byte-for-byte unchanged;
+- a successor is mode 0600 and cannot overwrite an existing name; and
+- symbolic-link output parents or endpoints receive no bundle output.
+
+## Alternatives rejected
+
+- **Path-check then in-place atomic rename:** atomic publication is not an atomic expected-inode comparison; a concurrent name replacement can occur after the check.
+- **Best-effort post-rename detection:** detection after publication cannot undo an unintended overwrite or restore a displaced object reliably.
+- **File locking alone:** advisory locks do not constrain an uncooperative custody writer and do not bind a pathname to an expected inode.
+- **Platform-specific conditional rename without a fail-closed portability contract:** evidence tooling must not silently provide weaker guarantees on another supported host.
 
 ## Consequences
 
-G9 evidence I/O is now bound to the filesystem objects selected for the operation rather than merely to path spelling and no-follow traversal. Every cryptographic phase uses one byte snapshot, retained memory is bounded across the transaction, and signing can preserve immutable bundle lineage.
+G9 evidence I/O is bound to the filesystem objects selected for each read rather than merely to path spelling and no-follow traversal. Every cryptographic phase uses one byte snapshot, retained memory is bounded across the transaction, and every authority-bearing signing step advances an immutable bundle lineage instead of mutating prior evidence.
+
+Operators must allocate a new bundle URI for each submission signature, reviewer signature, or final digest. A successor URI is single-use. Recovery starts from the last independently verified predecessor and ignores unreferenced output objects.
 
 These controls close only a repository-actionable custody class. They do not authenticate an evidence issuer, create a production tenant, operate a physical device, apply GitHub administration settings, provide vendor firmware authority, constitute independent assurance, sign a mobile release, conduct a pilot, or obtain store approval. Those inherited gaps remain blocked until their real authorities issue and independently accept evidence under the externally pinned registry.
