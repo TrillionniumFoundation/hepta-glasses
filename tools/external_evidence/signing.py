@@ -18,12 +18,11 @@ from .core import (
     canonical_submission_statement,
     read_object,
     require_sha,
-    safe_artifact_path,
 )
 from .signing_io import (
     atomic_replace_bundle,
     bundle_bytes,
-    create_exclusive,
+    create_scoped_uri_exclusive,
     load_bundle_snapshot,
     read_bundle,
     read_private_key_snapshot as _read_private_key_snapshot,
@@ -69,13 +68,13 @@ def _commit_bundle(
     custody_root = getattr(args, "custody_root", None)
     if not isinstance(custody_root, Path):
         raise ValueError("--custody-root is required with --output-bundle-uri")
-    path = safe_artifact_path(
+    path, digest = create_scoped_uri_exclusive(
         custody_root,
         output_uri,
+        data,
+        MAX_JSON_BYTES,
         label="output bundle",
-        maximum=MAX_JSON_BYTES,
     )
-    path, digest = create_exclusive(custody_root, path, data, MAX_JSON_BYTES)
     return path, digest, True
 
 
@@ -103,7 +102,11 @@ def sign_submission(args: argparse.Namespace) -> dict[str, Any]:
         submission,
         contract_revision=contract_revision(),
     )
-    signature = sign_ed25519(args.private_key, statement)
+    signature = sign_ed25519(
+        args.private_key,
+        statement,
+        forbidden_root=args.custody_root,
+    )
     submission["attestation"]["statement_digest"] = hashlib.sha256(statement).hexdigest()
     submission["attestation"]["signature_sha256"] = hashlib.sha256(signature).hexdigest()
     signature_path, signature_digest = write_signature(
@@ -155,7 +158,11 @@ def sign_reviewer(args: argparse.Namespace) -> dict[str, Any]:
         reviewer,
         contract_revision=contract_revision(),
     )
-    signature = sign_ed25519(args.private_key, statement)
+    signature = sign_ed25519(
+        args.private_key,
+        statement,
+        forbidden_root=args.custody_root,
+    )
     reviewer["statement_digest"] = hashlib.sha256(statement).hexdigest()
     reviewer["signature_sha256"] = hashlib.sha256(signature).hexdigest()
     signature_path, signature_digest = write_signature(
