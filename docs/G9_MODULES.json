@@ -28,6 +28,7 @@
         "services/qualification/test_external_evidence_key_alias.py",
         "services/qualification/test_external_evidence_key_type.py",
         "services/qualification/test_external_evidence_repository.py",
+        "services/qualification/test_external_evidence_review_order.py",
         "services/qualification/test_external_evidence_signature_time.py",
         "services/qualification/test_external_evidence_signing.py",
         "services/qualification/test_g9_metadata.py"
