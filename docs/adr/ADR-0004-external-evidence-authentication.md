@@ -15,6 +15,8 @@ An algorithm label is also not a key-type proof. OpenSSL can create a 64-byte si
 
 Security-relevant JSON must also have one unambiguous parse. Duplicate object members and silently trimmed identity, organization, key, path, claim, or authority strings create parser and canonicalization differentials between evidence producers, reviewers, and validators.
 
+A signature timestamp is an authorization input because registry validity and revocation are evaluated at that time. The timestamp therefore cannot live only beside a signature; it must be inside the signed statement. Otherwise a repository writer could backdate or forward-date a valid signature after collection.
+
 ## Decision
 
 G9 uses Ed25519 signatures over deterministic canonical JSON statements and an authority registry whose exact file SHA-256 is supplied through an out-of-band protected channel.
@@ -31,9 +33,9 @@ Before accepting a registry key, the validator asks OpenSSL to re-encode the PEM
 
 The signing helper applies the same actual-key-type check to external private keys before writing a detached signature. It and the validator use the same duplicate-rejecting JSON parser. Security-relevant strings are exact: leading or trailing whitespace is rejected, not normalized.
 
-Each submission signature covers the exact candidate, registry digest, gap, evidence level, issuer binding, environment, subjects, required claims, result, limitations, notes, and every artifact digest. Each acceptance signature covers the same candidate and registry, the complete evidence-set digest, reviewed gap IDs, decision, review artifact, and signing time.
+Each submission signature covers the exact candidate, registry digest, gap, evidence level, issuer binding, environment, subjects, required claims, result, limitations, notes, every artifact digest, and the issuer `attestation.signed_at` value. Each acceptance signature covers the same candidate and registry, the complete evidence-set digest, reviewed gap IDs, decision, review artifact, and reviewer `signed_at` value. Both times are checked against candidate collection, key validity, revocation, and the current verification time.
 
-Validation rejects unknown or substituted keys, wrong actual key type, normalized public-key aliases, invalid signatures, wrong usage/class/gap, expired or revoked keys, duplicate JSON members, padded authority fields, path escape, candidate drift, artifact drift, issuer/reviewer identity or key aliases, same-organization independence claims, missing per-gap approval coverage, and synthetic evidence for physical-only gaps.
+Validation rejects unknown or substituted keys, wrong actual key type, normalized public-key aliases, invalid signatures, post-signature timestamp mutation, wrong usage/class/gap, expired or revoked keys, duplicate JSON members, padded authority fields, path escape, candidate drift, artifact drift, issuer/reviewer identity or key aliases, same-organization independence claims, missing per-gap approval coverage, and synthetic evidence for physical-only gaps.
 
 The registry copy included with a custody package is reproducibility data, not its own trust anchor. Private keys never enter source, pull requests, ordinary CI artifacts, logs, or evidence packages.
 
@@ -43,6 +45,7 @@ The registry copy included with a custody package is reproducibility data, not i
 - **Optional detached signature checked only by file hash:** proves neither signer nor signed subject.
 - **Trusting `algorithm: ed25519` or signature length:** permits cryptographic key-type confusion, including a 64-byte RSA signature.
 - **Comparing only PEM bytes:** permits the same public key to be re-encoded under another authority record.
+- **Leaving signature time outside the preimage:** allows post-signature backdating across key validity or revocation boundaries.
 - **Permissive JSON duplicate handling or implicit trimming:** allows different components to authorize different meanings from the same input.
 - **Repository-committed public-key registry as sole root:** the submitter could replace evidence and trust root together.
 - **One omnipotent repository key:** destroys authority separation and independent review.
@@ -51,6 +54,6 @@ The registry copy included with a custody package is reproducibility data, not i
 
 ## Consequences
 
-Evidence collection now requires external key enrollment, proof of possession, narrow authorization, registry rotation/revocation procedures, protected digest distribution, signed acceptance, supported OpenSSL Ed25519 handling, normalized key uniqueness, and exact JSON/string production. This adds operational work but prevents repository code or a single maintainer from manufacturing closure. Source and CI can verify the mechanism only through E4; they cannot create the real-world evidence or authority behind E5-E7.
+Evidence collection now requires external key enrollment, proof of possession, narrow authorization, registry rotation/revocation procedures, protected digest distribution, signed acceptance, supported OpenSSL Ed25519 handling, normalized key uniqueness, signed time, and exact JSON/string production. This adds operational work but prevents repository code or a single maintainer from manufacturing closure. Source and CI can verify the mechanism only through E4; they cannot create the real-world evidence or authority behind E5-E7.
 
 Any candidate, artifact, provider, firmware, binary, registry generation, key validity, or review change invalidates the affected statements and reopens the corresponding row.
