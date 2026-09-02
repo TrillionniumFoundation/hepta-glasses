@@ -67,6 +67,78 @@ If a signature is created but a later bundle successor creation fails, no bundle
 
 The normative decisions and negative-test requirements are recorded in `docs/adr/ADR-0006-external-evidence-filesystem-custody.md` and `docs/adr/ADR-0007-evidence-object-identity-and-bounded-custody.md`. These controls protect local evidence I/O; they do not make repository custody an external trust anchor.
 
+## Complete issuer quorum
+
+A complete package requires one valid submission for **every authority class**
+listed for each gap in `contracts/external-evidence-envelope-v1.json`. Multiple
+submissions for the same gap are therefore expected.
+
+Within one gap, each authority seat must use a distinct trust-registry key ID
+and a distinct identity/organization pair. A broad key may be useful for a
+partial diagnostic fixture, but one key or identity cannot fill two seats in a
+complete package.
+
+Every class-specific submission still signs the complete required claim set for
+the gap. Artifacts should be divided by real issuing competence—for example,
+the credential provider attaches the revocation receipt while the incident
+owner attaches the closure decision—but both authorities co-attest the same
+final claim boundary.
+
+The validator reports:
+
+```text
+issuer_authority_coverage
+missing_issuer_authority_classes
+```
+
+Any missing class prevents review eligibility and closure.
+
+## Final reviewer roster and acceptance manifest
+
+Before final reviewer signatures are issued, freeze the complete ordered
+reviewer roster and acceptance context. Use the package helpers to calculate:
+
+```python
+from tools.external_evidence import (
+    acceptance_context_digest,
+    review_set_digest,
+)
+
+roster_digest = review_set_digest(bundle["acceptance"]["reviewers"])
+context_digest = acceptance_context_digest(
+    bundle["acceptance"],
+    roster_digest=roster_digest,
+)
+```
+
+Every final review artifact must be UTF-8 JSON and contain:
+
+```json
+{
+  "closure_manifest": {
+    "schema_version": 1,
+    "review_set_digest": "<roster_digest>",
+    "acceptance_context_digest": "<context_digest>"
+  }
+}
+```
+
+The artifact may also reference a separate human-readable report by SHA-256 or
+opaque access-controlled identifier. Set the reviewer `review_uri` and
+`review_sha256` to this final JSON artifact, then issue the reviewer Ed25519
+signature. All final reviewers must use the same roster and context digests.
+
+After final signatures, adding, removing, replacing, or reordering a reviewer,
+or changing the acceptance state, `reviewed_at`, `decision_reference`, or
+limitations, invalidates every surviving manifest. Recomputing the unsigned
+bundle digest cannot repair the mismatch.
+
+This mechanism protects the final roster that its members co-signed. It cannot
+discover a review never admitted to that roster; reviewer selection and any
+external transparency register remain governance responsibilities.
+
+The normative rule is `docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md`.
+
 ## Privacy and secret boundary
 
 Never commit or upload raw provider credentials, OAuth refresh tokens, KMS/HSM private material, application signing keys, recovery secrets, raw microphone audio, sensitive transcripts, unredacted customer data, precise location histories, or live exploitation secrets. Only public verification keys belong in the trust package. Private signing keys remain with the issuing authority.
@@ -94,8 +166,11 @@ For committed accepted packages, CI requires `HEPTA_EXTERNAL_TRUST_REGISTRY_SHA2
 
 An issuer signs the candidate identity, trust-registry binding, gap, evidence level, identity, authority class, environment, subjects, claims, artifact digests, result, limitations, and notes. A reviewer signs the same candidate and registry binding, the complete evidence-set digest, reviewed gaps, decision, and the digest of the review artifact.
 
-Optional per-artifact signatures are verified over the exact artifact bytes under the issuer key. They supplement, but do not replace, the required signed submission statement.
+The review artifact digest binds the G10 final-roster and acceptance-context
+manifest described above. Optional per-artifact signatures are verified over
+the exact artifact bytes under the issuer key. They supplement, but do not
+replace, the required signed submission statement.
 
 ## Ledger update rule
 
-The Gap Ledger changes only in a separate reviewed commit after the complete package passes with an externally pinned registry, every gap has signed approval coverage, independence-required gaps have distinct independent approval, the candidate remains unchanged, and no key or artifact is expired or revoked. Any later source, binary, firmware, provider, OAuth registration, repository-setting, trust-registry, key, or review-state change reopens the affected row.
+The Gap Ledger changes only in a separate reviewed commit after the complete package passes with an externally pinned registry, every required issuer authority class has participated through a distinct key and identity, every gap has signed approval coverage, every final review artifact binds the same final roster and acceptance context, independence-required gaps have distinct independent approval, the candidate remains unchanged, and no key or artifact is expired or revoked. Any later source, binary, firmware, provider, OAuth registration, repository-setting, trust-registry, key, or review-state change reopens the affected row.
