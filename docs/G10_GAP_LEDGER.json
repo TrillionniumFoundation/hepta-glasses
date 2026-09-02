@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "plan_revision": "2026-09-02-g10-quorum-1",
+  "extends_ledger": "docs/G9_GAP_LEDGER.json",
+  "source_summary": {
+    "repository_actionable_open": 0,
+    "closed_source": 2,
+    "inherited_authority_owned_blocked": 12
+  },
+  "gaps": [
+    {
+      "id": "HG-0076",
+      "title": "Complete closure requires every named issuer authority class",
+      "owner": "release-security",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        "contracts/external-evidence-envelope-v1.json",
+        "tools/external_evidence/complete_closure.py",
+        "tools/external_evidence/__init__.py",
+        "services/qualification/external_evidence_test_support.py",
+        "services/qualification/test_external_evidence.py",
+        "services/qualification/test_external_evidence_complete_closure.py",
+        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+        "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md"
+      ],
+      "close_criteria": "A complete bundle may contain multiple submissions for one gap and is eligible only when every authority class listed by the canonical contract is represented by a cryptographically valid submission. Within one gap, authority seats must use distinct trust-registry key IDs and distinct identity/organization pairs; one omnipotent key or identity cannot fill multiple seats. Partial bundles report missing classes and can never produce all_authority_owned_gaps_closed=true."
+    },
+    {
+      "id": "HG-0077",
+      "title": "Final signed review roster and acceptance context are removal-resistant",
+      "owner": "release-security",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        "tools/external_evidence/complete_closure.py",
+        "tools/external_evidence/__init__.py",
+        "services/qualification/external_evidence_test_support.py",
+        "services/qualification/test_external_evidence_complete_closure.py",
+        "services/qualification/test_external_evidence_review_order.py",
+        "evidence/external/README.md",
+        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+        "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md"
+      ],
+      "close_criteria": "Before an accepted complete bundle can close rows, every final signed review artifact must carry the same schema-v1 closure manifest. The manifest binds the ordered final reviewer roster and acceptance state, reviewed_at, decision_reference and limitations. Because each review artifact digest is already in the reviewer Ed25519 statement, removing, adding, replacing or reordering a final reviewer, or changing the final acceptance context after signatures, fails validation. This source control does not discover a review never admitted to the final roster; external governance and transparency remain authority gates."
+    }
+  ],
+  "inherited_authority_owned_gap_ids": [
+    "HG-0010",
+    "HG-0011",
+    "HG-0012",
+    "HG-0013",
+    "HG-0014",
+    "HG-0015",
+    "HG-0016",
+    "HG-0017",
+    "HG-0018",
+    "HG-0021",
+    "HG-0022",
+    "HG-0044"
+  ]
+}
