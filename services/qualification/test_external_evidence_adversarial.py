@@ -91,15 +91,16 @@ class ExternalEvidenceAdversarialTest(support.ExternalEvidenceFixture):
         ):
             self._validate(bundle)
 
-    def test_issuer_as_reviewer_alias_is_rejected(self) -> None:
+    def test_actual_submission_issuer_cannot_become_reviewer(self) -> None:
         bundle = self._complete_bundle(
             list(self.contract["allowed_gap_ids"])
         )
         self._accept(bundle)
+        actual_issuer = bundle["submissions"][0]["issuer"]
         reviewer = bundle["acceptance"]["reviewers"][0]
-        reviewer["identity"] = "fixture-evidence-authority"
-        reviewer["organization"] = "fixture-evidence-org"
-        reviewer["key_id"] = "issuer-key"
+        reviewer["identity"] = actual_issuer["identity"]
+        reviewer["organization"] = actual_issuer["organization"]
+        reviewer["key_id"] = actual_issuer["key_id"]
         with self.assertRaisesRegex(
             external_evidence.EvidenceError,
             "issuer alias",
