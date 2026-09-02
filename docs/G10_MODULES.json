@@ -21,6 +21,7 @@
         "services/qualification/test_external_evidence.py",
         "services/qualification/test_external_evidence_adversarial.py",
         "services/qualification/test_external_evidence_complete_closure.py",
+        "services/qualification/test_external_evidence_entrypoint_snapshot.py",
         "services/qualification/test_external_evidence_review_order.py",
         "services/qualification/test_external_evidence_repository.py",
         "services/qualification/test_g9_metadata.py",
