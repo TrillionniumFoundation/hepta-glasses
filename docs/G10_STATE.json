@@ -4,7 +4,7 @@
   "extends_plan_revision": "2026-09-02-g9-authenticated-1",
   "source_authority": {
     "repository": "TrillionniumFoundation/hepta-glasses",
-    "branch": "work/hepta-g10-authority-quorum-review-integrity-20260902",
+    "branch": "work/hepta-g10-trusted-openssl-custody-20260902",
     "identity_rule": "live_pull_request_head_and_tree",
     "self_attested_sha_is_authoritative": false,
     "exact_head_ci_required": true,
@@ -32,7 +32,7 @@
       "authority_seat_scope": "one key ID and one identity/organization pair may span gaps only under one unchanged authority class",
       "review_manifest_schema_version": 1,
       "validation_entrypoint_identity": "complete_closure module, acceptance alias, package API and CLI share one immutable aggregate-bounded snapshot wrapper",
-      "runtime_authority": "supported operational entrypoints use current trusted system time and canonical OpenSSL; caller overrides are rejected before evidence reads, while the underscored fixed-clock fixture is confined to the already trusted Python process",
+      "runtime_authority": "supported operational entrypoints use current trusted system time and root-owned non-group/world-writable /usr/bin/openssl by absolute path under a minimal deterministic environment; caller time, executable, PATH, OpenSSL configuration, module path and dynamic-loader overrides are rejected or discarded, while the underscored fixed-clock fixture is confined to the already trusted Python process",
       "contract_semantic_binding": "issuer, evidence-set and reviewer digests bind the canonical SHA-256 of the complete current contract object in addition to its revision label",
       "committed_accepted_envelope_discovery": "recursive content identity under evidence/external through filesystem-anchor and child directory descriptors, with no-follow traversal and stable lexical/opened/post-read object identity"
     }
@@ -53,7 +53,7 @@
       "HG-0022",
       "HG-0044"
     ],
-    "closure_rule": "Every authority class named for a gap signs exactly its versioned class-scoped claims. Multiple seats inside one gap use distinct key IDs and identity/organization pairs. Across a complete package, one key ID and one identity/organization pair may span gaps only under one unchanged authority class; neither may impersonate different authority roles. Every issuer and reviewer binds the canonical contract digest; every final reviewer binds the same policy, review roster and acceptance context; supported public validation owns its clock and cryptographic executable selection; every committed accepted envelope is discovered recursively by descriptor-anchored stable content and revalidated under an out-of-band pin; real external evidence and independent acceptance remain required."
+    "closure_rule": "Every authority class named for a gap signs exactly its versioned class-scoped claims. Multiple seats inside one gap use distinct key IDs and identity/organization pairs. Across a complete package, one key ID and one identity/organization pair may span gaps only under one unchanged authority class; neither may impersonate different authority roles. Every issuer and reviewer binds the canonical contract digest; every final reviewer binds the same policy, review roster and acceptance context; supported public validation owns its clock and executes only a verified root-owned /usr/bin/openssl under a sanitized environment independent of caller PATH or loader/configuration variables; every committed accepted envelope is discovered recursively by descriptor-anchored stable content and revalidated under an out-of-band pin; real external evidence and independent acceptance remain required."
   },
-  "claim_ceiling": "G10 closes repository-controlled authority quorum, cross-gap role aliasing, claim-scope/version binding, canonical-contract content binding, final-review-set integrity, trusted runtime authority, canonical validation-entrypoint identity, and descriptor-anchored committed accepted-envelope discovery only; it cannot manufacture E5-E7, administrative, upstream, physical, provider, vendor, independent-assurance, signing, pilot, store, or release authority."
+  "claim_ceiling": "G10 closes repository-controlled authority quorum, cross-gap role aliasing, claim-scope/version binding, canonical-contract content binding, final-review-set integrity, trusted clock and absolute cryptographic-executable custody, canonical validation-entrypoint identity, and descriptor-anchored committed accepted-envelope discovery only; it cannot manufacture E5-E7, administrative, upstream, physical, provider, vendor, independent-assurance, signing, pilot, store, or release authority."
 }
