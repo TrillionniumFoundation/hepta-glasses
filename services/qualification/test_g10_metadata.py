@@ -7,7 +7,14 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 G10_REVISION = "2026-09-02-g10-quorum-1"
-G10_GAPS = ("HG-0076", "HG-0077", "HG-0078", "HG-0079")
+G10_GAPS = (
+    "HG-0076",
+    "HG-0077",
+    "HG-0078",
+    "HG-0079",
+    "HG-0080",
+    "HG-0081",
+)
 G10_MODULES = ("authority-quorum-review-integrity",)
 
 
@@ -101,13 +108,23 @@ class G10MetadataCoverageTest(unittest.TestCase):
         policy = (
             ROOT / "tools/external_evidence/complete_closure.py"
         ).read_text(encoding="utf-8")
+        runtime_policy = (
+            ROOT / "tools/external_evidence/runtime_policy.py"
+        ).read_text(encoding="utf-8")
+        semantic_binding = (
+            ROOT / "tools/external_evidence/semantic_binding.py"
+        ).read_text(encoding="utf-8")
         wrapper = (
             ROOT / "tools/validate_external_evidence.py"
         ).read_text(encoding="utf-8")
+        cli = (ROOT / "tools/external_evidence/cli.py").read_text(
+            encoding="utf-8"
+        )
         repository_test = (
             ROOT / "services/qualification/test_external_evidence_repository.py"
         ).read_text(encoding="utf-8")
-        self.assertIn("_complete_closure.validate_bundle", package_init)
+        self.assertIn("_install_runtime_policy", package_init)
+        self.assertIn("_install_semantic_binding", package_init)
         self.assertIn("missing_issuer_authority_classes", policy)
         self.assertIn("issuer_claim_scopes", policy)
         self.assertIn("review_set_integrity", policy)
@@ -115,9 +132,21 @@ class G10MetadataCoverageTest(unittest.TestCase):
             "one key cannot satisfy multiple authority seats",
             policy,
         )
+        self.assertIn(
+            "caller-supplied validation time is prohibited",
+            runtime_policy,
+        )
+        self.assertIn(
+            "custom OpenSSL executable selection is prohibited",
+            runtime_policy,
+        )
+        self.assertNotIn("--openssl-binary", cli)
+        self.assertIn("contract_sha256", semantic_binding)
+        self.assertIn("canonical_digest(contract)", semantic_binding)
         self.assertIn("review_set_digest", wrapper)
         self.assertIn("acceptance_context_digest", wrapper)
         self.assertIn("base.rglob", repository_test)
+        self.assertIn("os.O_NOFOLLOW", repository_test)
         self.assertIn("acceptance.get(\"state\") == \"accepted\"", repository_test)
 
     def test_contract_policy_and_claim_partition_are_exact(self) -> None:
