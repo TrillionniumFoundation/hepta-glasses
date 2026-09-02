@@ -150,19 +150,19 @@ class ExternalEvidenceSignerCustodyTest(unittest.TestCase):
         self.assertFalse((custody / "signatures" / "test.sig").exists())
         self.assertFalse((retired / "signatures" / "test.sig").exists())
 
-    def test_finalize_atomically_replaces_the_exact_input_object(self) -> None:
+    def test_finalize_rejects_in_place_bundle_mutation(self) -> None:
         bundle_path = self._write_bundle()
-        before_inode = bundle_path.stat().st_ino
-        result = signer.finalize(Namespace(bundle=bundle_path))
-        finalized = json.loads(bundle_path.read_text(encoding="utf-8"))
+        original = bundle_path.read_bytes()
+        original_inode = bundle_path.stat().st_ino
 
-        self.assertTrue(result["ok"])
-        self.assertFalse(result["input_bundle_unchanged"])
-        self.assertNotEqual(bundle_path.stat().st_ino, before_inode)
-        self.assertEqual(
-            finalized["acceptance"]["bundle_digest"],
-            validator.canonical_bundle_digest(finalized),
-        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "requires --output-bundle-uri",
+        ):
+            signer.finalize(Namespace(bundle=bundle_path))
+
+        self.assertEqual(bundle_path.read_bytes(), original)
+        self.assertEqual(bundle_path.stat().st_ino, original_inode)
 
     def test_finalize_can_create_immutable_successor_without_mutating_input(self) -> None:
         bundle_path = self._write_bundle()
@@ -196,11 +196,17 @@ class ExternalEvidenceSignerCustodyTest(unittest.TestCase):
             self.skipTest(f"symbolic links are unavailable: {error}")
 
         with self.assertRaisesRegex(ValueError, "regular file"):
-            signer.finalize(Namespace(bundle=alias))
+            signer.finalize(
+                Namespace(
+                    bundle=alias,
+                    custody_root=self.root,
+                    output_bundle_uri="artifact://successors/finalized.json",
+                )
+            )
         self.assertEqual(target.read_bytes(), original)
         self.assertTrue(alias.is_symlink())
 
-    def test_real_parent_replacement_rejects_bundle_update(self) -> None:
+    def test_internal_compatibility_replace_rejects_real_parent_replacement(self) -> None:
         custody = self.root / "custody"
         bundle_path = self._write_bundle(custody)
         snapshot = signing_io.load_bundle_snapshot(bundle_path)
@@ -241,10 +247,17 @@ class ExternalEvidenceSignerCustodyTest(unittest.TestCase):
             )
         self.assertFalse((actual / "finalized.json").exists())
 
-    def test_atomic_bundle_replacement_preserves_private_mode(self) -> None:
+    def test_immutable_bundle_successor_has_private_mode(self) -> None:
         bundle_path = self._write_bundle()
-        signer.finalize(Namespace(bundle=bundle_path))
-        self.assertEqual(os.stat(bundle_path).st_mode & 0o777, 0o600)
+        successor = self.root / "successors" / "finalized.json"
+        signer.finalize(
+            Namespace(
+                bundle=bundle_path,
+                custody_root=self.root,
+                output_bundle_uri="artifact://successors/finalized.json",
+            )
+        )
+        self.assertEqual(os.stat(successor).st_mode & 0o777, 0o600)
 
 
 if __name__ == "__main__":
