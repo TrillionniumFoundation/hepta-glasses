@@ -9,6 +9,20 @@ from .snapshot_io import install_snapshot_io as _install_snapshot_io
 # not only symbolic-link syntax.
 _install_snapshot_io(_core)
 
+# The executable name is not an authority boundary when PATH, loader variables,
+# or OpenSSL configuration remain caller controlled. Pin one root-owned,
+# non-writable absolute system binary and a minimal subprocess environment
+# before trust, signature, or private-key modules import their helpers.
+from .openssl_policy import (
+    install_core_openssl_policy as _install_core_openssl_policy,
+    install_signing_io_openssl_policy as _install_signing_io_openssl_policy,
+)
+
+_install_core_openssl_policy(_core)
+from . import signing_io as _signing_io
+
+_install_signing_io_openssl_policy(_signing_io, _core)
+
 from . import acceptance as _acceptance
 from . import submission as _submission
 from . import trust as _trust
@@ -55,8 +69,9 @@ _install_global_authority_seat_policy(
 )
 
 # Public package, direct policy-module and CLI paths use the current trusted
-# clock and canonical OpenSSL command. The private deterministic hook exists for
-# unit tests only and is deliberately absent from ``__all__``.
+# clock and the already installed absolute-path OpenSSL custody policy. The
+# private deterministic hook exists for unit tests only and is deliberately
+# absent from ``__all__``.
 validate_bundle, _validate_bundle_at_for_tests = _install_runtime_policy(
     _complete_closure,
     _core,
