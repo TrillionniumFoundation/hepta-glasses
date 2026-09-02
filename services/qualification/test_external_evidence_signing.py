@@ -136,6 +136,41 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
         )
         self.assertEqual(len(signature), 64)
 
+    def test_signer_rejects_rsa_private_key_even_when_signature_is_64_bytes(self) -> None:
+        private_key = self.root / "rsa-private.pem"
+        subprocess.run(
+            [
+                "openssl",
+                "genpkey",
+                "-algorithm",
+                "RSA",
+                "-pkeyopt",
+                "rsa_keygen_bits:512",
+                "-out",
+                str(private_key),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        with self.assertRaisesRegex(ValueError, "actual Ed25519 private key"):
+            signer.sign_ed25519(private_key, b"not an Ed25519 statement")
+
+    def test_signer_rejects_duplicate_json_members_before_rewrite(self) -> None:
+        path = self.root / "duplicate-bundle.json"
+        path.write_text(
+            '{"contract_id":"first","contract_id":"second"}',
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(
+            validator.EvidenceError,
+            "duplicate JSON object member.*contract_id",
+        ):
+            signer.read_bundle(path)
+        self.assertEqual(
+            path.read_text(encoding="utf-8"),
+            '{"contract_id":"first","contract_id":"second"}',
+        )
+
     def test_write_signature_refuses_overwrite(self) -> None:
         uri = "artifact://signatures/test.sig"
         path, digest = signer.write_signature(
