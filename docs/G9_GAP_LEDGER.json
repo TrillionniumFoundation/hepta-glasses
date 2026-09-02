@@ -27,11 +27,12 @@
         "services/qualification/test_external_evidence_json_safety.py",
         "services/qualification/test_external_evidence_key_alias.py",
         "services/qualification/test_external_evidence_key_type.py",
+        "services/qualification/test_external_evidence_signature_time.py",
         "services/qualification/test_external_evidence_signing.py",
         "docs/development/G9_TERMINAL_EXTERNAL_CLOSURE.md",
         "docs/adr/ADR-0004-external-evidence-authentication.md"
       ],
-      "close_criteria": "A repository writer cannot manufacture accepted closure: every submission and decision is verified under a current, non-revoked, narrowly scoped Ed25519 key from an externally pinned trust registry; the pinned PEM is re-encoded and required to contain the id-Ed25519 SubjectPublicKeyInfo algorithm and a 32-byte public key; normalized SPKI reuse is forbidden across key IDs, identities, organizations and PEM encodings; duplicate JSON object members and silently normalized authority fields are rejected; candidate, claims, artifact digests, limitations, evidence-set digest and reviewed gaps are signed; key-type confusion, public-key aliases, parser differentials, issuer/reviewer aliases and synthetic physical evidence fail closed."
+      "close_criteria": "A repository writer cannot manufacture accepted closure: every submission and decision is verified under a current, non-revoked, narrowly scoped Ed25519 key from an externally pinned trust registry; the pinned PEM is re-encoded and required to contain the id-Ed25519 SubjectPublicKeyInfo algorithm and a 32-byte public key; normalized SPKI reuse is forbidden across key IDs, identities, organizations and PEM encodings; issuer attestation.signed_at and reviewer signed_at are included in their canonical signature preimages; duplicate JSON object members and silently normalized authority fields are rejected; candidate, claims, artifact digests, limitations, evidence-set digest and reviewed gaps are signed; key-type confusion, public-key aliases, signature-time mutation, parser differentials, issuer/reviewer aliases and synthetic physical evidence fail closed."
     }
   ],
   "inherited_authority_owned_gap_ids": [
