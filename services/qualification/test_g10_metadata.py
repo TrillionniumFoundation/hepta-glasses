@@ -7,7 +7,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 G10_REVISION = "2026-09-02-g10-quorum-1"
-G10_GAPS = ("HG-0076", "HG-0077", "HG-0078")
+G10_GAPS = ("HG-0076", "HG-0077", "HG-0078", "HG-0079")
 G10_MODULES = ("authority-quorum-review-integrity",)
 
 
@@ -104,6 +104,9 @@ class G10MetadataCoverageTest(unittest.TestCase):
         wrapper = (
             ROOT / "tools/validate_external_evidence.py"
         ).read_text(encoding="utf-8")
+        repository_test = (
+            ROOT / "services/qualification/test_external_evidence_repository.py"
+        ).read_text(encoding="utf-8")
         self.assertIn("_complete_closure.validate_bundle", package_init)
         self.assertIn("missing_issuer_authority_classes", policy)
         self.assertIn("issuer_claim_scopes", policy)
@@ -114,6 +117,8 @@ class G10MetadataCoverageTest(unittest.TestCase):
         )
         self.assertIn("review_set_digest", wrapper)
         self.assertIn("acceptance_context_digest", wrapper)
+        self.assertIn("base.rglob", repository_test)
+        self.assertIn("acceptance.get(\"state\") == \"accepted\"", repository_test)
 
     def test_contract_policy_and_claim_partition_are_exact(self) -> None:
         profile = self.contract["complete_closure_profile"]
