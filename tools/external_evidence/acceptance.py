@@ -99,6 +99,10 @@ def validate_acceptance(
         issuer_orgs_by_gap.setdefault(item["gap_id"], set()).add(
             item["issuer_organization"]
         )
+    latest_evidence_signature_time = max(
+        datetime.fromisoformat(item["attestation_signed_at"])
+        for item in submissions
+    )
 
     reviewer_identities: set[str] = set()
     reviewer_key_ids: set[str] = set()
@@ -174,6 +178,8 @@ def validate_acceptance(
         assert signed_at is not None
         if signed_at < candidate_collected_at:
             fail(f"{label}.signed_at predates candidate collection")
+        if signed_at < latest_evidence_signature_time:
+            fail(f"{label}.signed_at predates submitted evidence attestations")
         key = registry.require_key(
             key_id=key_id,
             identity=identity,
@@ -426,4 +432,3 @@ def validate_bundle(
         "eligible_for_review": eligible,
         "all_authority_owned_gaps_closed": closed,
     }
-
