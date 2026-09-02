@@ -25,6 +25,10 @@ complete-closure gaps remained:
 4. repository CI searched top-level `bundle.json` files but immutable accepted
    successors live below `successors/`.
 
+G10 also requires that every import path reaches the same immutable validation
+transaction and that recursive accepted-envelope discovery cannot promote a
+file replaced between lexical inspection and descriptor open.
+
 ## Source map
 
 | Area | Implementation |
@@ -34,6 +38,7 @@ complete-closure gaps remained:
 | Existing crypto and custody | `submission.py`, `acceptance.py`, `trust.py`, `core.py`, `snapshot_io.py`, `signing.py`, `signing_io.py` |
 | Multi-authority fixture | `services/qualification/external_evidence_test_support.py` |
 | Closure attacks | `services/qualification/test_external_evidence_complete_closure.py` |
+| Direct-entrypoint snapshot gate | `services/qualification/test_external_evidence_entrypoint_snapshot.py` |
 | Committed-package gate | `services/qualification/test_external_evidence_repository.py` |
 | Layer metadata | `services/qualification/test_g9_metadata.py`, `test_g10_metadata.py` |
 | Normative design | `docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md` |
@@ -55,7 +60,7 @@ label.
 Partial collection returns `missing_gaps` and
 `missing_issuer_authority_classes`; it never returns closure.
 
-## HG-0078: version and partition issuer claims
+## HG-0078: version, claim partition, and entrypoint consistency
 
 The signed contract revision is G10 and identifies the G9 predecessor. An old
 G9-revision signature fails because `contract_revision` is in issuer and
@@ -80,6 +85,13 @@ claims.
 
 Validation returns `issuer_claim_scopes` so the accepted machine report records
 the exact legal partition.
+
+The immutable validation wrapper is installed on
+`complete_closure.validate_bundle` itself before aliases are exported. The
+acceptance-module alias, package-level validator, command-line wrapper, and an
+explicit direct import therefore reference the same aggregate-bounded snapshot
+entrypoint. A direct submodule import cannot fall back to an unwrapped policy
+function and re-read mutable evidence between phases.
 
 ## HG-0077: final review-set and acceptance integrity
 
@@ -120,7 +132,15 @@ Repository qualification recursively inspects every bounded regular file under
 `evidence/external/`. It identifies an accepted envelope by canonical
 `contract_id` and `acceptance.state`, not filename, extension, or depth.
 
-For every match it locates the enclosing custody root and requires:
+Candidate discovery first captures the lexical file identity, then opens the
+same name with `O_NOFOLLOW`, and requires device, inode, mode, size,
+modification time, and change time to match. The complete bounded read is made
+through that one descriptor, whose identity is checked again afterward. A
+symbolic link, ordinary replacement between `lstat` and `open`, special object,
+oversized file, unsupported no-follow API, metadata mutation, or short read is
+never promoted into the accepted-envelope set.
+
+For every stable match the gate locates the enclosing custody root and requires:
 
 - a trust registry and artifact root;
 - `require_complete=true`;
@@ -163,7 +183,11 @@ The suite includes:
 - signed dissent removal after bundle re-hash;
 - final reviewer reorder;
 - post-sign limitation mutation;
+- direct `complete_closure` import without an active snapshot;
+- acceptance-module and policy-module entrypoint identity;
 - opaque-extension accepted successor discovery;
+- static symbolic-link discovery rejection;
+- regular-file replacement between `lstat` and descriptor open; and
 - inherited key substitution, expiry, revocation, parser, timing, alias,
   synthetic-physical, filesystem-replacement, and signing-custody negatives.
 
@@ -176,8 +200,10 @@ Reopen the affected G10 gap if any path can report closure while:
 - a class omits its assigned claim or signs another class's claim;
 - the contract revision or policy profile is not bound to signatures;
 - a final review or acceptance field changes after signing;
-- an accepted envelope can avoid repository CI by nesting or renaming; or
-- another public entry point still invokes the weaker G9 complete validator.
+- an accepted envelope can avoid repository CI by nesting, renaming, symbolic
+  linking, or replacement during discovery; or
+- another public or direct module entrypoint invokes an unwrapped or weaker
+  complete validator.
 
 ## External boundary
 
