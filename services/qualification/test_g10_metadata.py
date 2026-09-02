@@ -7,7 +7,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 G10_REVISION = "2026-09-02-g10-quorum-1"
-G10_GAPS = ("HG-0076", "HG-0077")
+G10_GAPS = ("HG-0076", "HG-0077", "HG-0078")
 G10_MODULES = ("authority-quorum-review-integrity",)
 
 
@@ -33,6 +33,11 @@ class G10MetadataCoverageTest(unittest.TestCase):
         self.assertEqual(self.state["plan_revision"], G10_REVISION)
         self.assertEqual(self.modules["plan_revision"], G10_REVISION)
         self.assertEqual(self.gaps["plan_revision"], G10_REVISION)
+        self.assertEqual(self.contract["contract_revision"], G10_REVISION)
+        self.assertEqual(
+            self.contract["extends_contract_revision"],
+            self.g9_state["plan_revision"],
+        )
         self.assertEqual(
             self.state["extends_plan_revision"],
             self.g9_state["plan_revision"],
@@ -71,10 +76,7 @@ class G10MetadataCoverageTest(unittest.TestCase):
 
     def test_module_has_source_doc_test_contract_coverage(self) -> None:
         entries = self.modules["modules"]
-        self.assertEqual(
-            tuple(item["id"] for item in entries),
-            G10_MODULES,
-        )
+        self.assertEqual(tuple(item["id"] for item in entries), G10_MODULES)
         for module in entries:
             for field in (
                 "source_roots",
@@ -99,22 +101,51 @@ class G10MetadataCoverageTest(unittest.TestCase):
         policy = (
             ROOT / "tools/external_evidence/complete_closure.py"
         ).read_text(encoding="utf-8")
-        self.assertIn(
-            "_complete_closure.validate_bundle",
-            package_init,
-        )
-        self.assertIn(
-            "missing_issuer_authority_classes",
-            policy,
-        )
-        self.assertIn(
-            "review_set_integrity",
-            policy,
-        )
+        wrapper = (
+            ROOT / "tools/validate_external_evidence.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("_complete_closure.validate_bundle", package_init)
+        self.assertIn("missing_issuer_authority_classes", policy)
+        self.assertIn("issuer_claim_scopes", policy)
+        self.assertIn("review_set_integrity", policy)
         self.assertIn(
             "one key cannot satisfy multiple authority seats",
             policy,
         )
+        self.assertIn("review_set_digest", wrapper)
+        self.assertIn("acceptance_context_digest", wrapper)
+
+    def test_contract_policy_and_claim_partition_are_exact(self) -> None:
+        profile = self.contract["complete_closure_profile"]
+        self.assertEqual(
+            profile["policy_id"],
+            "hepta-external-complete-closure-v1",
+        )
+        self.assertEqual(profile["policy_revision"], G10_REVISION)
+        self.assertEqual(
+            profile["issuer_authority_mode"],
+            "all_named_classes",
+        )
+        self.assertEqual(
+            profile["issuer_claim_mode"],
+            "exact_class_scoped_claims",
+        )
+        scopes = self.contract["required_claims_by_authority_class"]
+        for gap_id in self.contract["allowed_gap_ids"]:
+            self.assertEqual(
+                set(scopes[gap_id]),
+                set(self.contract["authority_classes"][gap_id]),
+            )
+            flattened = [
+                claim
+                for authority_class in self.contract["authority_classes"][gap_id]
+                for claim in scopes[gap_id][authority_class]
+            ]
+            self.assertEqual(len(flattened), len(set(flattened)))
+            self.assertEqual(
+                set(flattened),
+                set(self.contract["required_claims"][gap_id]),
+            )
 
     def test_docs_index_registers_g10_machine_truth(self) -> None:
         index = (ROOT / "docs/README.md").read_text(encoding="utf-8")
