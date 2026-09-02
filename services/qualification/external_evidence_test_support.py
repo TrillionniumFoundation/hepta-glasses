@@ -5,12 +5,12 @@ import importlib.util
 import json
 import shutil
 import subprocess
-import tempfile
 import sys
+import tempfile
 import unittest
-from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = ROOT / "tools/validate_external_evidence.py"
@@ -133,6 +133,15 @@ class ExternalEvidenceFixture(unittest.TestCase):
                     allowed_gap_ids=general_gaps,
                 ),
                 self._key_record(
+                    name="dissent-reviewer",
+                    key_id="dissent-reviewer-key",
+                    identity="dissent-reviewer",
+                    organization="independent-dissent-board",
+                    usages=["acceptance_reviewer"],
+                    authority_classes=["release_acceptance_authority"],
+                    allowed_gap_ids=general_gaps,
+                ),
+                self._key_record(
                     name="assurance-reviewer",
                     key_id="assurance-reviewer-key",
                     identity="assurance-reviewer",
@@ -216,6 +225,17 @@ class ExternalEvidenceFixture(unittest.TestCase):
             "signature_sha256": None,
         }
 
+    def _level(self, gap_id: str) -> str:
+        return {
+            "HG-0012": "E7",
+            "HG-0016": "UPSTREAM",
+            "HG-0017": "ADMIN",
+        }.get(gap_id, "E6" if gap_id in {"HG-0011", "HG-0044"} else "E5")
+
+    def _claims_for(self, gap_id: str, authority_class: str) -> dict[str, bool]:
+        scopes = self.contract["required_claims_by_authority_class"]
+        return {name: True for name in scopes[gap_id][authority_class]}
+
     def _unsigned_submission(
         self,
         gap_id: str,
@@ -223,17 +243,9 @@ class ExternalEvidenceFixture(unittest.TestCase):
         synthetic: bool = False,
     ) -> dict[str, object]:
         authority_class = self.contract["authority_classes"][gap_id][0]
-        claims = {
-            name: True for name in self.contract["required_claims"][gap_id]
-        }
-        level = {
-            "HG-0012": "E7",
-            "HG-0016": "UPSTREAM",
-            "HG-0017": "ADMIN",
-        }.get(gap_id, "E6" if gap_id in {"HG-0011", "HG-0044"} else "E5")
         return {
             "gap_id": gap_id,
-            "evidence_level": level,
+            "evidence_level": self._level(gap_id),
             "issuer": {
                 "identity": "fixture-evidence-authority",
                 "organization": "fixture-evidence-org",
@@ -243,15 +255,15 @@ class ExternalEvidenceFixture(unittest.TestCase):
             },
             "environment": {"fixture": True, "candidate": COMMIT},
             "subjects": [f"subject:{gap_id}"],
-            "claims": claims,
+            "claims": self._claims_for(gap_id, authority_class),
             "artifacts": [self._artifact(gap_id, synthetic=synthetic)],
             "result": "pass",
             "limitations": ["Cryptographically signed unit-test fixture."],
             "notes": None,
         }
 
-    def _bundle(self, gap_ids: list[str]) -> dict[str, object]:
-        bundle: dict[str, object] = {
+    def _base_bundle(self) -> dict[str, object]:
+        return {
             "schema_version": self.contract["schema_version"],
             "contract_id": self.contract["contract_id"],
             "trust_registry": {
@@ -277,31 +289,177 @@ class ExternalEvidenceFixture(unittest.TestCase):
                 "limitations": [],
             },
         }
+
+    def _sign_submission(
+        self,
+        bundle: dict[str, object],
+        submission: dict[str, object],
+        *,
+        key_name: str,
+        signature_name: str,
+    ) -> dict[str, object]:
+        submission["attestation"] = {
+            "signed_at": "2026-09-01T14:00:00Z",
+            "statement_digest": "0" * 64,
+            "signature_uri": "artifact://placeholder",
+            "signature_sha256": "0" * 64,
+        }
+        statement = external_evidence.canonical_submission_statement(
+            bundle,
+            submission,
+            contract_revision=self.contract["contract_revision"],
+        )
+        signature = self._sign(
+            key_name,
+            statement,
+            Path("signatures") / signature_name,
+        )
+        submission["attestation"] = {
+            "signed_at": "2026-09-01T14:00:00Z",
+            "statement_digest": hashlib.sha256(statement).hexdigest(),
+            **signature,
+        }
+        return submission
+
+    def _bundle(self, gap_ids: list[str]) -> dict[str, object]:
+        bundle = self._base_bundle()
+        bundle["submissions"] = [
+            self._sign_submission(
+                bundle,
+                self._unsigned_submission(gap_id),
+                key_name="issuer",
+                signature_name=f"{gap_id}.issuer.sig",
+            )
+            for gap_id in gap_ids
+        ]
+        return bundle
+
+    @staticmethod
+    def _authority_key_name(authority_class: str) -> str:
+        return f"issuer-{authority_class.replace('_', '-')}"
+
+    def _ensure_complete_issuer_keys(self) -> None:
+        existing = {
+            item["key_id"]
+            for item in self.registry_document["keys"]
+            if isinstance(item, dict)
+        }
+        all_gaps = list(self.contract["allowed_gap_ids"])
+        for authority_class in sorted(
+            {
+                value
+                for values in self.contract["authority_classes"].values()
+                for value in values
+            }
+        ):
+            key_name = self._authority_key_name(authority_class)
+            key_id = f"{key_name}-key"
+            if key_id in existing:
+                continue
+            allowed = [
+                gap
+                for gap in all_gaps
+                if authority_class in self.contract["authority_classes"][gap]
+            ]
+            self.registry_document["keys"].append(
+                self._key_record(
+                    name=key_name,
+                    key_id=key_id,
+                    identity=f"fixture-{authority_class}-authority",
+                    organization=f"fixture-{authority_class}-org",
+                    usages=["evidence_issuer"],
+                    authority_classes=[authority_class],
+                    allowed_gap_ids=allowed,
+                )
+            )
+            existing.add(key_id)
+
+    def _artifact_for_authority(
+        self,
+        gap_id: str,
+        authority_class: str,
+    ) -> dict[str, object]:
+        relative = Path(gap_id) / authority_class / "report.json"
+        path = self.artifact_root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps(
+            {
+                "gap_id": gap_id,
+                "authority_class": authority_class,
+                "result": "pass",
+                "fixture": True,
+            },
+            sort_keys=True,
+        ).encode("utf-8")
+        path.write_bytes(payload)
+        return {
+            "artifact_id": f"{gap_id.lower()}-{authority_class}-report",
+            "uri": f"artifact://{relative.as_posix()}",
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "media_type": "application/json",
+            "issued_at": "2026-09-01T13:00:00Z",
+            "expires_at": None,
+            "contains_secrets": False,
+            "synthetic": False,
+            "signature_uri": None,
+            "signature_sha256": None,
+        }
+
+    def _unsigned_submission_for_authority(
+        self,
+        gap_id: str,
+        authority_class: str,
+    ) -> dict[str, object]:
+        key_name = self._authority_key_name(authority_class)
+        return {
+            "gap_id": gap_id,
+            "evidence_level": self._level(gap_id),
+            "issuer": {
+                "identity": f"fixture-{authority_class}-authority",
+                "organization": f"fixture-{authority_class}-org",
+                "authority_class": authority_class,
+                "key_id": f"{key_name}-key",
+                "contact": None,
+            },
+            "environment": {
+                "fixture": True,
+                "candidate": COMMIT,
+                "authority_class": authority_class,
+            },
+            "subjects": [f"subject:{gap_id}:{authority_class}"],
+            "claims": self._claims_for(gap_id, authority_class),
+            "artifacts": [
+                self._artifact_for_authority(gap_id, authority_class)
+            ],
+            "result": "pass",
+            "limitations": [
+                "Cryptographically signed multi-authority unit-test fixture."
+            ],
+            "notes": None,
+        }
+
+    def _complete_bundle(self, gap_ids: list[str]) -> dict[str, object]:
+        self._ensure_complete_issuer_keys()
+        self.registry_digest = self._write_registry()
+        bundle = self._base_bundle()
+        bundle["trust_registry"]["sha256"] = self.registry_digest
         submissions = []
         for gap_id in gap_ids:
-            submission = self._unsigned_submission(gap_id)
-            submission["attestation"] = {
-                "signed_at": "2026-09-01T14:00:00Z",
-                "statement_digest": "0" * 64,
-                "signature_uri": "artifact://placeholder",
-                "signature_sha256": "0" * 64,
-            }
-            statement = external_evidence.canonical_submission_statement(
-                bundle,
-                submission,
-                contract_revision=self.contract["contract_revision"],
-            )
-            signature = self._sign(
-                "issuer",
-                statement,
-                Path("signatures") / f"{gap_id}.issuer.sig",
-            )
-            submission["attestation"] = {
-                "signed_at": "2026-09-01T14:00:00Z",
-                "statement_digest": hashlib.sha256(statement).hexdigest(),
-                **signature,
-            }
-            submissions.append(submission)
+            for authority_class in self.contract["authority_classes"][gap_id]:
+                key_name = self._authority_key_name(authority_class)
+                submissions.append(
+                    self._sign_submission(
+                        bundle,
+                        self._unsigned_submission_for_authority(
+                            gap_id,
+                            authority_class,
+                        ),
+                        key_name=key_name,
+                        signature_name=(
+                            f"{gap_id}.{authority_class}.issuer.sig"
+                        ),
+                    )
+                )
         bundle["submissions"] = submissions
         return bundle
 
@@ -352,51 +510,162 @@ class ExternalEvidenceFixture(unittest.TestCase):
         reviewer.update(signature)
         return reviewer
 
-    def _accept(self, bundle: dict[str, object]) -> None:
-        all_gaps = list(self.contract["allowed_gap_ids"])
+    def _reviewer_shell(
+        self,
+        *,
+        key_name: str,
+        key_id: str,
+        identity: str,
+        organization: str,
+        authority_class: str,
+        gaps: list[str],
+        decision: str = "approve",
+    ) -> tuple[str, dict[str, object]]:
+        review_relative = Path("reviews") / f"{key_name}.json"
+        return key_name, {
+            "identity": identity,
+            "organization": organization,
+            "authority_class": authority_class,
+            "key_id": key_id,
+            "decision": decision,
+            "reviewed_gap_ids": gaps,
+            "review_uri": f"artifact://{review_relative.as_posix()}",
+            "review_sha256": "0" * 64,
+            "signed_at": "2026-09-02T09:00:00Z",
+            "statement_digest": "0" * 64,
+            "signature_uri": "artifact://placeholder",
+            "signature_sha256": "0" * 64,
+        }
+
+    def _materialize_final_reviewer(
+        self,
+        bundle: dict[str, object],
+        *,
+        key_name: str,
+        reviewer: dict[str, object],
+        roster_digest: str,
+        context_digest: str,
+    ) -> None:
+        review_uri = reviewer["review_uri"]
+        assert isinstance(review_uri, str)
+        review_relative = Path(review_uri.removeprefix("artifact://"))
+        review_path = self.artifact_root / review_relative
+        review_path.parent.mkdir(parents=True, exist_ok=True)
+        review_document = {
+            "reviewer": reviewer["identity"],
+            "organization": reviewer["organization"],
+            "authority_class": reviewer["authority_class"],
+            "gaps": reviewer["reviewed_gap_ids"],
+            "decision": reviewer["decision"],
+            "closure_manifest": {
+                "schema_version": 1,
+                "policy_id": "hepta-external-complete-closure-v1",
+                "policy_revision": "2026-09-02-g10-quorum-1",
+                "review_set_digest": roster_digest,
+                "acceptance_context_digest": context_digest,
+            },
+        }
+        review_payload = json.dumps(
+            review_document,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        review_path.write_bytes(review_payload)
+        reviewer["review_sha256"] = hashlib.sha256(review_payload).hexdigest()
+        statement = external_evidence.canonical_review_statement(
+            bundle,
+            reviewer,
+            contract_revision=self.contract["contract_revision"],
+        )
+        signature = self._sign(
+            key_name,
+            statement,
+            Path("signatures") / f"{key_name}.review.sig",
+        )
+        reviewer["statement_digest"] = hashlib.sha256(statement).hexdigest()
+        reviewer.update(signature)
+
+    def _accept(
+        self,
+        bundle: dict[str, object],
+        *,
+        include_dissent: bool = False,
+    ) -> None:
+        submitted_gaps = sorted(
+            {
+                submission["gap_id"]
+                for submission in bundle["submissions"]
+                if isinstance(submission, dict)
+            }
+        )
         general_gaps = [
             gap
-            for gap in all_gaps
+            for gap in submitted_gaps
             if gap not in {"HG-0011", "HG-0017", "HG-0044"}
         ]
-        reviewers = [
-            self._reviewer(
-                bundle,
-                key_name="release-reviewer",
-                key_id="release-reviewer-key",
-                identity="release-reviewer",
-                organization="release-review-board",
-                authority_class="release_acceptance_authority",
-                gaps=general_gaps,
-            ),
-            self._reviewer(
-                bundle,
-                key_name="assurance-reviewer",
-                key_id="assurance-reviewer-key",
-                identity="assurance-reviewer",
-                organization="independent-assurance-lab",
-                authority_class="independent_assurance",
-                gaps=["HG-0011"],
-            ),
-            self._reviewer(
-                bundle,
-                key_name="governance-reviewer",
-                key_id="governance-reviewer-key",
-                identity="governance-reviewer",
-                organization="repository-governance-audit",
-                authority_class="repository_governance_reviewer",
-                gaps=["HG-0017"],
-            ),
-            self._reviewer(
-                bundle,
-                key_name="code-reviewer",
-                key_id="code-reviewer-key",
-                identity="code-reviewer",
-                organization="independent-code-review",
-                authority_class="independent_code_reviewer",
-                gaps=["HG-0044"],
-            ),
-        ]
+        reviewer_entries: list[tuple[str, dict[str, object]]] = []
+        if general_gaps:
+            reviewer_entries.append(
+                self._reviewer_shell(
+                    key_name="release-reviewer",
+                    key_id="release-reviewer-key",
+                    identity="release-reviewer",
+                    organization="release-review-board",
+                    authority_class="release_acceptance_authority",
+                    gaps=general_gaps,
+                )
+            )
+        if "HG-0011" in submitted_gaps:
+            reviewer_entries.append(
+                self._reviewer_shell(
+                    key_name="assurance-reviewer",
+                    key_id="assurance-reviewer-key",
+                    identity="assurance-reviewer",
+                    organization="independent-assurance-lab",
+                    authority_class="independent_assurance",
+                    gaps=["HG-0011"],
+                )
+            )
+        if "HG-0017" in submitted_gaps:
+            reviewer_entries.append(
+                self._reviewer_shell(
+                    key_name="governance-reviewer",
+                    key_id="governance-reviewer-key",
+                    identity="governance-reviewer",
+                    organization="repository-governance-audit",
+                    authority_class="repository_governance_reviewer",
+                    gaps=["HG-0017"],
+                )
+            )
+        if "HG-0044" in submitted_gaps:
+            reviewer_entries.append(
+                self._reviewer_shell(
+                    key_name="code-reviewer",
+                    key_id="code-reviewer-key",
+                    identity="code-reviewer",
+                    organization="independent-code-review",
+                    authority_class="independent_code_reviewer",
+                    gaps=["HG-0044"],
+                )
+            )
+        if include_dissent:
+            dissent_gap = (
+                "HG-0013" if "HG-0013" in submitted_gaps else general_gaps[0]
+            )
+            reviewer_entries.append(
+                self._reviewer_shell(
+                    key_name="dissent-reviewer",
+                    key_id="dissent-reviewer-key",
+                    identity="dissent-reviewer",
+                    organization="independent-dissent-board",
+                    authority_class="release_acceptance_authority",
+                    gaps=[dissent_gap],
+                    decision="reject",
+                )
+            )
+
+        reviewers = [entry[1] for entry in reviewer_entries]
         bundle["acceptance"] = {
             "state": "accepted",
             "reviewed_at": "2026-09-02T10:00:00Z",
@@ -405,11 +674,28 @@ class ExternalEvidenceFixture(unittest.TestCase):
             "decision_reference": "review:fixture:accepted",
             "limitations": [],
         }
+        roster_digest = external_evidence.review_set_digest(reviewers)
+        context_digest = external_evidence.acceptance_context_digest(
+            bundle["acceptance"],
+            roster_digest=roster_digest,
+        )
+        for key_name, reviewer in reviewer_entries:
+            self._materialize_final_reviewer(
+                bundle,
+                key_name=key_name,
+                reviewer=reviewer,
+                roster_digest=roster_digest,
+                context_digest=context_digest,
+            )
         bundle["acceptance"]["bundle_digest"] = (
             external_evidence.canonical_bundle_digest(bundle)
         )
 
-    def _write_bundle(self, bundle: dict[str, object], name: str = "bundle.json") -> Path:
+    def _write_bundle(
+        self,
+        bundle: dict[str, object],
+        name: str = "bundle.json",
+    ) -> Path:
         path = self.root / name
         path.write_text(json.dumps(bundle, sort_keys=True), encoding="utf-8")
         return path

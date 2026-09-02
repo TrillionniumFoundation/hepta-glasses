@@ -20,7 +20,9 @@ external_evidence = support.external_evidence
 
 class ExternalEvidenceReviewOrderTest(support.ExternalEvidenceFixture):
     def test_valid_review_signature_cannot_predate_issuer_attestations(self) -> None:
-        bundle = self._bundle(list(self.contract["allowed_gap_ids"]))
+        bundle = self._complete_bundle(
+            list(self.contract["allowed_gap_ids"])
+        )
         self._accept(bundle)
         reviewer = bundle["acceptance"]["reviewers"][0]
         reviewer["signed_at"] = "2026-09-01T13:30:00Z"

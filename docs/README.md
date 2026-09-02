@@ -18,18 +18,40 @@
 
 ## G9 layered machine truth
 
-G9 is a stacked evidence-authentication and latest-head CI-custody layer. It does not rewrite the frozen G8 candidate. Its machine-readable supplements are:
+G9 is a stacked evidence-authentication and latest-head CI-custody layer. It does not rewrite the frozen G8 candidate. Its supplements are:
 
-- `G9_STATE.json` — source authority rule, latest-head concurrency custody, claim ceiling, zero-open source status, and the inherited 12-gap set.
-- `G9_MODULES.json` — ownership and source/document/test/contract coverage for external-evidence authentication and latest-head CI custody, including bounded object-identity custody and hardened signing.
-- `G9_GAP_LEDGER.json` — source closure records for `HG-0073`, `HG-0074`, and `HG-0075`, plus the exact inherited authority-owned gap IDs.
-- `development/G9_TERMINAL_EXTERNAL_CLOSURE.md` — authenticated execution package for the 12 authority-owned gaps; not itself external evidence.
-- `development/G9_FILESYSTEM_CUSTODY_HARDENING.md` — implementation map, invariants, validation sequence, and reopen conditions for exact-object evidence custody.
+- `G9_STATE.json` — source authority, latest-head concurrency custody, claim ceiling, and inherited 12-gap set.
+- `G9_MODULES.json` — source/document/test/contract ownership for external-evidence authentication and CI custody.
+- `G9_GAP_LEDGER.json` — source closure records for `HG-0073`, `HG-0074`, and `HG-0075`.
+- `development/G9_TERMINAL_EXTERNAL_CLOSURE.md` — execution package for the authority-owned gaps; not itself external evidence.
+- `development/G9_FILESYSTEM_CUSTODY_HARDENING.md` — exact-object evidence custody implementation and reopen conditions.
 
-`services/qualification/test_g9_metadata.py` verifies these supplements, their referenced paths, their synchronization with the G8 ledger and G9 contract, the explicit filesystem-custody closure, and the absence of private-key material in repository custody. `services/qualification/test_ci_latest_head_custody.py` independently verifies stale-run cancellation and exact-source identity checks in all seven jobs. Dedicated filesystem and signer-custody suites exercise ordinary-directory replacement, URI aliases, aggregate snapshot bounds, SPKI retargeting, private-key replacement, and exact-object bundle updates.
+`services/qualification/test_g9_metadata.py` verifies these supplements, the G8 inheritance boundary, filesystem custody, and the absence of private-key material. `services/qualification/test_ci_latest_head_custody.py` verifies stale-run cancellation and exact-source identity in all seven jobs. Dedicated suites exercise directory and file replacement, URI aliases, aggregate bounds, SPKI retargeting, private-key replacement, and immutable successor creation.
+
+## G10 layered machine truth
+
+G10 is a versioned strict complete-closure layer over G9. It does not promote any inherited product row. Its supplements are:
+
+- `G10_STATE.json` — live source authority, zero-open repository state, active complete-closure policy, global authority-role consistency, trusted verifier boundary, canonical contract-content binding, descriptor-anchored repository admission, and unchanged inherited 12-gap set.
+- `G10_MODULES.json` — ownership and source/document/test/contract coverage for quorum, cross-gap role scope, claim scope, review-set integrity, runtime authority, contract semantic binding, and committed-package admission.
+- `G10_GAP_LEDGER.json` — source closure records for:
+  - `HG-0076`: every named issuer authority class must participate; seats are distinct inside each gap, and a key or identity pair may span gaps only under one unchanged authority class;
+  - `HG-0077`: every accepted reviewer co-signs the same policy, ordered final roster, and acceptance context;
+  - `HG-0078`: complete-closure semantics use the signed G10 contract revision, exact class-scoped claim partition, and one immutable validation entrypoint;
+  - `HG-0079`: repository CI recursively discovers every committed accepted envelope by filesystem-anchor and child-directory descriptors, stable canonical content, and exact lexical/opened/post-read identity, independent of filename or successor depth;
+  - `HG-0080`: supported operational validation owns the current clock and canonical OpenSSL command and rejects caller overrides; and
+  - `HG-0081`: issuer, evidence-set, and reviewer signatures bind the canonical SHA-256 of the complete current contract object.
+- `development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md` — quorum, claim partition, review roster, recursive admission, implementation sequence, hostile tests, and external boundary.
+- `development/G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md` — cross-gap authority-role invariants, descriptor-anchored recursive discovery, trusted-process boundary, hostile tests, and reopen conditions.
+- `development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md` — public/test runtime separation, contract-content signature binding, failure semantics, tests, operations, and reopen conditions.
+
+`services/qualification/test_g10_metadata.py` verifies the G10 policy profile, class-scope partition, machine truth, public entrypoints, trusted runtime boundary, contract semantic binding, and repository gate. `services/qualification/test_external_evidence_complete_closure.py` proves missing quorum, same-gap key-seat reuse, cross-scope claims, G9 semantic downgrade, review deletion/reordering, acceptance mutation, and wrong-policy manifests fail closed. `services/qualification/test_external_evidence_authority_seat_scope.py` proves a key or identity pair cannot impersonate different authority classes across gaps while preserving legitimate same-class reuse. `services/qualification/test_external_evidence_runtime_policy.py` proves supported public clock and cryptographic-executable injection fail. `services/qualification/test_external_evidence_contract_binding.py` proves same-revision contract mutation changes every authority preimage. `services/qualification/test_external_evidence_repository_admission.py` proves accepted immutable successors cannot evade protected-pin validation through nesting, opaque filenames, symbolic links, ordinary file replacement, or parent-directory replacement.
 
 ## Development
 
+- `development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md`
+- `development/G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md`
+- `development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md`
 - `development/G9_TERMINAL_EXTERNAL_CLOSURE.md`
 - `development/G9_FILESYSTEM_CUSTODY_HARDENING.md`
 - `development/G8_PRODUCTION_AUTHORITY_CLOSURE.md`
@@ -51,23 +73,25 @@ G9 is a stacked evidence-authentication and latest-head CI-custody layer. It doe
 - `operations/PRIVACY_SECURITY_REVIEW_CHECKLIST.md`
 - `operations/RELEASE_AND_ROLLBACK_RUNBOOK.md`
 - `operations/CREDENTIAL_INCIDENT_RUNBOOK.md`
-- `../evidence/external/README.md` — authenticated evidence custody, stable byte snapshots, secure detached-signature creation, external trust pin, and validation procedure.
+- `../evidence/external/README.md` — versioned evidence custody, immutable signing, all-class quorum, exact class-scoped claims, final review-set binding, trusted runtime validation, canonical contract binding, recursive committed-package admission, external trust pin, and validation procedure.
 
 ## Architecture decisions
 
 - `adr/ADR-0001-distributed-os-boundary.md`
 - `adr/ADR-0002-codex-authority-boundary.md`
 - `adr/ADR-0003-edge-runtime-language.md`
-- `adr/ADR-0004-external-evidence-authentication.md` — out-of-band trust pin, actual Ed25519 key binding, signed evidence/reviews, strict parsing and authority separation.
-- `adr/ADR-0005-latest-head-ci-concurrency.md` — pull-request/branch concurrency custody, stale-run cancellation and independent exact-source verification.
-- `adr/ADR-0006-external-evidence-filesystem-custody.md` — normalized lexical-path snapshots, descriptor-stable bounded reads, symlink-retarget fencing, and exclusive no-follow detached-signature creation.
-- `adr/ADR-0007-evidence-object-identity-and-bounded-custody.md` — ordinary-object identity binding, canonical URI spelling, aggregate snapshot bounds, snapshot-backed key normalization, private-key custody, and atomic/immutable bundle successors.
+- `adr/ADR-0004-external-evidence-authentication.md` — out-of-band trust pin, actual Ed25519 key binding, signed evidence/reviews, strict parsing, and authority separation.
+- `adr/ADR-0005-latest-head-ci-concurrency.md` — pull-request/branch concurrency custody, stale-run cancellation, and exact-source verification.
+- `adr/ADR-0006-external-evidence-filesystem-custody.md` — lexical-path snapshots, descriptor-stable bounded reads, symlink-retarget fencing, and exclusive detached signatures.
+- `adr/ADR-0007-evidence-object-identity-and-bounded-custody.md` — ordinary-object identity, canonical URIs, aggregate snapshot bounds, pinned-key normalization, private-key custody, and immutable bundle successors.
+- `adr/ADR-0008-authority-quorum-and-review-set-integrity.md` — versioned complete-closure policy, all-class quorum, exact claim partition, final roster/context manifests, canonical entrypoint, and recursive stable accepted-envelope admission.
+- `adr/ADR-0009-trusted-verifier-and-contract-content-binding.md` — current-time runtime authority, fixed cryptographic command, trusted-process/test-fixture boundary, and canonical contract digest in authority signatures.
 
-A later plan or ADR must state what it supersedes and update the applicable Current State, Gap Ledger, Evidence Index, module registry, validators, tests and affected machine contracts in the same change.
+A later plan or ADR must state what it supersedes and update the applicable Current State, Gap Ledger, Evidence Index, module registry, validators, tests, and affected machine contracts in the same change.
 
 ## Machine contracts
 
 - `../contracts/g1-ble-protocol-v1.json` — dual-BLE UUID, readiness, framing, command, and uncertainty contract.
-- `../contracts/external-evidence-envelope-v1.json` — authenticated authority-owned evidence and acceptance contract.
+- `../contracts/external-evidence-envelope-v1.json` — versioned authenticated authority-owned evidence and complete-closure contract.
 - `../schemas/external-evidence-envelope.schema.json` — evidence envelope schema.
 - `../schemas/external-authority-trust-registry.schema.json` — externally pinned Ed25519 authority registry schema.

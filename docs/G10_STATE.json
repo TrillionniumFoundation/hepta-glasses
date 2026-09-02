@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "plan_revision": "2026-09-02-g10-quorum-1",
+  "extends_plan_revision": "2026-09-02-g9-authenticated-1",
+  "source_authority": {
+    "repository": "TrillionniumFoundation/hepta-glasses",
+    "branch": "work/hepta-g10-authority-quorum-review-integrity-20260902",
+    "identity_rule": "live_pull_request_head_and_tree",
+    "self_attested_sha_is_authoritative": false,
+    "exact_head_ci_required": true,
+    "independent_latest_head_review_required": true
+  },
+  "repository_actionable": {
+    "open": 0,
+    "closed_source": [
+      "HG-0076",
+      "HG-0077",
+      "HG-0078",
+      "HG-0079",
+      "HG-0080",
+      "HG-0081"
+    ],
+    "module_registry": "docs/G10_MODULES.json",
+    "gap_ledger": "docs/G10_GAP_LEDGER.json",
+    "validator_test": "services/qualification/test_g10_metadata.py",
+    "complete_closure_policy": {
+      "policy_id": "hepta-external-complete-closure-v1",
+      "policy_revision": "2026-09-02-g10-quorum-1",
+      "predecessor_contract_revision": "2026-09-02-g9-authenticated-1",
+      "issuer_authority_mode": "all_named_classes",
+      "issuer_claim_mode": "exact_class_scoped_claims",
+      "authority_seat_scope": "one key ID and one identity/organization pair may span gaps only under one unchanged authority class",
+      "review_manifest_schema_version": 1,
+      "validation_entrypoint_identity": "complete_closure module, acceptance alias, package API and CLI share one immutable aggregate-bounded snapshot wrapper",
+      "runtime_authority": "supported operational entrypoints use current trusted system time and canonical OpenSSL; caller overrides are rejected before evidence reads, while the underscored fixed-clock fixture is confined to the already trusted Python process",
+      "contract_semantic_binding": "issuer, evidence-set and reviewer digests bind the canonical SHA-256 of the complete current contract object in addition to its revision label",
+      "committed_accepted_envelope_discovery": "recursive content identity under evidence/external through filesystem-anchor and child directory descriptors, with no-follow traversal and stable lexical/opened/post-read object identity"
+    }
+  },
+  "authority_owned": {
+    "inherited_blocked_count": 12,
+    "gap_ids": [
+      "HG-0010",
+      "HG-0011",
+      "HG-0012",
+      "HG-0013",
+      "HG-0014",
+      "HG-0015",
+      "HG-0016",
+      "HG-0017",
+      "HG-0018",
+      "HG-0021",
+      "HG-0022",
+      "HG-0044"
+    ],
+    "closure_rule": "Every authority class named for a gap signs exactly its versioned class-scoped claims. Multiple seats inside one gap use distinct key IDs and identity/organization pairs. Across a complete package, one key ID and one identity/organization pair may span gaps only under one unchanged authority class; neither may impersonate different authority roles. Every issuer and reviewer binds the canonical contract digest; every final reviewer binds the same policy, review roster and acceptance context; supported public validation owns its clock and cryptographic executable selection; every committed accepted envelope is discovered recursively by descriptor-anchored stable content and revalidated under an out-of-band pin; real external evidence and independent acceptance remain required."
+  },
+  "claim_ceiling": "G10 closes repository-controlled authority quorum, cross-gap role aliasing, claim-scope/version binding, canonical-contract content binding, final-review-set integrity, trusted runtime authority, canonical validation-entrypoint identity, and descriptor-anchored committed accepted-envelope discovery only; it cannot manufacture E5-E7, administrative, upstream, physical, provider, vendor, independent-assurance, signing, pilot, store, or release authority."
+}

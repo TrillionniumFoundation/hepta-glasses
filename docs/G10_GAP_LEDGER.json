@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "plan_revision": "2026-09-02-g10-quorum-1",
+  "extends_ledger": "docs/G9_GAP_LEDGER.json",
+  "source_summary": {
+    "repository_actionable_open": 0,
+    "closed_source": 6,
+    "inherited_authority_owned_blocked": 12
+  },
+  "gaps": [
+    {
+      "id": "HG-0076",
+      "title": "Complete closure requires every named issuer authority class",
+      "owner": "release-security",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        "contracts/external-evidence-envelope-v1.json",
+        "tools/external_evidence/complete_closure.py",
+        "tools/external_evidence/authority_seat_policy.py",
+        "tools/external_evidence/__init__.py",
+        "services/qualification/external_evidence_test_support.py",
+        "services/qualification/test_external_evidence.py",
+        "services/qualification/test_external_evidence_authority_seat_scope.py",
+        "services/qualification/test_external_evidence_complete_closure.py",
+        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+        "docs/development/G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md",
+        "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md"
+      ],
+      "close_criteria": "A complete bundle may contain multiple submissions for one gap and is eligible only when every authority class listed by the canonical contract is represented by a cryptographically valid submission. Within one gap, authority seats use distinct trust-registry key IDs and distinct identity/organization pairs. Across the complete package, one key ID and one identity/organization pair may be reused only for the same narrowly scoped authority class; one omnipotent key or identity cannot fill unrelated roles merely because they occur in different gaps. Same-class reuse across related gaps remains permitted and tested. Partial or aliased bundles never produce all_authority_owned_gaps_closed=true."
+    },
+    {
+      "id": "HG-0077",
+      "title": "Final signed review roster and acceptance context are removal-resistant",
+      "owner": "release-security",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        "tools/external_evidence/complete_closure.py",
+        "tools/external_evidence/__init__.py",
+        "services/qualification/external_evidence_test_support.py",
+        "services/qualification/test_external_evidence_complete_closure.py",
+        "services/qualification/test_external_evidence_review_order.py",
+        "evidence/external/README.md",
+        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+        "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md"
+      ],
+      "close_criteria": "Every accepted bundle requires every final signed review artifact to carry the same schema-v1 G10 closure manifest. The manifest binds the explicit policy ID/revision, ordered final reviewer roster, acceptance state, reviewed_at, decision_reference and limitations. Because each review artifact digest is in the reviewer Ed25519 statement, removing, adding, replacing or reordering a final reviewer, changing final acceptance context, or substituting another policy revision fails validation. External governance still determines whether every accountable review was admitted to the final roster."
+    },
+    {
+      "id": "HG-0078",
+      "title": "Complete-closure semantics are versioned and issuer claims are authority-scoped",
+      "owner": "release-security",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        "contracts/external-evidence-envelope-v1.json",
+        "tools/external_evidence/complete_closure.py",
+        "tools/external_evidence/__init__.py",
+        "tools/validate_external_evidence.py",
+        "services/qualification/external_evidence_test_support.py",
+        "services/qualification/test_external_evidence_complete_closure.py",
+        "services/qualification/test_external_evidence_entrypoint_snapshot.py",
+        "services/qualification/test_g9_metadata.py",
+        "services/qualification/test_g10_metadata.py",
+        "evidence/external/README.md",
+        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+        "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md"
+      ],
+      "close_criteria": "The canonical external-evidence contract revision is 2026-09-02-g10-quorum-1 and explicitly identifies its G9 predecessor, all-class quorum mode, exact class-scoped claim mode, distinct authority seats and review-manifest profile. Required claims are a validated disjoint partition across the named authority classes for each gap. Each issuer may sign exactly its assigned claims; missing or cross-scope claims fail before acceptance. Contract revision is inside issuer and reviewer signature preimages, and policy ID/revision are inside review-set and acceptance-context digests, so a G10 package cannot be accepted by the older G9 semantic revision. The policy module itself, the acceptance-module alias, the CLI and the package-level validator all resolve to the same immutable, aggregate-bounded validation-snapshot entrypoint; explicitly importing complete_closure cannot bypass filesystem custody."
+    },
+    {
+      "id": "HG-0079",
+      "title": "Repository CI discovers every committed accepted immutable successor",
+      "owner": "quality-gates",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        "tools/external_evidence/repository_admission.py",
+        "services/qualification/test_external_evidence_repository.py",
+        "services/qualification/test_external_evidence_repository_admission.py",
+        "tools/external_evidence/signing.py",
+        "tools/external_evidence/complete_closure.py",
+        "evidence/external/README.md",
+        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+        "docs/development/G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md"
+      ],
+      "close_criteria": "Repository qualification recursively inspects bounded regular files under evidence/external by canonical envelope content rather than only matching a top-level bundle.json filename. The authoritative scanner opens the root from the filesystem anchor and traverses every child through no-follow directory descriptors. Lexical, opened and post-traversal directory identities and lexical, opened and post-read file identities must agree. Symbolic links, special objects, ordinary file or parent-directory replacement, unstable reads, oversized files, excessive aggregate bytes, excessive entries, excessive depth and unsupported no-follow APIs fail the gate rather than being ignored. Every discovered envelope whose contract_id is canonical and acceptance.state is accepted is revalidated as complete and accepted under a protected out-of-band trust-registry pin. Filename, extension, nesting, successor placement or ancestor replacement cannot hide or inject an accepted package."
+    },
+    {
+      "id": "HG-0080",
+      "title": "Authority-bearing validation cannot inherit caller clock or executable authority",
+      "owner": "release-security",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        "tools/external_evidence/runtime_policy.py",
+        "tools/external_evidence/cli.py",
+        "tools/external_evidence/__init__.py",
+        "tools/validate_external_evidence.py",
+        "services/qualification/test_external_evidence_runtime_policy.py",
+        "docs/development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md",
+        "docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md"
+      ],
+      "close_criteria": "The supported package API, direct complete_closure module, package-name compatibility import and executable CLI use the trusted current system clock and canonical OpenSSL command. They reject a caller-supplied validation time and any custom OpenSSL executable before reading evidence. The CLI exposes no cryptographic-binary override. The deterministic underscored clock hook is test-only and not a security sandbox against arbitrary code already executing inside the trusted verifier process; operational validation must run in a controlled process that executes no untrusted Python. Expired, revoked or future-dated evidence cannot be made current through a supported authority-bearing entrypoint, and an attacker-selected executable cannot manufacture cryptographic success."
+    },
+    {
+      "id": "HG-0081",
+      "title": "Issuer and reviewer signatures bind canonical contract semantics",
+      "owner": "release-security",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        "tools/external_evidence/semantic_binding.py",
+        "tools/external_evidence/__init__.py",
+        "services/qualification/test_external_evidence_contract_binding.py",
+        "services/qualification/test_external_evidence_complete_closure.py",
+        "docs/development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md",
+        "docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md"
+      ],
+      "close_criteria": "Every issuer and reviewer canonical Ed25519 preimage contains a contract-binding statement with contract ID, declared revision and the canonical SHA-256 of the complete current contract object. The evidence-set digest carries the same binding. A contract whose revision string is unchanged but whose authority classes, claim partition, review rules, closure rule or any other canonical field changes produces different submission, evidence-set and review digests and invalidates existing signatures. A caller-supplied revision that differs from the current contract bytes fails before signing or verification."
+    }
+  ],
+  "inherited_authority_owned_gap_ids": [
+    "HG-0010",
+    "HG-0011",
+    "HG-0012",
+    "HG-0013",
+    "HG-0014",
+    "HG-0015",
+    "HG-0016",
+    "HG-0017",
+    "HG-0018",
+    "HG-0021",
+    "HG-0022",
+    "HG-0044"
+  ]
+}

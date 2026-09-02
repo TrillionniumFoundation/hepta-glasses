@@ -8,6 +8,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 G9_REVISION = "2026-09-02-g9-authenticated-1"
+G10_REVISION = "2026-09-02-g10-quorum-1"
 G9_GAPS = ("HG-0073", "HG-0074", "HG-0075")
 G9_MODULES = ("external-evidence-authentication", "latest-head-ci-custody")
 PRIVATE_KEY_PATTERN = re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")
@@ -32,7 +33,16 @@ class G9MetadataCoverageTest(unittest.TestCase):
         self.assertEqual(self.state["plan_revision"], G9_REVISION)
         self.assertEqual(self.modules["plan_revision"], G9_REVISION)
         self.assertEqual(self.gaps["plan_revision"], G9_REVISION)
-        self.assertEqual(self.contract["contract_revision"], G9_REVISION)
+        if (ROOT / "docs/G10_STATE.json").is_file():
+            g10_state = load_object("docs/G10_STATE.json")
+            self.assertEqual(g10_state["plan_revision"], G10_REVISION)
+            self.assertEqual(self.contract["contract_revision"], G10_REVISION)
+            self.assertEqual(
+                self.contract["extends_contract_revision"],
+                G9_REVISION,
+            )
+        else:
+            self.assertEqual(self.contract["contract_revision"], G9_REVISION)
 
         expected = set(self.contract["allowed_gap_ids"])
         self.assertEqual(set(self.state["authority_owned"]["gap_ids"]), expected)

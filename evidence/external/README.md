@@ -1,6 +1,31 @@
 # Authenticated authority-owned evidence staging
 
-This directory is a custody boundary for evidence that may close G9 authority-owned gaps. Files stored here are not trusted merely because they are committed, uploaded, hashed, or reviewed in a pull request.
+This directory is a custody boundary for evidence that may close authority-owned gaps. Files stored here are not trusted merely because they are committed, uploaded, hashed, or reviewed in a pull request.
+
+## Active protocol
+
+- Envelope: `hepta-external-evidence-envelope-v1`, schema version 2
+- Contract revision: `2026-09-02-g10-quorum-1`
+- Complete-closure policy: `hepta-external-complete-closure-v1`
+- Predecessor: `2026-09-02-g9-authenticated-1`
+- Signature profile: Ed25519 over canonical UTF-8 JSON
+- Contract binding: canonical SHA-256 of the complete current contract object
+
+A statement signed under the predecessor revision does not satisfy the G10 policy. Every issuer and reviewer signature preimage binds both the declared revision and a canonical contract-binding object containing the complete contract SHA-256. Keeping the same revision string while changing an authority class, claim partition, review rule, closure rule, or any other canonical contract field invalidates existing signatures. Policy ID and revision are also part of the final review-set and acceptance-context digests.
+
+## Trusted verifier runtime
+
+Authority-bearing validation owns its clock and cryptographic command selection:
+
+- the supported package API, direct `complete_closure` module, package-name compatibility import, and executable CLI capture the current timezone-aware UTC time inside the trusted verifier;
+- a supported caller-supplied `now` value is rejected before any evidence read;
+- validation accepts only the canonical `openssl` command and exposes no `--openssl-binary` override;
+- an underscored fixed-clock hook exists only for deterministic repository tests, is absent from the public export list, requires a timezone-aware `datetime`, and still rejects custom OpenSSL selection; and
+- the verifier host, system clock, installed OpenSSL, Python process, source object, kernel, and protected registry pin remain trusted operational dependencies.
+
+The fixed-clock fixture is API hygiene, not a sandbox against arbitrary Python already executing inside the verifier process. Code that can load source under forged module names or monkey-patch module globals already has equivalent process authority and is outside the verifier threat model. Run release validation in a controlled process that executes no untrusted Python.
+
+Do not attempt to make expired, revoked, or future-dated evidence current by changing process arguments. Do not substitute another executable as the signature verifier. The normative boundary is `docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md`.
 
 ## Required package layout
 
@@ -12,42 +37,47 @@ evidence/external/
     keys/
       <pinned-ed25519-public-key>.pem
     artifacts/
-      <gap-id>/...
+      <gap-id>/<authority-class>/...
       reviews/...
       signatures/...
       successors/...
     validation-result.json
 ```
 
-`bundle.json` uses `hepta-external-evidence-envelope-v1`, schema version 2. Every submission and every acceptance decision carries an Ed25519 signature over a canonical exact-subject statement. Artifact URIs use `artifact://`; public-key URIs use `key://` and resolve relative to `trust-registry.json`.
+`bundle.json` is an initial, non-authoritative predecessor. Every authority-bearing signing operation writes a fresh immutable successor under `artifact://successors/...`; in-place mutation is rejected.
+
+Artifact URIs use `artifact://`. Public-key URIs use `key://` and resolve relative to `trust-registry.json`.
 
 ## Non-self-issuable trust
 
-The trust registry binds each key ID to an identity, organization, authority class, allowed gaps, usage, validity interval, and revocation state. A copy of the registry may be kept with the custody package, but its SHA-256 is **not trusted from the bundle or repository**. The expected registry digest must be supplied out of band by a separately administered release or assurance controller.
+The trust registry binds each key ID to an identity, organization, authority class, allowed gaps, usage, validity interval, and revocation state. A copy may accompany the custody package, but its digest is **not trusted from the bundle or repository**. The expected SHA-256 must arrive through a separately administered, protected out-of-band channel.
 
-A repository writer cannot close a gap by inventing a key, replacing a public key, declaring themselves independent, or recomputing local hashes. Validation rejects unknown, expired, revoked, cross-gap, issuer-alias, and cryptographically invalid signatures.
+Validation rejects unknown, expired, revoked, cross-gap, wrong-usage, key-alias, normalized-SPKI-reuse, issuer/reviewer-alias, and cryptographically invalid signatures. Only Ed25519 public keys with the expected SubjectPublicKeyInfo form are accepted.
+
+Private keys never belong in repository, CI artifact, log, issue, pull request, or evidence custody. The signing helper rejects a private key located inside the declared custody root.
 
 ## Filesystem custody and stable byte snapshots
 
-A valid URI is not a stable byte identity by itself. Paths must use one canonical POSIX relative spelling: absolute paths, empty components, repeated or trailing separators, `.` and `..` are rejected.
+A URI is not a stable byte identity by itself. Paths use one canonical POSIX relative spelling; absolute paths, empty components, repeated or trailing separators, `.` and `..` are rejected.
 
-During one validation transaction, every existing `artifact://` and `key://` input is pinned to the first stable bytes observed for its normalized lexical path. The stable read captures the device, inode, and object type of every ancestor directory plus the complete identity of the final regular file. A second no-follow descriptor traversal must match those captured identities before bytes are accepted. Symbolic-link redirection, ordinary-object replacement after capture, same-name replacement, non-regular objects, oversized files, short reads, scope escapes, and metadata changes fail closed or cannot alter the pinned transaction bytes.
+During one validation transaction, every existing `artifact://` and `key://` input is pinned to the first stable bytes observed for its normalized lexical path. Reads capture the device, inode, and type of every ancestor directory plus the final regular file. A second no-follow descriptor traversal must match those captured identities before bytes are accepted.
 
-The transaction has both per-file limits and a 512 MiB aggregate snapshot ceiling. Very large raw measurement collections should be stored separately and referenced by authenticated content manifests rather than forcing the validator to retain every raw byte.
+Symbolic-link redirection, ordinary-directory or file replacement, same-name substitution, non-regular objects, oversized files, short reads, scope escapes, and metadata changes fail closed or cannot alter the pinned view. The transaction enforces per-file bounds and a 512 MiB aggregate snapshot ceiling.
 
-PEM hashing, Ed25519 key-type verification, normalized DER-SPKI uniqueness, and signature verification use the same pinned public-key bytes. OpenSSL receives a private temporary copy of the snapshot and never reopens the authority-controlled key pathname for a later cryptographic phase.
+PEM hashing, key-type inspection, normalized DER-SPKI uniqueness, and signature verification consume the same pinned public-key bytes. OpenSSL receives private temporary copies and does not reopen authority-controlled paths during later cryptographic phases.
 
 ## Signing custody
 
-The `--bundle` input, artifacts, detached signatures, and bundle successors must all belong to the same declared `--custody-root`. The signer rejects a bundle outside that root before creating any output. Private keys must remain outside the complete custody root; selecting another output root cannot be used to bypass that boundary.
+The input bundle, artifacts, signatures, and successors share one declared custody root. The signer:
 
-The signing helper reads the selected private key once through a bounded stable descriptor, then performs key-type inspection and signing on the same private temporary snapshot. Replacing the original key pathname after capture cannot change the signing key.
-
-Detached signatures are always new files. The helper walks the custody root with directory descriptors, rejects symbolic-link directory components, creates missing directories with mode `0700`, and creates the final signature with no-follow and exclusive-create semantics at mode `0600`. Existing regular files, dangling links, output links, overwrite attempts, partial writes, and unsupported secure directory APIs fail closed.
-
-Authority-bearing bundle operations are immutable-only. Every `submission`, `reviewer`, and `finalize` command requires a fresh canonical `--output-bundle-uri artifact://successors/<name>.json`. For signing commands, the successor URI and signature URI must be distinct. The helper creates one exclusive mode-0600 successor and leaves the input bundle byte-for-byte unchanged. In-place bundle mutation is rejected because portable POSIX rename cannot atomically assert that a visible name still references an expected inode at the instant of replacement.
-
-Before a command returns success, it reopens the visible signature and successor paths, rejects redirection or weakened permissions, and compares every byte with the objects just created. A disappeared, redirected, or replaced output therefore cannot be reported as successful. Any mutation after return remains detectable by normal bundle validation.
+1. snapshots the selected private key once outside custody;
+2. uses that snapshot for both Ed25519 type inspection and signing;
+3. reads the canonical contract and includes its exact canonical digest in the signed preimage;
+4. validates canonical, distinct output URIs;
+5. creates detached signatures and bundle successors exclusively as mode-0600 regular files through no-follow directory descriptors;
+6. leaves every predecessor bundle byte-for-byte unchanged;
+7. reopens and byte-compares visible outputs before reporting success; and
+8. never treats an unreferenced signature as authority.
 
 Example:
 
@@ -61,15 +91,84 @@ python3 tools/sign_external_evidence.py submission \
   --signature-uri artifact://signatures/submission-001.sig
 ```
 
-The next command uses the verified successor as its input and allocates new bundle and signature URIs. Existing output names are never overwritten.
+Each later command uses the verified successor as input and allocates fresh output names. Existing output names are never overwritten. If successor publication fails after signature creation, the command fails; the unreferenced signature remains non-authoritative.
 
-If a signature is created but a later bundle successor creation fails, no bundle success is reported. An unreferenced signature may remain and must not be represented as accepted evidence.
+The normative filesystem decisions are `docs/adr/ADR-0006-external-evidence-filesystem-custody.md` and `docs/adr/ADR-0007-evidence-object-identity-and-bounded-custody.md`.
 
-The normative decisions and negative-test requirements are recorded in `docs/adr/ADR-0006-external-evidence-filesystem-custody.md` and `docs/adr/ADR-0007-evidence-object-identity-and-bounded-custody.md`. These controls protect local evidence I/O; they do not make repository custody an external trust anchor.
+## Complete issuer quorum and cross-gap role scope
+
+A complete package requires a valid submission from **every authority class** listed for each gap in `contracts/external-evidence-envelope-v1.json`. Multiple submissions per gap are expected.
+
+Within one gap, every authority seat uses:
+
+- a distinct trust-registry key ID; and
+- a distinct `(identity, organization)` pair.
+
+Across the complete package:
+
+- one key ID may appear in multiple gaps only under one unchanged authority class;
+- one `(identity, organization)` pair may appear in multiple gaps only under one unchanged authority class; and
+- same-class reuse is allowed only when the registry explicitly authorizes that class and every referenced gap.
+
+A narrowly scoped physical-device lab may therefore attest related physical gaps. A broadly enrolled key or identity cannot also act as a credential provider, cloud-security owner, repository administrator, firmware vendor, store authority, or another unrelated role merely because the seats occur in different gaps.
+
+## Exact authority-scoped claims
+
+`required_claims_by_authority_class` is a disjoint and exhaustive partition of each gap's `required_claims`. Each issuer signs **only** the claims assigned to its authority class:
+
+- missing assigned claims fail;
+- claims assigned to another class fail;
+- false or non-boolean required claims fail; and
+- the full gap claim boundary exists only after every class-specific signed submission is present.
+
+Examples:
+
+- the repository administrator signs the configured protection controls, while the GitHub API observer signs the fresh readback;
+- the credential provider signs revocation facts, while the incident owner signs replacement scope and incident closure;
+- signing, pilot, and store authorities sign their separate release claims.
+
+The validator reports `issuer_claim_scopes`, `issuer_authority_coverage`, and `missing_issuer_authority_classes`. Any missing class prevents eligibility and closure.
+
+## Final reviewer roster and acceptance manifest
+
+Freeze the complete ordered reviewer roster and acceptance context before final reviewer signatures. Compute:
+
+```python
+from tools.external_evidence import (
+    acceptance_context_digest,
+    review_set_digest,
+)
+
+roster_digest = review_set_digest(bundle["acceptance"]["reviewers"])
+context_digest = acceptance_context_digest(
+    bundle["acceptance"],
+    roster_digest=roster_digest,
+)
+```
+
+Every final review artifact is UTF-8 JSON containing:
+
+```json
+{
+  "closure_manifest": {
+    "schema_version": 1,
+    "policy_id": "hepta-external-complete-closure-v1",
+    "policy_revision": "2026-09-02-g10-quorum-1",
+    "review_set_digest": "<roster_digest>",
+    "acceptance_context_digest": "<context_digest>"
+  }
+}
+```
+
+The artifact digest is inside the reviewer Ed25519 statement. Removing, adding, replacing, or reordering a final reviewer, changing acceptance state or limitations, or substituting another policy revision invalidates every surviving manifest. The requirement applies to every `accepted` bundle even when a caller does not request complete validation.
+
+This guarantees the final roster its members co-signed. It does not discover a review never admitted to the roster; accountable reviewer selection and any external transparency register remain governance gates.
+
+The normative complete-closure decision is `docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md`.
 
 ## Privacy and secret boundary
 
-Never commit or upload raw provider credentials, OAuth refresh tokens, KMS/HSM private material, application signing keys, recovery secrets, raw microphone audio, sensitive transcripts, unredacted customer data, precise location histories, or live exploitation secrets. Only public verification keys belong in the trust package. Private signing keys remain with the issuing authority.
+Never commit or upload raw provider credentials, OAuth refresh tokens, KMS/HSM private material, application signing keys, recovery secrets, raw microphone audio, sensitive transcripts, unredacted customer data, precise location histories, or live exploit details.
 
 Use opaque KIDs, tenant IDs, receipt IDs, revocation timestamps, hashes, redacted logs, signed summaries, and independently verifiable attestations.
 
@@ -88,14 +187,25 @@ python3 tools/validate_external_evidence.py \
   --output evidence/external/<commit>/validation-result.json
 ```
 
-For committed accepted packages, CI requires `HEPTA_EXTERNAL_TRUST_REGISTRY_SHA256` from a protected, out-of-band configuration source. A digest written into the same pull request is not a trust anchor.
+For committed accepted packages, CI requires the protected out-of-band registry pin. Repository qualification recursively inspects every bounded regular file under `evidence/external/` and identifies accepted envelopes by canonical content—not filename, extension, or directory depth.
 
-## Signature subjects
+The authoritative discovery pass opens the evidence root from the filesystem anchor and walks every child directory relative to an already-open no-follow descriptor. For directories, lexical, opened, post-recursion, and final-name identities must match. For files, lexical, opened, post-read, and final-name identities must match. Symbolic links and special objects anywhere below the evidence root fail the gate. Ordinary file replacement, ordinary parent-directory replacement, unstable reads, excessive depth, excessive entries, per-file overflow, and aggregate-byte overflow fail rather than hiding or injecting an accepted package.
 
-An issuer signs the candidate identity, trust-registry binding, gap, evidence level, identity, authority class, environment, subjects, claims, artifact digests, result, limitations, and notes. A reviewer signs the same candidate and registry binding, the complete evidence-set digest, reviewed gaps, decision, and the digest of the review artifact.
-
-Optional per-artifact signatures are verified over the exact artifact bytes under the issuer key. They supplement, but do not replace, the required signed submission statement.
+Every discovered accepted envelope is then passed to the complete G10 validator under the protected registry pin. An opaque immutable successor cannot avoid validation by being renamed or nested.
 
 ## Ledger update rule
 
-The Gap Ledger changes only in a separate reviewed commit after the complete package passes with an externally pinned registry, every gap has signed approval coverage, independence-required gaps have distinct independent approval, the candidate remains unchanged, and no key or artifact is expired or revoked. Any later source, binary, firmware, provider, OAuth registration, repository-setting, trust-registry, key, or review-state change reopens the affected row.
+A Gap Ledger row changes to `CLOSED_VERIFIED` only in a separate reviewed commit after:
+
+- every required issuer class has participated through a distinct key and identity/organization pair inside each gap;
+- no key or identity/organization pair represents different authority classes across the complete package;
+- every class signs exactly its assigned claims and evidence;
+- every issuer and reviewer signature binds the exact canonical contract digest;
+- the complete package passes under the out-of-band registry pin on a trusted current-time verifier;
+- every gap has valid approving reviewer coverage;
+- every final review artifact binds the same G10 policy, roster, and acceptance context;
+- independence-required gaps have distinct independent approval;
+- source, binary, firmware, provider, OAuth, repository-setting, registry, key, and review identities remain unchanged; and
+- no artifact or key is expired or revoked.
+
+Any material identity, contract, runtime, or authority change reopens the affected row.

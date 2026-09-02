@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "plan_revision": "2026-09-02-g10-quorum-1",
+  "extends_registry": "docs/G9_MODULES.json",
+  "modules": [
+    {
+      "id": "authority-quorum-review-integrity",
+      "owner": "release-security",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        "tools/external_evidence/complete_closure.py",
+        "tools/external_evidence/authority_seat_policy.py",
+        "tools/external_evidence/repository_admission.py",
+        "tools/external_evidence/semantic_binding.py",
+        "tools/external_evidence/runtime_policy.py",
+        "tools/external_evidence/cli.py",
+        "tools/external_evidence/__init__.py",
+        "tools/validate_external_evidence.py"
+      ],
+      "documentation": [
+        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+        "docs/development/G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md",
+        "docs/development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md",
+        "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md",
+        "docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md",
+        "evidence/external/README.md"
+      ],
+      "tests": [
+        "services/qualification/external_evidence_test_support.py",
+        "services/qualification/test_external_evidence.py",
+        "services/qualification/test_external_evidence_adversarial.py",
+        "services/qualification/test_external_evidence_authority_seat_scope.py",
+        "services/qualification/test_external_evidence_complete_closure.py",
+        "services/qualification/test_external_evidence_contract_binding.py",
+        "services/qualification/test_external_evidence_entrypoint_snapshot.py",
+        "services/qualification/test_external_evidence_runtime_policy.py",
+        "services/qualification/test_external_evidence_review_order.py",
+        "services/qualification/test_external_evidence_repository.py",
+        "services/qualification/test_external_evidence_repository_admission.py",
+        "services/qualification/test_g9_metadata.py",
+        "services/qualification/test_g10_metadata.py"
+      ],
+      "contracts": [
+        "contracts/external-evidence-envelope-v1.json",
+        "schemas/external-evidence-envelope.schema.json",
+        "schemas/external-authority-trust-registry.schema.json"
+      ],
+      "external_gates": [
+        "out-of-band trust-registry administration and digest distribution",
+        "real authority participation for every required issuer class",
+        "final reviewer roster selection and independent acceptance",
+        "protected CI pin for every committed accepted envelope",
+        "trusted verifier host, system clock and canonical OpenSSL installation",
+        "physical, provider, administrator, vendor, assurance, signing, pilot and store evidence"
+      ]
+    }
+  ]
+}
