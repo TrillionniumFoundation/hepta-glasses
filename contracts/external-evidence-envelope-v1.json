@@ -1,8 +1,18 @@
 {
   "contract_id": "hepta-external-evidence-envelope-v1",
-  "contract_revision": "2026-09-02-g9",
+  "contract_revision": "2026-09-02-g9-authenticated-1",
+  "schema_version": 2,
   "extends_plan_revision": "2026-09-01-g8",
   "schema": "schemas/external-evidence-envelope.schema.json",
+  "trust_registry_schema": "schemas/external-authority-trust-registry.schema.json",
+  "signature_profile": "ed25519-openssl-canonical-json-v1",
+  "trust_registry_profile": {
+    "registry_id": "hepta-external-authority-trust-registry-v1",
+    "schema_version": 1,
+    "pin_source": "out_of_band_required",
+    "allowed_algorithm": "ed25519",
+    "statement_canonicalization": "UTF-8 JSON, recursively sorted keys, no insignificant whitespace, finite numbers only"
+  },
   "candidate_binding": {
     "required": [
       "repository",
@@ -43,6 +53,20 @@
     "HG-0018": ["speech_provider_owner", "physical_device_lab"],
     "HG-0021": ["realtime_provider_tenant_owner", "oauth_registration_owner"],
     "HG-0022": ["capability_provider_owner", "privacy_owner"],
+    "HG-0044": ["independent_code_reviewer"]
+  },
+  "review_authority_classes": {
+    "HG-0010": ["release_acceptance_authority"],
+    "HG-0011": ["independent_assurance"],
+    "HG-0012": ["release_acceptance_authority"],
+    "HG-0013": ["release_acceptance_authority"],
+    "HG-0014": ["release_acceptance_authority"],
+    "HG-0015": ["release_acceptance_authority"],
+    "HG-0016": ["release_acceptance_authority"],
+    "HG-0017": ["repository_governance_reviewer"],
+    "HG-0018": ["release_acceptance_authority"],
+    "HG-0021": ["release_acceptance_authority"],
+    "HG-0022": ["release_acceptance_authority"],
     "HG-0044": ["independent_code_reviewer"]
   },
   "required_claims": {
@@ -185,5 +209,5 @@
     "expired",
     "revoked"
   ],
-  "closure_rule": "Only an accepted envelope with every required claim true, verified artifact digests, exact candidate binding, permitted issuer authority, and an independent acceptance record may support CLOSED_VERIFIED."
+  "closure_rule": "CLOSED_VERIFIED requires an accepted envelope in which every submission and reviewer decision has a valid Ed25519 signature under an externally pinned, current, non-revoked trust-registry key; every required claim and artifact digest is verified; every gap has approving reviewer coverage; and independence-required gaps have distinct independent approval."
 }

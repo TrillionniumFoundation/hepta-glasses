@@ -1,65 +1,108 @@
-# G9 terminal authority-owned gap closure
+# G9 authenticated terminal authority-owned gap closure
 
-Status: canonical execution package layered on plan revision `2026-09-01-g8` without changing the G8 source candidate.
+Status: canonical execution package layered on plan revision `2026-09-01-g8` without changing the frozen G8 source candidate.
+
+G9 contract revision: `2026-09-02-g9-authenticated-1`.
 
 ## 1. Objective
 
-G8 closed the repository-actionable implementation surface and established an exact-head E4 source candidate. G9 exists to close the remaining authority-owned rows using evidence that only physical devices, deployed providers, repository administrators, vendors, independent reviewers, signing authorities, pilot operators, and stores can issue.
+G8 closes the repository-actionable implementation surface and establishes an exact-head E4 source candidate. G9 closes the remaining authority-owned rows only with evidence issued by physical-device labs, deployed providers, repository administrators, vendors, independent reviewers, signing authorities, pilot operators, and stores.
 
-G9 must not rename a template, synthetic trace, local test, source artifact, screenshot, or self-review into E5, E6, or E7 evidence. A blocked row changes state only after its authoritative evidence bundle passes deterministic validation and independent review.
+A template, simulator result, local JSON file, source artifact, screenshot, repository-written identity, or self-review cannot become E5, E6, or E7 evidence by renaming or hashing it. A blocked row changes state only after its exact-subject evidence and acceptance decisions are cryptographically authenticated, deterministically validated, independently reviewed, and bound to the unchanged candidate.
 
 ## 2. Frozen source authority
 
-The G8 pull request remains the source authority. Its live head and tree, rather than this document, determine the candidate identity. Any source push invalidates prior exact-head CI and any approval bound to the previous head.
+The G8 pull request remains the source authority until it is intentionally superseded. Its live head and tree, rather than prose, determine the candidate identity. Any source or base movement invalidates prior exact-head CI, source artifacts, evidence signatures, and approval bound to the previous object.
 
-This G9 branch is an operations and evidence-contract branch. It must not be merged into the frozen candidate merely to create the appearance of closure. A later candidate may adopt these files and regenerate E4.
+This G9 branch is an operations and evidence-authentication branch. It must not be merged into the frozen G8 candidate merely to create the appearance of closure. A later candidate may adopt G9 and must then regenerate all seven E4 jobs and its content-addressed source artifact.
 
-## 3. Remaining rows and issuing authorities
+## 3. Threat model for evidence
 
-| Gap | Required authority | Minimum evidence level |
-|---|---|---|
-| HG-0010 | Android/iOS device lab and Even G1 owner | E5 |
-| HG-0011 | Independent security, privacy, legal, accessibility, and safety reviewers | E6 |
-| HG-0012 | Android/iOS signing, pilot, rollout, rollback, and store authorities | E7 |
-| HG-0013 | Historical credential provider and incident owner | E5/E6 |
-| HG-0014 | Production model-provider tenant owner and cloud security | E5 |
-| HG-0015 | KMS/HSM and Apple/Android attestation owners | E5/E6 |
-| HG-0016 | Firmware vendor | E6/upstream |
-| HG-0017 | Repository administrator plus fresh GitHub API observation | administrative |
-| HG-0018 | Android ASR provider and iOS physical speech lab | E5 |
-| HG-0021 | Production realtime/OAuth provider owners | E5 |
-| HG-0022 | Production capability-provider owners | E5 |
-| HG-0044 | Eligible non-pusher reviewer on the unchanged exact head | E6/governance |
+The evidence system assumes a repository writer may create or edit JSON, artifacts, hashes, public-key files, review fields, and acceptance state. Therefore none of those values may authenticate themselves.
 
-## 4. Closure protocol
+G9 uses the following trust boundary:
 
-Every submitted bundle must use `contracts/external-evidence-envelope-v1.json` and pass `tools/validate_external_evidence.py`.
+1. every issuer and reviewer owns an Ed25519 private key outside the repository;
+2. a separately administered trust registry binds the public key digest to identity, organization, authority class, permitted gaps, usage, validity interval, and revocation state;
+3. the expected trust-registry SHA-256 is supplied out of band by a protected release or assurance controller;
+4. the digest declared inside the bundle must match that external pin but is never accepted as its own anchor;
+5. every evidence submission signs a canonical statement containing the exact candidate, registry binding, claims, subjects, limitations, and artifact digests;
+6. every reviewer signs a canonical decision containing the exact candidate, registry binding, complete evidence-set digest, reviewed gaps, decision, and review-artifact digest;
+7. issuer/reviewer key aliases are rejected; independence-required rows require a distinct independent key and organization;
+8. expired, revoked, unknown, cross-gap, substituted-key, malformed, and cryptographically invalid signatures fail closed.
+
+Optional per-artifact signatures are verified over the exact artifact bytes. They supplement, but do not replace, the required signed submission statement.
+
+## 4. Remaining rows and issuing authorities
+
+| Gap | Required evidence issuer | Required acceptance authority | Minimum level |
+|---|---|---|---|
+| HG-0010 | Android/iOS physical-device lab and G1 owner | release acceptance authority | E5 |
+| HG-0011 | independent security, privacy, legal, accessibility, and safety reviewers | independent assurance | E6 |
+| HG-0012 | Android/iOS signing, pilot, rollout, rollback, and store authorities | release acceptance authority | E7 |
+| HG-0013 | historical credential provider and incident owner | release acceptance authority | E5/E6 |
+| HG-0014 | production model-provider tenant owner and cloud security | release acceptance authority | E5 |
+| HG-0015 | KMS/HSM and Apple/Android attestation owners | release acceptance authority | E5/E6 |
+| HG-0016 | firmware vendor | release acceptance authority | E6/upstream |
+| HG-0017 | repository administrator or GitHub API observer | repository governance reviewer | ADMIN |
+| HG-0018 | Android ASR owner and iOS physical speech lab | release acceptance authority | E5 |
+| HG-0021 | production realtime and OAuth owners | release acceptance authority | E5 |
+| HG-0022 | production capability-provider owners | release acceptance authority | E5 |
+| HG-0044 | exact-head source reviewer | independent code reviewer | E6/governance |
+
+## 5. Authenticated closure protocol
+
+Every package uses:
+
+- `contracts/external-evidence-envelope-v1.json`;
+- `schemas/external-evidence-envelope.schema.json`;
+- `schemas/external-authority-trust-registry.schema.json`;
+- `tools/validate_external_evidence.py`.
 
 The validator enforces:
 
-1. exact repository, source commit, source tree, contract revision, and collection-time binding;
-2. a complete SHA-256 digest for every referenced artifact;
-3. an issuer whose authority class is permitted for the claimed gap;
-4. explicit environment, device/provider/firmware versions, result, limitations, and expiry where applicable;
-5. no raw credentials, signing keys, raw audio, or sensitive transcript content;
-6. no self-review for independent assurance or latest-head approval;
-7. no synthetic or digital-twin evidence for physical-device claims;
-8. all gap-specific required claims before an item becomes `eligible_for_review`;
-9. an independent acceptance record before a ledger row becomes `CLOSED_VERIFIED`;
-10. fail-closed behavior on unknown fields, unknown gaps, digest mismatch, stale candidate identity, missing artifacts, or ambiguous results.
+1. exact repository, source commit, source tree, contracts revision, release identity, and collection time;
+2. an externally supplied trust-registry digest that matches the package copy and every signed statement;
+3. actual SHA-256 verification of registry public keys, evidence artifacts, review artifacts, and signatures;
+4. Ed25519 verification through OpenSSL, with no network lookup and no private keys in the package;
+5. issuer identity, organization, authority class, key usage, allowed gap, validity interval, and revocation state;
+6. required claims, environment, subjects, result, limitations, artifact issue time, expiry, and secret-content boundaries;
+7. no synthetic or digital-twin evidence for physical-device rows;
+8. no issuer key or identity reused as an acceptance reviewer;
+9. approving reviewer coverage for every submitted gap;
+10. distinct independent approving coverage for HG-0011 and HG-0044;
+11. a canonical bundle digest after all signed decisions are attached;
+12. fail-closed behavior on unknown fields, unknown gaps, path escape, digest drift, candidate drift, registry substitution, missing external pin, malformed signatures, or ambiguous outcomes.
 
-`eligible_for_review` is not closure. The Gap Ledger is changed only in a separate reviewed commit that cites the accepted evidence and records the reviewer.
+`eligible_for_review` is not closure. The Gap Ledger changes only in a separate reviewed commit that cites an accepted package and records the reviewer and validation result.
 
-## 5. Execution waves
+## 6. Trust-registry administration
+
+The trust registry is not owned by the feature branch that submits evidence. A release-security or assurance controller maintains its authoritative digest in protected configuration outside the pull request.
+
+Key registration requires:
+
+- proof of private-key possession;
+- verified legal or organizational identity;
+- explicit authority classes and allowed gaps;
+- the narrowest required usage;
+- bounded validity;
+- documented rotation and revocation contacts;
+- a public-key SHA-256 calculated before registration.
+
+A registry copy may accompany an evidence package for reproducibility, but changing that copy requires a new external pin and invalidates all statements signed against the prior registry digest. Private keys never enter source control, Actions artifacts, ordinary logs, or evidence packages.
+
+## 7. Execution waves
 
 ### Wave A — governance and independent source approval
 
 - Apply `contracts/main-branch-protection-v1.json` to `main`.
-- Read the settings back through the GitHub API and attach the redacted observation.
+- Read all settings back through the GitHub API and export the redacted observation.
 - Require all seven checks, strict mode, administrator enforcement, CODEOWNER review, last-push approval, stale-review dismissal, conversation resolution, linear history, and disabled force-push/deletion.
 - Obtain an eligible non-pusher approval on the unchanged G8 head after the complete matrix succeeds.
+- Sign the HG-0017 and HG-0044 submissions and their acceptance decisions with pinned keys.
 
-These two actions close HG-0017 and HG-0044 without changing source.
+These actions close HG-0017 and HG-0044 without changing G8 source.
 
 ### Wave B — incident, identity, and provider tenancy
 
@@ -67,6 +110,7 @@ These two actions close HG-0017 and HG-0044 without changing source.
 - Deploy KMS/HSM identities and platform attestation.
 - Qualify production model and realtime/OAuth tenants.
 - Qualify every enabled capability adapter with authoritative receipts and reconciliation.
+- Export redacted provider records, sign each exact-subject submission, and obtain release acceptance.
 
 This wave targets HG-0013, HG-0014, HG-0015, HG-0021, and HG-0022.
 
@@ -74,44 +118,52 @@ This wave targets HG-0013, HG-0014, HG-0015, HG-0021, and HG-0022.
 
 - Run the declared Android and iOS G1 matrix on signed applications and declared firmware.
 - Collect protocol, loss/reconnect, latency, power, thermal, cancellation, barge-in, and soak traces.
-- Deploy Android PCM-to-ASR and run the iOS locale/device finality matrix.
+- Deploy Android PCM-to-ASR and run Android/iOS locale, device, finality, latency, cancellation, and privacy matrices.
+- Preserve lab custody and sign each report with a pinned physical-lab key.
 
 This wave targets HG-0010 and HG-0018.
 
 ### Wave D — independent assurance and release
 
-- Freeze the candidate after all Wave B/C evidence passes.
+- Freeze source, binary, provider, registry, and firmware identities after Wave B/C evidence passes.
 - Complete independent security, privacy, legal, accessibility, safety, and vendor review.
-- Produce signed binaries and binary SBOM/provenance/attestation.
+- Produce signed binaries and binary SBOM, provenance, and attestation.
 - Complete pilot, kill-switch, rollback, staged rollout, and store approval.
+- Obtain signed independent and release-acceptance decisions over the complete evidence set.
 
 This wave targets HG-0011, HG-0012, and HG-0016.
 
-## 6. Parallel ownership
+## 8. Parallel ownership
 
-Each gap has one accountable owner and may have multiple evidence producers. Producers work in parallel, but only the closure controller may assemble a candidate bundle. Independent reviewers must not be the implementing or evidence-producing identity. Repository administrators may apply settings but may not attest settings that were not read back from the API.
+Each gap has one accountable owner and may have multiple evidence producers. Producers work in parallel, but only the closure controller assembles a candidate package. Independent reviewers cannot be an issuer, operator, implementing identity, key alias, or same-organization evidence producer for the gap they independently approve.
 
-## 7. Stop conditions
+Repository administrators may apply settings but may not attest settings that were not read back from the API. A release controller may coordinate acceptance but cannot replace an issuer or independent specialist.
 
-The closure campaign stops and reopens the affected row when:
+## 9. Stop and reopen conditions
 
-- the source head or tree changes;
-- a production binary digest changes;
-- a provider tenant, key, OAuth registration, firmware, device, or store build differs from the declared subject;
-- evidence expires or is revoked;
-- an independent reviewer reports an unresolved finding;
+The closure campaign stops or reopens the affected row when:
+
+- source head, source tree, base, production binary, or bundle digest changes;
+- trust-registry digest changes;
+- an issuer or reviewer key expires or is revoked;
+- provider tenant, KMS key, OAuth registration, firmware, device, store build, or signing identity differs from the signed subject;
+- an artifact digest or Ed25519 signature fails;
 - a required GitHub protection field cannot be observed;
-- a physical test uses a simulator, digital twin, or undeclared firmware;
-- an artifact digest or signature cannot be verified.
+- a physical test uses a simulator, digital twin, undeclared firmware, or unsigned/unknown application;
+- an independent reviewer reports an unresolved finding;
+- evidence expires or its issuing authority withdraws it.
 
-## 8. Definition of all gaps closed
+## 10. Definition of all gaps closed
 
 All gaps are closed only when:
 
 - every repository-actionable row is `CLOSED_SOURCE` or `CLOSED_VERIFIED`;
-- each of the 12 authority-owned rows has a complete accepted envelope;
-- the live G8/G9 candidate identity has not changed after the last bound approval;
+- all 12 authority-owned rows have complete, accepted, cryptographically authenticated packages;
+- the externally pinned registry is current and no relevant key is revoked or expired;
+- every submitted gap has signed approving reviewer coverage;
+- HG-0011 and HG-0044 have distinct independent signed approval;
+- the live candidate identity has not changed after the last bound approval;
 - the product release gate passes with no override;
 - a fresh machine report returns zero `OPEN`, `BLOCKED_EXTERNAL`, `BLOCKED_ADMIN_SETTING`, or `BLOCKED_UPSTREAM` rows.
 
-Until those facts exist, the truthful state is source-complete but product-blocked.
+Until those real-world facts exist, the truthful state remains **source-complete but product-blocked**.

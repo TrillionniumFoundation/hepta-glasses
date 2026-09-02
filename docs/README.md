@@ -2,7 +2,7 @@
 
 ## Canonical current truth
 
-1. `HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md` — normative G0–G8 sequence, invariants, gates, and evidence levels.
+1. `HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md` — normative G0–G8 source sequence, invariants, gates, and evidence levels.
 2. `CURRENT_STATE.md` — demonstrated source state and explicit non-claims.
 3. `PROJECT_STATE.json` — machine-readable authority, dynamic gate, and external-blocker contract.
 4. `PRODUCT_BOUNDARY.md` — device, edge, cloud, capability, model, Codex, and release boundaries.
@@ -18,6 +18,7 @@
 
 ## Development
 
+- `development/G9_TERMINAL_EXTERNAL_CLOSURE.md` — authenticated execution package for the 12 authority-owned gaps; layered on G8 and not itself external evidence.
 - `development/G8_PRODUCTION_AUTHORITY_CLOSURE.md`
 - `development/G8_METADATA_AND_DOCUMENTATION_CLOSURE.md`
 - `development/G8_SOURCE_REMEDIATION.md`
@@ -37,6 +38,7 @@
 - `operations/PRIVACY_SECURITY_REVIEW_CHECKLIST.md`
 - `operations/RELEASE_AND_ROLLBACK_RUNBOOK.md`
 - `operations/CREDENTIAL_INCIDENT_RUNBOOK.md`
+- `../evidence/external/README.md` — authenticated evidence custody, external trust pin, and validation procedure.
 
 ## Architecture decisions
 
@@ -49,3 +51,6 @@ A later plan or ADR must state what it supersedes and update Current State, Gap 
 ## Machine contracts
 
 - `../contracts/g1-ble-protocol-v1.json` — dual-BLE UUID, readiness, framing, command, and uncertainty contract.
+- `../contracts/external-evidence-envelope-v1.json` — authenticated authority-owned evidence and acceptance contract.
+- `../schemas/external-evidence-envelope.schema.json` — evidence envelope schema.
+- `../schemas/external-authority-trust-registry.schema.json` — externally pinned Ed25519 authority registry schema.

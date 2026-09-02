@@ -1,19 +1,29 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://hepta.invalid/schemas/external-evidence-envelope-v1.json",
-  "title": "Hepta authority-owned external evidence envelope",
+  "title": "Hepta authenticated authority-owned external evidence envelope",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
     "contract_id",
+    "trust_registry",
     "candidate",
     "submissions",
     "acceptance"
   ],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "contract_id": {"const": "hepta-external-evidence-envelope-v1"},
+    "trust_registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registry_id", "sha256"],
+      "properties": {
+        "registry_id": {"const": "hepta-external-authority-trust-registry-v1"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
     "candidate": {
       "type": "object",
       "additionalProperties": false,
@@ -63,7 +73,7 @@
         "reviewed_at": {"type": ["string", "null"], "format": "date-time"},
         "reviewers": {
           "type": "array",
-          "maxItems": 16,
+          "maxItems": 32,
           "items": {"$ref": "#/$defs/reviewer"}
         },
         "bundle_digest": {"$ref": "#/$defs/sha256OrNull"},
@@ -105,6 +115,17 @@
         "contact": {"type": ["string", "null"], "maxLength": 500}
       }
     },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signed_at", "statement_digest", "signature_uri", "signature_sha256"],
+      "properties": {
+        "signed_at": {"type": "string", "format": "date-time"},
+        "statement_digest": {"$ref": "#/$defs/sha256"},
+        "signature_uri": {"type": "string", "pattern": "^artifact://[A-Za-z0-9._/-]{1,500}$"},
+        "signature_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
     "artifact": {
       "type": "object",
       "additionalProperties": false,
@@ -119,14 +140,17 @@
       ],
       "properties": {
         "artifact_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{1,200}$"},
-        "uri": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "uri": {"type": "string", "pattern": "^artifact://[A-Za-z0-9._/-]{1,500}$"},
         "sha256": {"$ref": "#/$defs/sha256"},
         "media_type": {"type": "string", "minLength": 1, "maxLength": 200},
         "issued_at": {"type": "string", "format": "date-time"},
         "expires_at": {"type": ["string", "null"], "format": "date-time"},
         "contains_secrets": {"const": false},
         "synthetic": {"type": "boolean"},
-        "signature_uri": {"type": ["string", "null"], "maxLength": 2000},
+        "signature_uri": {
+          "type": ["string", "null"],
+          "pattern": "^artifact://[A-Za-z0-9._/-]{1,500}$"
+        },
         "signature_sha256": {"$ref": "#/$defs/sha256OrNull"}
       }
     },
@@ -142,25 +166,11 @@
         "claims",
         "artifacts",
         "result",
-        "limitations"
+        "limitations",
+        "attestation"
       ],
       "properties": {
-        "gap_id": {
-          "enum": [
-            "HG-0010",
-            "HG-0011",
-            "HG-0012",
-            "HG-0013",
-            "HG-0014",
-            "HG-0015",
-            "HG-0016",
-            "HG-0017",
-            "HG-0018",
-            "HG-0021",
-            "HG-0022",
-            "HG-0044"
-          ]
-        },
+        "gap_id": {"$ref": "#/$defs/gapId"},
         "evidence_level": {"enum": ["E5", "E6", "E7", "ADMIN", "UPSTREAM"]},
         "issuer": {"$ref": "#/$defs/issuer"},
         "environment": {
@@ -197,21 +207,63 @@
           "maxItems": 64,
           "items": {"type": "string", "minLength": 1, "maxLength": 1000}
         },
-        "notes": {"type": ["string", "null"], "maxLength": 5000}
+        "notes": {"type": ["string", "null"], "maxLength": 5000},
+        "attestation": {"$ref": "#/$defs/attestation"}
       }
     },
     "reviewer": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["identity", "organization", "independent", "decision", "review_digest"],
+      "required": [
+        "identity",
+        "organization",
+        "authority_class",
+        "key_id",
+        "decision",
+        "reviewed_gap_ids",
+        "review_uri",
+        "review_sha256",
+        "signed_at",
+        "statement_digest",
+        "signature_uri",
+        "signature_sha256"
+      ],
       "properties": {
         "identity": {"type": "string", "minLength": 1, "maxLength": 300},
         "organization": {"type": "string", "minLength": 1, "maxLength": 300},
-        "independent": {"type": "boolean"},
+        "authority_class": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,79}$"},
+        "key_id": {"type": "string", "minLength": 1, "maxLength": 500},
         "decision": {"enum": ["approve", "reject", "abstain"]},
-        "review_digest": {"$ref": "#/$defs/sha256"},
-        "signature_uri": {"type": ["string", "null"], "maxLength": 2000}
+        "reviewed_gap_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/gapId"}
+        },
+        "review_uri": {"type": "string", "pattern": "^artifact://[A-Za-z0-9._/-]{1,500}$"},
+        "review_sha256": {"$ref": "#/$defs/sha256"},
+        "signed_at": {"type": "string", "format": "date-time"},
+        "statement_digest": {"$ref": "#/$defs/sha256"},
+        "signature_uri": {"type": "string", "pattern": "^artifact://[A-Za-z0-9._/-]{1,500}$"},
+        "signature_sha256": {"$ref": "#/$defs/sha256"}
       }
+    },
+    "gapId": {
+      "enum": [
+        "HG-0010",
+        "HG-0011",
+        "HG-0012",
+        "HG-0013",
+        "HG-0014",
+        "HG-0015",
+        "HG-0016",
+        "HG-0017",
+        "HG-0018",
+        "HG-0021",
+        "HG-0022",
+        "HG-0044"
+      ]
     }
   }
 }

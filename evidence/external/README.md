@@ -1,38 +1,36 @@
-# Authority-owned evidence staging
+# Authenticated authority-owned evidence staging
 
-This directory is a staging boundary for evidence that can close G9 authority-owned gaps. A file in this directory is not automatically trusted and is not automatically part of a release.
+This directory is a custody boundary for evidence that may close G9 authority-owned gaps. Files stored here are not trusted merely because they are committed, uploaded, hashed, or reviewed in a pull request.
 
-## Required layout
+## Required package layout
 
 ```text
 evidence/external/
   <candidate-commit>/
     bundle.json
+    trust-registry.json
+    keys/
+      <pinned-ed25519-public-key>.pem
     artifacts/
       <gap-id>/...
-    signatures/
-      <artifact-id>.sig
+      reviews/...
+      signatures/...
     validation-result.json
 ```
 
-`bundle.json` must use `hepta-external-evidence-envelope-v1`. Artifact URIs use `artifact://` and are resolved relative to the selected `artifacts` root. Network URLs are not dereferenced by the validator; externally hosted records must be exported into the custody package with a stable digest and, where applicable, a detached signature or provider receipt.
+`bundle.json` uses `hepta-external-evidence-envelope-v1`, schema version 2. Every submission and every acceptance decision carries an Ed25519 signature over a canonical exact-subject statement. Artifact URIs use `artifact://`; public-key URIs use `key://` and resolve relative to `trust-registry.json`.
+
+## Non-self-issuable trust
+
+The trust registry binds each key ID to an identity, organization, authority class, allowed gaps, usage, validity interval, and revocation state. A copy of the registry may be kept with the custody package, but its SHA-256 is **not trusted from the bundle or repository**. The expected registry digest must be supplied out of band by a separately administered release or assurance controller.
+
+A repository writer cannot close a gap by inventing a key, replacing a public key, declaring themselves independent, or recomputing local hashes. Validation rejects unknown, expired, revoked, cross-gap, issuer-alias, and cryptographically invalid signatures.
 
 ## Privacy and secret boundary
 
-Never commit or upload:
-
-- raw provider credentials, OAuth refresh tokens, KMS/HSM private material, application signing keys, or recovery secrets;
-- raw microphone audio or sensitive transcripts;
-- unredacted provider dashboards, customer data, notification bodies, precise location histories, or personal calendars;
-- security reports containing live exploitation secrets that have not been separately access-controlled.
+Never commit or upload raw provider credentials, OAuth refresh tokens, KMS/HSM private material, application signing keys, recovery secrets, raw microphone audio, sensitive transcripts, unredacted customer data, precise location histories, or live exploitation secrets. Only public verification keys belong in the trust package. Private signing keys remain with the issuing authority.
 
 Use opaque KIDs, tenant IDs, receipt IDs, revocation timestamps, hashes, redacted logs, signed summaries, and independently verifiable attestations.
-
-## Artifact rules
-
-Every artifact must declare a unique ID, media type, issue time, optional expiry, SHA-256 digest, synthetic flag, and issuer key ID. Physical G1 and speech evidence must set `synthetic=false`; simulator and digital-twin results are rejected for HG-0010 and HG-0018.
-
-Evidence copied from an external system must preserve the issuer's authoritative identity and timestamp. A screenshot is supplemental only unless its issuer, subject, candidate identity, timestamp, and integrity can be independently verified.
 
 ## Validation
 
@@ -40,6 +38,8 @@ Evidence copied from an external system must preserve the issuer's authoritative
 python3 tools/validate_external_evidence.py \
   --bundle evidence/external/<commit>/bundle.json \
   --artifact-root evidence/external/<commit>/artifacts \
+  --trust-registry evidence/external/<commit>/trust-registry.json \
+  --expected-trust-registry-sha256 "$HEPTA_EXTERNAL_TRUST_REGISTRY_SHA256" \
   --expected-commit <40-hex-source-commit> \
   --expected-tree <40-hex-source-tree> \
   --require-complete \
@@ -47,17 +47,14 @@ python3 tools/validate_external_evidence.py \
   --output evidence/external/<commit>/validation-result.json
 ```
 
-A successful result means the package meets deterministic admission requirements. It does not prove the issuer's real-world statements by itself. The independent accepting reviewer remains responsible for verifying signatures, provider/device authority, test custody, and scope.
+For committed accepted packages, CI requires `HEPTA_EXTERNAL_TRUST_REGISTRY_SHA256` from a protected, out-of-band configuration source. A digest written into the same pull request is not a trust anchor.
+
+## Signature subjects
+
+An issuer signs the candidate identity, trust-registry binding, gap, evidence level, identity, authority class, environment, subjects, claims, artifact digests, result, limitations, and notes. A reviewer signs the same candidate and registry binding, the complete evidence-set digest, reviewed gaps, decision, and the digest of the review artifact.
+
+Optional per-artifact signatures are verified over the exact artifact bytes under the issuer key. They supplement, but do not replace, the required signed submission statement.
 
 ## Ledger update rule
 
-The Gap Ledger is changed only in a separate reviewed commit after:
-
-1. the complete bundle passes;
-2. the acceptance state is `accepted`;
-3. required independent reviewers are present and are not evidence issuers;
-4. the live candidate still matches the envelope;
-5. no artifact is expired or revoked;
-6. product release gate evaluation succeeds where E7 is claimed.
-
-Any later source, binary, firmware, provider, OAuth registration, repository-setting, or review-state change reopens the affected row.
+The Gap Ledger changes only in a separate reviewed commit after the complete package passes with an externally pinned registry, every gap has signed approval coverage, independence-required gaps have distinct independent approval, the candidate remains unchanged, and no key or artifact is expired or revoked. Any later source, binary, firmware, provider, OAuth registration, repository-setting, trust-registry, key, or review-state change reopens the affected row.
