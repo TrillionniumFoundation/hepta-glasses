@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
@@ -18,10 +19,13 @@ assert SPEC is not None and SPEC.loader is not None
 external_evidence = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = external_evidence
 SPEC.loader.exec_module(external_evidence)
+MAX_DISCOVERY_JSON_BYTES = 16 * 1024 * 1024
 
 
 def _read_json_object(path: Path) -> dict[str, Any] | None:
     try:
+        if path.stat().st_size > MAX_DISCOVERY_JSON_BYTES:
+            return None
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
         return None
@@ -31,14 +35,17 @@ def _read_json_object(path: Path) -> dict[str, Any] | None:
 def _accepted_envelopes(base: Path) -> list[Path]:
     """Discover accepted envelopes at any immutable successor depth.
 
-    Artifact, key, review, signature, template, and validator-output JSON files
-    are excluded by content rather than trusted filename conventions. An
-    authority bundle is identified by its canonical contract ID and accepted
-    state, so moving it below ``successors/`` cannot bypass repository CI.
+    Discovery uses canonical content identity rather than a filename or suffix.
+    Artifact, key, review, signature, template, and validator-output files are
+    ignored unless they actually declare the canonical envelope contract and an
+    accepted state. Moving an accepted envelope below ``successors/`` or giving
+    it an opaque filename therefore cannot bypass repository CI.
     """
 
     results: list[Path] = []
-    for path in sorted(base.rglob("*.json")):
+    for path in sorted(base.rglob("*")):
+        if not path.is_file():
+            continue
         document = _read_json_object(path)
         if document is None:
             continue
@@ -143,17 +150,20 @@ class CommittedExternalEvidenceTest(unittest.TestCase):
                 self.assertTrue(result["trust_registry"]["external_pin_verified"])
 
     def test_accepted_successor_discovery_cannot_be_filename_bypassed(self) -> None:
-        with self.subTest("content based discovery"):
-            self.assertIn("contract_id", _accepted_envelopes.__doc__ or "")
-        base = ROOT / "evidence/external"
-        for path in _accepted_envelopes(base):
-            self.assertEqual(path.suffix, ".json")
-            document = _read_json_object(path)
-            self.assertIsNotNone(document)
-            self.assertEqual(
-                document["acceptance"]["state"],
-                "accepted",
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            path = base / "opaque" / "not-a-bundle-extension.payload"
+            path.parent.mkdir()
+            path.write_text(
+                json.dumps(
+                    {
+                        "contract_id": "hepta-external-evidence-envelope-v1",
+                        "acceptance": {"state": "accepted"},
+                    }
+                ),
+                encoding="utf-8",
             )
+            self.assertEqual(_accepted_envelopes(base), [path])
 
 
 if __name__ == "__main__":
