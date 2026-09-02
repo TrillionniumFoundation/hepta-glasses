@@ -10,6 +10,8 @@
       "source_roots": [
         "tools/external_evidence",
         "tools/external_evidence/snapshot_io.py",
+        "tools/external_evidence/signing_io.py",
+        "tools/external_evidence/signing.py",
         "tools/validate_external_evidence.py",
         "tools/sign_external_evidence.py",
         "evidence/external",
@@ -18,8 +20,10 @@
       ],
       "documentation": [
         "docs/development/G9_TERMINAL_EXTERNAL_CLOSURE.md",
+        "docs/development/G9_FILESYSTEM_CUSTODY_HARDENING.md",
         "docs/adr/ADR-0004-external-evidence-authentication.md",
         "docs/adr/ADR-0006-external-evidence-filesystem-custody.md",
+        "docs/adr/ADR-0007-evidence-object-identity-and-bounded-custody.md",
         "evidence/external/README.md"
       ],
       "tests": [
@@ -32,8 +36,10 @@
         "services/qualification/test_external_evidence_repository.py",
         "services/qualification/test_external_evidence_review_order.py",
         "services/qualification/test_external_evidence_scoped_snapshot.py",
+        "services/qualification/test_external_evidence_filesystem_hardening.py",
         "services/qualification/test_external_evidence_signature_time.py",
         "services/qualification/test_external_evidence_signing.py",
+        "services/qualification/test_external_evidence_signer_custody.py",
         "services/qualification/test_external_evidence_snapshot.py",
         "services/qualification/test_g9_metadata.py"
       ],
