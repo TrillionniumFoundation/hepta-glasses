@@ -86,33 +86,60 @@ class G9MetadataCoverageTest(unittest.TestCase):
         custody = gaps["HG-0075"]
         required_evidence = {
             "tools/external_evidence/snapshot_io.py",
+            "tools/external_evidence/signing_io.py",
+            "tools/external_evidence/signing.py",
             "tools/sign_external_evidence.py",
             "services/qualification/test_external_evidence_snapshot.py",
             "services/qualification/test_external_evidence_scoped_snapshot.py",
+            "services/qualification/test_external_evidence_filesystem_hardening.py",
             "services/qualification/test_external_evidence_signing.py",
+            "services/qualification/test_external_evidence_signer_custody.py",
             "docs/adr/ADR-0006-external-evidence-filesystem-custody.md",
+            "docs/adr/ADR-0007-evidence-object-identity-and-bounded-custody.md",
+            "docs/development/G9_FILESYSTEM_CUSTODY_HARDENING.md",
             "evidence/external/README.md",
         }
         self.assertTrue(required_evidence.issubset(set(custody["evidence"])))
         self.assertIn("normalized lexical absolute path", custody["close_criteria"])
         self.assertIn("exclusive-create", custody["close_criteria"])
+        self.assertIn("ordinary-directory replacement", custody["close_criteria"])
+        self.assertIn("aggregate-bounded", custody["close_criteria"])
 
         modules = {item["id"]: item for item in self.modules["modules"]}
         evidence_module = modules["external-evidence-authentication"]
-        self.assertIn(
+        for source in (
             "tools/external_evidence/snapshot_io.py",
-            evidence_module["source_roots"],
-        )
-        self.assertIn(
+            "tools/external_evidence/signing_io.py",
+            "tools/external_evidence/signing.py",
+        ):
+            self.assertIn(source, evidence_module["source_roots"])
+        for document in (
             "docs/adr/ADR-0006-external-evidence-filesystem-custody.md",
-            evidence_module["documentation"],
-        )
+            "docs/adr/ADR-0007-evidence-object-identity-and-bounded-custody.md",
+            "docs/development/G9_FILESYSTEM_CUSTODY_HARDENING.md",
+        ):
+            self.assertIn(document, evidence_module["documentation"])
         for test in (
             "services/qualification/test_external_evidence_snapshot.py",
             "services/qualification/test_external_evidence_scoped_snapshot.py",
+            "services/qualification/test_external_evidence_filesystem_hardening.py",
             "services/qualification/test_external_evidence_signing.py",
+            "services/qualification/test_external_evidence_signer_custody.py",
         ):
             self.assertIn(test, evidence_module["tests"])
+
+        profile = self.state["repository_actionable"]["filesystem_custody_profile"]
+        self.assertTrue(profile["canonical_scoped_uris"])
+        self.assertTrue(profile["ancestor_and_file_object_identity_bound"])
+        self.assertEqual(profile["aggregate_snapshot_limit_bytes"], 512 * 1024 * 1024)
+        self.assertTrue(profile["public_key_spki_uses_pinned_bytes"])
+        self.assertTrue(profile["private_key_type_check_and_sign_use_one_snapshot"])
+        self.assertTrue(profile["exact_object_atomic_bundle_update"])
+        self.assertTrue(profile["immutable_bundle_successor_supported"])
+        self.assertEqual(
+            profile["normative_adr"],
+            "docs/adr/ADR-0007-evidence-object-identity-and-bounded-custody.md",
+        )
 
     def test_docs_index_registers_g9_machine_truth(self) -> None:
         index = (ROOT / "docs/README.md").read_text(encoding="utf-8")
@@ -120,9 +147,11 @@ class G9MetadataCoverageTest(unittest.TestCase):
             "G9_STATE.json",
             "G9_MODULES.json",
             "G9_GAP_LEDGER.json",
+            "G9_FILESYSTEM_CUSTODY_HARDENING.md",
             "ADR-0004-external-evidence-authentication.md",
             "ADR-0005-latest-head-ci-concurrency.md",
             "ADR-0006-external-evidence-filesystem-custody.md",
+            "ADR-0007-evidence-object-identity-and-bounded-custody.md",
         ):
             self.assertIn(name, index)
 
