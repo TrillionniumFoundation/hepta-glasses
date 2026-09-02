@@ -104,6 +104,7 @@ class G9MetadataCoverageTest(unittest.TestCase):
         self.assertIn("exclusive-create", custody["close_criteria"])
         self.assertIn("ordinary-directory replacement", custody["close_criteria"])
         self.assertIn("aggregate-bounded", custody["close_criteria"])
+        self.assertIn("in-place authority-bundle mutation is rejected", custody["close_criteria"])
 
         modules = {item["id"]: item for item in self.modules["modules"]}
         evidence_module = modules["external-evidence-authentication"]
@@ -134,8 +135,8 @@ class G9MetadataCoverageTest(unittest.TestCase):
         self.assertEqual(profile["aggregate_snapshot_limit_bytes"], 512 * 1024 * 1024)
         self.assertTrue(profile["public_key_spki_uses_pinned_bytes"])
         self.assertTrue(profile["private_key_type_check_and_sign_use_one_snapshot"])
-        self.assertTrue(profile["exact_object_atomic_bundle_update"])
-        self.assertTrue(profile["immutable_bundle_successor_supported"])
+        self.assertFalse(profile["in_place_authority_bundle_update_supported"])
+        self.assertTrue(profile["immutable_bundle_successor_required"])
         self.assertEqual(
             profile["normative_adr"],
             "docs/adr/ADR-0007-evidence-object-identity-and-bounded-custody.md",
