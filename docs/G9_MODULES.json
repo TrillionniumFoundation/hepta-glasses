@@ -40,6 +40,7 @@
         "services/qualification/test_external_evidence_signature_time.py",
         "services/qualification/test_external_evidence_signing.py",
         "services/qualification/test_external_evidence_signer_custody.py",
+        "services/qualification/test_external_evidence_signing_boundaries.py",
         "services/qualification/test_external_evidence_snapshot.py",
         "services/qualification/test_g9_metadata.py"
       ],
