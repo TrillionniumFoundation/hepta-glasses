@@ -188,7 +188,9 @@ class G10MetadataCoverageTest(unittest.TestCase):
             "G10_MODULES.json",
             "G10_GAP_LEDGER.json",
             "G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+            "G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md",
             "ADR-0008-authority-quorum-and-review-set-integrity.md",
+            "ADR-0009-trusted-verifier-and-contract-content-binding.md",
         ):
             self.assertIn(name, index)
 
