@@ -16,7 +16,8 @@
     "open": 0,
     "closed_source": [
       "HG-0073",
-      "HG-0074"
+      "HG-0074",
+      "HG-0075"
     ],
     "module_registry": "docs/G9_MODULES.json",
     "gap_ledger": "docs/G9_GAP_LEDGER.json",
