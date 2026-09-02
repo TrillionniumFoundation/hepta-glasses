@@ -1,14 +1,16 @@
-"""Complete external-evidence closure policy.
+"""Versioned complete external-evidence closure policy.
 
-This module layers two fail-closed rules over the authenticated G9 validator:
+G10 layers three fail-closed rules over the authenticated G9 primitives:
 
-* every authority class named for a gap must participate with a distinct issuer
-  key and identity before a complete bundle is eligible; and
-* every final reviewer co-signs the same ordered review roster and acceptance
+* every authority class named for a gap participates through a distinct key and
+  identity/organization seat;
+* each issuer signs exactly the claims assigned to its authority class by the
+  versioned canonical contract; and
+* every final reviewer co-signs the same ordered reviewer roster and acceptance
   context through a manifest embedded in the already signed review artifact.
 
-The underlying submission, artifact, key, and reviewer signature validation
-remains in the G9 modules. This layer changes only complete-closure admission.
+The underlying artifact, key, candidate, Ed25519, time, independence, and
+filesystem-custody checks remain in the G9 modules.
 """
 
 from __future__ import annotations
@@ -32,12 +34,180 @@ from .core import (
 from .submission import validate_candidate, validate_submission
 from .trust import load_trust_registry
 
+_POLICY_ID = "hepta-external-complete-closure-v1"
+_POLICY_REVISION = "2026-09-02-g10-quorum-1"
 _REVIEW_MANIFEST_VERSION = 1
 _REVIEW_SET_STATEMENT = "hepta.external-evidence-review-set.v1"
 _ACCEPTANCE_CONTEXT_STATEMENT = "hepta.external-evidence-acceptance-context.v1"
 
 
-def _review_projection(reviewer: Mapping[str, Any], *, label: str) -> dict[str, Any]:
+def _validate_contract_policy(
+    contract: Mapping[str, Any],
+) -> dict[str, dict[str, list[str]]]:
+    if contract.get("contract_revision") != _POLICY_REVISION:
+        fail(
+            "external evidence contract revision does not select the G10 "
+            "complete-closure policy"
+        )
+    if contract.get("extends_contract_revision") != (
+        "2026-09-02-g9-authenticated-1"
+    ):
+        fail("G10 contract does not identify its authenticated G9 predecessor")
+
+    profile = contract.get("complete_closure_profile")
+    if not isinstance(profile, dict):
+        fail("external evidence contract lacks complete_closure_profile")
+    require_exact_keys(
+        profile,
+        required={
+            "policy_id",
+            "policy_revision",
+            "issuer_authority_mode",
+            "issuer_claim_mode",
+            "distinct_key_per_gap",
+            "distinct_identity_organization_pair_per_gap",
+            "review_manifest_schema_version",
+            "review_set_statement_type",
+            "acceptance_context_statement_type",
+            "review_manifest_required_for_states",
+        },
+        optional=set(),
+        label="complete_closure_profile",
+    )
+    expected_scalars = {
+        "policy_id": _POLICY_ID,
+        "policy_revision": _POLICY_REVISION,
+        "issuer_authority_mode": "all_named_classes",
+        "issuer_claim_mode": "exact_class_scoped_claims",
+        "distinct_key_per_gap": True,
+        "distinct_identity_organization_pair_per_gap": True,
+        "review_manifest_schema_version": _REVIEW_MANIFEST_VERSION,
+        "review_set_statement_type": _REVIEW_SET_STATEMENT,
+        "acceptance_context_statement_type": _ACCEPTANCE_CONTEXT_STATEMENT,
+        "review_manifest_required_for_states": ["accepted"],
+    }
+    for key, expected in expected_scalars.items():
+        if profile.get(key) != expected:
+            fail(f"complete_closure_profile.{key} drifted")
+
+    allowed_gaps = contract.get("allowed_gap_ids")
+    authority_classes = contract.get("authority_classes")
+    all_claims = contract.get("required_claims")
+    raw_scopes = contract.get("required_claims_by_authority_class")
+    if not isinstance(allowed_gaps, list):
+        fail("evidence contract allowed_gap_ids must be an array")
+    if not isinstance(authority_classes, dict):
+        fail("evidence contract authority_classes must be an object")
+    if not isinstance(all_claims, dict):
+        fail("evidence contract required_claims must be an object")
+    if not isinstance(raw_scopes, dict):
+        fail(
+            "evidence contract required_claims_by_authority_class must be an "
+            "object"
+        )
+
+    gap_set = set(allowed_gaps)
+    if set(authority_classes) != gap_set:
+        fail("authority_classes gap set differs from allowed_gap_ids")
+    if set(all_claims) != gap_set:
+        fail("required_claims gap set differs from allowed_gap_ids")
+    if set(raw_scopes) != gap_set:
+        fail(
+            "required_claims_by_authority_class gap set differs from "
+            "allowed_gap_ids"
+        )
+
+    normalized: dict[str, dict[str, list[str]]] = {}
+    for gap_id in allowed_gaps:
+        classes = authority_classes[gap_id]
+        claims = all_claims[gap_id]
+        scopes = raw_scopes[gap_id]
+        if not isinstance(classes, list) or not classes:
+            fail(f"authority_classes.{gap_id} must be non-empty")
+        if not isinstance(claims, list) or not claims:
+            fail(f"required_claims.{gap_id} must be non-empty")
+        if not isinstance(scopes, dict):
+            fail(
+                f"required_claims_by_authority_class.{gap_id} must be an "
+                "object"
+            )
+        class_names = {
+            require_string(
+                value,
+                label=f"authority_classes.{gap_id}",
+                maximum=80,
+            )
+            for value in classes
+        }
+        if len(class_names) != len(classes):
+            fail(f"authority_classes.{gap_id} contains duplicates")
+        if set(scopes) != class_names:
+            fail(
+                f"claim-scope authority classes for {gap_id} differ from the "
+                "required authority seats"
+            )
+
+        required_claims = {
+            require_string(
+                value,
+                label=f"required_claims.{gap_id}",
+                maximum=100,
+            )
+            for value in claims
+        }
+        if len(required_claims) != len(claims):
+            fail(f"required_claims.{gap_id} contains duplicates")
+
+        assigned: set[str] = set()
+        normalized[gap_id] = {}
+        for authority_class in classes:
+            scoped = scopes[authority_class]
+            if not isinstance(scoped, list) or not scoped:
+                fail(
+                    f"required_claims_by_authority_class.{gap_id}."
+                    f"{authority_class} must be non-empty"
+                )
+            scoped_claims = [
+                require_string(
+                    value,
+                    label=(
+                        "required_claims_by_authority_class."
+                        f"{gap_id}.{authority_class}"
+                    ),
+                    maximum=100,
+                )
+                for value in scoped
+            ]
+            scoped_set = set(scoped_claims)
+            if len(scoped_set) != len(scoped_claims):
+                fail(
+                    f"claim scope {gap_id}/{authority_class} contains "
+                    "duplicates"
+                )
+            overlap = assigned & scoped_set
+            if overlap:
+                fail(
+                    f"claims {sorted(overlap)} are assigned to multiple "
+                    f"authority classes for {gap_id}"
+                )
+            assigned.update(scoped_set)
+            normalized[gap_id][authority_class] = scoped_claims
+        if assigned != required_claims:
+            missing = sorted(required_claims - assigned)
+            unknown = sorted(assigned - required_claims)
+            fail(
+                f"class-scoped claims for {gap_id} do not partition required "
+                f"claims; missing={missing}, unknown={unknown}"
+            )
+
+    return normalized
+
+
+def _review_projection(
+    reviewer: Mapping[str, Any],
+    *,
+    label: str,
+) -> dict[str, Any]:
     reviewed_gap_ids = reviewer.get("reviewed_gap_ids")
     if not isinstance(reviewed_gap_ids, list) or not reviewed_gap_ids:
         fail(f"{label}.reviewed_gap_ids must be a non-empty array")
@@ -87,12 +257,7 @@ def _review_projection(reviewer: Mapping[str, Any], *, label: str) -> dict[str, 
 
 
 def review_set_digest(reviewers: Sequence[Mapping[str, Any]]) -> str:
-    """Digest one ordered final reviewer roster.
-
-    Reviewer ordering is intentional. Removing, adding, replacing, or
-    reordering any final reviewer changes the digest that every signed review
-    artifact must carry.
-    """
+    """Digest one ordered final reviewer roster under the G10 policy."""
 
     projections = [
         _review_projection(reviewer, label=f"reviewers[{index}]")
@@ -101,6 +266,8 @@ def review_set_digest(reviewers: Sequence[Mapping[str, Any]]) -> str:
     return canonical_digest(
         {
             "statement_type": _REVIEW_SET_STATEMENT,
+            "policy_id": _POLICY_ID,
+            "policy_revision": _POLICY_REVISION,
             "reviewers": projections,
         }
     )
@@ -111,7 +278,7 @@ def acceptance_context_digest(
     *,
     roster_digest: str | None = None,
 ) -> str:
-    """Digest acceptance-level state that is otherwise outside one review."""
+    """Digest acceptance state outside one reviewer object."""
 
     reviewers = acceptance.get("reviewers")
     if not isinstance(reviewers, list):
@@ -123,6 +290,8 @@ def acceptance_context_digest(
     return canonical_digest(
         {
             "statement_type": _ACCEPTANCE_CONTEXT_STATEMENT,
+            "policy_id": _POLICY_ID,
+            "policy_revision": _POLICY_REVISION,
             "state": acceptance.get("state"),
             "reviewed_at": acceptance.get("reviewed_at"),
             "decision_reference": acceptance.get("decision_reference"),
@@ -130,6 +299,61 @@ def acceptance_context_digest(
             "review_set_digest": digest,
         }
     )
+
+
+def _submission_contract_for_authority(
+    raw: Any,
+    *,
+    index: int,
+    contract: Mapping[str, Any],
+    claim_scopes: Mapping[str, Mapping[str, list[str]]],
+) -> dict[str, Any]:
+    label = f"submissions[{index}]"
+    if not isinstance(raw, dict):
+        fail(f"{label} must be an object")
+    gap_id = require_string(
+        raw.get("gap_id"),
+        label=f"{label}.gap_id",
+        maximum=20,
+    )
+    issuer = raw.get("issuer")
+    if not isinstance(issuer, dict):
+        fail(f"{label}.issuer must be an object")
+    authority_class = require_string(
+        issuer.get("authority_class"),
+        label=f"{label}.issuer.authority_class",
+        maximum=80,
+    )
+    gap_scopes = claim_scopes.get(gap_id)
+    if gap_scopes is None or authority_class not in gap_scopes:
+        fail(
+            f"{label} issuer authority {authority_class} cannot attest "
+            f"{gap_id}"
+        )
+    required = list(gap_scopes[authority_class])
+    claims = raw.get("claims")
+    if not isinstance(claims, dict):
+        fail(f"{label}.claims must be an object")
+    supplied = set(claims)
+    required_set = set(required)
+    missing = sorted(required_set - supplied)
+    unauthorized = sorted(supplied - required_set)
+    if missing:
+        fail(
+            f"{label} is missing authority-scoped claims for "
+            f"{authority_class}: {missing}"
+        )
+    if unauthorized:
+        fail(
+            f"{label} asserts claims outside authority scope for "
+            f"{authority_class}: {unauthorized}"
+        )
+
+    scoped_contract = dict(contract)
+    required_claims = dict(contract["required_claims"])
+    required_claims[gap_id] = required
+    scoped_contract["required_claims"] = required_claims
+    return scoped_contract
 
 
 def _issuer_authority_coverage(
@@ -186,7 +410,8 @@ def _issuer_authority_coverage(
         if identity_key in gap_identities:
             fail(
                 f"gap {gap_id} reuses issuer identity {identity!r} from "
-                f"{organization!r}; authority seats require distinct identities"
+                f"{organization!r}; authority seats require distinct "
+                "identity/organization pairs"
             )
         gap_identities.add(identity_key)
 
@@ -198,16 +423,7 @@ def _issuer_authority_coverage(
     normalized: dict[str, dict[str, list[str]]] = {}
     missing: dict[str, list[str]] = {}
     for gap_id, required_values in raw_required.items():
-        if not isinstance(required_values, list) or not required_values:
-            fail(f"evidence contract authority_classes.{gap_id} must be non-empty")
-        required = {
-            require_string(
-                value,
-                label=f"authority_classes.{gap_id}",
-                maximum=80,
-            )
-            for value in required_values
-        }
+        required = set(required_values)
         actual = coverage.get(gap_id, {})
         normalized[gap_id] = {
             authority: sorted(keys)
@@ -269,6 +485,8 @@ def _validate_review_set_integrity(
             manifest,
             required={
                 "schema_version",
+                "policy_id",
+                "policy_revision",
                 "review_set_digest",
                 "acceptance_context_digest",
             },
@@ -277,6 +495,10 @@ def _validate_review_set_integrity(
         )
         if manifest["schema_version"] != _REVIEW_MANIFEST_VERSION:
             fail(f"{label}.review closure manifest version is unsupported")
+        if manifest["policy_id"] != _POLICY_ID:
+            fail(f"{label}.review closure manifest policy_id drifted")
+        if manifest["policy_revision"] != _POLICY_REVISION:
+            fail(f"{label}.review closure manifest policy_revision drifted")
         supplied_roster = require_sha(
             manifest["review_set_digest"],
             label=f"{label}.review.closure_manifest.review_set_digest",
@@ -314,6 +536,8 @@ def _validate_review_set_integrity(
     return {
         "verified": True,
         "schema_version": _REVIEW_MANIFEST_VERSION,
+        "policy_id": _POLICY_ID,
+        "policy_revision": _POLICY_REVISION,
         "review_set_digest": expected_roster,
         "acceptance_context_digest": expected_context,
         "reviewer_key_ids": verified_key_ids,
@@ -333,10 +557,11 @@ def validate_bundle(
     openssl_binary: str = "openssl",
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Validate a bundle under the complete G10 closure policy."""
+    """Validate a bundle under the versioned G10 closure policy."""
 
     now = now or datetime.now(timezone.utc)
     contract = read_object(CONTRACT_PATH, "external evidence contract")
+    claim_scopes = _validate_contract_policy(contract)
     bundle = read_object(bundle_path, "external evidence bundle")
     require_exact_keys(
         bundle,
@@ -383,12 +608,18 @@ def validate_bundle(
     seen_artifacts: set[str] = set()
     submissions: list[dict[str, Any]] = []
     for index, raw in enumerate(raw_submissions):
+        scoped_contract = _submission_contract_for_authority(
+            raw,
+            index=index,
+            contract=contract,
+            claim_scopes=claim_scopes,
+        )
         submissions.append(
             validate_submission(
                 raw,
                 bundle=bundle,
                 index=index,
-                contract=contract,
+                contract=scoped_contract,
                 artifact_root=artifact_root,
                 seen_artifacts=seen_artifacts,
                 registry=registry,
@@ -433,11 +664,13 @@ def validate_bundle(
     review_set_integrity: dict[str, Any] = {
         "verified": False,
         "schema_version": _REVIEW_MANIFEST_VERSION,
+        "policy_id": _POLICY_ID,
+        "policy_revision": _POLICY_REVISION,
         "review_set_digest": None,
         "acceptance_context_digest": None,
         "reviewer_key_ids": [],
     }
-    if complete_authority_set and acceptance["state"] == "accepted":
+    if acceptance["state"] == "accepted":
         review_set_integrity = _validate_review_set_integrity(
             acceptance_document=acceptance_document,
             acceptance_result=acceptance,
@@ -457,7 +690,10 @@ def validate_bundle(
         "ok": True,
         "contract_id": contract["contract_id"],
         "contract_revision": contract["contract_revision"],
-        "complete_closure_policy": "g10-authority-quorum-review-set-v1",
+        "complete_closure_policy": {
+            "policy_id": _POLICY_ID,
+            "policy_revision": _POLICY_REVISION,
+        },
         "signature_profile": contract["signature_profile"],
         "trust_registry": {
             "registry_id": registry.registry_id,
@@ -468,6 +704,7 @@ def validate_bundle(
         "candidate": candidate,
         "submitted_gaps": sorted(submitted_gaps),
         "missing_gaps": missing_gaps,
+        "issuer_claim_scopes": claim_scopes,
         "issuer_authority_coverage": authority_coverage,
         "missing_issuer_authority_classes": missing_authority_classes,
         "artifact_count": len(seen_artifacts),
