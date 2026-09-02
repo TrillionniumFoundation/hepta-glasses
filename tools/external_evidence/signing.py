@@ -20,7 +20,6 @@ from .core import (
     require_sha,
 )
 from .signing_io import (
-    atomic_replace_bundle,
     bundle_bytes,
     create_scoped_uri_exclusive,
     load_bundle_snapshot,
@@ -60,14 +59,27 @@ def _commit_bundle(
     snapshot: Any,
     bundle: dict[str, Any],
 ) -> tuple[Path, str, bool]:
-    data = bundle_bytes(bundle)
+    """Create an immutable successor and leave the signed input untouched.
+
+    Portable POSIX rename operations do not provide a conditional
+    compare-and-swap against an expected inode. A check followed by replacement
+    can therefore overwrite a name that another actor changed after the check.
+    Authority-bearing evidence never uses that ambiguous in-place operation:
+    every signing/finalization command must select a fresh exclusive successor
+    URI below the already declared custody root.
+    """
+
+    del snapshot  # The input snapshot is still required before mutation/signing.
     output_uri = getattr(args, "output_bundle_uri", None)
-    if output_uri is None:
-        path, digest = atomic_replace_bundle(snapshot, data)
-        return path, digest, False
     custody_root = getattr(args, "custody_root", None)
+    if not isinstance(output_uri, str) or not output_uri:
+        raise ValueError(
+            "authoritative evidence signing requires --output-bundle-uri; "
+            "in-place bundle mutation is unsupported"
+        )
     if not isinstance(custody_root, Path):
         raise ValueError("--custody-root is required with --output-bundle-uri")
+    data = bundle_bytes(bundle)
     path, digest = create_scoped_uri_exclusive(
         custody_root,
         output_uri,
@@ -211,7 +223,7 @@ def parser() -> argparse.ArgumentParser:
         command = commands.add_parser(name)
         command.add_argument("--bundle", required=True, type=Path)
         command.add_argument("--custody-root", required=True, type=Path)
-        command.add_argument("--output-bundle-uri")
+        command.add_argument("--output-bundle-uri", required=True)
         command.add_argument("--index", required=True, type=int)
         command.add_argument("--private-key", required=True, type=Path)
         command.add_argument("--signature-uri", required=True)
@@ -221,8 +233,8 @@ def parser() -> argparse.ArgumentParser:
         command.set_defaults(handler=handler)
     digest = commands.add_parser("finalize")
     digest.add_argument("--bundle", required=True, type=Path)
-    digest.add_argument("--custody-root", type=Path)
-    digest.add_argument("--output-bundle-uri")
+    digest.add_argument("--custody-root", required=True, type=Path)
+    digest.add_argument("--output-bundle-uri", required=True)
     digest.set_defaults(handler=finalize)
     return root
 
