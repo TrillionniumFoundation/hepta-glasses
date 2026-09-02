@@ -4,7 +4,7 @@
   "extends_ledger": "docs/GAP_LEDGER.yaml",
   "source_summary": {
     "repository_actionable_open": 0,
-    "closed_source": 1,
+    "closed_source": 2,
     "inherited_authority_owned_blocked": 12
   },
   "gaps": [
@@ -34,6 +34,19 @@
         "docs/adr/ADR-0004-external-evidence-authentication.md"
       ],
       "close_criteria": "A repository writer cannot manufacture accepted closure: every submission and decision is verified under a current, non-revoked, narrowly scoped Ed25519 key from an externally pinned trust registry; the pinned PEM is re-encoded and required to contain the id-Ed25519 SubjectPublicKeyInfo algorithm and a 32-byte public key; normalized SPKI reuse is forbidden across key IDs, identities, organizations and PEM encodings; issuer attestation.signed_at and reviewer signed_at are included in their canonical signature preimages, and every reviewer time must follow every submitted evidence attestation; duplicate JSON object members and silently normalized authority fields are rejected; candidate, claims, artifact digests, limitations, evidence-set digest and reviewed gaps are signed; key-type confusion, public-key aliases, signature-time mutation, pre-evidence review, parser differentials, issuer/reviewer aliases and synthetic physical evidence fail closed."
+    },
+    {
+      "id": "HG-0074",
+      "title": "Only the latest pull-request or branch CI run retains execution custody",
+      "owner": "quality-gates",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        ".github/workflows/ci.yml",
+        "tools/validate_production_authority.py",
+        "services/qualification/test_ci_latest_head_custody.py",
+        "docs/adr/ADR-0005-latest-head-ci-concurrency.md"
+      ],
+      "close_criteria": "Workflow concurrency is keyed by pull-request number or branch identity with cancel-in-progress enabled, never by commit SHA; every canonical job independently checks out and verifies the exact SOURCE_HEAD_SHA; a new push cancels the previous run for that PR without weakening exact-head artifact identity or granting CI source-write authority."
     }
   ],
   "inherited_authority_owned_gap_ids": [
