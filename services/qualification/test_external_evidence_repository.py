@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import stat
 import sys
 import tempfile
 import unittest
@@ -24,7 +25,10 @@ MAX_DISCOVERY_JSON_BYTES = 16 * 1024 * 1024
 
 def _read_json_object(path: Path) -> dict[str, Any] | None:
     try:
-        if path.stat().st_size > MAX_DISCOVERY_JSON_BYTES:
+        status = path.lstat()
+        if not stat.S_ISREG(status.st_mode):
+            return None
+        if status.st_size > MAX_DISCOVERY_JSON_BYTES:
             return None
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
@@ -36,16 +40,16 @@ def _accepted_envelopes(base: Path) -> list[Path]:
     """Discover accepted envelopes at any immutable successor depth.
 
     Discovery uses canonical content identity rather than a filename or suffix.
-    Artifact, key, review, signature, template, and validator-output files are
-    ignored unless they actually declare the canonical envelope contract and an
-    accepted state. Moving an accepted envelope below ``successors/`` or giving
-    it an opaque filename therefore cannot bypass repository CI.
+    Only lstat-confirmed regular files are read; repository symbolic links and
+    other special objects are never followed. Artifact, key, review, signature,
+    template, and validator-output files are ignored unless they actually
+    declare the canonical envelope contract and an accepted state. Moving an
+    accepted envelope below ``successors/`` or giving it an opaque filename
+    therefore cannot bypass repository CI.
     """
 
     results: list[Path] = []
     for path in sorted(base.rglob("*")):
-        if not path.is_file():
-            continue
         document = _read_json_object(path)
         if document is None:
             continue
@@ -164,6 +168,27 @@ class CommittedExternalEvidenceTest(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual(_accepted_envelopes(base), [path])
+
+    def test_repository_symlink_is_not_followed_during_discovery(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory) / "evidence"
+            outside = Path(directory) / "outside.json"
+            base.mkdir()
+            outside.write_text(
+                json.dumps(
+                    {
+                        "contract_id": "hepta-external-evidence-envelope-v1",
+                        "acceptance": {"state": "accepted"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            alias = base / "accepted-link"
+            try:
+                alias.symlink_to(outside)
+            except OSError as error:
+                self.skipTest(f"symbolic links are unavailable: {error}")
+            self.assertEqual(_accepted_envelopes(base), [])
 
 
 if __name__ == "__main__":
