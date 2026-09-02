@@ -20,9 +20,7 @@ external_evidence = support.external_evidence
 
 class ExternalEvidenceCompleteClosureTest(support.ExternalEvidenceFixture):
     def _all_gap_bundle(self) -> dict[str, object]:
-        return self._complete_bundle(
-            list(self.contract["allowed_gap_ids"])
-        )
+        return self._complete_bundle(list(self.contract["allowed_gap_ids"]))
 
     def _resign_all_submissions(self, bundle: dict[str, object]) -> None:
         for index, submission in enumerate(bundle["submissions"]):
@@ -113,6 +111,46 @@ class ExternalEvidenceCompleteClosureTest(support.ExternalEvidenceFixture):
         ):
             self._validate(bundle, complete=True, accepted=True)
 
+    def test_authority_cannot_assert_another_seats_claim(self) -> None:
+        bundle = self._bundle(["HG-0017"])
+        submission = bundle["submissions"][0]
+        submission["claims"]["fresh_api_readback_matches_contract"] = True
+        with self.assertRaisesRegex(
+            external_evidence.EvidenceError,
+            "asserts claims outside authority scope.*repository_administrator",
+        ):
+            self._validate(bundle)
+
+    def test_old_contract_revision_signature_cannot_downgrade_policy(self) -> None:
+        bundle = self._bundle(["HG-0017"])
+        submission = bundle["submissions"][0]
+        submission["attestation"] = {
+            "signed_at": "2026-09-01T14:00:00Z",
+            "statement_digest": "0" * 64,
+            "signature_uri": "artifact://placeholder",
+            "signature_sha256": "0" * 64,
+        }
+        old_statement = external_evidence.canonical_submission_statement(
+            bundle,
+            submission,
+            contract_revision="2026-09-02-g9-authenticated-1",
+        )
+        signature = self._sign(
+            "issuer",
+            old_statement,
+            Path("signatures") / "old-policy.sig",
+        )
+        submission["attestation"] = {
+            "signed_at": "2026-09-01T14:00:00Z",
+            "statement_digest": hashlib.sha256(old_statement).hexdigest(),
+            **signature,
+        }
+        with self.assertRaisesRegex(
+            external_evidence.EvidenceError,
+            "statement digest mismatch",
+        ):
+            self._validate(bundle)
+
     def test_removing_a_signed_dissenting_review_is_detected(self) -> None:
         bundle = self._all_gap_bundle()
         self._accept(bundle, include_dissent=True)
@@ -159,12 +197,72 @@ class ExternalEvidenceCompleteClosureTest(support.ExternalEvidenceFixture):
         ):
             self._validate(bundle, complete=True, accepted=True)
 
-    def test_complete_closure_reports_review_manifest_digests(self) -> None:
+    def test_manifest_policy_revision_is_mandatory(self) -> None:
+        bundle = self._all_gap_bundle()
+        self._accept(bundle)
+        reviewer = bundle["acceptance"]["reviewers"][0]
+        review_path = external_evidence.safe_artifact_path(
+            self.artifact_root,
+            reviewer["review_uri"],
+            label="review",
+        )
+        document = __import__("json").loads(review_path.read_text(encoding="utf-8"))
+        document["closure_manifest"]["policy_revision"] = (
+            "2026-09-02-g9-authenticated-1"
+        )
+        payload = __import__("json").dumps(
+            document,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        review_path.write_bytes(payload)
+        reviewer["review_sha256"] = hashlib.sha256(payload).hexdigest()
+        reviewer["statement_digest"] = "0" * 64
+        reviewer["signature_uri"] = "artifact://placeholder"
+        reviewer["signature_sha256"] = "0" * 64
+        statement = external_evidence.canonical_review_statement(
+            bundle,
+            reviewer,
+            contract_revision=self.contract["contract_revision"],
+        )
+        signature = self._sign(
+            "release-reviewer",
+            statement,
+            Path("signatures") / "wrong-policy-review.sig",
+        )
+        reviewer["statement_digest"] = hashlib.sha256(statement).hexdigest()
+        reviewer.update(signature)
+        bundle["acceptance"]["bundle_digest"] = (
+            external_evidence.canonical_bundle_digest(bundle)
+        )
+        with self.assertRaisesRegex(
+            external_evidence.EvidenceError,
+            "policy_revision drifted",
+        ):
+            self._validate(bundle, complete=True, accepted=True)
+
+    def test_complete_closure_reports_policy_and_manifest_digests(self) -> None:
         bundle = self._all_gap_bundle()
         self._accept(bundle)
         result = self._validate(bundle, complete=True, accepted=True)
+        self.assertEqual(
+            result["contract_revision"],
+            "2026-09-02-g10-quorum-1",
+        )
+        self.assertEqual(
+            result["complete_closure_policy"],
+            {
+                "policy_id": "hepta-external-complete-closure-v1",
+                "policy_revision": "2026-09-02-g10-quorum-1",
+            },
+        )
         integrity = result["review_set_integrity"]
         self.assertTrue(integrity["verified"])
+        self.assertEqual(
+            integrity["policy_revision"],
+            "2026-09-02-g10-quorum-1",
+        )
         self.assertEqual(len(integrity["review_set_digest"]), 64)
         self.assertEqual(len(integrity["acceptance_context_digest"]), 64)
         self.assertEqual(
