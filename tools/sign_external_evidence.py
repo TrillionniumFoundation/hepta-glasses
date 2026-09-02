@@ -11,6 +11,8 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -120,6 +122,126 @@ def sign_ed25519(private_key: Path, payload: bytes) -> bytes:
         return signature
 
 
+def _require_secure_directory_api() -> None:
+    required_flags = ("O_DIRECTORY", "O_NOFOLLOW")
+    if any(not hasattr(os, name) for name in required_flags):
+        raise ValueError(
+            "platform cannot securely create a detached signature below custody root"
+        )
+    supports_dir_fd = getattr(os, "supports_dir_fd", set())
+    if os.open not in supports_dir_fd or os.mkdir not in supports_dir_fd:
+        raise ValueError(
+            "platform lacks directory-descriptor support for detached signatures"
+        )
+
+
+def _directory_flags() -> int:
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    return flags
+
+
+def _open_or_create_directory(parent_fd: int, component: str) -> int:
+    try:
+        return os.open(component, _directory_flags(), dir_fd=parent_fd)
+    except FileNotFoundError:
+        try:
+            os.mkdir(component, mode=0o700, dir_fd=parent_fd)
+        except FileExistsError:
+            pass
+        try:
+            return os.open(component, _directory_flags(), dir_fd=parent_fd)
+        except OSError as error:
+            raise ValueError(
+                f"detached signature path contains an unsafe directory: {component}"
+            ) from error
+    except OSError as error:
+        raise ValueError(
+            f"detached signature path contains an unsafe directory: {component}"
+        ) from error
+
+
+def _write_all(descriptor: int, data: bytes) -> None:
+    remaining = memoryview(data)
+    while remaining:
+        written = os.write(descriptor, remaining)
+        if written <= 0:
+            raise OSError("detached signature write made no progress")
+        remaining = remaining[written:]
+
+
+def _create_scoped_file_exclusive(
+    *,
+    custody_root: Path,
+    path: Path,
+    data: bytes,
+) -> Path:
+    _require_secure_directory_api()
+    try:
+        resolved_root = custody_root.resolve(strict=True)
+    except OSError as error:
+        raise ValueError(f"custody root is unavailable: {error}") from error
+    if not resolved_root.is_dir():
+        raise ValueError("custody root must be a directory")
+    try:
+        relative = path.relative_to(resolved_root)
+    except ValueError as error:
+        raise ValueError("detached signature escapes custody root") from error
+    if not relative.parts or relative.name in {"", ".", ".."}:
+        raise ValueError("detached signature path is invalid")
+
+    opened_directories: list[int] = []
+    output_fd: int | None = None
+    created = False
+    try:
+        root_fd = os.open(resolved_root, _directory_flags())
+        opened_directories.append(root_fd)
+        current_fd = root_fd
+        for component in relative.parts[:-1]:
+            current_fd = _open_or_create_directory(current_fd, component)
+            opened_directories.append(current_fd)
+
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        try:
+            output_fd = os.open(
+                relative.name,
+                flags,
+                0o600,
+                dir_fd=current_fd,
+            )
+            created = True
+        except FileExistsError as error:
+            raise ValueError(
+                f"refusing to overwrite detached signature: {path}"
+            ) from error
+        except OSError as error:
+            raise ValueError(
+                f"cannot securely create detached signature: {path}"
+            ) from error
+
+        _write_all(output_fd, data)
+        os.fsync(output_fd)
+        created_state = os.fstat(output_fd)
+        if not stat.S_ISREG(created_state.st_mode) or created_state.st_size != len(data):
+            raise RuntimeError("detached signature was not written as one regular file")
+    except Exception:
+        if created and opened_directories:
+            try:
+                os.unlink(relative.name, dir_fd=opened_directories[-1])
+            except OSError:
+                pass
+        raise
+    finally:
+        if output_fd is not None:
+            os.close(output_fd)
+        for descriptor in reversed(opened_directories):
+            os.close(descriptor)
+    return resolved_root / relative
+
+
 def write_signature(
     *,
     custody_root: Path,
@@ -131,11 +253,12 @@ def write_signature(
         signature_uri,
         label="detached signature",
     )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        raise ValueError(f"refusing to overwrite detached signature: {path}")
-    path.write_bytes(signature)
-    return path, hashlib.sha256(signature).hexdigest()
+    created = _create_scoped_file_exclusive(
+        custody_root=custody_root,
+        path=path,
+        data=signature,
+    )
+    return created, hashlib.sha256(signature).hexdigest()
 
 
 def sign_submission(args: argparse.Namespace) -> dict[str, Any]:
