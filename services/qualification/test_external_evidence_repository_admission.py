@@ -76,6 +76,25 @@ class DescriptorAnchoredRepositoryAdmissionTest(unittest.TestCase):
             envelopes = discover_accepted_envelopes(base)
             self.assertEqual([item.path for item in envelopes], [path.resolve()])
 
+    def test_symbolic_link_root_fails_the_repository_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            actual = Path(directory) / "actual-evidence"
+            actual.mkdir()
+            (actual / "bundle.json").write_text(
+                json.dumps(_accepted_document()),
+                encoding="utf-8",
+            )
+            base = Path(directory) / "evidence"
+            try:
+                base.symlink_to(actual.name, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"symbolic links are unavailable: {error}")
+            with self.assertRaisesRegex(
+                EvidenceError,
+                "root must be a real directory",
+            ):
+                discover_accepted_envelopes(base)
+
     def test_symbolic_link_entry_fails_the_repository_gate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory) / "evidence"
@@ -89,6 +108,47 @@ class DescriptorAnchoredRepositoryAdmissionTest(unittest.TestCase):
                 self.skipTest(f"symbolic links are unavailable: {error}")
             with self.assertRaisesRegex(EvidenceError, "is a symbolic link"):
                 discover_accepted_envelopes(base)
+
+    def test_root_replacement_between_lstat_and_open_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory) / "evidence"
+            retired = Path(directory) / "retired"
+            base.mkdir()
+            (base / "bundle.json").write_text(
+                json.dumps(_accepted_document()),
+                encoding="utf-8",
+            )
+            original_open_root = repository_admission._open_absolute_directory_nofollow
+            replaced = False
+
+            def raced_open_root(
+                target: Path,
+                *,
+                label: str,
+                fail: object,
+            ) -> int:
+                nonlocal replaced
+                if not replaced:
+                    base.rename(retired)
+                    base.mkdir()
+                    (base / "replacement.json").write_text(
+                        json.dumps(_accepted_document()),
+                        encoding="utf-8",
+                    )
+                    replaced = True
+                return original_open_root(target, label=label, fail=fail)
+
+            with mock.patch.object(
+                repository_admission,
+                "_open_absolute_directory_nofollow",
+                side_effect=raced_open_root,
+            ):
+                with self.assertRaisesRegex(
+                    EvidenceError,
+                    "root changed between lexical inspection and open",
+                ):
+                    discover_accepted_envelopes(base)
+            self.assertTrue(replaced)
 
     def test_file_replacement_between_stat_and_open_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
