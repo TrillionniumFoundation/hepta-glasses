@@ -21,11 +21,11 @@
 G9 is a stacked evidence-authentication and latest-head CI-custody layer. It does not rewrite the frozen G8 candidate. Its machine-readable supplements are:
 
 - `G9_STATE.json` — source authority rule, latest-head concurrency custody, claim ceiling, zero-open source status, and the inherited 12-gap set.
-- `G9_MODULES.json` — ownership and source/document/test/contract coverage for the external-evidence authentication and latest-head CI-custody modules.
-- `G9_GAP_LEDGER.json` — source closure records for `HG-0073` and `HG-0074`, plus the exact inherited authority-owned gap IDs.
+- `G9_MODULES.json` — ownership and source/document/test/contract coverage for external-evidence authentication and latest-head CI custody, including stable evidence filesystem I/O.
+- `G9_GAP_LEDGER.json` — source closure records for `HG-0073`, `HG-0074`, and `HG-0075`, plus the exact inherited authority-owned gap IDs.
 - `development/G9_TERMINAL_EXTERNAL_CLOSURE.md` — authenticated execution package for the 12 authority-owned gaps; not itself external evidence.
 
-`services/qualification/test_g9_metadata.py` verifies these supplements, their referenced paths, their synchronization with the G8 ledger and G9 contract, and the absence of private-key material in repository custody. `services/qualification/test_ci_latest_head_custody.py` independently verifies stale-run cancellation and exact-head identity checks in all seven jobs.
+`services/qualification/test_g9_metadata.py` verifies these supplements, their referenced paths, their synchronization with the G8 ledger and G9 contract, the explicit filesystem-custody closure, and the absence of private-key material in repository custody. `services/qualification/test_ci_latest_head_custody.py` independently verifies stale-run cancellation and exact-source identity checks in all seven jobs.
 
 ## Development
 
@@ -49,7 +49,7 @@ G9 is a stacked evidence-authentication and latest-head CI-custody layer. It doe
 - `operations/PRIVACY_SECURITY_REVIEW_CHECKLIST.md`
 - `operations/RELEASE_AND_ROLLBACK_RUNBOOK.md`
 - `operations/CREDENTIAL_INCIDENT_RUNBOOK.md`
-- `../evidence/external/README.md` — authenticated evidence custody, external trust pin, and validation procedure.
+- `../evidence/external/README.md` — authenticated evidence custody, stable byte snapshots, secure detached-signature creation, external trust pin, and validation procedure.
 
 ## Architecture decisions
 
@@ -58,6 +58,7 @@ G9 is a stacked evidence-authentication and latest-head CI-custody layer. It doe
 - `adr/ADR-0003-edge-runtime-language.md`
 - `adr/ADR-0004-external-evidence-authentication.md` — out-of-band trust pin, actual Ed25519 key binding, signed evidence/reviews, strict parsing and authority separation.
 - `adr/ADR-0005-latest-head-ci-concurrency.md` — pull-request/branch concurrency custody, stale-run cancellation and independent exact-source verification.
+- `adr/ADR-0006-external-evidence-filesystem-custody.md` — normalized lexical-path snapshots, descriptor-stable bounded reads, symlink-retarget fencing, and exclusive no-follow detached-signature creation.
 
 A later plan or ADR must state what it supersedes and update the applicable Current State, Gap Ledger, Evidence Index, module registry, validators, tests and affected machine contracts in the same change.
 
