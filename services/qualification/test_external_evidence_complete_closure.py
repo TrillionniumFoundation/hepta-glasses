@@ -121,7 +121,7 @@ class ExternalEvidenceCompleteClosureTest(support.ExternalEvidenceFixture):
         ):
             self._validate(bundle)
 
-    def test_old_contract_revision_signature_cannot_downgrade_policy(self) -> None:
+    def test_old_contract_revision_cannot_construct_a_canonical_statement(self) -> None:
         bundle = self._bundle(["HG-0017"])
         submission = bundle["submissions"][0]
         submission["attestation"] = {
@@ -130,26 +130,15 @@ class ExternalEvidenceCompleteClosureTest(support.ExternalEvidenceFixture):
             "signature_uri": "artifact://placeholder",
             "signature_sha256": "0" * 64,
         }
-        old_statement = external_evidence.canonical_submission_statement(
-            bundle,
-            submission,
-            contract_revision="2026-09-02-g9-authenticated-1",
-        )
-        signature = self._sign(
-            "issuer",
-            old_statement,
-            Path("signatures") / "old-policy.sig",
-        )
-        submission["attestation"] = {
-            "signed_at": "2026-09-01T14:00:00Z",
-            "statement_digest": hashlib.sha256(old_statement).hexdigest(),
-            **signature,
-        }
         with self.assertRaisesRegex(
             external_evidence.EvidenceError,
-            "statement digest mismatch",
+            "contract revision differs from the current contract bytes",
         ):
-            self._validate(bundle)
+            external_evidence.canonical_submission_statement(
+                bundle,
+                submission,
+                contract_revision="2026-09-02-g9-authenticated-1",
+            )
 
     def test_removing_a_signed_dissenting_review_is_detected(self) -> None:
         bundle = self._all_gap_bundle()
