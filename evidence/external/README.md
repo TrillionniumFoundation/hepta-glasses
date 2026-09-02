@@ -15,6 +15,7 @@ evidence/external/
       <gap-id>/...
       reviews/...
       signatures/...
+      successors/...
     validation-result.json
 ```
 
@@ -28,13 +29,28 @@ A repository writer cannot close a gap by inventing a key, replacing a public ke
 
 ## Filesystem custody and stable byte snapshots
 
-A valid URI is not a stable byte identity by itself. During one validation transaction, every existing `artifact://` and `key://` input is pinned to the first stable bytes observed for its normalized lexical path. Scope is checked against the resolved custody root, but later hashing, JSON parsing, secret scanning, public-key normalization, and signature verification reuse the pinned lexical-path snapshot rather than resolving the path again.
+A valid URI is not a stable byte identity by itself. Paths must use one canonical POSIX relative spelling: absolute paths, empty components, repeated or trailing separators, `.` and `..` are rejected.
 
-Input reads use bounded regular-file descriptors and compare device, inode, size, modification time, and change time before and after the read. A symbolic link retarget, same-name replacement, non-regular object, oversized file, short read, scope escape, or metadata change fails closed or remains unable to alter the already pinned transaction bytes.
+During one validation transaction, every existing `artifact://` and `key://` input is pinned to the first stable bytes observed for its normalized lexical path. The stable read captures the device, inode, and object type of every ancestor directory plus the complete identity of the final regular file. A second no-follow descriptor traversal must match those captured identities before bytes are accepted. Symbolic-link redirection, ordinary-object replacement after capture, same-name replacement, non-regular objects, oversized files, short reads, scope escapes, and metadata changes fail closed or cannot alter the pinned transaction bytes.
 
-Detached signatures are always new files. The signing helper walks the custody root with directory descriptors, rejects symbolic-link directory components, creates missing directories with mode `0700`, and creates the final signature with no-follow and exclusive-create semantics at mode `0600`. Existing regular files, dangling links, output links, overwrite attempts, and unsupported secure directory APIs fail closed. A partial final entry is removed on error.
+The transaction has both per-file limits and a 512 MiB aggregate snapshot ceiling. Very large raw measurement collections should be stored separately and referenced by authenticated content manifests rather than forcing the validator to retain every raw byte.
 
-The normative design and negative-test requirements are recorded in `docs/adr/ADR-0006-external-evidence-filesystem-custody.md`. These controls protect local evidence I/O; they do not make repository custody an external trust anchor.
+PEM hashing, Ed25519 key-type verification, normalized DER-SPKI uniqueness, and signature verification use the same pinned public-key bytes. OpenSSL receives a private temporary copy of the snapshot and never reopens the authority-controlled key pathname for a later cryptographic phase.
+
+## Signing custody
+
+Private keys never enter repository or evidence custody. The signing helper reads the selected private key once through a bounded stable descriptor, then performs key-type inspection and signing on the same private temporary snapshot. Replacing the original key pathname after capture cannot change the signing key.
+
+Detached signatures are always new files. The helper walks the custody root with directory descriptors, rejects symbolic-link directory components, creates missing directories with mode `0700`, and creates the final signature with no-follow and exclusive-create semantics at mode `0600`. Existing regular files, dangling links, output links, overwrite attempts, partial writes, and unsupported secure directory APIs fail closed.
+
+The helper supports two bundle-output modes:
+
+- default compatibility mode verifies the exact unchanged parent chain, input object, and input bytes, stages a complete mode-0600 successor, and atomically replaces that exact input name;
+- `--output-bundle-uri artifact://successors/<name>.json` creates a new exclusive successor and leaves the input bundle byte-for-byte unchanged. This mode is preferred for independently reviewed custody.
+
+If a signature is created but a later bundle commit fails, no bundle success is reported. An unreferenced signature may remain and must not be represented as accepted evidence.
+
+The normative decisions and negative-test requirements are recorded in `docs/adr/ADR-0006-external-evidence-filesystem-custody.md` and `docs/adr/ADR-0007-evidence-object-identity-and-bounded-custody.md`. These controls protect local evidence I/O; they do not make repository custody an external trust anchor.
 
 ## Privacy and secret boundary
 
