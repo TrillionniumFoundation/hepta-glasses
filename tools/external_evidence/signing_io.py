@@ -9,10 +9,11 @@ import secrets
 import stat
 import subprocess
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .core import (
+    ARTIFACT_URI,
     ED25519_SPKI_BYTES,
     ED25519_SPKI_PREFIX,
     MAX_JSON_BYTES,
@@ -25,7 +26,6 @@ from .core import (
     _read_bounded_file,
     _stable_read_target,
     read_object,
-    safe_artifact_path,
     validation_snapshot,
 )
 
@@ -143,15 +143,37 @@ def _write_private_snapshot(path: Path, data: bytes) -> None:
     try:
         _write_all(descriptor, data)
         os.fsync(descriptor)
+        state = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(state.st_mode)
+            or state.st_size != len(data)
+            or state.st_mode & 0o077
+        ):
+            raise RuntimeError("private-key snapshot is not one private regular file")
     finally:
         os.close(descriptor)
 
 
-def read_private_key_snapshot(private_key: Path) -> bytes:
+def read_private_key_snapshot(
+    private_key: Path,
+    *,
+    forbidden_root: Path | None = None,
+) -> bytes:
     try:
         resolved = private_key.resolve(strict=True)
     except OSError as error:
         raise ValueError(f"private key is missing or unreadable: {error}") from error
+    if forbidden_root is not None:
+        try:
+            custody = forbidden_root.resolve(strict=True)
+        except OSError as error:
+            raise ValueError(f"custody root is unavailable: {error}") from error
+        try:
+            resolved.relative_to(custody)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("private key must remain outside evidence custody")
     data = _stable_read_target(
         resolved,
         label="private key",
@@ -186,10 +208,21 @@ def verify_private_key_ed25519(private_key: Path) -> None:
     _verify_private_bytes(read_private_key_snapshot(private_key))
 
 
-def sign_ed25519(private_key: Path, payload: bytes) -> bytes:
+def sign_ed25519(
+    private_key: Path,
+    payload: bytes,
+    *,
+    forbidden_root: Path | None = None,
+) -> bytes:
     if not isinstance(payload, bytes):
         raise TypeError("payload must be bytes")
-    key_bytes = read_private_key_snapshot(private_key)
+    if forbidden_root is None:
+        key_bytes = read_private_key_snapshot(private_key)
+    else:
+        key_bytes = read_private_key_snapshot(
+            private_key,
+            forbidden_root=forbidden_root,
+        )
     _verify_private_bytes(key_bytes)
     with tempfile.TemporaryDirectory(prefix="hepta-sign-") as directory:
         root = Path(directory)
@@ -244,17 +277,31 @@ def _dir_flags() -> int:
     return flags
 
 
-def _scoped_relative(root: Path, path: Path) -> tuple[Path, Path]:
-    resolved = root.resolve(strict=True)
+def _canonical_artifact_relative(uri: str, *, label: str) -> Path:
+    if not isinstance(uri, str):
+        raise ValueError(f"{label} must be an artifact URI")
+    match = ARTIFACT_URI.fullmatch(uri)
+    if match is None:
+        raise ValueError(f"{label} must use artifact:// with a scoped relative path")
+    raw = match.group(1)
+    relative = PurePosixPath(raw)
+    if (
+        relative.is_absolute()
+        or any(part in {"", ".", ".."} for part in relative.parts)
+        or relative.as_posix() != raw
+    ):
+        raise ValueError(f"{label} must use a canonical scoped relative path")
+    return Path(*relative.parts)
+
+
+def _resolved_custody_root(root: Path) -> Path:
+    try:
+        resolved = root.resolve(strict=True)
+    except OSError as error:
+        raise ValueError(f"custody root is unavailable: {error}") from error
     if not resolved.is_dir():
         raise ValueError("custody root must be a directory")
-    try:
-        relative = path.relative_to(resolved)
-    except ValueError as error:
-        raise ValueError("custody output escapes custody root") from error
-    if not relative.parts or any(part in {"", ".", ".."} for part in relative.parts):
-        raise ValueError("custody output path is invalid")
-    return resolved, relative
+    return resolved
 
 
 def _open_child(parent: int, component: str) -> int:
@@ -265,23 +312,32 @@ def _open_child(parent: int, component: str) -> int:
             os.mkdir(component, mode=0o700, dir_fd=parent)
         except FileExistsError:
             pass
-        return os.open(component, _dir_flags(), dir_fd=parent)
+        try:
+            return os.open(component, _dir_flags(), dir_fd=parent)
+        except OSError as error:
+            raise ValueError(
+                f"custody path contains an unsafe directory: {component}"
+            ) from error
     except OSError as error:
-        raise ValueError(f"custody path contains an unsafe directory: {component}") from error
+        raise ValueError(
+            f"custody path contains an unsafe directory: {component}"
+        ) from error
 
 
-def create_exclusive(
-    root: Path,
-    path: Path,
+def _create_relative_exclusive(
+    resolved_root: Path,
+    relative: Path,
     data: bytes,
     maximum: int,
 ) -> tuple[Path, str]:
     _require_output_api()
+    if not relative.parts or any(part in {"", ".", ".."} for part in relative.parts):
+        raise ValueError("custody output path is invalid")
     if len(data) > maximum:
         raise ValueError("custody output exceeds its byte bound")
-    resolved, relative = _scoped_relative(root, path)
+
     identities = _capture_absolute_directory_identity(
-        resolved,
+        resolved_root,
         label="custody root",
         fail=_fail,
     )
@@ -290,7 +346,7 @@ def create_exclusive(
     created = False
     try:
         current = _open_absolute_directory_nofollow(
-            resolved,
+            resolved_root,
             label="custody root",
             fail=_fail,
             expected_identities=identities,
@@ -306,12 +362,22 @@ def create_exclusive(
             output = os.open(relative.name, flags, 0o600, dir_fd=current)
             created = True
         except FileExistsError as error:
-            raise ValueError(f"refusing to overwrite custody output: {path}") from error
+            raise ValueError(
+                f"refusing to overwrite custody output: {resolved_root / relative}"
+            ) from error
+        except OSError as error:
+            raise ValueError(
+                f"cannot securely create custody output: {resolved_root / relative}"
+            ) from error
         _write_all(output, data)
         os.fsync(output)
         state = os.fstat(output)
-        if not stat.S_ISREG(state.st_mode) or state.st_size != len(data):
-            raise RuntimeError("custody output is incomplete")
+        if (
+            not stat.S_ISREG(state.st_mode)
+            or state.st_size != len(data)
+            or state.st_mode & 0o077
+        ):
+            raise RuntimeError("custody output is incomplete or not private")
         os.fsync(current)
     except Exception:
         if created and opened:
@@ -325,7 +391,38 @@ def create_exclusive(
             os.close(output)
         for descriptor in reversed(opened):
             os.close(descriptor)
-    return resolved / relative, hashlib.sha256(data).hexdigest()
+    return resolved_root / relative, hashlib.sha256(data).hexdigest()
+
+
+def create_scoped_uri_exclusive(
+    root: Path,
+    uri: str,
+    data: bytes,
+    maximum: int,
+    *,
+    label: str,
+) -> tuple[Path, str]:
+    relative = _canonical_artifact_relative(uri, label=label)
+    return _create_relative_exclusive(
+        _resolved_custody_root(root),
+        relative,
+        data,
+        maximum,
+    )
+
+
+def create_exclusive(
+    root: Path,
+    path: Path,
+    data: bytes,
+    maximum: int,
+) -> tuple[Path, str]:
+    resolved = _resolved_custody_root(root)
+    try:
+        relative = path.relative_to(resolved)
+    except ValueError as error:
+        raise ValueError("custody output escapes custody root") from error
+    return _create_relative_exclusive(resolved, relative, data, maximum)
 
 
 def write_signature(
@@ -333,13 +430,13 @@ def write_signature(
     signature_uri: str,
     signature: bytes,
 ) -> tuple[Path, str]:
-    path = safe_artifact_path(
+    return create_scoped_uri_exclusive(
         custody_root,
         signature_uri,
+        signature,
+        MAX_SIGNATURE_BYTES,
         label="detached signature",
-        maximum=MAX_SIGNATURE_BYTES,
     )
-    return create_exclusive(custody_root, path, signature, MAX_SIGNATURE_BYTES)
 
 
 def bundle_bytes(bundle: dict[str, Any]) -> bytes:
@@ -363,6 +460,7 @@ def atomic_replace_bundle(snapshot: BundleSnapshot, data: bytes) -> tuple[Path, 
     staged: int | None = None
     temporary: str | None = None
     renamed = False
+    visible: int | None = None
     try:
         flags = os.O_RDONLY | os.O_NOFOLLOW
         if hasattr(os, "O_CLOEXEC"):
@@ -373,6 +471,7 @@ def atomic_replace_bundle(snapshot: BundleSnapshot, data: bytes) -> tuple[Path, 
         current_bytes = _read_fd(current, "bundle", MAX_JSON_BYTES)
         if hashlib.sha256(current_bytes).hexdigest() != snapshot.sha256:
             raise ValueError("bundle bytes changed before update")
+
         for _ in range(16):
             temporary = f".{snapshot.path.name}.{secrets.token_hex(12)}.tmp"
             try:
@@ -385,17 +484,25 @@ def atomic_replace_bundle(snapshot: BundleSnapshot, data: bytes) -> tuple[Path, 
                 temporary = None
         if staged is None or temporary is None:
             raise RuntimeError("cannot allocate an exclusive bundle staging file")
+
         _write_all(staged, data)
         os.fsync(staged)
-        if os.fstat(staged).st_size != len(data):
-            raise RuntimeError("staged bundle is incomplete")
-        visible = os.stat(
+        staged_state = os.fstat(staged)
+        if (
+            not stat.S_ISREG(staged_state.st_mode)
+            or staged_state.st_size != len(data)
+            or staged_state.st_mode & 0o077
+        ):
+            raise RuntimeError("staged bundle is incomplete or not private")
+
+        visible_state = os.stat(
             snapshot.path.name,
             dir_fd=parent_fd,
             follow_symlinks=False,
         )
-        if _file_identity(visible) != snapshot.file_identity:
+        if _file_identity(visible_state) != snapshot.file_identity:
             raise ValueError("bundle name changed before update")
+
         os.replace(
             temporary,
             snapshot.path.name,
@@ -404,13 +511,24 @@ def atomic_replace_bundle(snapshot: BundleSnapshot, data: bytes) -> tuple[Path, 
         )
         renamed = True
         os.fsync(parent_fd)
-        if _stable_read_target(
-            snapshot.path,
-            label="updated bundle",
-            maximum=MAX_JSON_BYTES,
-        ) != data:
+
+        visible = os.open(snapshot.path.name, flags, dir_fd=parent_fd)
+        if _read_fd(visible, "updated bundle", MAX_JSON_BYTES) != data:
             raise RuntimeError("updated bundle bytes differ from staging")
+        visible_state = os.fstat(visible)
+        if visible_state.st_mode & 0o077:
+            raise RuntimeError("updated bundle permissions are not private")
+
+        verification_fd = _open_absolute_directory_nofollow(
+            snapshot.path.parent,
+            label="external evidence bundle parent",
+            fail=_fail,
+            expected_identities=snapshot.directories,
+        )
+        os.close(verification_fd)
     finally:
+        if visible is not None:
+            os.close(visible)
         if current is not None:
             os.close(current)
         if staged is not None:
