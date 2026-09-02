@@ -3,12 +3,20 @@
 from . import core as _core
 from .snapshot_io import install_snapshot_io as _install_snapshot_io
 
-# Install lexical-path snapshot semantics before any validator module imports
-# private I/O helpers from ``core``. This gives the entire package one immutable
-# byte view even when a symbolic link is retargeted between validation phases.
+# Install lexical-path snapshot semantics before any validator imports private
+# I/O helpers from ``core``. This gives the complete validation transaction one
+# immutable, aggregate-bounded byte view and binds ordinary directory objects,
+# not only symbolic-link syntax.
 _install_snapshot_io(_core)
 
 from . import acceptance as _acceptance
+from . import trust as _trust
+
+# ``trust.py`` historically normalized SPKI by handing the mutable source path
+# back to OpenSSL. Replace that module global with the snapshot-backed
+# normalizer before any registry is loaded.
+_trust._normalized_public_key_digest = _core._normalized_public_key_digest
+
 from .core import (
     EvidenceError,
     canonical_bundle_digest,
