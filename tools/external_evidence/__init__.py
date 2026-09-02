@@ -3,11 +3,18 @@
 from . import core as _core
 from .snapshot_io import install_snapshot_io as _install_snapshot_io
 
-# Install lexical-path snapshot semantics before any validator imports private
-# I/O helpers from ``core``. This gives the complete validation transaction one
-# immutable, aggregate-bounded byte view and binds ordinary directory objects,
-# not only symbolic-link syntax.
+# Install the bounded byte-snapshot primitives first.
 _install_snapshot_io(_core)
+
+# Replace resolve-first scope handling before any validator or signer imports
+# core helpers. Every evidence/key/signature path remains lexical and no-follow,
+# ancestor identities are pinned across the complete validation transaction,
+# and the visible final name must still identify the opened file after reading.
+from .lexical_scope_policy import (
+    install_lexical_scope_policy as _install_lexical_scope_policy,
+)
+
+_install_lexical_scope_policy(_core)
 
 # The executable name is not an authority boundary when PATH, loader variables,
 # or OpenSSL configuration remain caller controlled. Pin one root-owned,
@@ -27,9 +34,8 @@ from . import acceptance as _acceptance
 from . import submission as _submission
 from . import trust as _trust
 
-# ``trust.py`` historically normalized SPKI by handing the mutable source path
-# back to OpenSSL. Replace that module global with the snapshot-backed
-# normalizer before any registry is loaded.
+# Public-key normalization consumes the same pinned lexical byte snapshot used
+# for hashing, parsing, and Ed25519 verification.
 _trust._normalized_public_key_digest = _core._normalized_public_key_digest
 
 # Bind canonical contract bytes, not only a human-selected revision label, into
@@ -69,7 +75,7 @@ _install_global_authority_seat_policy(
 )
 
 # Public package, direct policy-module and CLI paths use the current trusted
-# clock and the already installed absolute-path OpenSSL custody policy. The
+# clock, lexical no-follow object custody, and absolute-path OpenSSL policy. The
 # private deterministic hook exists for unit tests only and is deliberately
 # absent from ``__all__``.
 validate_bundle, _validate_bundle_at_for_tests = _install_runtime_policy(
