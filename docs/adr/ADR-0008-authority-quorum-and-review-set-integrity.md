@@ -1,184 +1,204 @@
-# ADR-0008: Require complete issuer quorum and bind the final review set
+# ADR-0008: Version complete-closure policy, partition issuer claims, and bind the final review set
 
 - Status: accepted for G10 source
 - Date: 2026-09-02
 - Extends: `ADR-0004-external-evidence-authentication.md`
 - Extends: `ADR-0007-evidence-object-identity-and-bounded-custody.md`
-- Plan revision: `2026-09-02-g10-quorum-1`
+- Plan and contract revision: `2026-09-02-g10-quorum-1`
+- Policy ID: `hepta-external-complete-closure-v1`
 
 ## Context
 
-G9 authenticates each evidence submission and each reviewer decision under an
+G9 authenticates each evidence submission and reviewer decision under an
 externally pinned Ed25519 trust registry. It binds the candidate, claims,
-artifact digests, limitations, decision, reviewed gaps, and evidence-set digest.
-Those controls prevent a repository writer from inventing an authority identity
-or altering a signed statement.
+artifacts, limitations, decision, reviewed gaps, and evidence-set digest. Four
+complete-closure weaknesses remained.
 
-Two complete-closure weaknesses remained.
+First, the contract names multiple issuer classes for most product gaps, but the
+G9 validator accepted one submission per gap and therefore treated any one
+allowed class as sufficient.
 
-First, the canonical contract names more than one issuer authority class for
-several gaps. Examples include physical-device lab plus mobile release owner,
-credential provider plus incident owner, release signing plus pilot plus store
-authority, and repository administrator plus independent API observer. The G9
-bundle validator accepted only one submission per gap and therefore treated any
-one allowed class as sufficient. A single broadly authorized key could assert
-all required claims without the other named authority seats participating.
+Second, forcing every class to sign every claim would be an unusable repair. A
+credential provider cannot truthfully approve the incident owner's risk
+decision; a store authority cannot attest the signing authority's key custody;
+an API observer cannot claim to have configured branch protection. Claims need
+a versioned, exact authority scope.
 
-Second, each reviewer signature authenticated its own reviewer object and the
-complete evidence-set digest, but not the final reviewer roster or the
-acceptance-level state. A curator could remove a signed dissenting or limiting
-review, recompute the unsigned bundle digest, and leave the remaining reviewer
-signatures valid. The validator would see only the surviving reviews.
+Third, reviewer signatures did not bind the final reviewer roster or
+acceptance-level state and limitations. A curator could delete a signed dissent,
+recompute the unsigned bundle digest, and leave surviving reviewer signatures
+valid.
+
+Fourth, the immutable signer writes accepted successors below `successors/`,
+while repository CI previously searched only one top-level `bundle.json` name.
+A committed accepted successor could therefore evade protected-pin validation.
 
 ## Decision
 
+### Versioned contract and downgrade resistance
+
+The canonical external-evidence contract revision is
+`2026-09-02-g10-quorum-1` and explicitly identifies
+`2026-09-02-g9-authenticated-1` as its predecessor. The contract declares the
+complete-closure policy ID, all-class quorum mode, exact class-scoped claim
+mode, distinct-seat rules, review-manifest schema, and digest statement types.
+
+Issuer and reviewer canonical Ed25519 preimages already contain
+`contract_revision`; consequently, a G10-signed statement fails under the older
+G9 revision. Review-set and acceptance-context digest preimages additionally
+contain the G10 policy ID and revision. The signed review artifact repeats both
+values. A verifier cannot silently interpret a G10 package under the weaker G9
+semantics.
+
 ### Complete issuer quorum
 
-A bundle may contain multiple independently signed submissions for the same
-gap. For complete closure, every authority class listed in
-`contracts/external-evidence-envelope-v1.json` for that gap must have at least
-one cryptographically valid submission.
+A bundle may contain multiple independently signed submissions for one gap.
+Complete closure requires every authority class listed for that gap.
+Within the same gap, each seat uses:
 
-Within one gap:
+1. a distinct trust-registry key ID; and
+2. a distinct `(identity, organization)` pair.
 
-1. each authority seat uses a distinct trust-registry key ID;
-2. each authority seat uses a distinct `(identity, organization)` pair;
-3. every submission remains subject to the existing key usage, class, gap,
-   validity, revocation, artifact, claim, candidate, and signature checks; and
-4. one key or identity cannot be replayed under another allowed authority class
-   to manufacture quorum.
+One broad key or identity cannot fill multiple seats merely by changing the
+class string. All existing key usage, class, gap, validity, revocation,
+artifact, candidate, time, and signature checks remain active.
 
-The current contract requires every issuer submission to attest the complete
-required claim set for its gap. G10 therefore implements co-attestation: every
-named authority class signs the same complete claim boundary, while attaching
-the artifacts it is competent to issue. A later contract revision may divide
-claims by authority class, but it must not weaken full-class participation.
+### Exact class-scoped claim partition
 
-Partial bundles remain useful for collection and diagnostics. They return the
-missing gaps and missing issuer authority classes, but cannot become eligible
-and cannot produce `all_authority_owned_gaps_closed=true`.
+`required_claims_by_authority_class` is a disjoint, exhaustive partition of
+`required_claims` for each gap. At validator startup, G10 proves:
+
+- the mapping covers exactly the allowed gaps;
+- every named issuer class has one non-empty scope;
+- no claim is assigned twice;
+- no required claim is unassigned; and
+- no unknown claim is introduced.
+
+Each issuer submission must contain exactly its class scope. Missing claims and
+cross-scope claims fail before acceptance. The full gap claim boundary is true
+only after every class-specific signed submission is present. This lets each
+real authority attest only facts it owns while preserving complete coverage.
+
+Partial packages remain inspectable and report both missing gaps and missing
+classes, but can never become eligible or closed.
 
 ### Final review roster digest
 
-For a final accepted bundle, the reviewer list is an ordered final roster. G10
-computes `hepta.external-evidence-review-set.v1` over, for every reviewer:
+The final reviewer list is ordered. G10 computes
+`hepta.external-evidence-review-set.v1` over the policy ID/revision and, for
+each reviewer:
 
-- identity;
-- organization;
-- authority class;
-- key ID;
+- identity and organization;
+- authority class and key ID;
 - decision;
 - sorted reviewed gap IDs; and
 - signed timestamp.
 
-The list order is part of the digest. Adding, removing, replacing, or reordering
-a reviewer changes the digest.
+Adding, removing, replacing, or reordering a reviewer changes the digest.
 
 ### Acceptance context digest
 
-G10 computes `hepta.external-evidence-acceptance-context.v1` over:
-
-- acceptance state;
-- `reviewed_at`;
-- `decision_reference`;
-- limitations; and
-- the final review-set digest.
-
-The bundle digest is deliberately excluded to avoid a signature cycle.
+G10 computes `hepta.external-evidence-acceptance-context.v1` over the policy
+ID/revision, acceptance state, `reviewed_at`, `decision_reference`, limitations,
+and final review-set digest. The bundle digest is excluded to avoid a signature
+cycle.
 
 ### Signed closure manifest
 
-Every final review artifact must be UTF-8 JSON and contain:
+Every accepted review artifact must be UTF-8 JSON containing:
 
 ```json
 {
   "closure_manifest": {
     "schema_version": 1,
+    "policy_id": "hepta-external-complete-closure-v1",
+    "policy_revision": "2026-09-02-g10-quorum-1",
     "review_set_digest": "<64 lowercase hex>",
     "acceptance_context_digest": "<64 lowercase hex>"
   }
 }
 ```
 
-The existing reviewer Ed25519 statement already signs `review_uri` and
-`review_sha256`. Therefore the review artifact hash cryptographically binds the
-closure manifest without changing the G9 reviewer canonicalization or
-invalidating the existing signature profile.
+The reviewer Ed25519 statement signs `review_uri` and `review_sha256`, so it
+cryptographically binds this manifest without creating a digest cycle. Every
+final reviewer must carry the same roster and context digests. The manifest is
+required for every `accepted` bundle, not only when a caller passes
+`--require-complete`.
 
-All final reviewers must carry the same two digests. Validation first verifies
-the ordinary reviewer identity, authority, timing, review artifact hash, and
-Ed25519 signature. It then recomputes the final roster and acceptance context
-from the bundle and requires every signed artifact manifest to match.
+Removing a dissent, adding or replacing a reviewer, reordering the list, or
+changing accepted state, review time, decision reference, or limitations makes
+every surviving manifest inconsistent. Recomputing the curator-controlled
+bundle digest cannot repair it.
 
-This produces a co-signed final set:
+The manifest proves integrity of the final roster its members co-signed. It
+cannot discover a review never admitted to that roster; reviewer selection,
+external review registries, and organizational independence remain governance
+responsibilities.
 
-- removing a rejecting or limiting review changes the roster digest;
-- adding or replacing a reviewer changes the roster digest;
-- reordering reviews changes the roster digest;
-- changing accepted/rejected state, review time, decision reference, or
-  limitations changes the acceptance-context digest; and
-- recomputing the bundle self-hash cannot repair any mismatch.
+### Recursive committed-package admission
 
-The rule is applied whenever a bundle has the complete issuer authority set and
-declares `accepted`, even if a caller omits `--require-complete`. No API path may
-return `all_authority_owned_gaps_closed=true` without verified manifests.
+Repository qualification recursively inspects every bounded regular file under
+`evidence/external/`. It identifies an authority envelope by canonical
+`contract_id` plus `acceptance.state == "accepted"`, not by filename, suffix, or
+directory depth. Every discovered envelope is mapped to the nearest custody
+root containing `trust-registry.json` and `artifacts/`, then revalidated with:
 
-### Scope of the guarantee
+- `require_complete=true`;
+- `require_accepted=true`; and
+- protected `HEPTA_EXTERNAL_TRUST_REGISTRY_SHA256`.
 
-The manifest proves integrity of the final roster that its members co-signed.
-It cannot discover a review that was never admitted to that roster. Selection
-of the accountable reviewers, completeness of an external review register, and
-organizational independence remain governance and external-authority
-responsibilities. A future transparency-log integration may add global review
-discovery without replacing this local cryptographic invariant.
+An opaque filename or immutable successor path cannot hide an accepted package
+from CI.
 
 ## Required negative evidence
 
-The deterministic suite must prove that:
+The deterministic suite proves that:
 
 - a complete bundle missing any named issuer class fails;
-- the same key cannot fill two authority seats for one gap;
-- the same identity and organization cannot fill two seats through different
-  keys;
+- one key cannot fill two authority seats for one gap;
+- a class cannot omit its assigned claim or assert another class's claim;
+- the claim scopes are a disjoint exhaustive partition;
+- an issuer signature created under the G9 revision fails under G10;
 - a full distinct-authority bundle passes;
-- removing a signed dissenting review and recomputing the bundle digest fails;
+- removing a signed dissent and recomputing the bundle digest fails;
 - adding, replacing, or reordering final reviewers fails unless every reviewer
-  signs the new final roster;
+  signs the new roster;
 - mutating final limitations or decision context fails;
-- a missing, malformed, wrong-version, or mismatched closure manifest fails;
-- partial evidence remains inspectable but never reports closure; and
-- the external registry pin, key validity, evidence signatures, reviewer
-  coverage, and independence rules remain in force.
+- a missing, malformed, wrong-policy, wrong-version, or mismatched manifest
+  fails;
+- an accepted envelope with an opaque extension is still discovered; and
+- external pin, key validity, evidence signatures, reviewer coverage,
+  independence, and filesystem custody remain in force.
 
 ## Alternatives rejected
 
-- **Treat any allowed authority class as sufficient:** contradicts the named
-  multi-authority contract and allows one key to impersonate a complete
-  operational chain.
-- **Require a key to list all classes:** still permits one omnipotent key to fill
-  every seat.
-- **Keep one submission per gap and add unsigned co-signer names:** names are not
-  cryptographic participation.
-- **Rely only on the bundle digest:** the curator controls that self-hash.
-- **Sign each review independently without a roster:** allows post-sign removal.
-- **Include review artifact hashes inside the roster digest:** creates a
-  circular dependency because the artifacts contain the roster digest.
-- **Require an external transparency service immediately:** useful later, but
-  not necessary to close the repository-controlled final-roster deletion
-  weakness.
+- **Any allowed class is sufficient:** collapses a multi-party boundary.
+- **One omnipotent key lists all classes:** produces labels, not independent
+  participation.
+- **Every class signs every claim:** forces authorities to attest facts they do
+  not own and makes legitimate closure impracticable.
+- **Unsigned co-signer names:** provide no proof of participation.
+- **Only the bundle digest protects reviews:** the curator controls that hash.
+- **Independent review signatures without a roster:** permit post-sign removal.
+- **Reuse G9 contract revision:** enables semantic downgrade and ambiguous
+  verification.
+- **Scan only `*/bundle.json`:** misses immutable successors and trusts naming
+  conventions.
+- **Require a transparency service immediately:** useful for global review
+  discovery, but not necessary to close local final-roster deletion.
 
 ## Consequences
 
-A complete authority-owned package contains more submissions than gaps and may
-contain multiple artifacts per gap. Operators must enroll narrowly scoped keys
-for every named authority class and must prepare the complete reviewer roster
-before final reviewer signatures are issued.
+A complete package contains more submissions than gaps. Evidence operators must
+provision narrowly scoped keys for every named class, collect only class-owned
+claims and artifacts, freeze the final reviewer roster, generate the G10
+manifest, and then obtain reviewer signatures.
 
-Final review artifacts become machine-readable review envelopes. They may
-reference separate human-readable reports by content digest or opaque
-access-controlled identifier.
+Accepted packages committed at any successor depth trigger protected-pin CI
+validation. Intermediate or rejected packages remain non-authoritative.
 
-G10 closes only repository-controlled quorum and final-set integrity. It does
-not create a physical test, provider receipt, administrator readback, firmware
-authorization, independent assurance report, production signing identity,
-pilot result, store approval, or release decision.
+G10 closes repository-controlled quorum, claim scope, policy downgrade,
+review-set deletion, and package-discovery gaps. It does not create physical
+tests, provider receipts, administrator readback, firmware authorization,
+independent assurance, production signatures, pilot results, store approvals,
+or release authority.
