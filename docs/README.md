@@ -28,8 +28,30 @@ G9 is a stacked evidence-authentication and latest-head CI-custody layer. It doe
 
 `services/qualification/test_g9_metadata.py` verifies these supplements, their referenced paths, their synchronization with the G8 ledger and G9 contract, the explicit filesystem-custody closure, and the absence of private-key material in repository custody. `services/qualification/test_ci_latest_head_custody.py` independently verifies stale-run cancellation and exact-source identity checks in all seven jobs. Dedicated filesystem and signer-custody suites exercise ordinary-directory replacement, URI aliases, aggregate snapshot bounds, SPKI retargeting, private-key replacement, and exact-object bundle updates.
 
+## G10 layered machine truth
+
+G10 is a strict complete-closure admission layer over G9. It does not alter the
+individual Ed25519 statement profile and does not promote any inherited product
+row. Its supplements are:
+
+- `G10_STATE.json` — live source authority, zero-open repository status, claim
+  ceiling, and the unchanged inherited 12-gap set.
+- `G10_MODULES.json` — ownership and source/document/test/contract coverage for
+  authority quorum and final review-set integrity.
+- `G10_GAP_LEDGER.json` — source closure records for `HG-0076` and `HG-0077`.
+- `development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md` — implementation,
+  validation order, failure semantics, hostile tests, and external boundary.
+
+`services/qualification/test_g10_metadata.py` verifies the G10 supplements and
+that every package caller uses the strict complete validator.
+`services/qualification/test_external_evidence_complete_closure.py` proves that
+all named issuer classes must participate through distinct keys and identities,
+and that removing or reordering a final review or changing the acceptance
+context after signing fails closed.
+
 ## Development
 
+- `development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md`
 - `development/G9_TERMINAL_EXTERNAL_CLOSURE.md`
 - `development/G9_FILESYSTEM_CUSTODY_HARDENING.md`
 - `development/G8_PRODUCTION_AUTHORITY_CLOSURE.md`
@@ -51,7 +73,7 @@ G9 is a stacked evidence-authentication and latest-head CI-custody layer. It doe
 - `operations/PRIVACY_SECURITY_REVIEW_CHECKLIST.md`
 - `operations/RELEASE_AND_ROLLBACK_RUNBOOK.md`
 - `operations/CREDENTIAL_INCIDENT_RUNBOOK.md`
-- `../evidence/external/README.md` — authenticated evidence custody, stable byte snapshots, secure detached-signature creation, external trust pin, and validation procedure.
+- `../evidence/external/README.md` — authenticated evidence custody, stable byte snapshots, secure detached-signature creation, complete issuer quorum, final review-set binding, external trust pin, and validation procedure.
 
 ## Architecture decisions
 
@@ -62,6 +84,7 @@ G9 is a stacked evidence-authentication and latest-head CI-custody layer. It doe
 - `adr/ADR-0005-latest-head-ci-concurrency.md` — pull-request/branch concurrency custody, stale-run cancellation and independent exact-source verification.
 - `adr/ADR-0006-external-evidence-filesystem-custody.md` — normalized lexical-path snapshots, descriptor-stable bounded reads, symlink-retarget fencing, and exclusive no-follow detached-signature creation.
 - `adr/ADR-0007-evidence-object-identity-and-bounded-custody.md` — ordinary-object identity binding, canonical URI spelling, aggregate snapshot bounds, snapshot-backed key normalization, private-key custody, and atomic/immutable bundle successors.
+- `adr/ADR-0008-authority-quorum-and-review-set-integrity.md` — all-class issuer quorum, distinct authority seats, final ordered reviewer roster, and signed acceptance-context manifests.
 
 A later plan or ADR must state what it supersedes and update the applicable Current State, Gap Ledger, Evidence Index, module registry, validators, tests and affected machine contracts in the same change.
 
