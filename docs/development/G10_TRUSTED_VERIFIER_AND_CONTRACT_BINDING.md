@@ -13,12 +13,13 @@ turn repository source, unit tests, or CI into E5–E7 evidence.
 
 | Component | Responsibility |
 |---|---|
-| `runtime_policy.py` | Separates public current-time validation from the private deterministic test clock and rejects cryptographic executable overrides |
+| `runtime_policy.py` | Separates public current-time validation from the private deterministic test clock and rejects explicit cryptographic executable overrides |
+| `openssl_policy.py` | Pins root-owned `/usr/bin/openssl`, verifies path-object identity, and supplies a minimal subprocess environment without caller PATH, OpenSSL module/configuration, or dynamic-loader injection |
 | `semantic_binding.py` | Installs contract-content-bound issuer, evidence-set, and reviewer canonical functions |
 | `__init__.py` | Enforces installation order and exports only the public runtime validator |
 | `cli.py` | Exposes no caller-selectable OpenSSL path and invokes the public validator |
 | `validate_external_evidence.py` | Preserves historical test-fixture compatibility without changing executable CLI authority |
-| `test_external_evidence_runtime_policy.py` | Exercises public clock and executable-injection negatives |
+| `test_external_evidence_runtime_policy.py` | Exercises public clock, executable argument, PATH shadowing, system-binary identity, and environment-injection negatives |
 | `test_external_evidence_contract_binding.py` | Exercises same-revision semantic drift and revision/content mismatch negatives |
 
 ## Runtime validation state machine
@@ -30,6 +31,8 @@ caller
       -> reject custom openssl_binary
       -> capture current UTC time
       -> enter one validation_snapshot transaction
+      -> resolve only verified /usr/bin/openssl
+      -> replace caller environment with minimal trusted environment
       -> read and validate contract/bundle/registry/evidence
       -> return result
 
@@ -38,6 +41,7 @@ unit-test fixture
       -> require explicit fixed now
       -> reject custom openssl_binary
       -> enter the same validation_snapshot transaction
+      -> use the same absolute executable and environment policy
       -> run the same underlying policy
 ```
 
@@ -46,6 +50,43 @@ uses `tools.external_evidence.cli.main`, whose module imported the public
 acceptance alias after package initialization. Loading
 `tools/validate_external_evidence.py` under the historical fixture module name
 selects the private hook only for deterministic unit tests.
+
+## Cryptographic executable custody
+
+A command name is not an executable identity. G10 therefore does not call
+`shutil.which` or inherit caller `PATH` on an authority-bearing path.
+
+Before each public-key parse, normalized SPKI calculation, signature
+verification, private-key type check, or signing operation,
+`openssl_policy.py` requires:
+
+- `/`, `/usr`, and `/usr/bin` are real directories owned by UID 0 and not
+  group/world writable;
+- `/usr/bin/openssl` is a real root-owned executable regular file and is not
+  group/world writable;
+- the executable opens with `O_NOFOLLOW`; and
+- lexical-before, opened-descriptor, and lexical-after identities match.
+
+The subprocess receives only:
+
+```text
+HOME=/nonexistent
+LANG=C
+LC_ALL=C
+OPENSSL_CONF=/dev/null
+PATH=/usr/bin:/bin
+TZ=UTC
+```
+
+Caller `OPENSSL_MODULES`, `LD_PRELOAD`, `LD_LIBRARY_PATH`,
+`DYLD_INSERT_LIBRARIES`, `DYLD_LIBRARY_PATH`, `OPENSSL_CONF`, and `PATH` are not
+inherited. A caller cannot supply `env=`, `executable=`, a shell, or another
+program. Unsupported hosts fail closed instead of using a fallback binary.
+
+The verifier still trusts the operating-system kernel, root-controlled system
+paths, checked binary bytes and runtime libraries, and its own Python process.
+Root-level host compromise and arbitrary code already executing inside the
+verifier remain host-attestation and release-custody concerns.
 
 ## Contract binding
 
@@ -70,8 +111,11 @@ another object.
 
 ## Failure semantics
 
-Public clock or OpenSSL override attempts fail before any evidence read. No
-partial validation result is returned as success.
+Public clock or executable override attempts fail before any evidence read. An
+untrusted `PATH` entry is never executed. A missing, linked, non-root-owned,
+group/world-writable, non-executable, or identity-changing system binary fails
+closed. Caller subprocess environment or shell/executable substitution is
+rejected. No partial validation result is returned as success.
 
 Contract revision/content disagreement raises `EvidenceError`. Contract file
 replacement during one transaction remains subject to the G9 exact-object and
@@ -79,24 +123,9 @@ aggregate-snapshot controls. A contract changed between transactions is a new
 semantic object and requires fresh issuer and reviewer signatures.
 
 The private test hook does not bypass signature, key, time, artifact, custody,
-quorum, claim-scope, or review-manifest validation. It controls only the
-validation instant used by deterministic tests.
-
-## Security boundary
-
-Trusted runtime dependencies are:
-
-- the operating-system kernel and filesystem primitives;
-- a correct system UTC clock;
-- the verifier Python process and source object;
-- the installed canonical OpenSSL command and its runtime dependencies; and
-- the externally protected trust-registry digest.
-
-An arbitrary evidence submitter controls none of these. Host compromise,
-malicious `PATH`, or replacement of the installed system OpenSSL is an
-operational-host failure and must be handled by hardened release hosts,
-provenance, and independent custody; it is not repaired by accepting a caller
-path argument.
+quorum, claim-scope, review-manifest, executable, or subprocess-environment
+validation. It controls only the validation instant used by deterministic
+tests.
 
 ## Tests
 
@@ -108,9 +137,13 @@ Required tests include:
 4. executable parser rejects `--openssl-binary`;
 5. compatibility in-memory verifier rejects custom OpenSSL;
 6. private test hook requires `now` and rejects custom OpenSSL;
-7. same-revision contract mutation changes submission, evidence-set, and review
-   preimages; and
-8. revision argument/current-contract mismatch fails.
+7. resolver returns root-owned, non-writable `/usr/bin/openssl`;
+8. minimal environment excludes loader and OpenSSL module overrides;
+9. a fake `openssl` placed first on caller `PATH` is not executed during
+   private-key validation, signing, or verification;
+10. same-revision contract mutation changes submission, evidence-set, and review
+    preimages; and
+11. revision argument/current-contract mismatch fails.
 
 The complete repository suite must also continue to pass every G8, G9, and
 prior G10 test, both mobile builds, native tests, sanitizers, all-ref secret
@@ -123,16 +156,23 @@ any canonical contract change. A contract revision label alone is not enough to
 reuse a signature; the exact canonical contract digest is authoritative inside
 the signed preimage.
 
-Operators must invoke the canonical CLI without a crypto-binary override and on
-a host whose clock and OpenSSL installation are controlled. Tests may use the
-private fixed-clock hook only inside the repository qualification suite.
+Operators invoke the canonical CLI without a crypto-binary or environment
+override on a host that provides root-owned, non-writable
+`/usr/bin/openssl`. Tests may use the private fixed-clock hook only inside the
+repository qualification suite. A host without this exact executable boundary
+is unsupported and must fail rather than silently selecting another program.
 
 ## Reopen conditions
 
-Reopen `HG-0080` if any public package, module, compatibility, or CLI path can:
+Reopen `HG-0080` if any public package, module, compatibility, signing, or CLI
+path can:
 
 - supply validation time;
-- select a different cryptographic executable;
+- select a different cryptographic executable directly or through `PATH`;
+- inherit OpenSSL configuration/provider or dynamic-loader injection variables;
+- provide a subprocess environment, executable override, or shell;
+- accept a linked, mutable, non-root-owned, or group/world-writable OpenSSL
+  object or ancestor;
 - receive test-clock authority through a public export; or
 - reach an unwrapped underlying validator.
 
