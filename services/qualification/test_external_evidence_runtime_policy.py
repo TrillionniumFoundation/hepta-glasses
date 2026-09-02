@@ -137,6 +137,46 @@ class ExternalEvidenceRuntimePolicyTest(unittest.TestCase):
         ):
             self.assertNotIn(prohibited, environment)
 
+    def test_proxy_rejects_positional_popen_options(self) -> None:
+        with self.assertRaisesRegex(
+            EvidenceError,
+            "positional subprocess options are prohibited",
+        ):
+            evidence_core.subprocess.run(
+                ["openssl", "version"],
+                -1,
+                "/tmp/attacker-executable",
+            )
+
+    def test_proxy_rejects_execution_context_keywords(self) -> None:
+        cases = (
+            ({"env": {}}, "caller-supplied subprocess environment"),
+            ({"executable": "/tmp/attacker-executable"}, "executable override"),
+            ({"shell": True}, "shell execution"),
+            ({"cwd": "/tmp"}, "unsupported OpenSSL subprocess options"),
+            ({"preexec_fn": lambda: None}, "unsupported OpenSSL subprocess options"),
+            ({"pass_fds": (2,)}, "unsupported OpenSSL subprocess options"),
+        )
+        for kwargs, message in cases:
+            with self.subTest(kwargs=tuple(kwargs)):
+                with self.assertRaisesRegex(EvidenceError, message):
+                    evidence_core.subprocess.run(
+                        ["openssl", "version"],
+                        **kwargs,
+                    )
+
+    def test_proxy_rejects_binary_and_nul_command_arguments(self) -> None:
+        with self.assertRaisesRegex(
+            EvidenceError,
+            "argument 0 must be text",
+        ):
+            evidence_core.subprocess.run([b"openssl", b"version"])
+        with self.assertRaisesRegex(
+            EvidenceError,
+            "argument 1 contains NUL",
+        ):
+            evidence_core.subprocess.run(["openssl", "version\x00ignored"])
+
     def test_signing_and_verification_ignore_path_shadow(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
