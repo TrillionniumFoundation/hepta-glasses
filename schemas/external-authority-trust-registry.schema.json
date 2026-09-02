@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hepta.invalid/schemas/external-authority-trust-registry-v1.json",
+  "title": "Hepta externally pinned authority trust registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "registry_id",
+    "registry_revision",
+    "issued_at",
+    "expires_at",
+    "keys"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "registry_id": {"const": "hepta-external-authority-trust-registry-v1"},
+    "registry_revision": {"type": "string", "minLength": 1, "maxLength": 200},
+    "issued_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "keys": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/key"}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gapId": {
+      "enum": [
+        "HG-0010",
+        "HG-0011",
+        "HG-0012",
+        "HG-0013",
+        "HG-0014",
+        "HG-0015",
+        "HG-0016",
+        "HG-0017",
+        "HG-0018",
+        "HG-0021",
+        "HG-0022",
+        "HG-0044"
+      ]
+    },
+    "key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key_id",
+        "identity",
+        "organization",
+        "algorithm",
+        "public_key_uri",
+        "public_key_sha256",
+        "usages",
+        "authority_classes",
+        "allowed_gap_ids",
+        "valid_from",
+        "valid_until",
+        "revoked_at"
+      ],
+      "properties": {
+        "key_id": {"type": "string", "minLength": 1, "maxLength": 500},
+        "identity": {"type": "string", "minLength": 1, "maxLength": 300},
+        "organization": {"type": "string", "minLength": 1, "maxLength": 300},
+        "algorithm": {"const": "ed25519"},
+        "public_key_uri": {"type": "string", "pattern": "^key://[A-Za-z0-9._/-]{1,500}$"},
+        "public_key_sha256": {"$ref": "#/$defs/sha256"},
+        "usages": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["evidence_issuer", "acceptance_reviewer", "independent_reviewer"]
+          }
+        },
+        "authority_classes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,79}$"}
+        },
+        "allowed_gap_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/gapId"}
+        },
+        "valid_from": {"type": "string", "format": "date-time"},
+        "valid_until": {"type": "string", "format": "date-time"},
+        "revoked_at": {"type": ["string", "null"], "format": "date-time"}
+      }
+    }
+  }
+}
