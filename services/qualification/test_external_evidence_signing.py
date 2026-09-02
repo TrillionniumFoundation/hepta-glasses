@@ -36,6 +36,8 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        self.custody = self.root / "custody"
+        self.custody.mkdir()
         self.private = self.root / "private.pem"
         self.public = self.root / "public.pem"
         subprocess.run(
@@ -121,7 +123,7 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
         }
 
     def _write_bundle(self, bundle: dict[str, object]) -> Path:
-        path = self.root / "bundle.json"
+        path = self.custody / "bundle.json"
         path.write_text(json.dumps(bundle), encoding="utf-8")
         return path
 
@@ -156,7 +158,7 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
             signer.sign_ed25519(private_key, b"not an Ed25519 statement")
 
     def test_signer_rejects_duplicate_json_members_before_rewrite(self) -> None:
-        path = self.root / "duplicate-bundle.json"
+        path = self.custody / "duplicate-bundle.json"
         path.write_text(
             '{"contract_id":"first","contract_id":"second"}',
             encoding="utf-8",
@@ -174,7 +176,7 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
     def test_write_signature_refuses_overwrite(self) -> None:
         uri = "artifact://signatures/test.sig"
         path, digest = signer.write_signature(
-            custody_root=self.root,
+            custody_root=self.custody,
             signature_uri=uri,
             signature=b"first",
         )
@@ -182,15 +184,15 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
         self.assertEqual(path.read_bytes(), b"first")
         with self.assertRaisesRegex(ValueError, "refusing to overwrite"):
             signer.write_signature(
-                custody_root=self.root,
+                custody_root=self.custody,
                 signature_uri=uri,
                 signature=b"second",
             )
 
     def test_write_signature_rejects_symlink_directory_component(self) -> None:
-        actual = self.root / "actual-signatures"
+        actual = self.custody / "actual-signatures"
         actual.mkdir()
-        alias = self.root / "signatures"
+        alias = self.custody / "signatures"
         try:
             alias.symlink_to(actual.name, target_is_directory=True)
         except OSError as error:
@@ -198,14 +200,14 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "unsafe directory"):
             signer.write_signature(
-                custody_root=self.root,
+                custody_root=self.custody,
                 signature_uri="artifact://signatures/test.sig",
                 signature=b"signature",
             )
         self.assertFalse((actual / "test.sig").exists())
 
     def test_write_signature_rejects_dangling_symlink_destination(self) -> None:
-        signatures = self.root / "signatures"
+        signatures = self.custody / "signatures"
         signatures.mkdir()
         destination = signatures / "test.sig"
         target = signatures / "redirected.sig"
@@ -216,7 +218,7 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "refusing to overwrite"):
             signer.write_signature(
-                custody_root=self.root,
+                custody_root=self.custody,
                 signature_uri="artifact://signatures/test.sig",
                 signature=b"signature",
             )
@@ -227,7 +229,7 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
         result = signer.sign_submission(
             Namespace(
                 bundle=path,
-                custody_root=self.root,
+                custody_root=self.custody,
                 index=0,
                 private_key=self.private,
                 signature_uri="artifact://signatures/submission.sig",
@@ -247,7 +249,7 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
             contract_revision=self.contract_revision,
         )
         self.assertEqual(attestation["statement_digest"], hashlib.sha256(payload).hexdigest())
-        signature = (self.root / "signatures/submission.sig").read_bytes()
+        signature = (self.custody / "signatures/submission.sig").read_bytes()
         validator.verify_ed25519(
             self.public.read_text(encoding="utf-8"),
             payload,
@@ -261,7 +263,7 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
         result = signer.sign_reviewer(
             Namespace(
                 bundle=path,
-                custody_root=self.root,
+                custody_root=self.custody,
                 index=0,
                 private_key=self.private,
                 signature_uri="artifact://signatures/reviewer.sig",
@@ -277,7 +279,7 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
             contract_revision=self.contract_revision,
         )
         self.assertEqual(reviewer["statement_digest"], hashlib.sha256(payload).hexdigest())
-        signature = (self.root / "signatures/reviewer.sig").read_bytes()
+        signature = (self.custody / "signatures/reviewer.sig").read_bytes()
         validator.verify_ed25519(
             self.public.read_text(encoding="utf-8"),
             payload,
@@ -292,7 +294,7 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
             signer.sign_reviewer(
                 Namespace(
                     bundle=path,
-                    custody_root=self.root,
+                    custody_root=self.custody,
                     index=0,
                     private_key=self.private,
                     signature_uri="artifact://signatures/reviewer.sig",
