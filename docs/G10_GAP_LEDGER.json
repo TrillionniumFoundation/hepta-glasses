@@ -90,6 +90,7 @@
       "status": "CLOSED_SOURCE",
       "evidence": [
         "tools/external_evidence/runtime_policy.py",
+        "tools/external_evidence/openssl_policy.py",
         "tools/external_evidence/cli.py",
         "tools/external_evidence/__init__.py",
         "tools/validate_external_evidence.py",
@@ -97,7 +98,7 @@
         "docs/development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md",
         "docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md"
       ],
-      "close_criteria": "The supported package API, direct complete_closure module, package-name compatibility import and executable CLI use the trusted current system clock and canonical OpenSSL command. They reject a caller-supplied validation time and any custom OpenSSL executable before reading evidence. The CLI exposes no cryptographic-binary override. The deterministic underscored clock hook is test-only and not a security sandbox against arbitrary code already executing inside the trusted verifier process; operational validation must run in a controlled process that executes no untrusted Python. Expired, revoked or future-dated evidence cannot be made current through a supported authority-bearing entrypoint, and an attacker-selected executable cannot manufacture cryptographic success."
+      "close_criteria": "The supported package API, direct complete_closure module, package-name compatibility import, verifier CLI and signing path use the trusted current system clock and only the absolute /usr/bin/openssl executable. Every path ancestor and the executable must be a real root-owned, non-group/world-writable object; the executable is opened with no-follow semantics and its lexical/opened/post-check identity must agree. Cryptographic subprocesses run under a minimal deterministic environment and do not inherit caller PATH, OPENSSL_CONF, OPENSSL_MODULES, LD_PRELOAD, DYLD injection variables or another environment override. Caller-supplied validation time, custom executable, shell execution, subprocess executable replacement and caller environment are rejected before cryptographic use. The CLI exposes no cryptographic-binary override. The deterministic underscored clock hook is test-only and not a sandbox against arbitrary code already executing inside the trusted verifier process. Hostile tests prove a same-name attacker program placed first on PATH is not executed for private-key validation, signing or verification."
     },
     {
       "id": "HG-0081",
