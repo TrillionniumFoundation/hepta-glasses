@@ -82,23 +82,23 @@ class ExternalEvidenceAuthoritySeatScopeTest(support.ExternalEvidenceFixture):
             gap_id="HG-0010",
             authority_class="physical_device_lab",
         )
-        speech = self._submission(
+        store = self._submission(
             bundle,
-            gap_id="HG-0018",
-            authority_class="speech_provider_owner",
+            gap_id="HG-0012",
+            authority_class="store_authority",
         )
         physical_issuer = dict(physical["issuer"])
         physical_key_id = str(physical_issuer["key_id"])
         physical_record = self._registry_record(physical_key_id)
         physical_record["authority_classes"] = sorted(
-            set(physical_record["authority_classes"]) | {"speech_provider_owner"}
+            set(physical_record["authority_classes"]) | {"store_authority"}
         )
         physical_record["allowed_gap_ids"] = sorted(
-            set(physical_record["allowed_gap_ids"]) | {"HG-0018"}
+            set(physical_record["allowed_gap_ids"]) | {"HG-0012"}
         )
-        speech["issuer"] = {
+        store["issuer"] = {
             **physical_issuer,
-            "authority_class": "speech_provider_owner",
+            "authority_class": "store_authority",
         }
         self.registry_digest = self._write_registry()
         bundle["trust_registry"]["sha256"] = self.registry_digest
