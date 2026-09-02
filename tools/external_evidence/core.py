@@ -215,6 +215,9 @@ def canonical_submission_statement(
     contract_revision: str,
 ) -> bytes:
     unsigned = {key: value for key, value in submission.items() if key != "attestation"}
+    attestation = submission.get("attestation")
+    signed_at = attestation.get("signed_at") if isinstance(attestation, Mapping) else None
+    unsigned["attestation"] = {"signed_at": signed_at}
     return canonical_bytes(
         {
             "statement_type": "hepta.external-evidence-submission.v1",
