@@ -50,16 +50,18 @@
       "evidence": [
         "contracts/external-evidence-envelope-v1.json",
         "tools/external_evidence/complete_closure.py",
+        "tools/external_evidence/__init__.py",
         "tools/validate_external_evidence.py",
         "services/qualification/external_evidence_test_support.py",
         "services/qualification/test_external_evidence_complete_closure.py",
+        "services/qualification/test_external_evidence_entrypoint_snapshot.py",
         "services/qualification/test_g9_metadata.py",
         "services/qualification/test_g10_metadata.py",
         "evidence/external/README.md",
         "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
         "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md"
       ],
-      "close_criteria": "The canonical external-evidence contract revision is 2026-09-02-g10-quorum-1 and explicitly identifies its G9 predecessor, all-class quorum mode, exact class-scoped claim mode, distinct authority seats and review-manifest profile. Required claims are a validated disjoint partition across the named authority classes for each gap. Each issuer may sign exactly its assigned claims; missing or cross-scope claims fail before acceptance. Contract revision is inside issuer and reviewer signature preimages, and policy ID/revision are inside review-set and acceptance-context digests, so a G10 package cannot be accepted by the older G9 semantic revision."
+      "close_criteria": "The canonical external-evidence contract revision is 2026-09-02-g10-quorum-1 and explicitly identifies its G9 predecessor, all-class quorum mode, exact class-scoped claim mode, distinct authority seats and review-manifest profile. Required claims are a validated disjoint partition across the named authority classes for each gap. Each issuer may sign exactly its assigned claims; missing or cross-scope claims fail before acceptance. Contract revision is inside issuer and reviewer signature preimages, and policy ID/revision are inside review-set and acceptance-context digests, so a G10 package cannot be accepted by the older G9 semantic revision. The policy module itself, the acceptance-module alias, the CLI and the package-level validator all resolve to the same immutable, aggregate-bounded validation-snapshot entrypoint; explicitly importing complete_closure cannot bypass filesystem custody."
     },
     {
       "id": "HG-0079",
