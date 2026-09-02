@@ -18,7 +18,8 @@ def install_runtime_policy(
     verifier's clock or cryptographic executable. Public package, direct module,
     and CLI paths therefore use the current trusted system clock and the
     repository's fixed OpenSSL command selection. Deterministic unit tests use
-    the separately returned private hook and can inject only their clock.
+    the separately returned private hook and can inject only a timezone-aware
+    clock.
     """
 
     raw_validate = complete_closure.validate_bundle
@@ -50,8 +51,15 @@ def install_runtime_policy(
 
     @wraps(raw_validate)
     def validate_bundle_at_for_tests(*args: Any, **kwargs: Any) -> Any:
-        if "now" not in kwargs or kwargs["now"] is None:
-            raise TypeError("private deterministic validation requires now")
+        fixed_now = kwargs.get("now")
+        if not isinstance(fixed_now, datetime):
+            raise TypeError(
+                "private deterministic validation requires a datetime now"
+            )
+        if fixed_now.tzinfo is None or fixed_now.utcoffset() is None:
+            raise TypeError(
+                "private deterministic validation requires timezone-aware now"
+            )
         openssl_binary = kwargs.pop("openssl_binary", "openssl")
         _require_canonical_openssl(openssl_binary)
         return snapshot_validate(
