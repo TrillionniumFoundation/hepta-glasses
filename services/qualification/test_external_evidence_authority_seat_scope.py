@@ -75,6 +75,13 @@ class ExternalEvidenceAuthoritySeatScopeTest(support.ExternalEvidenceFixture):
             if record["key_id"] == key_id
         )
 
+    def test_partial_collection_does_not_become_false_closure(self) -> None:
+        bundle = self._bundle(["HG-0010", "HG-0013"])
+        result = self._validate(bundle)
+        self.assertFalse(result["all_authority_owned_gaps_closed"])
+        self.assertTrue(result["missing_gaps"])
+        self.assertTrue(result["missing_issuer_authority_classes"])
+
     def test_one_key_cannot_span_different_authority_classes_across_gaps(self) -> None:
         bundle = self._all_gap_bundle()
         physical = self._submission(
