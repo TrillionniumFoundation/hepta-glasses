@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "plan_revision": "2026-09-02-g10-quorum-1",
+  "extends_plan_revision": "2026-09-02-g9-authenticated-1",
+  "source_authority": {
+    "repository": "TrillionniumFoundation/hepta-glasses",
+    "branch": "work/hepta-g10-authority-quorum-review-integrity-20260902",
+    "identity_rule": "live_pull_request_head_and_tree",
+    "self_attested_sha_is_authoritative": false,
+    "exact_head_ci_required": true,
+    "independent_latest_head_review_required": true
+  },
+  "repository_actionable": {
+    "open": 0,
+    "closed_source": [
+      "HG-0076",
+      "HG-0077"
+    ],
+    "module_registry": "docs/G10_MODULES.json",
+    "gap_ledger": "docs/G10_GAP_LEDGER.json",
+    "validator_test": "services/qualification/test_g10_metadata.py"
+  },
+  "authority_owned": {
+    "inherited_blocked_count": 12,
+    "gap_ids": [
+      "HG-0010",
+      "HG-0011",
+      "HG-0012",
+      "HG-0013",
+      "HG-0014",
+      "HG-0015",
+      "HG-0016",
+      "HG-0017",
+      "HG-0018",
+      "HG-0021",
+      "HG-0022",
+      "HG-0044"
+    ],
+    "closure_rule": "Every authority class named for a gap must sign through a distinct pinned key and identity; every final reviewer must bind the same review roster and acceptance context; real external evidence and independent acceptance remain required."
+  },
+  "claim_ceiling": "G10 closes repository-controlled quorum and final-review-set integrity only; it cannot manufacture E5-E7, administrative, upstream, physical, provider, vendor, independent-assurance, signing, pilot, store, or release authority."
+}
