@@ -8,7 +8,10 @@ import unittest
 from pathlib import Path
 
 SUPPORT_PATH = Path(__file__).with_name("external_evidence_test_support.py")
-SPEC = importlib.util.spec_from_file_location("external_evidence_test_support", SUPPORT_PATH)
+SPEC = importlib.util.spec_from_file_location(
+    "external_evidence_test_support",
+    SUPPORT_PATH,
+)
 assert SPEC is not None and SPEC.loader is not None
 support = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = support
@@ -31,7 +34,8 @@ class ExternalEvidenceAdversarialTest(support.ExternalEvidenceFixture):
         artifact["signature_uri"] = f"artifact://{relative.as_posix()}"
         artifact["signature_sha256"] = hashlib.sha256(b"z" * 64).hexdigest()
         with self.assertRaisesRegex(
-            external_evidence.EvidenceError, "cryptographic verification failed"
+            external_evidence.EvidenceError,
+            "cryptographic verification failed",
         ):
             self._validate(bundle)
 
@@ -44,23 +48,36 @@ class ExternalEvidenceAdversarialTest(support.ExternalEvidenceFixture):
         issuer_record["public_key_sha256"] = replacement_digest
         new_digest = self._write_registry()
         bundle["trust_registry"]["sha256"] = new_digest
-        with self.assertRaisesRegex(external_evidence.EvidenceError, "external pin mismatch"):
+        with self.assertRaisesRegex(
+            external_evidence.EvidenceError,
+            "external pin mismatch",
+        ):
             self._validate(bundle, registry_digest=self.registry_digest)
 
     def test_revoked_key_is_rejected(self) -> None:
         bundle = self._bundle(["HG-0017"])
-        self.registry_document["keys"][0]["revoked_at"] = "2026-09-02T08:00:00Z"
+        self.registry_document["keys"][0]["revoked_at"] = (
+            "2026-09-02T08:00:00Z"
+        )
         self.registry_digest = self._write_registry()
         bundle["trust_registry"]["sha256"] = self.registry_digest
-        with self.assertRaisesRegex(external_evidence.EvidenceError, "is revoked"):
+        with self.assertRaisesRegex(
+            external_evidence.EvidenceError,
+            "is revoked",
+        ):
             self._validate(bundle)
 
     def test_expired_key_is_rejected(self) -> None:
         bundle = self._bundle(["HG-0017"])
-        self.registry_document["keys"][0]["valid_until"] = "2026-09-02T11:00:00Z"
+        self.registry_document["keys"][0]["valid_until"] = (
+            "2026-09-02T11:00:00Z"
+        )
         self.registry_digest = self._write_registry()
         bundle["trust_registry"]["sha256"] = self.registry_digest
-        with self.assertRaisesRegex(external_evidence.EvidenceError, "is expired"):
+        with self.assertRaisesRegex(
+            external_evidence.EvidenceError,
+            "is expired",
+        ):
             self._validate(bundle)
 
     def test_cross_gap_authority_reuse_is_rejected(self) -> None:
@@ -68,23 +85,38 @@ class ExternalEvidenceAdversarialTest(support.ExternalEvidenceFixture):
         self.registry_document["keys"][0]["allowed_gap_ids"] = ["HG-0010"]
         self.registry_digest = self._write_registry()
         bundle["trust_registry"]["sha256"] = self.registry_digest
-        with self.assertRaisesRegex(external_evidence.EvidenceError, "not authorized for gaps"):
+        with self.assertRaisesRegex(
+            external_evidence.EvidenceError,
+            "not authorized for gaps",
+        ):
             self._validate(bundle)
 
     def test_issuer_as_reviewer_alias_is_rejected(self) -> None:
-        bundle = self._bundle(list(self.contract["allowed_gap_ids"]))
+        bundle = self._complete_bundle(
+            list(self.contract["allowed_gap_ids"])
+        )
         self._accept(bundle)
         reviewer = bundle["acceptance"]["reviewers"][0]
         reviewer["identity"] = "fixture-evidence-authority"
         reviewer["organization"] = "fixture-evidence-org"
         reviewer["key_id"] = "issuer-key"
-        with self.assertRaisesRegex(external_evidence.EvidenceError, "issuer alias"):
+        with self.assertRaisesRegex(
+            external_evidence.EvidenceError,
+            "issuer alias",
+        ):
             self._validate(bundle, complete=True, accepted=True)
 
-    def test_fabricated_accepted_bundle_without_external_pin_is_rejected(self) -> None:
-        bundle = self._bundle(list(self.contract["allowed_gap_ids"]))
+    def test_fabricated_accepted_bundle_without_external_pin_is_rejected(
+        self,
+    ) -> None:
+        bundle = self._complete_bundle(
+            list(self.contract["allowed_gap_ids"])
+        )
         self._accept(bundle)
-        with self.assertRaisesRegex(external_evidence.EvidenceError, "out-of-band"):
+        with self.assertRaisesRegex(
+            external_evidence.EvidenceError,
+            "out-of-band",
+        ):
             external_evidence.validate_bundle(
                 self._write_bundle(bundle),
                 artifact_root=self.artifact_root,
