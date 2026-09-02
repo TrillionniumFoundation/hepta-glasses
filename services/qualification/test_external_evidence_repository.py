@@ -41,8 +41,9 @@ def _read_json_object(path: Path) -> dict[str, Any] | None:
     The initial lexical-object identity must equal the object opened with
     ``O_NOFOLLOW``. The descriptor identity must then remain unchanged for the
     complete bounded read. A replacement between discovery and open, a symbolic
-    link, a special object, an oversized file, or an unstable read is ignored
-    rather than being promoted into an accepted-envelope candidate.
+    link, a special object, an oversized file, an unsupported no-follow API, or
+    an unstable read is ignored rather than being promoted into an accepted
+    envelope candidate.
     """
 
     descriptor: int | None = None
@@ -52,12 +53,12 @@ def _read_json_object(path: Path) -> dict[str, Any] | None:
             return None
         if lexical_status.st_size > MAX_DISCOVERY_JSON_BYTES:
             return None
+        if not hasattr(os, "O_NOFOLLOW"):
+            return None
 
-        flags = os.O_RDONLY
+        flags = os.O_RDONLY | os.O_NOFOLLOW
         if hasattr(os, "O_CLOEXEC"):
             flags |= os.O_CLOEXEC
-        if hasattr(os, "O_NOFOLLOW"):
-            flags |= os.O_NOFOLLOW
         descriptor = os.open(path, flags)
         opened_status = os.fstat(descriptor)
         if not stat.S_ISREG(opened_status.st_mode):
