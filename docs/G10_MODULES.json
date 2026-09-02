@@ -22,6 +22,8 @@
         "services/qualification/test_external_evidence_adversarial.py",
         "services/qualification/test_external_evidence_complete_closure.py",
         "services/qualification/test_external_evidence_review_order.py",
+        "services/qualification/test_external_evidence_repository.py",
+        "services/qualification/test_g9_metadata.py",
         "services/qualification/test_g10_metadata.py"
       ],
       "contracts": [
@@ -33,6 +35,7 @@
         "out-of-band trust-registry administration and digest distribution",
         "real authority participation for every required issuer class",
         "final reviewer roster selection and independent acceptance",
+        "protected CI pin for every committed accepted envelope",
         "physical, provider, administrator, vendor, assurance, signing, pilot and store evidence"
       ]
     }
