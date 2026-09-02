@@ -4,7 +4,7 @@
   "extends_ledger": "docs/G9_GAP_LEDGER.json",
   "source_summary": {
     "repository_actionable_open": 0,
-    "closed_source": 4,
+    "closed_source": 6,
     "inherited_authority_owned_blocked": 12
   },
   "gaps": [
@@ -76,6 +76,37 @@
         "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md"
       ],
       "close_criteria": "Repository qualification recursively inspects bounded regular files under evidence/external by canonical envelope content rather than only matching a top-level bundle.json filename. Candidate discovery uses O_NOFOLLOW and one stable descriptor whose lexical, opened and post-read device/inode/mode/size/mtime/ctime identities agree; symbolic links, ordinary replacement between lstat and open, special objects, oversized files, unsupported no-follow APIs and unstable reads are never promoted. Every discovered envelope whose contract_id is canonical and acceptance.state is accepted is mapped to its enclosing custody root and revalidated as complete and accepted under a protected out-of-band trust-registry pin. Filename, extension, nesting, successor placement, or a discovery-time replacement cannot hide or inject an accepted package."
+    },
+    {
+      "id": "HG-0080",
+      "title": "Authority-bearing validation cannot inherit caller clock or executable authority",
+      "owner": "release-security",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        "tools/external_evidence/runtime_policy.py",
+        "tools/external_evidence/cli.py",
+        "tools/external_evidence/__init__.py",
+        "tools/validate_external_evidence.py",
+        "services/qualification/test_external_evidence_runtime_policy.py",
+        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+        "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md"
+      ],
+      "close_criteria": "The package API, direct complete_closure module and executable CLI use the trusted current system clock and the canonical OpenSSL command. They reject a caller-supplied validation time and any custom OpenSSL executable before reading evidence. The CLI exposes no cryptographic-binary override. A private deterministic clock hook is absent from __all__, used only by the historical qualification fixture, and still rejects custom OpenSSL selection. Expired, revoked or future-dated evidence cannot be made current by public argument injection, and an attacker-selected executable cannot manufacture cryptographic success through an authority-bearing entrypoint."
+    },
+    {
+      "id": "HG-0081",
+      "title": "Issuer and reviewer signatures bind canonical contract semantics",
+      "owner": "release-security",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        "tools/external_evidence/semantic_binding.py",
+        "tools/external_evidence/__init__.py",
+        "services/qualification/test_external_evidence_contract_binding.py",
+        "services/qualification/test_external_evidence_complete_closure.py",
+        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+        "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md"
+      ],
+      "close_criteria": "Every issuer and reviewer canonical Ed25519 preimage contains a contract-binding statement with contract ID, declared revision and the canonical SHA-256 of the complete current contract object. The evidence-set digest carries the same binding. A contract whose revision string is unchanged but whose authority classes, claim partition, review rules, closure rule or any other canonical field changes produces different submission, evidence-set and review digests and invalidates existing signatures. A caller-supplied revision that differs from the current contract bytes fails before signing or verification."
     }
   ],
   "inherited_authority_owned_gap_ids": [
