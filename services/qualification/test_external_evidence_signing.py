@@ -187,6 +187,41 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
                 signature=b"second",
             )
 
+    def test_write_signature_rejects_symlink_directory_component(self) -> None:
+        actual = self.root / "actual-signatures"
+        actual.mkdir()
+        alias = self.root / "signatures"
+        try:
+            alias.symlink_to(actual.name, target_is_directory=True)
+        except OSError as error:
+            self.skipTest(f"symbolic links are unavailable: {error}")
+
+        with self.assertRaisesRegex(ValueError, "unsafe directory"):
+            signer.write_signature(
+                custody_root=self.root,
+                signature_uri="artifact://signatures/test.sig",
+                signature=b"signature",
+            )
+        self.assertFalse((actual / "test.sig").exists())
+
+    def test_write_signature_rejects_dangling_symlink_destination(self) -> None:
+        signatures = self.root / "signatures"
+        signatures.mkdir()
+        destination = signatures / "test.sig"
+        target = signatures / "redirected.sig"
+        try:
+            destination.symlink_to(target.name)
+        except OSError as error:
+            self.skipTest(f"symbolic links are unavailable: {error}")
+
+        with self.assertRaisesRegex(ValueError, "refusing to overwrite"):
+            signer.write_signature(
+                custody_root=self.root,
+                signature_uri="artifact://signatures/test.sig",
+                signature=b"signature",
+            )
+        self.assertFalse(target.exists())
+
     def test_sign_submission_uses_current_attestation_contract(self) -> None:
         path = self._write_bundle(self._bundle())
         result = signer.sign_submission(
