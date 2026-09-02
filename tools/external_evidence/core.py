@@ -67,6 +67,15 @@ def _reject_json_constant(value: str) -> None:
     fail(f"non-finite JSON number is prohibited: {value}")
 
 
+def _reject_duplicate_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            fail(f"duplicate JSON object member is prohibited: {key}")
+        result[key] = value
+    return result
+
+
 def read_object(path: Path, label: str, *, maximum_bytes: int = MAX_JSON_BYTES) -> dict[str, Any]:
     try:
         raw = path.read_bytes()
@@ -78,6 +87,7 @@ def read_object(path: Path, label: str, *, maximum_bytes: int = MAX_JSON_BYTES) 
         value = json.loads(
             raw.decode("utf-8"),
             parse_constant=_reject_json_constant,
+            object_pairs_hook=_reject_duplicate_object,
         )
     except EvidenceError:
         raise
@@ -108,6 +118,8 @@ def require_string(value: Any, *, label: str, maximum: int = 5000) -> str:
     if not isinstance(value, str) or not value.strip():
         fail(f"{label} must be a non-empty string")
     normalized = value.strip()
+    if normalized != value:
+        fail(f"{label} must not contain leading or trailing whitespace")
     if len(normalized) > maximum:
         fail(f"{label} exceeds {maximum} characters")
     return normalized
