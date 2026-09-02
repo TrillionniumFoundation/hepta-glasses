@@ -25,22 +25,20 @@ from .core import (
     canonical_submission_statement,
     evidence_set_digest,
     safe_artifact_path,
-    validation_snapshot,
 )
+from .runtime_policy import install_runtime_policy as _install_runtime_policy
 from .submission import validate_artifact, validate_candidate, validate_submission
 from .trust import TrustKey, TrustRegistry, load_trust_registry
 
-# Install the immutable validation transaction on the policy module itself.
-# This is deliberately stronger than wrapping only the package alias: callers
-# that explicitly import ``tools.external_evidence.complete_closure`` must not
-# bypass the same aggregate-bounded lexical-path snapshot used by the CLI and
-# every package-level entrypoint.
-_complete_closure.validate_bundle = validation_snapshot(
-    _complete_closure.validate_bundle
+# Public package, direct policy-module and CLI paths use the current trusted
+# clock and canonical OpenSSL command. The private deterministic hook exists for
+# unit tests only and is deliberately absent from ``__all__``.
+validate_bundle, _validate_bundle_at_for_tests = _install_runtime_policy(
+    _complete_closure,
+    _core,
 )
-_acceptance.validate_bundle = _complete_closure.validate_bundle
+_acceptance.validate_bundle = validate_bundle
 validate_acceptance = _acceptance.validate_acceptance
-validate_bundle = _complete_closure.validate_bundle
 review_set_digest = _complete_closure.review_set_digest
 acceptance_context_digest = _complete_closure.acceptance_context_digest
 
