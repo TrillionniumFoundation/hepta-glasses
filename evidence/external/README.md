@@ -39,11 +39,15 @@ PEM hashing, Ed25519 key-type verification, normalized DER-SPKI uniqueness, and 
 
 ## Signing custody
 
-Private keys never enter repository or evidence custody. The signing helper reads the selected private key once through a bounded stable descriptor, then performs key-type inspection and signing on the same private temporary snapshot. Replacing the original key pathname after capture cannot change the signing key.
+The `--bundle` input, artifacts, detached signatures, and bundle successors must all belong to the same declared `--custody-root`. The signer rejects a bundle outside that root before creating any output. Private keys must remain outside the complete custody root; selecting another output root cannot be used to bypass that boundary.
+
+The signing helper reads the selected private key once through a bounded stable descriptor, then performs key-type inspection and signing on the same private temporary snapshot. Replacing the original key pathname after capture cannot change the signing key.
 
 Detached signatures are always new files. The helper walks the custody root with directory descriptors, rejects symbolic-link directory components, creates missing directories with mode `0700`, and creates the final signature with no-follow and exclusive-create semantics at mode `0600`. Existing regular files, dangling links, output links, overwrite attempts, partial writes, and unsupported secure directory APIs fail closed.
 
-Authority-bearing bundle operations are immutable-only. Every `submission`, `reviewer`, and `finalize` command requires a fresh `--output-bundle-uri artifact://successors/<name>.json`. The helper creates one exclusive mode-0600 successor and leaves the input bundle byte-for-byte unchanged. In-place bundle mutation is rejected because portable POSIX rename cannot atomically assert that a visible name still references an expected inode at the instant of replacement.
+Authority-bearing bundle operations are immutable-only. Every `submission`, `reviewer`, and `finalize` command requires a fresh canonical `--output-bundle-uri artifact://successors/<name>.json`. For signing commands, the successor URI and signature URI must be distinct. The helper creates one exclusive mode-0600 successor and leaves the input bundle byte-for-byte unchanged. In-place bundle mutation is rejected because portable POSIX rename cannot atomically assert that a visible name still references an expected inode at the instant of replacement.
+
+Before a command returns success, it reopens the visible signature and successor paths, rejects redirection or weakened permissions, and compares every byte with the objects just created. A disappeared, redirected, or replaced output therefore cannot be reported as successful. Any mutation after return remains detectable by normal bundle validation.
 
 Example:
 
