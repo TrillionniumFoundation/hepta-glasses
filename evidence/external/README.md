@@ -15,17 +15,21 @@ A statement signed under the predecessor revision does not satisfy the G10 polic
 
 ## Trusted verifier runtime
 
-Authority-bearing validation owns its clock and cryptographic command selection:
+Authority-bearing validation owns its clock, executable identity, and cryptographic subprocess environment:
 
 - the supported package API, direct `complete_closure` module, package-name compatibility import, and executable CLI capture the current timezone-aware UTC time inside the trusted verifier;
-- a supported caller-supplied `now` value is rejected before any evidence read;
-- validation accepts only the canonical `openssl` command and exposes no `--openssl-binary` override;
-- an underscored fixed-clock hook exists only for deterministic repository tests, is absent from the public export list, requires a timezone-aware `datetime`, and still rejects custom OpenSSL selection; and
-- the verifier host, system clock, installed OpenSSL, Python process, source object, kernel, and protected registry pin remain trusted operational dependencies.
+- a caller-supplied `now` value is rejected before any evidence read;
+- validation and signing support only root-owned, non-group/world-writable `/usr/bin/openssl`, reached by absolute path rather than caller `PATH`;
+- `/`, `/usr`, `/usr/bin`, and the executable are checked as real root-owned objects; the final executable is opened with no-follow semantics and its lexical/opened/post-check identity must agree;
+- every OpenSSL process receives only `HOME=/nonexistent`, `LANG=C`, `LC_ALL=C`, `OPENSSL_CONF=/dev/null`, `PATH=/usr/bin:/bin`, and `TZ=UTC`;
+- caller `OPENSSL_MODULES`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `DYLD_INSERT_LIBRARIES`, `DYLD_LIBRARY_PATH`, OpenSSL configuration, shell, executable override, and subprocess environment are not inherited or accepted;
+- the CLI exposes no `--openssl-binary` override;
+- an underscored fixed-clock hook exists only for deterministic repository tests, is absent from the public export list, requires a timezone-aware `datetime`, and still uses the same trusted executable policy; and
+- the verifier kernel, root-controlled system paths, checked OpenSSL bytes/runtime libraries, Python process, source object, and protected registry pin remain trusted operational dependencies.
 
 The fixed-clock fixture is API hygiene, not a sandbox against arbitrary Python already executing inside the verifier process. Code that can load source under forged module names or monkey-patch module globals already has equivalent process authority and is outside the verifier threat model. Run release validation in a controlled process that executes no untrusted Python.
 
-Do not attempt to make expired, revoked, or future-dated evidence current by changing process arguments. Do not substitute another executable as the signature verifier. The normative boundary is `docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md`.
+Do not attempt to make expired, revoked, or future-dated evidence current by changing process arguments. A same-name executable earlier on `PATH` is ignored; a host without the exact root-owned `/usr/bin/openssl` boundary fails closed. The normative boundary is `docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md`.
 
 ## Required package layout
 
@@ -74,10 +78,11 @@ The input bundle, artifacts, signatures, and successors share one declared custo
 2. uses that snapshot for both Ed25519 type inspection and signing;
 3. reads the canonical contract and includes its exact canonical digest in the signed preimage;
 4. validates canonical, distinct output URIs;
-5. creates detached signatures and bundle successors exclusively as mode-0600 regular files through no-follow directory descriptors;
-6. leaves every predecessor bundle byte-for-byte unchanged;
-7. reopens and byte-compares visible outputs before reporting success; and
-8. never treats an unreferenced signature as authority.
+5. executes only the verified absolute OpenSSL object under the sanitized environment above;
+6. creates detached signatures and bundle successors exclusively as mode-0600 regular files through no-follow directory descriptors;
+7. leaves every predecessor bundle byte-for-byte unchanged;
+8. reopens and byte-compares visible outputs before reporting success; and
+9. never treats an unreferenced signature as authority.
 
 Example:
 
@@ -201,7 +206,7 @@ A Gap Ledger row changes to `CLOSED_VERIFIED` only in a separate reviewed commit
 - no key or identity/organization pair represents different authority classes across the complete package;
 - every class signs exactly its assigned claims and evidence;
 - every issuer and reviewer signature binds the exact canonical contract digest;
-- the complete package passes under the out-of-band registry pin on a trusted current-time verifier;
+- the complete package passes under the out-of-band registry pin on a trusted current-time verifier using the checked absolute OpenSSL boundary;
 - every gap has valid approving reviewer coverage;
 - every final review artifact binds the same G10 policy, roster, and acceptance context;
 - independence-required gaps have distinct independent approval;
