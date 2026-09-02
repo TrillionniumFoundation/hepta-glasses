@@ -226,17 +226,20 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
 
     def test_sign_submission_uses_current_attestation_contract(self) -> None:
         path = self._write_bundle(self._bundle())
+        original = path.read_bytes()
         result = signer.sign_submission(
             Namespace(
                 bundle=path,
                 custody_root=self.custody,
+                output_bundle_uri="artifact://successors/submission.json",
                 index=0,
                 private_key=self.private,
                 signature_uri="artifact://signatures/submission.sig",
                 signed_at="2026-09-02T01:00:00Z",
             )
         )
-        bundle = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(path.read_bytes(), original)
+        bundle = json.loads(Path(result["bundle_path"]).read_text(encoding="utf-8"))
         submission = bundle["submissions"][0]
         attestation = submission["attestation"]
         self.assertEqual(
@@ -257,13 +260,16 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
             label="submission-signing-tool-test",
         )
         self.assertEqual(result["statement_digest"], attestation["statement_digest"])
+        self.assertTrue(result["input_bundle_unchanged"])
 
     def test_sign_reviewer_uses_current_review_contract(self) -> None:
         path = self._write_bundle(self._bundle())
+        original = path.read_bytes()
         result = signer.sign_reviewer(
             Namespace(
                 bundle=path,
                 custody_root=self.custody,
+                output_bundle_uri="artifact://successors/reviewer.json",
                 index=0,
                 private_key=self.private,
                 signature_uri="artifact://signatures/reviewer.sig",
@@ -271,7 +277,8 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
                 signed_at="2026-09-02T01:05:00Z",
             )
         )
-        bundle = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(path.read_bytes(), original)
+        bundle = json.loads(Path(result["bundle_path"]).read_text(encoding="utf-8"))
         reviewer = bundle["acceptance"]["reviewers"][0]
         payload = validator.canonical_review_statement(
             bundle,
@@ -287,6 +294,7 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
             label="reviewer-signing-tool-test",
         )
         self.assertEqual(result["statement_digest"], reviewer["statement_digest"])
+        self.assertTrue(result["input_bundle_unchanged"])
 
     def test_reviewer_signing_rejects_wrong_out_of_band_registry_pin(self) -> None:
         path = self._write_bundle(self._bundle())
@@ -295,6 +303,7 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
                 Namespace(
                     bundle=path,
                     custody_root=self.custody,
+                    output_bundle_uri="artifact://successors/reviewer.json",
                     index=0,
                     private_key=self.private,
                     signature_uri="artifact://signatures/reviewer.sig",
@@ -303,15 +312,24 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
                 )
             )
 
-    def test_finalize_writes_self_consistent_bundle_digest(self) -> None:
+    def test_finalize_writes_self_consistent_immutable_successor(self) -> None:
         path = self._write_bundle(self._bundle())
-        result = signer.finalize(Namespace(bundle=path))
-        finalized = json.loads(path.read_text(encoding="utf-8"))
+        original = path.read_bytes()
+        result = signer.finalize(
+            Namespace(
+                bundle=path,
+                custody_root=self.custody,
+                output_bundle_uri="artifact://successors/finalized.json",
+            )
+        )
+        self.assertEqual(path.read_bytes(), original)
+        finalized = json.loads(Path(result["bundle_path"]).read_text(encoding="utf-8"))
         self.assertEqual(result["bundle_digest"], finalized["acceptance"]["bundle_digest"])
         self.assertEqual(
             finalized["acceptance"]["bundle_digest"],
             validator.canonical_bundle_digest(finalized),
         )
+        self.assertTrue(result["input_bundle_unchanged"])
 
 
 if __name__ == "__main__":
