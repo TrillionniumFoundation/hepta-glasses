@@ -8,7 +8,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 G9_REVISION = "2026-09-02-g9-authenticated-1"
-G9_GAPS = ("HG-0073", "HG-0074")
+G9_GAPS = ("HG-0073", "HG-0074", "HG-0075")
 G9_MODULES = ("external-evidence-authentication", "latest-head-ci-custody")
 PRIVATE_KEY_PATTERN = re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")
 
@@ -81,6 +81,39 @@ class G9MetadataCoverageTest(unittest.TestCase):
                     for relative in module[field]:
                         self.assertTrue((ROOT / relative).is_file(), relative)
 
+    def test_filesystem_custody_gap_is_registered_end_to_end(self) -> None:
+        gaps = {item["id"]: item for item in self.gaps["gaps"]}
+        custody = gaps["HG-0075"]
+        required_evidence = {
+            "tools/external_evidence/snapshot_io.py",
+            "tools/sign_external_evidence.py",
+            "services/qualification/test_external_evidence_snapshot.py",
+            "services/qualification/test_external_evidence_scoped_snapshot.py",
+            "services/qualification/test_external_evidence_signing.py",
+            "docs/adr/ADR-0006-external-evidence-filesystem-custody.md",
+            "evidence/external/README.md",
+        }
+        self.assertTrue(required_evidence.issubset(set(custody["evidence"])))
+        self.assertIn("normalized lexical absolute path", custody["close_criteria"])
+        self.assertIn("exclusive-create", custody["close_criteria"])
+
+        modules = {item["id"]: item for item in self.modules["modules"]}
+        evidence_module = modules["external-evidence-authentication"]
+        self.assertIn(
+            "tools/external_evidence/snapshot_io.py",
+            evidence_module["source_roots"],
+        )
+        self.assertIn(
+            "docs/adr/ADR-0006-external-evidence-filesystem-custody.md",
+            evidence_module["documentation"],
+        )
+        for test in (
+            "services/qualification/test_external_evidence_snapshot.py",
+            "services/qualification/test_external_evidence_scoped_snapshot.py",
+            "services/qualification/test_external_evidence_signing.py",
+        ):
+            self.assertIn(test, evidence_module["tests"])
+
     def test_docs_index_registers_g9_machine_truth(self) -> None:
         index = (ROOT / "docs/README.md").read_text(encoding="utf-8")
         for name in (
@@ -89,6 +122,7 @@ class G9MetadataCoverageTest(unittest.TestCase):
             "G9_GAP_LEDGER.json",
             "ADR-0004-external-evidence-authentication.md",
             "ADR-0005-latest-head-ci-concurrency.md",
+            "ADR-0006-external-evidence-filesystem-custody.md",
         ):
             self.assertIn(name, index)
 
