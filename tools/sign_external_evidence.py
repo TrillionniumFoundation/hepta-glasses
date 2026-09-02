@@ -20,6 +20,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR_PATH = ROOT / "tools/validate_external_evidence.py"
+CONTRACT_PATH = ROOT / "contracts/external-evidence-envelope-v1.json"
 SPEC = importlib.util.spec_from_file_location("hepta_external_evidence", VALIDATOR_PATH)
 assert SPEC is not None and SPEC.loader is not None
 external = importlib.util.module_from_spec(SPEC)
@@ -31,6 +32,14 @@ def read_bundle(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("bundle must be a JSON object")
     return value
+
+
+def contract_revision() -> str:
+    value = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    revision = value.get("contract_revision") if isinstance(value, dict) else None
+    if not isinstance(revision, str) or not revision:
+        raise ValueError("external evidence contract_revision is unavailable")
+    return revision
 
 
 def normalize_time(value: str | None) -> str:
@@ -69,7 +78,10 @@ def sign_ed25519(private_key: Path, payload: bytes) -> bytes:
         )
         if result.returncode != 0 or not signature_path.is_file():
             raise RuntimeError("OpenSSL Ed25519 signing failed")
-        return signature_path.read_bytes()
+        signature = signature_path.read_bytes()
+        if len(signature) != 64:
+            raise RuntimeError("OpenSSL produced a non-Ed25519 signature")
+        return signature
 
 
 def write_signature(
@@ -78,7 +90,7 @@ def write_signature(
     signature_uri: str,
     signature: bytes,
 ) -> tuple[Path, str]:
-    path = external.safe_custody_path(
+    path = external.safe_artifact_path(
         custody_root,
         signature_uri,
         label="detached signature",
@@ -101,31 +113,27 @@ def sign_submission(args: argparse.Namespace) -> dict[str, Any]:
     issuer = submission.get("issuer")
     if not isinstance(issuer, dict) or not isinstance(issuer.get("key_id"), str):
         raise ValueError("submission issuer.key_id is required")
+
     signed_at = normalize_time(args.signed_at)
     submission["attestation"] = {
-        "algorithm": "ed25519",
-        "key_id": issuer["key_id"],
         "signed_at": signed_at,
-        "payload_sha256": "0" * 64,
+        "statement_digest": "0" * 64,
         "signature_uri": args.signature_uri,
         "signature_sha256": "0" * 64,
     }
-    document = external.submission_signed_document(bundle["candidate"], submission)
-    payload = external.canonical_bytes(document)
+    payload = external.canonical_submission_statement(
+        bundle,
+        submission,
+        contract_revision=contract_revision(),
+    )
     signature = sign_ed25519(args.private_key, payload)
     path, signature_digest = write_signature(
         custody_root=args.custody_root,
         signature_uri=args.signature_uri,
         signature=signature,
     )
-    submission["attestation"] = {
-        "algorithm": "ed25519",
-        "key_id": issuer["key_id"],
-        "signed_at": signed_at,
-        "payload_sha256": hashlib.sha256(payload).hexdigest(),
-        "signature_uri": args.signature_uri,
-        "signature_sha256": signature_digest,
-    }
+    submission["attestation"]["statement_digest"] = hashlib.sha256(payload).hexdigest()
+    submission["attestation"]["signature_sha256"] = signature_digest
     args.bundle.write_text(
         json.dumps(bundle, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
         encoding="utf-8",
@@ -136,7 +144,7 @@ def sign_submission(args: argparse.Namespace) -> dict[str, Any]:
         "index": args.index,
         "gap_id": submission.get("gap_id"),
         "signature_path": str(path),
-        "payload_sha256": submission["attestation"]["payload_sha256"],
+        "statement_digest": submission["attestation"]["statement_digest"],
         "signature_sha256": signature_digest,
     }
 
@@ -152,28 +160,32 @@ def sign_reviewer(args: argparse.Namespace) -> dict[str, Any]:
     reviewer = reviewers[args.index]
     if not isinstance(reviewer, dict) or not isinstance(reviewer.get("key_id"), str):
         raise ValueError("reviewer key_id is required")
-    reviewer["reviewed_at"] = normalize_time(args.signed_at or reviewer.get("reviewed_at"))
-    reviewer["review_digest"] = "0" * 64
-    reviewer["signature_uri"] = args.signature_uri
-    reviewer["signature_sha256"] = "0" * 64
+
     registry_digest = external.require_sha(
         args.trust_registry_sha256,
         label="--trust-registry-sha256",
         width=64,
     )
-    document = external.reviewer_signed_document(
+    trust_registry = bundle.get("trust_registry")
+    if not isinstance(trust_registry, dict) or trust_registry.get("sha256") != registry_digest:
+        raise ValueError("out-of-band trust registry digest differs from bundle binding")
+
+    reviewer["signed_at"] = normalize_time(args.signed_at or reviewer.get("signed_at"))
+    reviewer["statement_digest"] = "0" * 64
+    reviewer["signature_uri"] = args.signature_uri
+    reviewer["signature_sha256"] = "0" * 64
+    payload = external.canonical_review_statement(
         bundle,
         reviewer,
-        trust_registry_sha256=registry_digest,
+        contract_revision=contract_revision(),
     )
-    payload = external.canonical_bytes(document)
     signature = sign_ed25519(args.private_key, payload)
     path, signature_digest = write_signature(
         custody_root=args.custody_root,
         signature_uri=args.signature_uri,
         signature=signature,
     )
-    reviewer["review_digest"] = hashlib.sha256(payload).hexdigest()
+    reviewer["statement_digest"] = hashlib.sha256(payload).hexdigest()
     reviewer["signature_sha256"] = signature_digest
     args.bundle.write_text(
         json.dumps(bundle, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
@@ -185,7 +197,7 @@ def sign_reviewer(args: argparse.Namespace) -> dict[str, Any]:
         "index": args.index,
         "identity": reviewer.get("identity"),
         "signature_path": str(path),
-        "review_digest": reviewer["review_digest"],
+        "statement_digest": reviewer["statement_digest"],
         "signature_sha256": signature_digest,
     }
 
