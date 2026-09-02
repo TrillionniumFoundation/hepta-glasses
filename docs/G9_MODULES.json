@@ -24,6 +24,7 @@
         "services/qualification/external_evidence_test_support.py",
         "services/qualification/test_external_evidence.py",
         "services/qualification/test_external_evidence_adversarial.py",
+        "services/qualification/test_external_evidence_json_safety.py",
         "services/qualification/test_external_evidence_key_type.py",
         "services/qualification/test_external_evidence_repository.py",
         "services/qualification/test_external_evidence_signing.py",
