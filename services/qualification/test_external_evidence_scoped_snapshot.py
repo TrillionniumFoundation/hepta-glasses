@@ -56,6 +56,38 @@ class ExternalEvidenceScopedSnapshotTest(unittest.TestCase):
             self.assertEqual(second, first)
             self.assertEqual(alias.read_bytes(), b"attacker")
 
+    def test_retarget_after_path_selection_cannot_change_first_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "custody"
+            root.mkdir()
+            trusted = root / "trusted.bin"
+            attacker = Path(directory) / "outside.bin"
+            alias = root / "report.bin"
+            trusted.write_bytes(b"trusted")
+            attacker.write_bytes(b"outside-attacker")
+            try:
+                alias.symlink_to(trusted.name)
+            except OSError as error:
+                self.skipTest(f"symbolic links are unavailable: {error}")
+
+            @validation_snapshot
+            def validate_after_retarget() -> bytes:
+                selected = safe_artifact_path(
+                    root,
+                    "artifact://report.bin",
+                    label="artifact",
+                )
+                alias.unlink()
+                alias.symlink_to(attacker)
+                return _read_bounded_file(
+                    selected,
+                    label="artifact",
+                    maximum=1024,
+                )
+
+            self.assertEqual(validate_after_retarget(), b"trusted")
+            self.assertEqual(alias.read_bytes(), b"outside-attacker")
+
 
 if __name__ == "__main__":
     unittest.main()
