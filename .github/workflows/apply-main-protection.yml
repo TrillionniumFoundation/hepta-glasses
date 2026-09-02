@@ -1,0 +1,84 @@
+name: apply-main-protection
+
+on:
+  push:
+    branches:
+      - ops/hepta-g9-apply-main-protection-20260902
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hepta-glasses-main-protection-admin
+  cancel-in-progress: false
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Require separately provisioned repository administrator token
+        env:
+          HEPTA_REPO_ADMIN_TOKEN: ${{ secrets.HEPTA_REPO_ADMIN_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/governance
+          if test -z "${HEPTA_REPO_ADMIN_TOKEN:-}"; then
+            printf '%s\n' '{"ok":false,"error":"admin_token_required"}' \
+              > build/governance/main-protection-evaluation.json
+            exit 2
+          fi
+      - name: Apply canonical contract and evaluate API readback
+        env:
+          HEPTA_REPO_ADMIN_TOKEN: ${{ secrets.HEPTA_REPO_ADMIN_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 tools/repository_governance.py \
+            --repo TrillionniumFoundation/hepta-glasses \
+            --branch main \
+            --contract contracts/main-branch-protection-v1.json \
+            --apply \
+            > build/governance/main-protection-evaluation.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('build/governance/main-protection-evaluation.json')
+          result = json.loads(path.read_text(encoding='utf-8'))
+          if result.get('ok') is not True or result.get('missing'):
+              raise SystemExit('canonical main protection did not verify')
+          PY
+      - name: Emit exact administration subject
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p build/governance
+          SOURCE_HEAD_SHA='${{ github.sha }}' python3 - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          path = Path('build/governance/main-protection-subject.json')
+          path.write_text(json.dumps({
+              'schema_version': 1,
+              'repository': 'TrillionniumFoundation/hepta-glasses',
+              'branch': 'main',
+              'contract': 'contracts/main-branch-protection-v1.json',
+              'administrator_workflow_source': os.environ['SOURCE_HEAD_SHA'],
+              'observed_at': datetime.now(timezone.utc).isoformat(),
+              'secret_material_included': False,
+          }, sort_keys=True, indent=2) + '\n', encoding='utf-8')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: hepta-main-protection-admin-${{ github.sha }}
+          path: build/governance
+          if-no-files-found: error
+          retention-days: 30
