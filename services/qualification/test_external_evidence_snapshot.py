@@ -82,6 +82,30 @@ class ExternalEvidenceImmutableSnapshotTest(unittest.TestCase):
         self.assertEqual(second, first)
         self.assertEqual(json.loads(path.read_text()), {"registry_id": "attacker"})
 
+    def test_symlink_retarget_is_pinned_to_first_lexical_path_snapshot(self) -> None:
+        trusted = self.root / "trusted-registry.json"
+        attacker = self.root / "attacker-registry.json"
+        alias = self.root / "registry-link.json"
+        trusted.write_text('{"registry_id":"trusted"}', encoding="utf-8")
+        attacker.write_text('{"registry_id":"attacker"}', encoding="utf-8")
+        try:
+            alias.symlink_to(trusted.name)
+        except OSError as error:
+            self.skipTest(f"symbolic links are unavailable: {error}")
+
+        @validation_snapshot
+        def read_then_retarget() -> tuple[dict[str, object], dict[str, object]]:
+            first = read_object(alias, "registry-link")
+            alias.unlink()
+            alias.symlink_to(attacker.name)
+            second = read_object(alias, "registry-link")
+            return first, second
+
+        first, second = read_then_retarget()
+        self.assertEqual(first, {"registry_id": "trusted"})
+        self.assertEqual(second, first)
+        self.assertEqual(json.loads(alias.read_text()), {"registry_id": "attacker"})
+
     def test_public_key_verification_uses_digest_phase_snapshot(self) -> None:
         original = self.public_key.read_bytes()
         replacement_private = self.root / "rsa-private.pem"
