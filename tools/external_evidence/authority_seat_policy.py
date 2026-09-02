@@ -18,7 +18,8 @@ def install_global_authority_seat_policy(
     authority class. A physical-device lab can therefore attest multiple
     physical gaps with one narrowly scoped key, while an omnipotent key cannot
     also act as a credential provider, cloud-security owner, store authority,
-    or another unrelated role.
+    or another unrelated role. In particular, one pinned key cannot occupy different
+    authority roles in the same complete package.
 
     Partial collection remains possible. The cross-gap rule is activated only
     after every allowed gap and every named authority class are represented;
