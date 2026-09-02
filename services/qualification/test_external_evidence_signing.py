@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR_PATH = ROOT / "tools/validate_external_evidence.py"
 SIGNER_PATH = ROOT / "tools/sign_external_evidence.py"
+CONTRACT_PATH = ROOT / "contracts/external-evidence-envelope-v1.json"
 
 VALIDATOR_SPEC = importlib.util.spec_from_file_location(
     "validate_external_evidence_for_signer_test",
@@ -47,6 +48,82 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
             check=True,
             capture_output=True,
         )
+        contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+        self.contract_revision = contract["contract_revision"]
+        self.registry_digest = "a" * 64
+
+    def _bundle(self) -> dict[str, object]:
+        return {
+            "schema_version": 2,
+            "contract_id": "hepta-external-evidence-envelope-v1",
+            "trust_registry": {
+                "registry_id": "hepta-external-authority-trust-registry-v1",
+                "sha256": self.registry_digest,
+            },
+            "candidate": {
+                "repository": "TrillionniumFoundation/hepta-glasses",
+                "source_commit": "1" * 40,
+                "source_tree": "2" * 40,
+                "contracts_revision": "2026-09-01-g8",
+                "release_id": None,
+                "binary_digests": [],
+                "collected_at": "2026-09-02T00:00:00Z",
+            },
+            "submissions": [
+                {
+                    "gap_id": "HG-0017",
+                    "evidence_level": "ADMIN",
+                    "issuer": {
+                        "identity": "repository-admin",
+                        "organization": "TrillionniumFoundation",
+                        "authority_class": "repository_administrator",
+                        "key_id": "key:repository-admin:1",
+                        "contact": None,
+                    },
+                    "environment": {"branch": "main"},
+                    "subjects": ["main"],
+                    "claims": {"seven_checks_required": True},
+                    "artifacts": [],
+                    "result": "pass",
+                    "limitations": [],
+                    "notes": None,
+                    "attestation": {
+                        "signed_at": "1970-01-01T00:00:00Z",
+                        "statement_digest": "0" * 64,
+                        "signature_uri": "artifact://signatures/placeholder.sig",
+                        "signature_sha256": "0" * 64,
+                    },
+                }
+            ],
+            "acceptance": {
+                "state": "incomplete",
+                "reviewed_at": None,
+                "reviewers": [
+                    {
+                        "identity": "governance-reviewer",
+                        "organization": "Independent Governance Lab",
+                        "authority_class": "repository_governance_reviewer",
+                        "key_id": "key:governance-reviewer:1",
+                        "decision": "approve",
+                        "reviewed_gap_ids": ["HG-0017"],
+                        "review_uri": "artifact://reviews/review.json",
+                        "review_sha256": "b" * 64,
+                        "signed_at": "1970-01-01T00:00:00Z",
+                        "statement_digest": "0" * 64,
+                        "signature_uri": "artifact://signatures/reviewer-placeholder.sig",
+                        "signature_sha256": "0" * 64,
+                    }
+                ],
+                "bundle_digest": None,
+                "decision_reference": None,
+                "limitations": [],
+            },
+        }
+
+    def _write_bundle(self, bundle: dict[str, object]) -> Path:
+        path = self.root / "bundle.json"
+        path.write_text(json.dumps(bundle), encoding="utf-8")
+        return path
 
     def test_sign_ed25519_produces_verifiable_detached_signature(self) -> None:
         payload = b"canonical external evidence payload"
@@ -75,23 +152,87 @@ class ExternalEvidenceSigningToolTest(unittest.TestCase):
                 signature=b"second",
             )
 
+    def test_sign_submission_uses_current_attestation_contract(self) -> None:
+        path = self._write_bundle(self._bundle())
+        result = signer.sign_submission(
+            Namespace(
+                bundle=path,
+                custody_root=self.root,
+                index=0,
+                private_key=self.private,
+                signature_uri="artifact://signatures/submission.sig",
+                signed_at="2026-09-02T01:00:00Z",
+            )
+        )
+        bundle = json.loads(path.read_text(encoding="utf-8"))
+        submission = bundle["submissions"][0]
+        attestation = submission["attestation"]
+        self.assertEqual(
+            set(attestation),
+            {"signed_at", "statement_digest", "signature_uri", "signature_sha256"},
+        )
+        payload = validator.canonical_submission_statement(
+            bundle,
+            submission,
+            contract_revision=self.contract_revision,
+        )
+        self.assertEqual(attestation["statement_digest"], hashlib.sha256(payload).hexdigest())
+        signature = (self.root / "signatures/submission.sig").read_bytes()
+        validator.verify_ed25519(
+            self.public.read_text(encoding="utf-8"),
+            payload,
+            signature,
+            label="submission-signing-tool-test",
+        )
+        self.assertEqual(result["statement_digest"], attestation["statement_digest"])
+
+    def test_sign_reviewer_uses_current_review_contract(self) -> None:
+        path = self._write_bundle(self._bundle())
+        result = signer.sign_reviewer(
+            Namespace(
+                bundle=path,
+                custody_root=self.root,
+                index=0,
+                private_key=self.private,
+                signature_uri="artifact://signatures/reviewer.sig",
+                trust_registry_sha256=self.registry_digest,
+                signed_at="2026-09-02T01:05:00Z",
+            )
+        )
+        bundle = json.loads(path.read_text(encoding="utf-8"))
+        reviewer = bundle["acceptance"]["reviewers"][0]
+        payload = validator.canonical_review_statement(
+            bundle,
+            reviewer,
+            contract_revision=self.contract_revision,
+        )
+        self.assertEqual(reviewer["statement_digest"], hashlib.sha256(payload).hexdigest())
+        signature = (self.root / "signatures/reviewer.sig").read_bytes()
+        validator.verify_ed25519(
+            self.public.read_text(encoding="utf-8"),
+            payload,
+            signature,
+            label="reviewer-signing-tool-test",
+        )
+        self.assertEqual(result["statement_digest"], reviewer["statement_digest"])
+
+    def test_reviewer_signing_rejects_wrong_out_of_band_registry_pin(self) -> None:
+        path = self._write_bundle(self._bundle())
+        with self.assertRaisesRegex(ValueError, "differs from bundle binding"):
+            signer.sign_reviewer(
+                Namespace(
+                    bundle=path,
+                    custody_root=self.root,
+                    index=0,
+                    private_key=self.private,
+                    signature_uri="artifact://signatures/reviewer.sig",
+                    trust_registry_sha256="c" * 64,
+                    signed_at="2026-09-02T01:05:00Z",
+                )
+            )
+
     def test_finalize_writes_self_consistent_bundle_digest(self) -> None:
-        bundle = {
-            "schema_version": 1,
-            "contract_id": "hepta-external-evidence-envelope-v1",
-            "candidate": {"source_commit": "1" * 40},
-            "submissions": [],
-            "acceptance": {
-                "state": "incomplete",
-                "reviewed_at": None,
-                "reviewers": [],
-                "bundle_digest": None,
-                "decision_reference": None,
-                "limitations": [],
-            },
-        }
-        path = self.root / "bundle.json"
-        path.write_text(json.dumps(bundle), encoding="utf-8")
+        path = self._write_bundle(self._bundle())
         result = signer.finalize(Namespace(bundle=path))
         finalized = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(result["bundle_digest"], finalized["acceptance"]["bundle_digest"])
