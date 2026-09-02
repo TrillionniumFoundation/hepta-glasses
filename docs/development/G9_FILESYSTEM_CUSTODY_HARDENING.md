@@ -28,11 +28,11 @@ Registry byte hashing and key verification already used pinned bytes, but normal
 
 The top-level validation transaction now has a 512 MiB cumulative cache ceiling. Per-file maxima remain in force. The validator rejects a package when admitting another distinct input would exceed the transaction budget.
 
-### Signing input and bundle replacement
+### Signing input and bundle publication
 
-Private-key inspection and signing now use one descriptor-captured key snapshot. The original key pathname is never reopened for the signing phase.
+Private-key inspection and signing use one descriptor-captured key snapshot. The original key pathname is never reopened for the signing phase.
 
-The input bundle is captured with its bytes and exact filesystem identities. Backwards-compatible in-place updates are staged into one mode-0600 file and replace only the exact unchanged input name through descriptor-relative atomic replacement. The preferred `--output-bundle-uri` mode creates a new immutable bundle successor and leaves the input unchanged.
+Authority-bearing bundle operations never rewrite the input bundle. Portable POSIX rename does not provide an atomic expected-inode compare-and-swap, so a check followed by in-place replacement would leave a race against a concurrent name substitution. Every submission signature, reviewer signature, and final digest therefore requires `--output-bundle-uri` and creates one new exclusive mode-0600 successor below the declared custody root. The input remains byte-for-byte unchanged.
 
 ## Implementation map
 
@@ -40,7 +40,7 @@ The input bundle is captured with its bytes and exact filesystem identities. Bac
 |---|---|
 | Validation transaction, URI canonicalization, object identity and aggregate budget | `tools/external_evidence/snapshot_io.py` |
 | Snapshot-backed trust normalization | `tools/external_evidence/__init__.py`, `tools/external_evidence/trust.py` |
-| Descriptor-bound private key, signatures and bundle output | `tools/external_evidence/signing_io.py` |
+| Descriptor-bound private key, signatures and immutable bundle output | `tools/external_evidence/signing_io.py` |
 | Submission/reviewer/finalize operations and CLI | `tools/external_evidence/signing.py`, `tools/sign_external_evidence.py` |
 | Validation hostile tests | `services/qualification/test_external_evidence_filesystem_hardening.py` |
 | Signing hostile tests | `services/qualification/test_external_evidence_signer_custody.py` |
@@ -53,10 +53,26 @@ The input bundle is captured with its bytes and exact filesystem identities. Bac
 4. Public-key normalization never reopens the authority-controlled key path.
 5. Distinct cached inputs cannot exceed the aggregate transaction byte ceiling.
 6. Private-key type checking and signing use the same captured bytes.
-7. In-place bundle update fails if the parent chain, input object, or input bytes changed.
-8. A new bundle successor is created exclusively and never overwrites an existing path.
+7. Signing and finalization reject a missing successor URI and never rewrite the input bundle.
+8. Every bundle successor is created exclusively as a private regular file and cannot overwrite an existing path.
 9. Partial or orphaned output is not accepted as evidence and does not change a Gap Ledger row.
 10. Unsupported secure filesystem APIs fail closed; there is no path-based compatibility fallback.
+
+## Signing sequence
+
+A submission or reviewer signing command must allocate a new successor URI:
+
+```bash
+python3 tools/sign_external_evidence.py submission \
+  --bundle <custody-root>/unsigned-or-prior.json \
+  --custody-root <custody-root> \
+  --output-bundle-uri artifact://successors/submission-001.json \
+  --index 0 \
+  --private-key <external-private-key.pem> \
+  --signature-uri artifact://signatures/submission-001.sig
+```
+
+The next operation consumes the verified successor as its input and writes another new successor. Reusing a successor or signature URI fails because creation is exclusive.
 
 ## Validation sequence
 
@@ -82,7 +98,8 @@ Reopen `HG-0075` when any of the following is observed:
 - a non-canonical URI spelling creates a second cache or review identity;
 - transaction snapshot growth is unbounded;
 - signing reuses a mutable private-key pathname after type validation;
-- bundle mutation uses an unchecked path write, follows a symbolic link, overwrites an unrelated object, or can expose a partial successor;
+- an authority-bearing command rewrites its input bundle or permits operation without a new exclusive successor URI;
+- a successor write follows a symbolic link, overwrites an existing object, or can report success for a partial file;
 - a required hostile test is deleted, skipped without an explicit platform reason, or no longer exercises the security boundary; or
 - the exact-head CI packet or independent review no longer binds the live candidate.
 
