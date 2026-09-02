@@ -10,12 +10,24 @@ from .snapshot_io import install_snapshot_io as _install_snapshot_io
 _install_snapshot_io(_core)
 
 from . import acceptance as _acceptance
+from . import submission as _submission
 from . import trust as _trust
 
 # ``trust.py`` historically normalized SPKI by handing the mutable source path
 # back to OpenSSL. Replace that module global with the snapshot-backed
 # normalizer before any registry is loaded.
 _trust._normalized_public_key_digest = _core._normalized_public_key_digest
+
+# Bind canonical contract bytes, not only a human-selected revision label, into
+# every issuer and reviewer Ed25519 preimage. Patch the module globals used by
+# the G9 primitive validators before the G10 policy layer is imported.
+from .semantic_binding import install_semantic_binding as _install_semantic_binding
+
+_install_semantic_binding(
+    _core,
+    _submission,
+    _acceptance,
+)
 
 from . import complete_closure as _complete_closure
 from .core import (
