@@ -21,15 +21,17 @@
 G9 is a stacked evidence-authentication and latest-head CI-custody layer. It does not rewrite the frozen G8 candidate. Its machine-readable supplements are:
 
 - `G9_STATE.json` — source authority rule, latest-head concurrency custody, claim ceiling, zero-open source status, and the inherited 12-gap set.
-- `G9_MODULES.json` — ownership and source/document/test/contract coverage for external-evidence authentication and latest-head CI custody, including stable evidence filesystem I/O.
+- `G9_MODULES.json` — ownership and source/document/test/contract coverage for external-evidence authentication and latest-head CI custody, including bounded object-identity custody and hardened signing.
 - `G9_GAP_LEDGER.json` — source closure records for `HG-0073`, `HG-0074`, and `HG-0075`, plus the exact inherited authority-owned gap IDs.
 - `development/G9_TERMINAL_EXTERNAL_CLOSURE.md` — authenticated execution package for the 12 authority-owned gaps; not itself external evidence.
+- `development/G9_FILESYSTEM_CUSTODY_HARDENING.md` — implementation map, invariants, validation sequence, and reopen conditions for exact-object evidence custody.
 
-`services/qualification/test_g9_metadata.py` verifies these supplements, their referenced paths, their synchronization with the G8 ledger and G9 contract, the explicit filesystem-custody closure, and the absence of private-key material in repository custody. `services/qualification/test_ci_latest_head_custody.py` independently verifies stale-run cancellation and exact-source identity checks in all seven jobs.
+`services/qualification/test_g9_metadata.py` verifies these supplements, their referenced paths, their synchronization with the G8 ledger and G9 contract, the explicit filesystem-custody closure, and the absence of private-key material in repository custody. `services/qualification/test_ci_latest_head_custody.py` independently verifies stale-run cancellation and exact-source identity checks in all seven jobs. Dedicated filesystem and signer-custody suites exercise ordinary-directory replacement, URI aliases, aggregate snapshot bounds, SPKI retargeting, private-key replacement, and exact-object bundle updates.
 
 ## Development
 
 - `development/G9_TERMINAL_EXTERNAL_CLOSURE.md`
+- `development/G9_FILESYSTEM_CUSTODY_HARDENING.md`
 - `development/G8_PRODUCTION_AUTHORITY_CLOSURE.md`
 - `development/G8_METADATA_AND_DOCUMENTATION_CLOSURE.md`
 - `development/G8_SOURCE_REMEDIATION.md`
@@ -59,6 +61,7 @@ G9 is a stacked evidence-authentication and latest-head CI-custody layer. It doe
 - `adr/ADR-0004-external-evidence-authentication.md` — out-of-band trust pin, actual Ed25519 key binding, signed evidence/reviews, strict parsing and authority separation.
 - `adr/ADR-0005-latest-head-ci-concurrency.md` — pull-request/branch concurrency custody, stale-run cancellation and independent exact-source verification.
 - `adr/ADR-0006-external-evidence-filesystem-custody.md` — normalized lexical-path snapshots, descriptor-stable bounded reads, symlink-retarget fencing, and exclusive no-follow detached-signature creation.
+- `adr/ADR-0007-evidence-object-identity-and-bounded-custody.md` — ordinary-object identity binding, canonical URI spelling, aggregate snapshot bounds, snapshot-backed key normalization, private-key custody, and atomic/immutable bundle successors.
 
 A later plan or ADR must state what it supersedes and update the applicable Current State, Gap Ledger, Evidence Index, module registry, validators, tests and affected machine contracts in the same change.
 
