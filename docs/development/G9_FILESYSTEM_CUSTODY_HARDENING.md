@@ -28,11 +28,15 @@ Registry byte hashing and key verification already used pinned bytes, but normal
 
 The top-level validation transaction now has a 512 MiB cumulative cache ceiling. Per-file maxima remain in force. The validator rejects a package when admitting another distinct input would exceed the transaction budget.
 
-### Signing input and bundle publication
+### Signing input, lineage, and bundle publication
 
 Private-key inspection and signing use one descriptor-captured key snapshot. The original key pathname is never reopened for the signing phase.
 
+The input bundle must be located below the same declared custody root that receives the detached signature and bundle successor. This prevents a caller from placing a private key beside the input evidence while declaring a different output root as the only custody boundary. The private key remains outside the complete lineage root.
+
 Authority-bearing bundle operations never rewrite the input bundle. Portable POSIX rename does not provide an atomic expected-inode compare-and-swap, so a check followed by in-place replacement would leave a race against a concurrent name substitution. Every submission signature, reviewer signature, and final digest therefore requires `--output-bundle-uri` and creates one new exclusive mode-0600 successor below the declared custody root. The input remains byte-for-byte unchanged.
+
+Signing commands preflight canonical output URIs before producing a signature. A detached signature and its successor bundle cannot share one URI. After exclusive creation, both signature and successor are re-read from their visible canonical paths; redirection, disappearance, permission weakening, or byte replacement prevents a successful result.
 
 ## Implementation map
 
@@ -41,9 +45,9 @@ Authority-bearing bundle operations never rewrite the input bundle. Portable POS
 | Validation transaction, URI canonicalization, object identity and aggregate budget | `tools/external_evidence/snapshot_io.py` |
 | Snapshot-backed trust normalization | `tools/external_evidence/__init__.py`, `tools/external_evidence/trust.py` |
 | Descriptor-bound private key, signatures and immutable bundle output | `tools/external_evidence/signing_io.py` |
-| Submission/reviewer/finalize operations and CLI | `tools/external_evidence/signing.py`, `tools/sign_external_evidence.py` |
+| Submission/reviewer/finalize preflight, declared-root binding and output readback | `tools/external_evidence/signing.py`, `tools/sign_external_evidence.py` |
 | Validation hostile tests | `services/qualification/test_external_evidence_filesystem_hardening.py` |
-| Signing hostile tests | `services/qualification/test_external_evidence_signer_custody.py` |
+| Signing hostile tests | `services/qualification/test_external_evidence_signer_custody.py`, `services/qualification/test_external_evidence_signing_boundaries.py` |
 
 ## Required invariants
 
@@ -53,10 +57,12 @@ Authority-bearing bundle operations never rewrite the input bundle. Portable POS
 4. Public-key normalization never reopens the authority-controlled key path.
 5. Distinct cached inputs cannot exceed the aggregate transaction byte ceiling.
 6. Private-key type checking and signing use the same captured bytes.
-7. Signing and finalization reject a missing successor URI and never rewrite the input bundle.
-8. Every bundle successor is created exclusively as a private regular file and cannot overwrite an existing path.
-9. Partial or orphaned output is not accepted as evidence and does not change a Gap Ledger row.
-10. Unsupported secure filesystem APIs fail closed; there is no path-based compatibility fallback.
+7. The input bundle, artifacts, signatures, and successors share one declared custody root; private keys remain outside it.
+8. Signing and finalization reject a missing successor URI and never rewrite the input bundle.
+9. Signature and successor bundle URIs are canonical, distinct, exclusive, and private.
+10. Every created output is visibly re-read and byte-compared before command success.
+11. Partial or orphaned output is not accepted as evidence and does not change a Gap Ledger row.
+12. Unsupported secure filesystem APIs fail closed; there is no path-based compatibility fallback.
 
 ## Signing sequence
 
@@ -68,11 +74,11 @@ python3 tools/sign_external_evidence.py submission \
   --custody-root <custody-root> \
   --output-bundle-uri artifact://successors/submission-001.json \
   --index 0 \
-  --private-key <external-private-key.pem> \
+  --private-key <private-key-outside-custody.pem> \
   --signature-uri artifact://signatures/submission-001.sig
 ```
 
-The next operation consumes the verified successor as its input and writes another new successor. Reusing a successor or signature URI fails because creation is exclusive.
+The next operation consumes the verified successor as its input and writes another new successor. Reusing a successor or signature URI fails because creation is exclusive. The two output URIs must differ.
 
 ## Validation sequence
 
@@ -98,8 +104,10 @@ Reopen `HG-0075` when any of the following is observed:
 - a non-canonical URI spelling creates a second cache or review identity;
 - transaction snapshot growth is unbounded;
 - signing reuses a mutable private-key pathname after type validation;
+- the input bundle is accepted outside the declared custody root or a private key is accepted inside it;
 - an authority-bearing command rewrites its input bundle or permits operation without a new exclusive successor URI;
-- a successor write follows a symbolic link, overwrites an existing object, or can report success for a partial file;
+- signature and successor URIs can alias, or a successor write follows a symbolic link or overwrites an existing object;
+- a command can report success without re-reading the complete visible output bytes and private mode;
 - a required hostile test is deleted, skipped without an explicit platform reason, or no longer exercises the security boundary; or
 - the exact-head CI packet or independent review no longer binds the live candidate.
 
