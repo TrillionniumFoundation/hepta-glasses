@@ -43,6 +43,32 @@
         "proof of possession and authority for every enrolled issuer and reviewer key",
         "real physical, provider, administrator, vendor, assurance, signing, pilot and store evidence"
       ]
+    },
+    {
+      "id": "latest-head-ci-custody",
+      "owner": "quality-gates",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        ".github/workflows/ci.yml",
+        "tools/validate_production_authority.py"
+      ],
+      "documentation": [
+        "docs/adr/ADR-0005-latest-head-ci-concurrency.md",
+        "docs/development/G8_PRODUCTION_AUTHORITY_CLOSURE.md"
+      ],
+      "tests": [
+        "services/qualification/test_ci_latest_head_custody.py",
+        "tools/validate_production_authority.py"
+      ],
+      "contracts": [
+        "contracts/release-gates-v1.json",
+        "contracts/main-branch-protection-v1.json"
+      ],
+      "external_gates": [
+        "GitHub-hosted runner availability",
+        "administrator cancellation of runs created before the PR-level concurrency rule",
+        "branch protection that requires all seven canonical contexts"
+      ]
     }
   ]
 }
