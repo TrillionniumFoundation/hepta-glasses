@@ -18,14 +18,14 @@
 
 ## G9 layered machine truth
 
-G9 is a stacked evidence-authentication layer and does not rewrite the frozen G8 candidate. Its machine-readable supplements are:
+G9 is a stacked evidence-authentication and latest-head CI-custody layer. It does not rewrite the frozen G8 candidate. Its machine-readable supplements are:
 
-- `G9_STATE.json` — source authority rule, claim ceiling, zero-open source status, and the inherited 12-gap set.
-- `G9_MODULES.json` — ownership and source/document/test/contract coverage for the external-evidence authentication module.
-- `G9_GAP_LEDGER.json` — source closure record for `HG-0073` and the exact inherited authority-owned gap IDs.
+- `G9_STATE.json` — source authority rule, latest-head concurrency custody, claim ceiling, zero-open source status, and the inherited 12-gap set.
+- `G9_MODULES.json` — ownership and source/document/test/contract coverage for the external-evidence authentication and latest-head CI-custody modules.
+- `G9_GAP_LEDGER.json` — source closure records for `HG-0073` and `HG-0074`, plus the exact inherited authority-owned gap IDs.
 - `development/G9_TERMINAL_EXTERNAL_CLOSURE.md` — authenticated execution package for the 12 authority-owned gaps; not itself external evidence.
 
-`services/qualification/test_g9_metadata.py` verifies these supplements, their referenced paths, their synchronization with the G8 ledger and G9 contract, and the absence of private-key material in repository custody.
+`services/qualification/test_g9_metadata.py` verifies these supplements, their referenced paths, their synchronization with the G8 ledger and G9 contract, and the absence of private-key material in repository custody. `services/qualification/test_ci_latest_head_custody.py` independently verifies stale-run cancellation and exact-head identity checks in all seven jobs.
 
 ## Development
 
@@ -56,9 +56,10 @@ G9 is a stacked evidence-authentication layer and does not rewrite the frozen G8
 - `adr/ADR-0001-distributed-os-boundary.md`
 - `adr/ADR-0002-codex-authority-boundary.md`
 - `adr/ADR-0003-edge-runtime-language.md`
-- `adr/ADR-0004-external-evidence-authentication.md` — out-of-band trust pin, Ed25519 statements, authority separation, and rejected self-attestation designs.
+- `adr/ADR-0004-external-evidence-authentication.md` — out-of-band trust pin, actual Ed25519 key binding, signed evidence/reviews, strict parsing and authority separation.
+- `adr/ADR-0005-latest-head-ci-concurrency.md` — pull-request/branch concurrency custody, stale-run cancellation and independent exact-source verification.
 
-A later plan or ADR must state what it supersedes and update the applicable Current State, Gap Ledger, Evidence Index, module registry, and affected machine contracts in the same change.
+A later plan or ADR must state what it supersedes and update the applicable Current State, Gap Ledger, Evidence Index, module registry, validators, tests and affected machine contracts in the same change.
 
 ## Machine contracts
 
