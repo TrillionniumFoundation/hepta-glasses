@@ -26,6 +26,16 @@ The trust registry binds each key ID to an identity, organization, authority cla
 
 A repository writer cannot close a gap by inventing a key, replacing a public key, declaring themselves independent, or recomputing local hashes. Validation rejects unknown, expired, revoked, cross-gap, issuer-alias, and cryptographically invalid signatures.
 
+## Filesystem custody and stable byte snapshots
+
+A valid URI is not a stable byte identity by itself. During one validation transaction, every existing `artifact://` and `key://` input is pinned to the first stable bytes observed for its normalized lexical path. Scope is checked against the resolved custody root, but later hashing, JSON parsing, secret scanning, public-key normalization, and signature verification reuse the pinned lexical-path snapshot rather than resolving the path again.
+
+Input reads use bounded regular-file descriptors and compare device, inode, size, modification time, and change time before and after the read. A symbolic link retarget, same-name replacement, non-regular object, oversized file, short read, scope escape, or metadata change fails closed or remains unable to alter the already pinned transaction bytes.
+
+Detached signatures are always new files. The signing helper walks the custody root with directory descriptors, rejects symbolic-link directory components, creates missing directories with mode `0700`, and creates the final signature with no-follow and exclusive-create semantics at mode `0600`. Existing regular files, dangling links, output links, overwrite attempts, and unsupported secure directory APIs fail closed. A partial final entry is removed on error.
+
+The normative design and negative-test requirements are recorded in `docs/adr/ADR-0006-external-evidence-filesystem-custody.md`. These controls protect local evidence I/O; they do not make repository custody an external trust anchor.
+
 ## Privacy and secret boundary
 
 Never commit or upload raw provider credentials, OAuth refresh tokens, KMS/HSM private material, application signing keys, recovery secrets, raw microphone audio, sensitive transcripts, unredacted customer data, precise location histories, or live exploitation secrets. Only public verification keys belong in the trust package. Private signing keys remain with the issuing authority.
