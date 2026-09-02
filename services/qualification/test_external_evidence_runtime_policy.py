@@ -82,6 +82,26 @@ class ExternalEvidenceRuntimePolicyTest(unittest.TestCase):
                 openssl_binary="/tmp/attacker-openssl",
             )
 
+    def test_private_test_hook_rejects_missing_or_naive_time(self) -> None:
+        with self.assertRaisesRegex(
+            TypeError,
+            "requires a datetime now",
+        ):
+            _validate_bundle_at_for_tests(
+                Path("unused-bundle.json"),
+                **self._arguments(),
+                now=None,
+            )
+        with self.assertRaisesRegex(
+            TypeError,
+            "requires timezone-aware now",
+        ):
+            _validate_bundle_at_for_tests(
+                Path("unused-bundle.json"),
+                **self._arguments(),
+                now=datetime(2026, 9, 2, 12, 0),
+            )
+
     def test_executable_cli_has_no_crypto_binary_override(self) -> None:
         with self.assertRaises(SystemExit):
             parse_args(
