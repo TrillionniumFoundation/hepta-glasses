@@ -108,6 +108,12 @@ class G10MetadataCoverageTest(unittest.TestCase):
         policy = (
             ROOT / "tools/external_evidence/complete_closure.py"
         ).read_text(encoding="utf-8")
+        seat_policy = (
+            ROOT / "tools/external_evidence/authority_seat_policy.py"
+        ).read_text(encoding="utf-8")
+        admission = (
+            ROOT / "tools/external_evidence/repository_admission.py"
+        ).read_text(encoding="utf-8")
         runtime_policy = (
             ROOT / "tools/external_evidence/runtime_policy.py"
         ).read_text(encoding="utf-8")
@@ -123,8 +129,13 @@ class G10MetadataCoverageTest(unittest.TestCase):
         repository_test = (
             ROOT / "services/qualification/test_external_evidence_repository.py"
         ).read_text(encoding="utf-8")
+        repository_admission_test = (
+            ROOT
+            / "services/qualification/test_external_evidence_repository_admission.py"
+        ).read_text(encoding="utf-8")
         self.assertIn("_install_runtime_policy", package_init)
         self.assertIn("_install_semantic_binding", package_init)
+        self.assertIn("_install_global_authority_seat_policy", package_init)
         self.assertIn("missing_issuer_authority_classes", policy)
         self.assertIn("issuer_claim_scopes", policy)
         self.assertIn("review_set_integrity", policy)
@@ -132,6 +143,11 @@ class G10MetadataCoverageTest(unittest.TestCase):
             "one key cannot satisfy multiple authority seats",
             policy,
         )
+        self.assertIn("spans authority classes", seat_policy)
+        self.assertIn("one pinned key cannot occupy different", seat_policy)
+        self.assertIn("_open_absolute_directory_nofollow", admission)
+        self.assertIn("name no longer identifies the opened file", admission)
+        self.assertIn("committed evidence directory changed", admission)
         self.assertIn(
             "caller-supplied validation time is prohibited",
             runtime_policy,
@@ -148,6 +164,8 @@ class G10MetadataCoverageTest(unittest.TestCase):
         self.assertIn("base.rglob", repository_test)
         self.assertIn("os.O_NOFOLLOW", repository_test)
         self.assertIn("acceptance.get(\"state\") == \"accepted\"", repository_test)
+        self.assertIn("discover_accepted_envelopes", repository_admission_test)
+        self.assertIn("directory_replacement_between_stat_and_open", repository_admission_test)
 
     def test_contract_policy_and_claim_partition_are_exact(self) -> None:
         profile = self.contract["complete_closure_profile"]
@@ -188,6 +206,7 @@ class G10MetadataCoverageTest(unittest.TestCase):
             "G10_MODULES.json",
             "G10_GAP_LEDGER.json",
             "G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+            "G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md",
             "G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md",
             "ADR-0008-authority-quorum-and-review-set-integrity.md",
             "ADR-0009-trusted-verifier-and-contract-content-binding.md",
@@ -201,6 +220,8 @@ class G10MetadataCoverageTest(unittest.TestCase):
             len(self.contract["allowed_gap_ids"]),
         )
         self.assertIn("cannot manufacture", self.state["claim_ceiling"])
+        self.assertIn("one key ID", self.state["authority_owned"]["closure_rule"])
+        self.assertIn("descriptor-anchored", self.state["claim_ceiling"])
         g9_external = set(
             self.g9_gaps["inherited_authority_owned_gap_ids"]
         )
