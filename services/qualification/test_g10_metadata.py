@@ -117,6 +117,9 @@ class G10MetadataCoverageTest(unittest.TestCase):
         runtime_policy = (
             ROOT / "tools/external_evidence/runtime_policy.py"
         ).read_text(encoding="utf-8")
+        openssl_policy = (
+            ROOT / "tools/external_evidence/openssl_policy.py"
+        ).read_text(encoding="utf-8")
         semantic_binding = (
             ROOT / "tools/external_evidence/semantic_binding.py"
         ).read_text(encoding="utf-8")
@@ -136,6 +139,8 @@ class G10MetadataCoverageTest(unittest.TestCase):
         self.assertIn("_install_runtime_policy", package_init)
         self.assertIn("_install_semantic_binding", package_init)
         self.assertIn("_install_global_authority_seat_policy", package_init)
+        self.assertIn("_install_core_openssl_policy", package_init)
+        self.assertIn("_install_signing_io_openssl_policy", package_init)
         self.assertIn("missing_issuer_authority_classes", policy)
         self.assertIn("issuer_claim_scopes", policy)
         self.assertIn("review_set_integrity", policy)
@@ -156,6 +161,16 @@ class G10MetadataCoverageTest(unittest.TestCase):
             "custom OpenSSL executable selection is prohibited",
             runtime_policy,
         )
+        self.assertIn('_TRUSTED_OPENSSL = Path("/usr/bin/openssl")', openssl_policy)
+        self.assertIn("os.O_NOFOLLOW", openssl_policy)
+        self.assertIn("value.st_uid != 0", openssl_policy)
+        self.assertIn("stat.S_IWGRP | stat.S_IWOTH", openssl_policy)
+        self.assertIn('"OPENSSL_CONF": "/dev/null"', openssl_policy)
+        self.assertIn(
+            "caller-supplied subprocess environment is prohibited",
+            openssl_policy,
+        )
+        self.assertNotIn("shutil.which", openssl_policy)
         self.assertNotIn("--openssl-binary", cli)
         self.assertIn("contract_sha256", semantic_binding)
         self.assertIn("canonical_digest(contract)", semantic_binding)
@@ -166,6 +181,27 @@ class G10MetadataCoverageTest(unittest.TestCase):
         self.assertIn("acceptance.get(\"state\") == \"accepted\"", repository_test)
         self.assertIn("discover_accepted_envelopes", repository_admission_test)
         self.assertIn("directory_replacement_between_stat_and_open", repository_admission_test)
+
+    def test_trusted_openssl_boundary_is_registered_end_to_end(self) -> None:
+        modules = {item["id"]: item for item in self.modules["modules"]}
+        module = modules["authority-quorum-review-integrity"]
+        self.assertIn(
+            "tools/external_evidence/openssl_policy.py",
+            module["source_roots"],
+        )
+        gaps = {item["id"]: item for item in self.gaps["gaps"]}
+        runtime_gap = gaps["HG-0080"]
+        self.assertIn(
+            "tools/external_evidence/openssl_policy.py",
+            runtime_gap["evidence"],
+        )
+        self.assertIn("/usr/bin/openssl", runtime_gap["close_criteria"])
+        self.assertIn("caller PATH", runtime_gap["close_criteria"])
+        runtime_authority = self.state["repository_actionable"][
+            "complete_closure_policy"
+        ]["runtime_authority"]
+        self.assertIn("/usr/bin/openssl", runtime_authority)
+        self.assertIn("dynamic-loader", runtime_authority)
 
     def test_contract_policy_and_claim_partition_are_exact(self) -> None:
         profile = self.contract["complete_closure_profile"]
@@ -222,6 +258,7 @@ class G10MetadataCoverageTest(unittest.TestCase):
         self.assertIn("cannot manufacture", self.state["claim_ceiling"])
         self.assertIn("one key ID", self.state["authority_owned"]["closure_rule"])
         self.assertIn("descriptor-anchored", self.state["claim_ceiling"])
+        self.assertIn("absolute cryptographic-executable", self.state["claim_ceiling"])
         g9_external = set(
             self.g9_gaps["inherited_authority_owned_gap_ids"]
         )
