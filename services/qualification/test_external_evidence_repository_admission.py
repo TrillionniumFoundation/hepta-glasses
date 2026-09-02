@@ -5,11 +5,11 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Any
 from unittest import mock
 
 from tools import external_evidence
 from tools.external_evidence import EvidenceError
+from tools.external_evidence import repository_admission
 from tools.external_evidence.repository_admission import (
     discover_accepted_envelopes,
 )
@@ -106,30 +106,21 @@ class DescriptorAnchoredRepositoryAdmissionTest(unittest.TestCase):
                 encoding="utf-8",
             )
             replacement = json.dumps(_accepted_document())
-            original_open = os.open
+            original_flags = repository_admission._file_flags
             replaced = False
 
-            def raced_open(
-                target: os.PathLike[str] | str,
-                flags: int,
-                *args: Any,
-                **kwargs: Any,
-            ) -> int:
+            def raced_flags() -> int:
                 nonlocal replaced
-                if (
-                    not replaced
-                    and target == "candidate.json"
-                    and kwargs.get("dir_fd") is not None
-                    and not (flags & getattr(os, "O_DIRECTORY", 0))
-                ):
+                if not replaced:
                     candidate.rename(retired)
                     candidate.write_text(replacement, encoding="utf-8")
                     replaced = True
-                return original_open(target, flags, *args, **kwargs)
+                return original_flags()
 
-            with mock.patch(
-                "tools.external_evidence.repository_admission.os.open",
-                side_effect=raced_open,
+            with mock.patch.object(
+                repository_admission,
+                "_file_flags",
+                side_effect=raced_flags,
             ):
                 with self.assertRaisesRegex(
                     EvidenceError,
@@ -148,22 +139,12 @@ class DescriptorAnchoredRepositoryAdmissionTest(unittest.TestCase):
                 json.dumps(_accepted_document()),
                 encoding="utf-8",
             )
-            original_open = os.open
+            original_flags = repository_admission._directory_flags
             replaced = False
 
-            def raced_open(
-                target: os.PathLike[str] | str,
-                flags: int,
-                *args: Any,
-                **kwargs: Any,
-            ) -> int:
+            def raced_flags() -> int:
                 nonlocal replaced
-                if (
-                    not replaced
-                    and target == "candidate"
-                    and kwargs.get("dir_fd") is not None
-                    and flags & getattr(os, "O_DIRECTORY", 0)
-                ):
+                if not replaced:
                     candidate.rename(retired)
                     candidate.mkdir()
                     (candidate / "replacement.json").write_text(
@@ -171,11 +152,12 @@ class DescriptorAnchoredRepositoryAdmissionTest(unittest.TestCase):
                         encoding="utf-8",
                     )
                     replaced = True
-                return original_open(target, flags, *args, **kwargs)
+                return original_flags()
 
-            with mock.patch(
-                "tools.external_evidence.repository_admission.os.open",
-                side_effect=raced_open,
+            with mock.patch.object(
+                repository_admission,
+                "_directory_flags",
+                side_effect=raced_flags,
             ):
                 with self.assertRaisesRegex(
                     EvidenceError,
