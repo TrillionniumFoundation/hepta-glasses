@@ -8,7 +8,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 G9_REVISION = "2026-09-02-g9-authenticated-1"
-G9_GAP = "HG-0073"
+G9_GAPS = ("HG-0073", "HG-0074")
+G9_MODULES = ("external-evidence-authentication", "latest-head-ci-custody")
 PRIVATE_KEY_PATTERN = re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")
 
 
@@ -45,28 +46,40 @@ class G9MetadataCoverageTest(unittest.TestCase):
                 {"BLOCKED_EXTERNAL", "BLOCKED_ADMIN_SETTING", "BLOCKED_UPSTREAM"},
             )
 
-    def test_g9_source_gap_is_closed_with_existing_evidence(self) -> None:
+    def test_g9_source_gaps_are_closed_with_existing_evidence(self) -> None:
         self.assertEqual(self.gaps["source_summary"]["repository_actionable_open"], 0)
+        self.assertEqual(self.gaps["source_summary"]["closed_source"], len(G9_GAPS))
         entries = self.gaps["gaps"]
-        self.assertEqual([item["id"] for item in entries], [G9_GAP])
-        gap = entries[0]
-        self.assertEqual(gap["status"], "CLOSED_SOURCE")
-        self.assertTrue(gap["close_criteria"].strip())
-        for relative in gap["evidence"]:
-            self.assertTrue((ROOT / relative).is_file(), relative)
+        self.assertEqual(tuple(item["id"] for item in entries), G9_GAPS)
+        self.assertEqual(
+            tuple(self.state["repository_actionable"]["closed_source"]),
+            G9_GAPS,
+        )
+        for gap in entries:
+            with self.subTest(gap=gap["id"]):
+                self.assertEqual(gap["status"], "CLOSED_SOURCE")
+                self.assertTrue(gap["close_criteria"].strip())
+                for relative in gap["evidence"]:
+                    self.assertTrue((ROOT / relative).is_file(), relative)
 
-    def test_external_evidence_module_has_source_doc_test_contract_coverage(self) -> None:
+    def test_g9_modules_have_source_doc_test_contract_coverage(self) -> None:
         entries = self.modules["modules"]
-        self.assertEqual(len(entries), 1)
-        module = entries[0]
-        self.assertEqual(module["id"], "external-evidence-authentication")
-        for field in ("source_roots", "documentation", "tests", "contracts", "external_gates"):
-            self.assertTrue(module[field], field)
-        for relative in module["source_roots"]:
-            self.assertTrue((ROOT / relative).exists(), relative)
-        for field in ("documentation", "tests", "contracts"):
-            for relative in module[field]:
-                self.assertTrue((ROOT / relative).is_file(), relative)
+        self.assertEqual(tuple(item["id"] for item in entries), G9_MODULES)
+        for module in entries:
+            with self.subTest(module=module["id"]):
+                for field in (
+                    "source_roots",
+                    "documentation",
+                    "tests",
+                    "contracts",
+                    "external_gates",
+                ):
+                    self.assertTrue(module[field], f"{module['id']}.{field}")
+                for relative in module["source_roots"]:
+                    self.assertTrue((ROOT / relative).exists(), relative)
+                for field in ("documentation", "tests", "contracts"):
+                    for relative in module[field]:
+                        self.assertTrue((ROOT / relative).is_file(), relative)
 
     def test_docs_index_registers_g9_machine_truth(self) -> None:
         index = (ROOT / "docs/README.md").read_text(encoding="utf-8")
@@ -75,6 +88,7 @@ class G9MetadataCoverageTest(unittest.TestCase):
             "G9_MODULES.json",
             "G9_GAP_LEDGER.json",
             "ADR-0004-external-evidence-authentication.md",
+            "ADR-0005-latest-head-ci-concurrency.md",
         ):
             self.assertIn(name, index)
 
@@ -107,6 +121,10 @@ class G9MetadataCoverageTest(unittest.TestCase):
         )
         self.assertIn("E5-E7", self.state["claim_ceiling"])
         self.assertIn("externally pinned", self.state["authority_owned"]["closure_rule"])
+        self.assertIn(
+            "exact source SHA verified inside every job",
+            self.state["source_authority"]["workflow_concurrency_rule"],
+        )
 
 
 if __name__ == "__main__":
