@@ -26,17 +26,21 @@ assert SPEC is not None and SPEC.loader is not None
 external = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(external)
 
+from tools.external_evidence.core import (  # noqa: E402
+    ED25519_SPKI_BYTES,
+    ED25519_SPKI_PREFIX,
+    MAX_PUBLIC_KEY_BYTES,
+    read_object,
+)
+
 
 def read_bundle(path: Path) -> dict[str, Any]:
-    value = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(value, dict):
-        raise ValueError("bundle must be a JSON object")
-    return value
+    return read_object(path, "external evidence bundle")
 
 
 def contract_revision() -> str:
-    value = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-    revision = value.get("contract_revision") if isinstance(value, dict) else None
+    value = read_object(CONTRACT_PATH, "external evidence contract")
+    revision = value.get("contract_revision")
     if not isinstance(revision, str) or not revision:
         raise ValueError("external evidence contract_revision is unavailable")
     return revision
@@ -51,9 +55,40 @@ def normalize_time(value: str | None) -> str:
     return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def sign_ed25519(private_key: Path, payload: bytes) -> bytes:
+def verify_private_key_ed25519(private_key: Path) -> None:
     if not private_key.is_file():
         raise ValueError("private key is missing")
+    if private_key.stat().st_size > MAX_PUBLIC_KEY_BYTES:
+        raise ValueError("private key exceeds the bounded key-file size")
+    data = private_key.read_bytes()
+    if b"PRIVATE KEY" not in data:
+        raise ValueError("private key file does not contain PEM private-key material")
+    result = subprocess.run(
+        [
+            "openssl",
+            "pkey",
+            "-in",
+            str(private_key),
+            "-pubout",
+            "-outform",
+            "DER",
+        ],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=15,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError("private key cannot be parsed non-interactively")
+    if (
+        len(result.stdout) != ED25519_SPKI_BYTES
+        or not result.stdout.startswith(ED25519_SPKI_PREFIX)
+    ):
+        raise ValueError("private key must be an actual Ed25519 private key")
+
+
+def sign_ed25519(private_key: Path, payload: bytes) -> bytes:
+    verify_private_key_ed25519(private_key)
     with tempfile.TemporaryDirectory(prefix="hepta-evidence-sign-") as directory:
         root = Path(directory)
         payload_path = root / "payload.bin"
@@ -72,6 +107,7 @@ def sign_ed25519(private_key: Path, payload: bytes) -> bytes:
                 "-out",
                 str(signature_path),
             ],
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             timeout=15,
             check=False,
