@@ -84,6 +84,11 @@ def _require_bundle_inside_custody(snapshot: Any, root: Any) -> Path:
 
 def _canonical_output_uri(value: Any, *, label: str) -> str:
     if not isinstance(value, str) or not value:
+        if label == "output bundle":
+            raise ValueError(
+                "authoritative evidence signing requires --output-bundle-uri; "
+                "in-place bundle mutation is unsupported"
+            )
         raise ValueError(f"{label} must be a non-empty artifact URI")
     match = ARTIFACT_URI.fullmatch(value)
     if match is None:
@@ -156,12 +161,7 @@ def _commit_bundle(
     serialized: bytes,
     custody_root: Path,
 ) -> tuple[Path, str, bool]:
-    """Create an immutable successor and leave the signed input untouched.
-
-    Portable POSIX rename operations do not provide a conditional
-    compare-and-swap against an expected inode. Authority-bearing evidence
-    therefore advances only through fresh, exclusive successor objects.
-    """
+    """Create an immutable successor and leave the signed input untouched."""
 
     del snapshot
     output_uri = _canonical_output_uri(
@@ -188,9 +188,12 @@ def _commit_bundle(
 
 
 def sign_submission(args: argparse.Namespace) -> dict[str, Any]:
-    snapshot = load_bundle_snapshot(args.bundle)
-    custody_root = _require_bundle_inside_custody(snapshot, args.custody_root)
     _preflight_output_uris(args, include_signature=True)
+    snapshot = load_bundle_snapshot(args.bundle)
+    custody_root = _require_bundle_inside_custody(
+        snapshot,
+        getattr(args, "custody_root", None),
+    )
     bundle = snapshot.value
     submissions = bundle.get("submissions")
     if not isinstance(submissions, list) or not 0 <= args.index < len(submissions):
@@ -258,9 +261,12 @@ def sign_submission(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def sign_reviewer(args: argparse.Namespace) -> dict[str, Any]:
-    snapshot = load_bundle_snapshot(args.bundle)
-    custody_root = _require_bundle_inside_custody(snapshot, args.custody_root)
     _preflight_output_uris(args, include_signature=True)
+    snapshot = load_bundle_snapshot(args.bundle)
+    custody_root = _require_bundle_inside_custody(
+        snapshot,
+        getattr(args, "custody_root", None),
+    )
     bundle = snapshot.value
     acceptance = bundle.get("acceptance")
     reviewers = acceptance.get("reviewers") if isinstance(acceptance, dict) else None
@@ -333,9 +339,12 @@ def sign_reviewer(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def finalize(args: argparse.Namespace) -> dict[str, Any]:
-    snapshot = load_bundle_snapshot(args.bundle)
-    custody_root = _require_bundle_inside_custody(snapshot, args.custody_root)
     _preflight_output_uris(args, include_signature=False)
+    snapshot = load_bundle_snapshot(args.bundle)
+    custody_root = _require_bundle_inside_custody(
+        snapshot,
+        getattr(args, "custody_root", None),
+    )
     bundle = snapshot.value
     acceptance = bundle.get("acceptance")
     if not isinstance(acceptance, dict):
