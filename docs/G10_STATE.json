@@ -28,7 +28,8 @@
       "issuer_authority_mode": "all_named_classes",
       "issuer_claim_mode": "exact_class_scoped_claims",
       "review_manifest_schema_version": 1,
-      "committed_accepted_envelope_discovery": "recursive content identity under evidence/external"
+      "validation_entrypoint_identity": "complete_closure module, acceptance alias, package API and CLI share one immutable aggregate-bounded snapshot wrapper",
+      "committed_accepted_envelope_discovery": "recursive content identity under evidence/external using O_NOFOLLOW and stable lexical/opened/post-read descriptor identity"
     }
   },
   "authority_owned": {
@@ -47,7 +48,7 @@
       "HG-0022",
       "HG-0044"
     ],
-    "closure_rule": "Every authority class named for a gap signs exactly its versioned class-scoped claims through a distinct pinned key and identity/organization pair; every final reviewer binds the same policy, review roster and acceptance context; every committed accepted envelope is discovered recursively by content and revalidated under an out-of-band pin; real external evidence and independent acceptance remain required."
+    "closure_rule": "Every authority class named for a gap signs exactly its versioned class-scoped claims through a distinct pinned key and identity/organization pair; every final reviewer binds the same policy, review roster and acceptance context; every committed accepted envelope is discovered recursively by stable descriptor-backed content and revalidated under an out-of-band pin; real external evidence and independent acceptance remain required."
   },
-  "claim_ceiling": "G10 closes repository-controlled authority quorum, claim-scope/version binding, final-review-set integrity, and committed accepted-envelope discovery only; it cannot manufacture E5-E7, administrative, upstream, physical, provider, vendor, independent-assurance, signing, pilot, store, or release authority."
+  "claim_ceiling": "G10 closes repository-controlled authority quorum, claim-scope/version binding, final-review-set integrity, canonical validation-entrypoint identity, and stable committed accepted-envelope discovery only; it cannot manufacture E5-E7, administrative, upstream, physical, provider, vendor, independent-assurance, signing, pilot, store, or release authority."
 }
