@@ -88,10 +88,10 @@
         "tools/external_evidence/__init__.py",
         "tools/validate_external_evidence.py",
         "services/qualification/test_external_evidence_runtime_policy.py",
-        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
-        "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md"
+        "docs/development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md",
+        "docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md"
       ],
-      "close_criteria": "The package API, direct complete_closure module and executable CLI use the trusted current system clock and the canonical OpenSSL command. They reject a caller-supplied validation time and any custom OpenSSL executable before reading evidence. The CLI exposes no cryptographic-binary override. A private deterministic clock hook is absent from __all__, used only by the historical qualification fixture, and still rejects custom OpenSSL selection. Expired, revoked or future-dated evidence cannot be made current by public argument injection, and an attacker-selected executable cannot manufacture cryptographic success through an authority-bearing entrypoint."
+      "close_criteria": "The package API, direct complete_closure module and executable CLI use the trusted current system clock and the canonical OpenSSL command. They reject a caller-supplied validation time and any custom OpenSSL executable before reading evidence. The CLI exposes no cryptographic-binary override. A private deterministic clock hook is absent from __all__, used only by the historical qualification fixture, requires a timezone-aware datetime, and still rejects custom OpenSSL selection. Expired, revoked or future-dated evidence cannot be made current by public argument injection, and an attacker-selected executable cannot manufacture cryptographic success through an authority-bearing entrypoint."
     },
     {
       "id": "HG-0081",
@@ -103,8 +103,8 @@
         "tools/external_evidence/__init__.py",
         "services/qualification/test_external_evidence_contract_binding.py",
         "services/qualification/test_external_evidence_complete_closure.py",
-        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
-        "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md"
+        "docs/development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md",
+        "docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md"
       ],
       "close_criteria": "Every issuer and reviewer canonical Ed25519 preimage contains a contract-binding statement with contract ID, declared revision and the canonical SHA-256 of the complete current contract object. The evidence-set digest carries the same binding. A contract whose revision string is unchanged but whose authority classes, claim partition, review rules, closure rule or any other canonical field changes produces different submission, evidence-set and review digests and invalidates existing signatures. A caller-supplied revision that differs from the current contract bytes fails before signing or verification."
     }
