@@ -5,7 +5,9 @@ import unittest
 from pathlib import Path
 
 from tools.external_evidence.core import (
+    EvidenceError,
     _read_bounded_file,
+    _stable_read_target,
     safe_artifact_path,
     validation_snapshot,
 )
@@ -87,6 +89,42 @@ class ExternalEvidenceScopedSnapshotTest(unittest.TestCase):
 
             self.assertEqual(validate_after_retarget(), b"trusted")
             self.assertEqual(alias.read_bytes(), b"outside-attacker")
+
+    def test_resolved_target_parent_replaced_by_symlink_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            selected_parent = root / "selected"
+            retired_parent = root / "retired"
+            outside_parent = root / "outside"
+            selected_parent.mkdir()
+            outside_parent.mkdir()
+            target = selected_parent / "report.bin"
+            target.write_bytes(b"trusted")
+            (outside_parent / "report.bin").write_bytes(b"outside-attacker")
+            resolved_target = target.resolve(strict=True)
+
+            selected_parent.rename(retired_parent)
+            try:
+                selected_parent.symlink_to(
+                    outside_parent,
+                    target_is_directory=True,
+                )
+            except OSError as error:
+                self.skipTest(f"symbolic links are unavailable: {error}")
+
+            with self.assertRaisesRegex(
+                EvidenceError,
+                "unsafe or replaced directory component",
+            ):
+                _stable_read_target(
+                    resolved_target,
+                    label="artifact",
+                    maximum=1024,
+                )
+            self.assertEqual(
+                (selected_parent / "report.bin").read_bytes(),
+                b"outside-attacker",
+            )
 
 
 if __name__ == "__main__":
