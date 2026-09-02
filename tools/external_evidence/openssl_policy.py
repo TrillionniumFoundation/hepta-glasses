@@ -2,16 +2,15 @@
 
 Authority-bearing verification and signing must not inherit executable selection
 from ``PATH`` or dynamic-loader/OpenSSL configuration from the invoking
-environment.  The supported verifier therefore executes one root-owned,
+environment. The supported verifier therefore executes one root-owned,
 non-writable system binary by absolute path under a minimal deterministic
-environment.
+environment and a deliberately narrow subprocess API.
 """
 
 from __future__ import annotations
 
 import os
 import stat
-import subprocess as _subprocess
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Callable, Sequence
@@ -25,6 +24,20 @@ _TRUSTED_ENVIRONMENT = {
     "PATH": "/usr/bin:/bin",
     "TZ": "UTC",
 }
+_ALLOWED_RUN_KEYWORDS = frozenset(
+    {
+        "capture_output",
+        "check",
+        "encoding",
+        "errors",
+        "input",
+        "stderr",
+        "stdin",
+        "stdout",
+        "text",
+        "timeout",
+    }
+)
 
 
 def _identity(value: os.stat_result) -> tuple[int, int, int, int, int, int]:
@@ -67,7 +80,7 @@ def trusted_openssl_path(*, fail: Callable[[str], Any]) -> str:
     Every ancestor is a root-owned, non-group/world-writable real directory.
     The final executable is a root-owned, non-writable regular file opened with
     no-follow semantics, and its lexical/opened/post-check identities must
-    agree.  A caller cannot substitute a same-name program through ``PATH``.
+    agree. A caller cannot substitute a same-name program through ``PATH``.
     """
 
     if not hasattr(os, "O_NOFOLLOW"):
@@ -115,6 +128,29 @@ def trusted_subprocess_environment() -> dict[str, str]:
     return dict(_TRUSTED_ENVIRONMENT)
 
 
+def _canonical_command(
+    command: Sequence[Any],
+    *,
+    fail: Callable[[str], Any],
+) -> list[str]:
+    if isinstance(command, (str, bytes)) or not isinstance(command, Sequence):
+        fail("OpenSSL command must be an argument sequence")
+    values: list[str] = []
+    for index, item in enumerate(command):
+        try:
+            value = os.fspath(item)
+        except TypeError:
+            fail(f"OpenSSL command argument {index} is not path/string-like")
+        if not isinstance(value, str):
+            fail(f"OpenSSL command argument {index} must be text")
+        if "\x00" in value:
+            fail(f"OpenSSL command argument {index} contains NUL")
+        values.append(value)
+    if not values:
+        fail("OpenSSL command must not be empty")
+    return values
+
+
 class _TrustedOpenSSLSubprocess:
     _hepta_trusted_openssl_proxy = True
 
@@ -136,28 +172,36 @@ class _TrustedOpenSSLSubprocess:
         *args: Any,
         **kwargs: Any,
     ) -> Any:
-        if isinstance(command, (str, bytes)) or not isinstance(command, Sequence):
-            self._fail("OpenSSL command must be an argument sequence")
-        values = list(command)
-        if not values:
-            self._fail("OpenSSL command must not be empty")
-        trusted = trusted_openssl_path(fail=self._fail)
-        requested = os.fspath(values[0])
-        if requested not in {"openssl", trusted}:
+        values = _canonical_command(command, fail=self._fail)
+        if args:
             self._fail(
-                "custom OpenSSL executable selection is prohibited on the "
-                "authority-bearing path"
+                "positional subprocess options are prohibited for OpenSSL"
             )
         if kwargs.get("shell"):
             self._fail("shell execution is prohibited for OpenSSL")
         if "executable" in kwargs and kwargs["executable"] is not None:
             self._fail("subprocess executable override is prohibited for OpenSSL")
         if "env" in kwargs:
-            self._fail("caller-supplied subprocess environment is prohibited for OpenSSL")
+            self._fail(
+                "caller-supplied subprocess environment is prohibited for OpenSSL"
+            )
+        unknown = sorted(set(kwargs) - _ALLOWED_RUN_KEYWORDS)
+        if unknown:
+            self._fail(
+                "unsupported OpenSSL subprocess options are prohibited: "
+                f"{unknown}"
+            )
+
+        trusted = trusted_openssl_path(fail=self._fail)
+        requested = values[0]
+        if requested not in {"openssl", trusted}:
+            self._fail(
+                "custom OpenSSL executable selection is prohibited on the "
+                "authority-bearing path"
+            )
         values[0] = trusted
         return self._real.run(
             values,
-            *args,
             env=trusted_subprocess_environment(),
             **kwargs,
         )
