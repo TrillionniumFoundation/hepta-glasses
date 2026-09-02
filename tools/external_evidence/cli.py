@@ -19,7 +19,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--expected-tree")
     parser.add_argument("--require-complete", action="store_true")
     parser.add_argument("--require-accepted", action="store_true")
-    parser.add_argument("--openssl-binary", default="openssl")
     parser.add_argument("--output", type=Path)
     return parser.parse_args(argv)
 
@@ -46,7 +45,6 @@ def main(argv: list[str] | None = None) -> int:
             require_accepted=args.require_accepted,
             trust_registry_path=args.trust_registry,
             expected_trust_registry_sha256=args.expected_trust_registry_sha256,
-            openssl_binary=args.openssl_binary,
         )
     except EvidenceError as error:
         result = {"ok": False, "error": str(error)}
