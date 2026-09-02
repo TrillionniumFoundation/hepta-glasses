@@ -75,7 +75,7 @@
         "evidence/external/README.md",
         "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md"
       ],
-      "close_criteria": "Repository qualification recursively inspects regular files under evidence/external by canonical envelope content rather than only matching a top-level bundle.json filename. Every committed envelope whose contract_id is canonical and acceptance.state is accepted is located at any immutable successor depth, mapped to its enclosing custody root, and revalidated as complete and accepted under a protected out-of-band trust-registry pin. Filename, extension, nesting, or successor placement cannot hide an accepted package from CI."
+      "close_criteria": "Repository qualification recursively inspects bounded regular files under evidence/external by canonical envelope content rather than only matching a top-level bundle.json filename. Candidate discovery uses O_NOFOLLOW and one stable descriptor whose lexical, opened and post-read device/inode/mode/size/mtime/ctime identities agree; symbolic links, ordinary replacement between lstat and open, special objects, oversized files, unsupported no-follow APIs and unstable reads are never promoted. Every discovered envelope whose contract_id is canonical and acceptance.state is accepted is mapped to its enclosing custody root and revalidated as complete and accepted under a protected out-of-band trust-registry pin. Filename, extension, nesting, successor placement, or a discovery-time replacement cannot hide or inject an accepted package."
     }
   ],
   "inherited_authority_owned_gap_ids": [
