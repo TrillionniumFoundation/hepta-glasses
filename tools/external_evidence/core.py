@@ -9,12 +9,16 @@ the digest declared inside the bundle is not accepted as its own trust anchor.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
+import os
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -53,6 +57,10 @@ ED25519_SPKI_BYTES = len(ED25519_SPKI_PREFIX) + 32
 ALLOWED_KEY_USAGES = frozenset(
     {"evidence_issuer", "acceptance_reviewer", "independent_reviewer"}
 )
+_READ_SNAPSHOT: ContextVar[dict[Path, bytes] | None] = ContextVar(
+    "hepta_external_evidence_read_snapshot",
+    default=None,
+)
 
 
 class EvidenceError(AssertionError):
@@ -61,6 +69,27 @@ class EvidenceError(AssertionError):
 
 def fail(message: str) -> None:
     raise EvidenceError(message)
+
+
+def validation_snapshot(function: Any) -> Any:
+    """Pin every validation input to the first stable byte snapshot read.
+
+    This prevents a concurrent writer from presenting one registry/key/artifact
+    for hashing and another for parsing or OpenSSL verification. Nested calls
+    reuse the active snapshot so the entire bundle validation has one byte view.
+    """
+
+    @functools.wraps(function)
+    def wrapped(*args: Any, **kwargs: Any) -> Any:
+        if _READ_SNAPSHOT.get() is not None:
+            return function(*args, **kwargs)
+        token = _READ_SNAPSHOT.set({})
+        try:
+            return function(*args, **kwargs)
+        finally:
+            _READ_SNAPSHOT.reset(token)
+
+    return wrapped
 
 
 def _reject_json_constant(value: str) -> None:
@@ -77,12 +106,7 @@ def _reject_duplicate_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def read_object(path: Path, label: str, *, maximum_bytes: int = MAX_JSON_BYTES) -> dict[str, Any]:
-    try:
-        raw = path.read_bytes()
-    except OSError as error:
-        fail(f"{label} cannot be read: {error}")
-    if len(raw) > maximum_bytes:
-        fail(f"{label} exceeds the {maximum_bytes}-byte validation bound")
+    raw = _read_bounded_file(path, label=label, maximum=maximum_bytes)
     try:
         value = json.loads(
             raw.decode("utf-8"),
@@ -298,15 +322,69 @@ def safe_key_path(root: Path, uri: str, *, label: str) -> Path:
 
 
 def _read_bounded_file(path: Path, *, label: str, maximum: int) -> bytes:
-    if not path.is_file():
-        fail(f"{label} references a missing file: {path}")
-    size = path.stat().st_size
-    if size > maximum:
-        fail(f"{label} exceeds the {maximum}-byte validation bound")
     try:
-        return path.read_bytes()
+        resolved = path.resolve(strict=True)
     except OSError as error:
-        fail(f"{label} cannot be read: {error}")
+        fail(f"{label} references a missing or unreadable file: {error}")
+
+    cache = _READ_SNAPSHOT.get()
+    if cache is not None and resolved in cache:
+        data = cache[resolved]
+        if len(data) > maximum:
+            fail(f"{label} exceeds the {maximum}-byte validation bound")
+        return data
+
+    flags = os.O_RDONLY
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(resolved, flags)
+    except OSError as error:
+        fail(f"{label} cannot be opened safely: {error}")
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            fail(f"{label} must reference a regular file")
+        if before.st_size > maximum:
+            fail(f"{label} exceeds the {maximum}-byte validation bound")
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            chunk = os.read(descriptor, min(1024 * 1024, maximum + 1 - total))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+            if total > maximum:
+                fail(f"{label} exceeds the {maximum}-byte validation bound")
+        after = os.fstat(descriptor)
+    except OSError as error:
+        fail(f"{label} cannot be read stably: {error}")
+    finally:
+        os.close(descriptor)
+
+    identity_before = (
+        before.st_dev,
+        before.st_ino,
+        before.st_size,
+        before.st_mtime_ns,
+        before.st_ctime_ns,
+    )
+    identity_after = (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ctime_ns,
+    )
+    data = b"".join(chunks)
+    if identity_before != identity_after or len(data) != before.st_size:
+        fail(f"{label} changed while it was being read")
+    if cache is not None:
+        cache[resolved] = data
+    return data
 
 
 def scan_secret_material(path: Path, *, label: str) -> None:
@@ -340,29 +418,96 @@ def _run_openssl(command: list[str], *, label: str) -> bytes:
     return completed.stdout
 
 
+def _verify_public_key_material(
+    public_key_data: bytes,
+    *,
+    openssl_binary: str,
+    label: str,
+) -> None:
+    if b"PRIVATE KEY" in public_key_data or b"PUBLIC KEY" not in public_key_data:
+        fail(f"{label} must contain only a PEM public key")
+    with tempfile.TemporaryDirectory(prefix="hepta-evidence-key-") as directory:
+        public_key = Path(directory) / "public.pem"
+        public_key.write_bytes(public_key_data)
+        der = _run_openssl(
+            [
+                _resolve_openssl(openssl_binary),
+                "pkey",
+                "-pubin",
+                "-in",
+                str(public_key),
+                "-pubout",
+                "-outform",
+                "DER",
+            ],
+            label=label,
+        )
+    if len(der) != ED25519_SPKI_BYTES or not der.startswith(ED25519_SPKI_PREFIX):
+        fail(f"{label} must contain an actual Ed25519 public key")
+
+
 def verify_public_key(public_key: Path, *, openssl_binary: str, label: str) -> None:
     data = _read_bounded_file(
         public_key,
         label=label,
         maximum=MAX_PUBLIC_KEY_BYTES,
     )
-    if b"PRIVATE KEY" in data or b"PUBLIC KEY" not in data:
-        fail(f"{label} must contain only a PEM public key")
-    der = _run_openssl(
-        [
-            _resolve_openssl(openssl_binary),
-            "pkey",
-            "-pubin",
-            "-in",
-            str(public_key),
-            "-pubout",
-            "-outform",
-            "DER",
-        ],
+    _verify_public_key_material(
+        data,
+        openssl_binary=openssl_binary,
         label=label,
     )
-    if len(der) != ED25519_SPKI_BYTES or not der.startswith(ED25519_SPKI_PREFIX):
-        fail(f"{label} must contain an actual Ed25519 public key")
+
+
+def _verify_ed25519_material(
+    *,
+    public_key_data: bytes,
+    message: bytes,
+    signature: bytes,
+    openssl_binary: str,
+    label: str,
+) -> None:
+    if len(signature) != 64:
+        fail(f"{label}.signature must be a 64-byte Ed25519 signature")
+    with tempfile.TemporaryDirectory(prefix="hepta-evidence-verify-") as directory:
+        root = Path(directory)
+        public_key = root / "public.pem"
+        message_path = root / "message.bin"
+        signature_path = root / "signature.bin"
+        public_key.write_bytes(public_key_data)
+        message_path.write_bytes(message)
+        signature_path.write_bytes(signature)
+        der = _run_openssl(
+            [
+                _resolve_openssl(openssl_binary),
+                "pkey",
+                "-pubin",
+                "-in",
+                str(public_key),
+                "-pubout",
+                "-outform",
+                "DER",
+            ],
+            label=f"{label}.public_key",
+        )
+        if len(der) != ED25519_SPKI_BYTES or not der.startswith(ED25519_SPKI_PREFIX):
+            fail(f"{label}.public_key must contain an actual Ed25519 public key")
+        _run_openssl(
+            [
+                _resolve_openssl(openssl_binary),
+                "pkeyutl",
+                "-verify",
+                "-pubin",
+                "-inkey",
+                str(public_key),
+                "-rawin",
+                "-in",
+                str(message_path),
+                "-sigfile",
+                str(signature_path),
+            ],
+            label=label,
+        )
 
 
 def verify_ed25519_file(
@@ -373,27 +518,26 @@ def verify_ed25519_file(
     openssl_binary: str,
     label: str,
 ) -> None:
+    public_key_data = _read_bounded_file(
+        public_key,
+        label=f"{label}.public_key",
+        maximum=MAX_PUBLIC_KEY_BYTES,
+    )
+    message = _read_bounded_file(
+        message_path,
+        label=f"{label}.message",
+        maximum=MAX_ARTIFACT_BYTES,
+    )
     signature = _read_bounded_file(
         signature_path,
         label=f"{label}.signature",
         maximum=MAX_SIGNATURE_BYTES,
     )
-    if len(signature) != 64:
-        fail(f"{label}.signature must be a 64-byte Ed25519 signature")
-    _run_openssl(
-        [
-            _resolve_openssl(openssl_binary),
-            "pkeyutl",
-            "-verify",
-            "-pubin",
-            "-inkey",
-            str(public_key),
-            "-rawin",
-            "-in",
-            str(message_path),
-            "-sigfile",
-            str(signature_path),
-        ],
+    _verify_ed25519_material(
+        public_key_data=public_key_data,
+        message=message,
+        signature=signature,
+        openssl_binary=openssl_binary,
         label=label,
     )
 
@@ -406,16 +550,20 @@ def verify_ed25519_bytes(
     openssl_binary: str,
     label: str,
 ) -> None:
-    with tempfile.NamedTemporaryFile(prefix="hepta-evidence-", delete=False) as handle:
-        handle.write(message)
-        message_path = Path(handle.name)
-    try:
-        verify_ed25519_file(
-            public_key=public_key,
-            message_path=message_path,
-            signature_path=signature_path,
-            openssl_binary=openssl_binary,
-            label=label,
-        )
-    finally:
-        message_path.unlink(missing_ok=True)
+    public_key_data = _read_bounded_file(
+        public_key,
+        label=f"{label}.public_key",
+        maximum=MAX_PUBLIC_KEY_BYTES,
+    )
+    signature = _read_bounded_file(
+        signature_path,
+        label=f"{label}.signature",
+        maximum=MAX_SIGNATURE_BYTES,
+    )
+    _verify_ed25519_material(
+        public_key_data=public_key_data,
+        message=message,
+        signature=signature,
+        openssl_binary=openssl_binary,
+        label=label,
+    )
