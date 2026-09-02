@@ -9,8 +9,21 @@ This directory is a custody boundary for evidence that may close authority-owned
 - Complete-closure policy: `hepta-external-complete-closure-v1`
 - Predecessor: `2026-09-02-g9-authenticated-1`
 - Signature profile: Ed25519 over canonical UTF-8 JSON
+- Contract binding: canonical SHA-256 of the complete current contract object
 
-A statement signed under the predecessor revision does not satisfy the G10 policy. Contract revision is part of every issuer and reviewer signature preimage, while policy ID and revision are also part of the final review-set and acceptance-context digests.
+A statement signed under the predecessor revision does not satisfy the G10 policy. Every issuer and reviewer signature preimage binds both the declared revision and a canonical contract-binding object containing the complete contract SHA-256. Keeping the same revision string while changing an authority class, claim partition, review rule, closure rule, or any other canonical contract field invalidates existing signatures. Policy ID and revision are also part of the final review-set and acceptance-context digests.
+
+## Trusted verifier runtime
+
+Authority-bearing validation owns its clock and cryptographic command selection:
+
+- the package API, direct `complete_closure` module, and executable CLI capture the current timezone-aware UTC time inside the trusted verifier;
+- a public caller-supplied `now` value is rejected before any evidence read;
+- validation accepts only the canonical `openssl` command and exposes no `--openssl-binary` override;
+- a private fixed-clock hook exists only for deterministic repository tests, is absent from the public export list, requires a timezone-aware `datetime`, and still rejects custom OpenSSL selection; and
+- the verifier host, system clock, installed OpenSSL, process, kernel, and protected registry pin remain trusted operational dependencies.
+
+Run validation on a controlled host. Do not attempt to make expired, revoked, or future-dated evidence current by changing process arguments. Do not substitute another executable as the signature verifier. The normative boundary is `docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md`.
 
 ## Required package layout
 
@@ -57,11 +70,12 @@ The input bundle, artifacts, signatures, and successors share one declared custo
 
 1. snapshots the selected private key once outside custody;
 2. uses that snapshot for both Ed25519 type inspection and signing;
-3. validates canonical, distinct output URIs;
-4. creates detached signatures and bundle successors exclusively as mode-0600 regular files through no-follow directory descriptors;
-5. leaves every predecessor bundle byte-for-byte unchanged;
-6. reopens and byte-compares visible outputs before reporting success; and
-7. never treats an unreferenced signature as authority.
+3. reads the canonical contract and includes its exact canonical digest in the signed preimage;
+4. validates canonical, distinct output URIs;
+5. creates detached signatures and bundle successors exclusively as mode-0600 regular files through no-follow directory descriptors;
+6. leaves every predecessor bundle byte-for-byte unchanged;
+7. reopens and byte-compares visible outputs before reporting success; and
+8. never treats an unreferenced signature as authority.
 
 Example:
 
@@ -167,7 +181,7 @@ python3 tools/validate_external_evidence.py \
   --output evidence/external/<commit>/validation-result.json
 ```
 
-For committed accepted packages, CI requires the protected out-of-band registry pin. Repository qualification recursively inspects every bounded regular file under `evidence/external/` and identifies accepted envelopes by canonical content—not filename, extension, or directory depth. An opaque immutable successor cannot avoid validation by being renamed or nested.
+For committed accepted packages, CI requires the protected out-of-band registry pin. Repository qualification recursively inspects every bounded regular file under `evidence/external/` and identifies accepted envelopes by canonical content—not filename, extension, or directory depth. Discovery uses `O_NOFOLLOW` and requires lexical, opened, and post-read file identities to match. An opaque immutable successor cannot avoid validation by being renamed or nested, and a replacement between lexical inspection and descriptor open cannot inject an accepted package.
 
 ## Ledger update rule
 
@@ -175,11 +189,12 @@ A Gap Ledger row changes to `CLOSED_VERIFIED` only in a separate reviewed commit
 
 - every required issuer class has participated through a distinct key and identity/organization pair;
 - every class signs exactly its assigned claims and evidence;
-- the complete package passes under the out-of-band registry pin;
+- every issuer and reviewer signature binds the exact canonical contract digest;
+- the complete package passes under the out-of-band registry pin on a trusted current-time verifier;
 - every gap has valid approving reviewer coverage;
 - every final review artifact binds the same G10 policy, roster, and acceptance context;
 - independence-required gaps have distinct independent approval;
 - source, binary, firmware, provider, OAuth, repository-setting, registry, key, and review identities remain unchanged; and
 - no artifact or key is expired or revoked.
 
-Any material identity or authority change reopens the affected row.
+Any material identity, contract, runtime, or authority change reopens the affected row.
