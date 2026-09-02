@@ -30,14 +30,17 @@ from .core import (
 from .submission import validate_artifact, validate_candidate, validate_submission
 from .trust import TrustKey, TrustRegistry, load_trust_registry
 
-# Every supported entry point validates against one immutable byte snapshot.
-# G10 additionally requires every named issuer authority class and a final
-# reviewer-set/acceptance-context manifest before complete closure. Patching the
-# module function keeps package callers and direct acceptance-module callers on
-# the same fail-closed implementation.
-_acceptance.validate_bundle = validation_snapshot(_complete_closure.validate_bundle)
+# Install the immutable validation transaction on the policy module itself.
+# This is deliberately stronger than wrapping only the package alias: callers
+# that explicitly import ``tools.external_evidence.complete_closure`` must not
+# bypass the same aggregate-bounded lexical-path snapshot used by the CLI and
+# every package-level entrypoint.
+_complete_closure.validate_bundle = validation_snapshot(
+    _complete_closure.validate_bundle
+)
+_acceptance.validate_bundle = _complete_closure.validate_bundle
 validate_acceptance = _acceptance.validate_acceptance
-validate_bundle = _acceptance.validate_bundle
+validate_bundle = _complete_closure.validate_bundle
 review_set_digest = _complete_closure.review_set_digest
 acceptance_context_digest = _complete_closure.acceptance_context_digest
 
