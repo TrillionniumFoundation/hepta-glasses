@@ -1,11 +1,24 @@
 {
   "contract_id": "hepta-external-evidence-envelope-v1",
-  "contract_revision": "2026-09-02-g9-authenticated-1",
+  "contract_revision": "2026-09-02-g10-quorum-1",
+  "extends_contract_revision": "2026-09-02-g9-authenticated-1",
   "schema_version": 2,
   "extends_plan_revision": "2026-09-01-g8",
   "schema": "schemas/external-evidence-envelope.schema.json",
   "trust_registry_schema": "schemas/external-authority-trust-registry.schema.json",
   "signature_profile": "ed25519-openssl-canonical-json-v1",
+  "complete_closure_profile": {
+    "policy_id": "hepta-external-complete-closure-v1",
+    "policy_revision": "2026-09-02-g10-quorum-1",
+    "issuer_authority_mode": "all_named_classes",
+    "issuer_claim_mode": "exact_class_scoped_claims",
+    "distinct_key_per_gap": true,
+    "distinct_identity_organization_pair_per_gap": true,
+    "review_manifest_schema_version": 1,
+    "review_set_statement_type": "hepta.external-evidence-review-set.v1",
+    "acceptance_context_statement_type": "hepta.external-evidence-acceptance-context.v1",
+    "review_manifest_required_for_states": ["accepted"]
+  },
   "trust_registry_profile": {
     "registry_id": "hepta-external-authority-trust-registry-v1",
     "schema_version": 1,
@@ -191,6 +204,166 @@
       "head_unchanged_after_approval"
     ]
   },
+  "required_claims_by_authority_class": {
+    "HG-0010": {
+      "physical_device_lab": [
+        "android_physical_report_passed",
+        "ios_physical_report_passed",
+        "protocol_passed",
+        "loss_reconnect_passed",
+        "latency_passed",
+        "power_passed",
+        "thermal_passed",
+        "cancellation_passed",
+        "barge_in_passed",
+        "soak_passed"
+      ],
+      "mobile_release_owner": ["firmware_matrix_declared"]
+    },
+    "HG-0011": {
+      "independent_assurance": [
+        "security_approved",
+        "privacy_approved",
+        "legal_approved",
+        "accessibility_approved",
+        "safety_approved",
+        "findings_disposition_complete",
+        "residual_risk_accepted"
+      ]
+    },
+    "HG-0012": {
+      "release_signing_authority": [
+        "android_signed",
+        "ios_signed",
+        "binary_sbom_verified",
+        "binary_provenance_verified",
+        "binary_attestation_verified"
+      ],
+      "pilot_operator": [
+        "pilot_exit_passed",
+        "kill_switch_drill_passed",
+        "rollback_drill_passed",
+        "staged_rollout_passed"
+      ],
+      "store_authority": ["store_approvals_received"]
+    },
+    "HG-0013": {
+      "credential_provider": [
+        "old_credential_revoked",
+        "revocation_timestamp_verified",
+        "replacement_kid_verified",
+        "old_credential_unusable"
+      ],
+      "security_incident_owner": [
+        "replacement_scope_verified",
+        "incident_owner_approved"
+      ]
+    },
+    "HG-0014": {
+      "model_provider_tenant_owner": [
+        "production_tenancy_active",
+        "quota_controls_verified",
+        "retention_controls_verified",
+        "live_receipts_passed"
+      ],
+      "cloud_security": [
+        "kms_secret_reference_verified",
+        "redacted_observability_verified"
+      ]
+    },
+    "HG-0015": {
+      "kms_hsm_owner": [
+        "kms_hsm_keys_deployed",
+        "rotation_drill_passed",
+        "revocation_drill_passed"
+      ],
+      "platform_attestation_owner": [
+        "android_attestation_passed",
+        "apple_attestation_passed",
+        "lost_device_drill_passed"
+      ],
+      "cloud_security": ["recovery_drill_passed"]
+    },
+    "HG-0016": {
+      "firmware_vendor": [
+        "vendor_authority_granted",
+        "firmware_source_build_access_verified",
+        "secure_boot_chain_verified",
+        "signing_authority_verified",
+        "ota_drill_passed",
+        "recovery_drill_passed",
+        "rollback_drill_passed"
+      ]
+    },
+    "HG-0017": {
+      "repository_administrator": [
+        "seven_checks_required",
+        "strict_status_checks",
+        "administrator_enforcement",
+        "codeowner_review_required",
+        "last_push_approval_required",
+        "stale_review_dismissal",
+        "conversation_resolution",
+        "linear_history",
+        "force_push_disabled",
+        "branch_deletion_disabled"
+      ],
+      "github_api_observer": ["fresh_api_readback_matches_contract"]
+    },
+    "HG-0018": {
+      "speech_provider_owner": [
+        "android_pcm_asr_active",
+        "finality_passed",
+        "latency_passed",
+        "privacy_controls_passed"
+      ],
+      "physical_device_lab": [
+        "android_physical_speech_passed",
+        "ios_locale_device_matrix_passed",
+        "cancellation_passed"
+      ]
+    },
+    "HG-0021": {
+      "realtime_provider_tenant_owner": [
+        "production_realtime_tenancy_active",
+        "one_time_bootstrap_passed",
+        "revoke_drill_passed",
+        "timeout_reconciliation_passed"
+      ],
+      "oauth_registration_owner": [
+        "oauth_registrations_verified",
+        "scope_review_passed"
+      ]
+    },
+    "HG-0022": {
+      "capability_provider_owner": [
+        "calendar_adapter_passed",
+        "reminder_adapter_passed",
+        "notification_adapter_passed",
+        "location_adapter_passed",
+        "storage_adapter_passed",
+        "accessibility_adapter_passed",
+        "opaque_credentials_verified",
+        "authoritative_receipts_verified",
+        "reconciliation_passed",
+        "revocation_passed"
+      ],
+      "privacy_owner": [
+        "consent_records_verified",
+        "audit_export_passed"
+      ]
+    },
+    "HG-0044": {
+      "independent_code_reviewer": [
+        "exact_head_ci_passed",
+        "source_artifact_verified",
+        "eligible_non_pusher_approved",
+        "approval_bound_to_current_head",
+        "all_conversations_resolved",
+        "head_unchanged_after_approval"
+      ]
+    }
+  },
   "independence_required": ["HG-0011", "HG-0044"],
   "physical_evidence_only": ["HG-0010", "HG-0018"],
   "prohibited_payload_classes": [
@@ -209,5 +382,5 @@
     "expired",
     "revoked"
   ],
-  "closure_rule": "CLOSED_VERIFIED requires an accepted envelope in which every submission and reviewer decision has a valid Ed25519 signature under an externally pinned, current, non-revoked trust-registry key; every required claim and artifact digest is verified; every gap has approving reviewer coverage; and independence-required gaps have distinct independent approval."
+  "closure_rule": "CLOSED_VERIFIED requires an accepted envelope under contract revision 2026-09-02-g10-quorum-1: every named issuer authority class participates through a distinct pinned key and identity/organization pair; each issuer signs exactly its class-scoped required claims and artifacts; every reviewer decision has a valid Ed25519 signature; every final review artifact binds the same ordered reviewer roster and acceptance context; every gap has approving reviewer coverage; and independence-required gaps have distinct independent approval."
 }
