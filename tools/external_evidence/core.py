@@ -45,6 +45,11 @@ MAX_REGISTRY_BYTES = 4 * 1024 * 1024
 MAX_ARTIFACT_BYTES = 256 * 1024 * 1024
 MAX_SIGNATURE_BYTES = 4096
 MAX_PUBLIC_KEY_BYTES = 64 * 1024
+# DER SubjectPublicKeyInfo for id-Ed25519 (OID 1.3.101.112), followed by a
+# 32-byte raw public key. Re-encoding through OpenSSL avoids trusting the PEM
+# label or registry algorithm string as the cryptographic key type.
+ED25519_SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
+ED25519_SPKI_BYTES = len(ED25519_SPKI_PREFIX) + 32
 ALLOWED_KEY_USAGES = frozenset(
     {"evidence_issuer", "acceptance_reviewer", "independent_reviewer"}
 )
@@ -303,7 +308,7 @@ def _resolve_openssl(openssl_binary: str) -> str:
     return resolved
 
 
-def _run_openssl(command: list[str], *, label: str) -> None:
+def _run_openssl(command: list[str], *, label: str) -> bytes:
     try:
         completed = subprocess.run(
             command,
@@ -317,6 +322,7 @@ def _run_openssl(command: list[str], *, label: str) -> None:
         fail(f"{label} could not execute OpenSSL: {type(error).__name__}")
     if completed.returncode != 0:
         fail(f"{label} cryptographic verification failed")
+    return completed.stdout
 
 
 def verify_public_key(public_key: Path, *, openssl_binary: str, label: str) -> None:
@@ -327,17 +333,21 @@ def verify_public_key(public_key: Path, *, openssl_binary: str, label: str) -> N
     )
     if b"PRIVATE KEY" in data or b"PUBLIC KEY" not in data:
         fail(f"{label} must contain only a PEM public key")
-    _run_openssl(
+    der = _run_openssl(
         [
             _resolve_openssl(openssl_binary),
             "pkey",
             "-pubin",
             "-in",
             str(public_key),
-            "-noout",
+            "-pubout",
+            "-outform",
+            "DER",
         ],
         label=label,
     )
+    if len(der) != ED25519_SPKI_BYTES or not der.startswith(ED25519_SPKI_PREFIX):
+        fail(f"{label} must contain an actual Ed25519 public key")
 
 
 def verify_ed25519_file(
@@ -394,4 +404,3 @@ def verify_ed25519_bytes(
         )
     finally:
         message_path.unlink(missing_ok=True)
-
