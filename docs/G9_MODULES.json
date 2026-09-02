@@ -9,6 +9,7 @@
       "lifecycle": "source_candidate",
       "source_roots": [
         "tools/external_evidence",
+        "tools/external_evidence/snapshot_io.py",
         "tools/validate_external_evidence.py",
         "tools/sign_external_evidence.py",
         "evidence/external",
@@ -18,6 +19,7 @@
       "documentation": [
         "docs/development/G9_TERMINAL_EXTERNAL_CLOSURE.md",
         "docs/adr/ADR-0004-external-evidence-authentication.md",
+        "docs/adr/ADR-0006-external-evidence-filesystem-custody.md",
         "evidence/external/README.md"
       ],
       "tests": [
@@ -29,8 +31,10 @@
         "services/qualification/test_external_evidence_key_type.py",
         "services/qualification/test_external_evidence_repository.py",
         "services/qualification/test_external_evidence_review_order.py",
+        "services/qualification/test_external_evidence_scoped_snapshot.py",
         "services/qualification/test_external_evidence_signature_time.py",
         "services/qualification/test_external_evidence_signing.py",
+        "services/qualification/test_external_evidence_snapshot.py",
         "services/qualification/test_g9_metadata.py"
       ],
       "contracts": [
