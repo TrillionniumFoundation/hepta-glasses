@@ -114,7 +114,7 @@ class ExternalEvidenceScopedSnapshotTest(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 EvidenceError,
-                "unsafe or replaced directory component",
+                "non-directory or symbolic-link component",
             ):
                 _stable_read_target(
                     resolved_target,
