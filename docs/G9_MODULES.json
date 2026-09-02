@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "plan_revision": "2026-09-02-g9-authenticated-1",
+  "extends_registry": "docs/MODULES.json",
+  "modules": [
+    {
+      "id": "external-evidence-authentication",
+      "owner": "release-security",
+      "lifecycle": "source_candidate",
+      "source_roots": [
+        "tools/external_evidence",
+        "tools/validate_external_evidence.py",
+        "tools/sign_external_evidence.py",
+        "evidence/external",
+        "evidence/templates/external-evidence-bundle.template.json",
+        "evidence/templates/external-authority-trust-registry.template.json"
+      ],
+      "documentation": [
+        "docs/development/G9_TERMINAL_EXTERNAL_CLOSURE.md",
+        "docs/adr/ADR-0004-external-evidence-authentication.md",
+        "evidence/external/README.md"
+      ],
+      "tests": [
+        "services/qualification/external_evidence_test_support.py",
+        "services/qualification/test_external_evidence.py",
+        "services/qualification/test_external_evidence_adversarial.py",
+        "services/qualification/test_external_evidence_repository.py",
+        "services/qualification/test_external_evidence_signing.py",
+        "services/qualification/test_g9_metadata.py"
+      ],
+      "contracts": [
+        "contracts/external-evidence-envelope-v1.json",
+        "schemas/external-evidence-envelope.schema.json",
+        "schemas/external-authority-trust-registry.schema.json"
+      ],
+      "external_gates": [
+        "out-of-band trust-registry administration and digest distribution",
+        "proof of possession and authority for every enrolled issuer and reviewer key",
+        "real physical, provider, administrator, vendor, assurance, signing, pilot and store evidence"
+      ]
+    }
+  ]
+}

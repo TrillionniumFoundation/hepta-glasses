@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "plan_revision": "2026-09-02-g9-authenticated-1",
+  "extends_ledger": "docs/GAP_LEDGER.yaml",
+  "source_summary": {
+    "repository_actionable_open": 0,
+    "closed_source": 1,
+    "inherited_authority_owned_blocked": 12
+  },
+  "gaps": [
+    {
+      "id": "HG-0073",
+      "title": "External authority evidence is cryptographically non-self-issuable",
+      "owner": "release-security",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        "contracts/external-evidence-envelope-v1.json",
+        "schemas/external-evidence-envelope.schema.json",
+        "schemas/external-authority-trust-registry.schema.json",
+        "tools/external_evidence/core.py",
+        "tools/external_evidence/trust.py",
+        "tools/external_evidence/submission.py",
+        "tools/external_evidence/acceptance.py",
+        "tools/validate_external_evidence.py",
+        "tools/sign_external_evidence.py",
+        "services/qualification/test_external_evidence_adversarial.py",
+        "services/qualification/test_external_evidence_signing.py",
+        "docs/development/G9_TERMINAL_EXTERNAL_CLOSURE.md",
+        "docs/adr/ADR-0004-external-evidence-authentication.md"
+      ],
+      "close_criteria": "A repository writer cannot manufacture accepted closure: every submission and decision is verified under a current, non-revoked, narrowly scoped Ed25519 key from an externally pinned trust registry; candidate, claims, artifact digests, limitations, evidence-set digest and reviewed gaps are signed; issuer/reviewer aliases and synthetic physical evidence fail closed."
+    }
+  ],
+  "inherited_authority_owned_gap_ids": [
+    "HG-0010",
+    "HG-0011",
+    "HG-0012",
+    "HG-0013",
+    "HG-0014",
+    "HG-0015",
+    "HG-0016",
+    "HG-0017",
+    "HG-0018",
+    "HG-0021",
+    "HG-0022",
+    "HG-0044"
+  ]
+}
