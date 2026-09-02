@@ -7,7 +7,6 @@ import re
 import stat
 from pathlib import Path, PurePosixPath
 from types import ModuleType
-from typing import Any
 
 
 def install_snapshot_io(core: ModuleType) -> None:
@@ -38,10 +37,12 @@ def install_snapshot_io(core: ModuleType) -> None:
 
         resolved_root = root.resolve()
         lexical_path = resolved_root / Path(*relative.parts)
-        try:
-            resolved_target = lexical_path.resolve(strict=True)
-        except OSError as error:
-            core.fail(f"{label} references a missing or unreadable file: {error}")
+        # ``safe_artifact_path`` is also used to select a new detached-signature
+        # destination. Resolve existing ancestors and symlinks without requiring
+        # the final path to exist; actual reads remain strict in
+        # ``read_bounded_file``. This preserves scope checks while allowing an
+        # atomically created output below a not-yet-created directory.
+        resolved_target = lexical_path.resolve(strict=False)
         try:
             resolved_target.relative_to(resolved_root)
         except ValueError:
