@@ -1,5 +1,13 @@
 """Authenticated external-evidence validation package."""
 
+from . import core as _core
+from .snapshot_io import install_snapshot_io as _install_snapshot_io
+
+# Install lexical-path snapshot semantics before any validator module imports
+# private I/O helpers from ``core``. This gives the entire package one immutable
+# byte view even when a symbolic link is retargeted between validation phases.
+_install_snapshot_io(_core)
+
 from . import acceptance as _acceptance
 from .core import (
     EvidenceError,
