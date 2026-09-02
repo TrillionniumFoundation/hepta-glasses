@@ -33,6 +33,11 @@ Fourth, the immutable signer writes accepted successors below `successors/`,
 while repository CI previously searched only one top-level `bundle.json` name.
 A committed accepted successor could therefore evade protected-pin validation.
 
+A further implementation boundary follows from those decisions: the complete
+policy is not effective if a caller can import an unwrapped submodule function,
+or if repository discovery inspects a regular file and later reopens the same
+name after it has been replaced.
+
 ## Decision
 
 ### Versioned contract and downgrade resistance
@@ -49,6 +54,20 @@ G9 revision. Review-set and acceptance-context digest preimages additionally
 contain the G10 policy ID and revision. The signed review artifact repeats both
 values. A verifier cannot silently interpret a G10 package under the weaker G9
 semantics.
+
+### Canonical validation entrypoint
+
+The immutable, aggregate-bounded validation wrapper is installed directly on
+`complete_closure.validate_bundle` before any public aliases are exported. The
+acceptance-module alias, package-level API, command-line wrapper, and explicit
+submodule import therefore resolve to the same wrapped function.
+
+Wrapping only `_acceptance.validate_bundle` is insufficient: a caller could
+otherwise import `tools.external_evidence.complete_closure.validate_bundle`
+and invoke the policy without the one-transaction byte snapshot. A regression
+test replaces the policy module's `read_object` function with a probe and proves
+that a direct module call already has an active snapshot and that the snapshot
+is released after failure.
 
 ### Complete issuer quorum
 
@@ -140,15 +159,26 @@ responsibilities.
 Repository qualification recursively inspects every bounded regular file under
 `evidence/external/`. It identifies an authority envelope by canonical
 `contract_id` plus `acceptance.state == "accepted"`, not by filename, suffix, or
-directory depth. Every discovered envelope is mapped to the nearest custody
-root containing `trust-registry.json` and `artifacts/`, then revalidated with:
+directory depth.
+
+Discovery captures the lexical object's device, inode, mode, size,
+modification-time, and change-time identity. It then opens the same lexical name
+with `O_NOFOLLOW`, requires the opened identity to equal the captured identity,
+performs the complete bounded read through that one descriptor, and requires
+the descriptor identity and byte count to remain stable afterward. A static
+link, a regular-file or link replacement between `lstat` and `open`, a special
+object, an oversized object, a platform without no-follow support, a metadata
+mutation, or a short read is never promoted into the accepted-envelope set.
+
+Every discovered envelope is mapped to the nearest custody root containing
+`trust-registry.json` and `artifacts/`, then revalidated with:
 
 - `require_complete=true`;
 - `require_accepted=true`; and
 - protected `HEPTA_EXTERNAL_TRUST_REGISTRY_SHA256`.
 
 An opaque filename or immutable successor path cannot hide an accepted package
-from CI.
+from CI, and a replacement race cannot inject one after lexical inspection.
 
 ## Required negative evidence
 
@@ -166,7 +196,11 @@ The deterministic suite proves that:
 - mutating final limitations or decision context fails;
 - a missing, malformed, wrong-policy, wrong-version, or mismatched manifest
   fails;
-- an accepted envelope with an opaque extension is still discovered; and
+- a direct complete-closure submodule call has an active immutable snapshot;
+- the acceptance alias and policy module expose one identical wrapped function;
+- an accepted envelope with an opaque extension is still discovered;
+- a static repository symlink is never followed;
+- a regular file replaced between lexical inspection and open is rejected; and
 - external pin, key validity, evidence signatures, reviewer coverage,
   independence, and filesystem custody remain in force.
 
@@ -182,8 +216,14 @@ The deterministic suite proves that:
 - **Independent review signatures without a roster:** permit post-sign removal.
 - **Reuse G9 contract revision:** enables semantic downgrade and ambiguous
   verification.
+- **Wrap only a package alias:** leaves a direct submodule policy call outside
+  the immutable transaction.
 - **Scan only `*/bundle.json`:** misses immutable successors and trusts naming
   conventions.
+- **Use `lstat()` and then `Path.read_text()`:** re-resolves a mutable name and
+  permits replacement between check and read.
+- **Silently omit `O_NOFOLLOW` on unsupported platforms:** turns a fail-closed
+  source gate into link-following behavior.
 - **Require a transparency service immediately:** useful for global review
   discovery, but not necessary to close local final-roster deletion.
 
@@ -196,9 +236,12 @@ manifest, and then obtain reviewer signatures.
 
 Accepted packages committed at any successor depth trigger protected-pin CI
 validation. Intermediate or rejected packages remain non-authoritative.
+Repository discovery now requires Linux/POSIX-style no-follow semantics; a
+platform unable to provide them does not classify a file as an accepted
+candidate.
 
 G10 closes repository-controlled quorum, claim scope, policy downgrade,
-review-set deletion, and package-discovery gaps. It does not create physical
-tests, provider receipts, administrator readback, firmware authorization,
-independent assurance, production signatures, pilot results, store approvals,
-or release authority.
+review-set deletion, entrypoint aliasing, and package-discovery gaps. It does
+not create physical tests, provider receipts, administrator readback, firmware
+authorization, independent assurance, production signatures, pilot results,
+store approvals, or release authority.
