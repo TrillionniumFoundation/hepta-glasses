@@ -30,6 +30,9 @@ _install_semantic_binding(
 )
 
 from . import complete_closure as _complete_closure
+from .authority_seat_policy import (
+    install_global_authority_seat_policy as _install_global_authority_seat_policy,
+)
 from .core import (
     EvidenceError,
     canonical_bundle_digest,
@@ -41,6 +44,15 @@ from .core import (
 from .runtime_policy import install_runtime_policy as _install_runtime_policy
 from .submission import validate_artifact, validate_candidate, validate_submission
 from .trust import TrustKey, TrustRegistry, load_trust_registry
+
+# A key or identity/organization pair may span multiple gaps only while
+# retaining one narrowly scoped authority class. This prevents a broadly
+# enrolled key from impersonating unrelated authority seats across the final
+# complete package.
+_install_global_authority_seat_policy(
+    _complete_closure,
+    _core,
+)
 
 # Public package, direct policy-module and CLI paths use the current trusted
 # clock and canonical OpenSSL command. The private deterministic hook exists for
