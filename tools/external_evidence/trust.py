@@ -12,6 +12,8 @@ from .core import (
     MAX_PUBLIC_KEY_BYTES,
     MAX_REGISTRY_BYTES,
     _read_bounded_file,
+    _resolve_openssl,
+    _run_openssl,
     fail,
     parse_time,
     read_object,
@@ -32,6 +34,7 @@ class TrustKey:
     algorithm: str
     public_key: Path
     public_key_sha256: str
+    public_key_spki_sha256: str
     usages: frozenset[str]
     authority_classes: frozenset[str]
     allowed_gap_ids: frozenset[str]
@@ -81,6 +84,28 @@ class TrustRegistry:
         if signed_at > now:
             fail(f"{label}.signed_at is in the future")
         return key
+
+
+def _normalized_public_key_digest(
+    public_key: Path,
+    *,
+    openssl_binary: str,
+    label: str,
+) -> str:
+    der = _run_openssl(
+        [
+            _resolve_openssl(openssl_binary),
+            "pkey",
+            "-pubin",
+            "-in",
+            str(public_key),
+            "-pubout",
+            "-outform",
+            "DER",
+        ],
+        label=label,
+    )
+    return hashlib.sha256(der).hexdigest()
 
 
 def load_trust_registry(
@@ -167,6 +192,7 @@ def load_trust_registry(
         fail("trust registry.keys must be a non-empty bounded array")
     allowed_gaps = set(contract["allowed_gap_ids"])
     keys: dict[str, TrustKey] = {}
+    seen_public_key_spki: dict[str, str] = {}
     registry_root = path.parent
     for index, raw_key in enumerate(raw_keys):
         label = f"trust registry.keys[{index}]"
@@ -272,6 +298,18 @@ def load_trust_registry(
             openssl_binary=openssl_binary,
             label=f"{label}.public_key",
         )
+        public_spki_digest = _normalized_public_key_digest(
+            public_key,
+            openssl_binary=openssl_binary,
+            label=f"{label}.public_key",
+        )
+        previous_key_id = seen_public_key_spki.get(public_spki_digest)
+        if previous_key_id is not None:
+            fail(
+                f"{label} reuses the cryptographic public key already bound to "
+                f"{previous_key_id}"
+            )
+        seen_public_key_spki[public_spki_digest] = key_id
         keys[key_id] = TrustKey(
             key_id=key_id,
             identity=identity,
@@ -279,6 +317,7 @@ def load_trust_registry(
             algorithm=algorithm,
             public_key=public_key,
             public_key_sha256=public_digest,
+            public_key_spki_sha256=public_spki_digest,
             usages=usages,
             authority_classes=authority_classes,
             allowed_gap_ids=key_gaps,
@@ -292,4 +331,3 @@ def load_trust_registry(
         keys=keys,
         expires_at=expires_at,
     )
-
