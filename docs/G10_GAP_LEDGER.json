@@ -4,7 +4,7 @@
   "extends_ledger": "docs/G9_GAP_LEDGER.json",
   "source_summary": {
     "repository_actionable_open": 0,
-    "closed_source": 3,
+    "closed_source": 4,
     "inherited_authority_owned_blocked": 12
   },
   "gaps": [
@@ -60,6 +60,20 @@
         "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md"
       ],
       "close_criteria": "The canonical external-evidence contract revision is 2026-09-02-g10-quorum-1 and explicitly identifies its G9 predecessor, all-class quorum mode, exact class-scoped claim mode, distinct authority seats and review-manifest profile. Required claims are a validated disjoint partition across the named authority classes for each gap. Each issuer may sign exactly its assigned claims; missing or cross-scope claims fail before acceptance. Contract revision is inside issuer and reviewer signature preimages, and policy ID/revision are inside review-set and acceptance-context digests, so a G10 package cannot be accepted by the older G9 semantic revision."
+    },
+    {
+      "id": "HG-0079",
+      "title": "Repository CI discovers every committed accepted immutable successor",
+      "owner": "quality-gates",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        "services/qualification/test_external_evidence_repository.py",
+        "tools/external_evidence/signing.py",
+        "tools/external_evidence/complete_closure.py",
+        "evidence/external/README.md",
+        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md"
+      ],
+      "close_criteria": "Repository qualification recursively inspects regular files under evidence/external by canonical envelope content rather than only matching a top-level bundle.json filename. Every committed envelope whose contract_id is canonical and acceptance.state is accepted is located at any immutable successor depth, mapped to its enclosing custody root, and revalidated as complete and accepted under a protected out-of-band trust-registry pin. Filename, extension, nesting, or successor placement cannot hide an accepted package from CI."
     }
   ],
   "inherited_authority_owned_gap_ids": [
