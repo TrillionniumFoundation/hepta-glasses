@@ -5,10 +5,9 @@ import importlib.util
 import json
 import shutil
 import subprocess
-import tempfile
 import sys
+import tempfile
 import unittest
-from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -115,8 +114,6 @@ class ExternalEvidenceFixture(unittest.TestCase):
             "issued_at": "2026-08-01T00:00:00Z",
             "expires_at": "2027-09-01T00:00:00Z",
             "keys": [
-                # Retained for focused one-submission tests. Complete closure
-                # uses one narrowly scoped key per authority class instead.
                 self._key_record(
                     name="issuer",
                     key_id="issuer-key",
@@ -235,6 +232,10 @@ class ExternalEvidenceFixture(unittest.TestCase):
             "HG-0017": "ADMIN",
         }.get(gap_id, "E6" if gap_id in {"HG-0011", "HG-0044"} else "E5")
 
+    def _claims_for(self, gap_id: str, authority_class: str) -> dict[str, bool]:
+        scopes = self.contract["required_claims_by_authority_class"]
+        return {name: True for name in scopes[gap_id][authority_class]}
+
     def _unsigned_submission(
         self,
         gap_id: str,
@@ -242,9 +243,6 @@ class ExternalEvidenceFixture(unittest.TestCase):
         synthetic: bool = False,
     ) -> dict[str, object]:
         authority_class = self.contract["authority_classes"][gap_id][0]
-        claims = {
-            name: True for name in self.contract["required_claims"][gap_id]
-        }
         return {
             "gap_id": gap_id,
             "evidence_level": self._level(gap_id),
@@ -257,7 +255,7 @@ class ExternalEvidenceFixture(unittest.TestCase):
             },
             "environment": {"fixture": True, "candidate": COMMIT},
             "subjects": [f"subject:{gap_id}"],
-            "claims": claims,
+            "claims": self._claims_for(gap_id, authority_class),
             "artifacts": [self._artifact(gap_id, synthetic=synthetic)],
             "result": "pass",
             "limitations": ["Cryptographically signed unit-test fixture."],
@@ -325,17 +323,15 @@ class ExternalEvidenceFixture(unittest.TestCase):
 
     def _bundle(self, gap_ids: list[str]) -> dict[str, object]:
         bundle = self._base_bundle()
-        submissions = []
-        for gap_id in gap_ids:
-            submissions.append(
-                self._sign_submission(
-                    bundle,
-                    self._unsigned_submission(gap_id),
-                    key_name="issuer",
-                    signature_name=f"{gap_id}.issuer.sig",
-                )
+        bundle["submissions"] = [
+            self._sign_submission(
+                bundle,
+                self._unsigned_submission(gap_id),
+                key_name="issuer",
+                signature_name=f"{gap_id}.issuer.sig",
             )
-        bundle["submissions"] = submissions
+            for gap_id in gap_ids
+        ]
         return bundle
 
     @staticmethod
@@ -431,10 +427,7 @@ class ExternalEvidenceFixture(unittest.TestCase):
                 "authority_class": authority_class,
             },
             "subjects": [f"subject:{gap_id}:{authority_class}"],
-            "claims": {
-                name: True
-                for name in self.contract["required_claims"][gap_id]
-            },
+            "claims": self._claims_for(gap_id, authority_class),
             "artifacts": [
                 self._artifact_for_authority(gap_id, authority_class)
             ],
@@ -450,7 +443,6 @@ class ExternalEvidenceFixture(unittest.TestCase):
         self.registry_digest = self._write_registry()
         bundle = self._base_bundle()
         bundle["trust_registry"]["sha256"] = self.registry_digest
-
         submissions = []
         for gap_id in gap_ids:
             for authority_class in self.contract["authority_classes"][gap_id]:
@@ -482,8 +474,6 @@ class ExternalEvidenceFixture(unittest.TestCase):
         authority_class: str,
         gaps: list[str],
     ) -> dict[str, object]:
-        """Create a standalone review used by focused non-complete tests."""
-
         review_relative = Path("reviews") / f"{key_name}.json"
         review_path = self.artifact_root / review_relative
         review_path.parent.mkdir(parents=True, exist_ok=True)
@@ -569,6 +559,8 @@ class ExternalEvidenceFixture(unittest.TestCase):
             "decision": reviewer["decision"],
             "closure_manifest": {
                 "schema_version": 1,
+                "policy_id": "hepta-external-complete-closure-v1",
+                "policy_revision": "2026-09-02-g10-quorum-1",
                 "review_set_digest": roster_digest,
                 "acceptance_context_digest": context_digest,
             },
@@ -581,7 +573,6 @@ class ExternalEvidenceFixture(unittest.TestCase):
         ).encode("utf-8")
         review_path.write_bytes(review_payload)
         reviewer["review_sha256"] = hashlib.sha256(review_payload).hexdigest()
-
         statement = external_evidence.canonical_review_statement(
             bundle,
             reviewer,
@@ -659,7 +650,9 @@ class ExternalEvidenceFixture(unittest.TestCase):
                 )
             )
         if include_dissent:
-            dissent_gap = "HG-0013" if "HG-0013" in submitted_gaps else general_gaps[0]
+            dissent_gap = (
+                "HG-0013" if "HG-0013" in submitted_gaps else general_gaps[0]
+            )
             reviewer_entries.append(
                 self._reviewer_shell(
                     key_name="dissent-reviewer",
