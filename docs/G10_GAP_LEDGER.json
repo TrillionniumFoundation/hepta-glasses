@@ -68,20 +68,23 @@
     },
     {
       "id": "HG-0079",
-      "title": "Repository CI discovers every committed accepted immutable successor",
+      "title": "Repository and validator admission bind accepted evidence to stable lexical objects",
       "owner": "quality-gates",
       "status": "CLOSED_SOURCE",
       "evidence": [
         "tools/external_evidence/repository_admission.py",
+        "tools/external_evidence/lexical_scope_policy.py",
         "services/qualification/test_external_evidence_repository.py",
         "services/qualification/test_external_evidence_repository_admission.py",
+        "services/qualification/test_external_evidence_lexical_scope_policy.py",
         "tools/external_evidence/signing.py",
         "tools/external_evidence/complete_closure.py",
+        "tools/external_evidence/__init__.py",
         "evidence/external/README.md",
         "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
         "docs/development/G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md"
       ],
-      "close_criteria": "Repository qualification recursively inspects bounded regular files under evidence/external by canonical envelope content rather than only matching a top-level bundle.json filename. The authoritative scanner opens the root from the filesystem anchor and traverses every child through no-follow directory descriptors. Lexical, opened and post-traversal directory identities and lexical, opened and post-read file identities must agree. Symbolic links, special objects, ordinary file or parent-directory replacement, unstable reads, oversized files, excessive aggregate bytes, excessive entries, excessive depth and unsupported no-follow APIs fail the gate rather than being ignored. Every discovered envelope whose contract_id is canonical and acceptance.state is accepted is revalidated as complete and accepted under a protected out-of-band trust-registry pin. Filename, extension, nesting, successor placement or ancestor replacement cannot hide or inject an accepted package."
+      "close_criteria": "Repository qualification recursively inspects bounded regular files under evidence/external by canonical envelope content rather than only matching a top-level bundle.json filename. Repository admission and ordinary validator scope resolution preserve canonical lexical names instead of resolving symbolic links first. Roots, every parent component and final files are opened with no-follow semantics; lexical, opened and post-read identities must agree, and the visible final name must still identify the opened file. One validation snapshot pins every shared ancestor-directory object across all bundle, registry, key, artifact, signature and review reads, so replacing a custody root or parent directory between otherwise stable reads fails instead of assembling evidence from different filesystem generations. Symbolic links, special objects, ordinary file or directory replacement, unstable reads, excessive resources and unsupported no-follow APIs fail closed. Every discovered accepted envelope is revalidated as complete and accepted under a protected out-of-band registry pin."
     },
     {
       "id": "HG-0080",
@@ -98,7 +101,7 @@
         "docs/development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md",
         "docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md"
       ],
-      "close_criteria": "The supported package API, direct complete_closure module, package-name compatibility import, verifier CLI and signing path use the trusted current system clock and only the absolute /usr/bin/openssl executable. Every path ancestor and the executable must be a real root-owned, non-group/world-writable object; the executable is opened with no-follow semantics and its lexical/opened/post-check identity must agree. Cryptographic subprocesses run under a minimal deterministic environment and do not inherit caller PATH, OPENSSL_CONF, OPENSSL_MODULES, LD_PRELOAD, DYLD injection variables or another environment override. Caller-supplied validation time, custom executable, shell execution, subprocess executable replacement and caller environment are rejected before cryptographic use. The CLI exposes no cryptographic-binary override. The deterministic underscored clock hook is test-only and not a sandbox against arbitrary code already executing inside the trusted verifier process. Hostile tests prove a same-name attacker program placed first on PATH is not executed for private-key validation, signing or verification."
+      "close_criteria": "The supported package API, direct complete_closure module, package-name compatibility import, verifier CLI and signing path use the trusted current system clock and only the absolute /usr/bin/openssl executable. Every path ancestor and the executable must be a real root-owned, non-group/world-writable object; the executable is opened with no-follow semantics and its lexical/opened/post-check identity must agree. Cryptographic subprocesses run under a minimal deterministic environment and do not inherit caller PATH, OpenSSL/provider configuration or dynamic-loader injection variables. The proxy accepts only a text argument vector and a narrow explicit subprocess keyword allowlist; NUL arguments, extra positional Popen options, cwd, preexec_fn, pass_fds, shell, executable and caller env injection fail before cryptographic execution. The CLI exposes no cryptographic-binary override. Hostile tests prove a same-name attacker program placed first on PATH is not executed for private-key validation, signing or verification."
     },
     {
       "id": "HG-0081",
