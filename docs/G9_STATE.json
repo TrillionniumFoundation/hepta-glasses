@@ -9,12 +9,14 @@
     "identity_rule": "live_pull_request_head_and_tree",
     "self_attested_sha_is_authoritative": false,
     "exact_head_ci_required": true,
-    "independent_latest_head_review_required": true
+    "independent_latest_head_review_required": true,
+    "workflow_concurrency_rule": "one current run per pull request or branch; exact source SHA verified inside every job"
   },
   "repository_actionable": {
     "open": 0,
     "closed_source": [
-      "HG-0073"
+      "HG-0073",
+      "HG-0074"
     ],
     "module_registry": "docs/G9_MODULES.json",
     "gap_ledger": "docs/G9_GAP_LEDGER.json",
