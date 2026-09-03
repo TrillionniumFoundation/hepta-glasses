@@ -31,7 +31,9 @@ class ExternalEvidenceFilesystemHardeningTest(unittest.TestCase):
             target = selected / "report.bin"
             target.write_bytes(b"trusted")
 
-            original_open = snapshot_io._open_absolute_regular_nofollow
+            # The lexical policy calls the function installed on core. Patching
+            # the implementation module no longer intercepts that bound entrypoint.
+            original_open = core._open_absolute_regular_nofollow
             raced = False
 
             def replace_then_open(path: Path, **kwargs: object) -> int:
@@ -44,7 +46,7 @@ class ExternalEvidenceFilesystemHardeningTest(unittest.TestCase):
                 return original_open(path, **kwargs)
 
             with patch.object(
-                snapshot_io,
+                core,
                 "_open_absolute_regular_nofollow",
                 side_effect=replace_then_open,
             ):
@@ -109,7 +111,7 @@ class ExternalEvidenceFilesystemHardeningTest(unittest.TestCase):
                     select_both()
 
     @unittest.skipUnless(shutil.which("openssl"), "OpenSSL is required")
-    def test_spki_normalization_uses_the_pinned_public_key_bytes(self) -> None:
+    def test_spki_normalization_uses_pinned_regular_file_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             first_private = root / "first-private.pem"
@@ -167,21 +169,17 @@ class ExternalEvidenceFilesystemHardeningTest(unittest.TestCase):
                 capture_output=True,
             )
 
-            alias = root / "authority.pem"
-            try:
-                alias.symlink_to(first_public.name)
-            except OSError as error:
-                self.skipTest(f"symbolic links are unavailable: {error}")
+            selected_key = root / "authority.pem"
+            selected_key.write_bytes(first_public.read_bytes())
 
             @validation_snapshot
-            def normalize_after_retarget() -> str:
+            def normalize_after_replacement() -> str:
                 selected = safe_key_path(
                     root,
                     "key://authority.pem",
                     label="authority public key",
                 )
-                alias.unlink()
-                alias.symlink_to(second_public.name)
+                selected_key.write_bytes(second_public.read_bytes())
                 return core._normalized_public_key_digest(
                     selected,
                     openssl_binary="openssl",
@@ -217,9 +215,10 @@ class ExternalEvidenceFilesystemHardeningTest(unittest.TestCase):
                 capture_output=True,
             ).stdout
 
-            normalized = normalize_after_retarget()
+            normalized = normalize_after_replacement()
             self.assertEqual(normalized, hashlib.sha256(first_der).hexdigest())
             self.assertNotEqual(normalized, hashlib.sha256(second_der).hexdigest())
+            self.assertEqual(selected_key.read_bytes(), second_public.read_bytes())
             self.assertIs(
                 trust_module._normalized_public_key_digest,
                 core._normalized_public_key_digest,

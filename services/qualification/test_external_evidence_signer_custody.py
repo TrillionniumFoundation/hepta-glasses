@@ -195,7 +195,7 @@ class ExternalEvidenceSignerCustodyTest(unittest.TestCase):
         except OSError as error:
             self.skipTest(f"symbolic links are unavailable: {error}")
 
-        with self.assertRaisesRegex(ValueError, "regular file"):
+        with self.assertRaisesRegex(validator.EvidenceError, "regular file"):
             signer.finalize(
                 Namespace(
                     bundle=alias,

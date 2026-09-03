@@ -215,7 +215,7 @@ class ExternalEvidenceRuntimePolicyTest(unittest.TestCase):
     def test_private_test_hook_accepts_only_an_explicit_fixed_clock(self) -> None:
         with self.assertRaisesRegex(
             EvidenceError,
-            "missing or unreadable|references a missing|cannot be opened",
+            "missing or unreadable|references a missing|cannot be opened|cannot snapshot its file identity",
         ):
             _validate_bundle_at_for_tests(
                 Path("unused-bundle.json"),
