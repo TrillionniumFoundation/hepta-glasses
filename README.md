@@ -16,8 +16,11 @@ No old G8/G9/G10 receipt automatically qualifies a later repair commit.
 Start with:
 
 - `docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md` — execution order and acceptance;
-- `docs/REMEDIATION_GAP_LEDGER.json` — new findings, including still-OPEN production implementation work;
+- `docs/REMEDIATION_GAP_LEDGER.json` — active findings and their exact evidence state;
 - `docs/MODULE_COVERAGE.json` — flattened G8/G9/G10 ownership plus the plugin supplement;
+- `docs/MODULE_HANDOFF.json` — machine-readable API/state/failure/configuration/migration/operations/test/evidence dimensions for all 26 modules;
+- `docs/development/MODULE_HANDOFF.md` — human-readable engineering handoff for every flattened module;
+- `contracts/conformance/canonical-json-v1.json` — vectors consumed by Dart and Python fingerprint tests;
 - `docs/development/SOURCE_COVERAGE_AND_STATE.md` — reverse coverage and truthful current-state projection;
 - `docs/development/REFERENCE_RUNTIME_HARDENING.md` — bounded capability calls and current-consent Memory;
 - `plugins/hepta-glasses-agent-os/DEVELOPMENT.md` — actual read-only plugin launch and tool contract.
@@ -28,8 +31,8 @@ counts with the current flattened registry. The canonical product invariants in
 `docs/HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md`, `docs/PRODUCT_BOUNDARY.md`,
 `docs/ARCHITECTURE.md`, `docs/THREAT_MODEL.md`, `docs/PRIVACY_MODEL.md` and
 `docs/CAPABILITY_MODEL.md` remain applicable. `docs/README.md` indexes the retained
-G8/G9/G10 guides and ADRs. The source scanner checks path coverage, not semantic
-completeness or production readiness.
+G8/G9/G10 guides and ADRs. Reverse source ownership and handoff validators check
+coverage and structured dimensions; neither turns reference code into production.
 
 ## Supported source and explicit limits
 
@@ -44,6 +47,8 @@ Capability timeouts and post-dispatch errors preserve indeterminate receipts;
 timed-out workers retain a bounded capacity permit, not a right to retry. The
 Memory reference applies current consent atomically and remains process-memory
 only. The plugin exposes development snapshots/previews, never device mutations.
+Canonical fingerprints accept string-keyed finite JSON only; Dart and Python
+consume the same committed vectors and reject non-finite values before hashing.
 
 ## Validation
 
@@ -52,6 +57,7 @@ python3 tools/validate_repository.py
 python3 tools/validate_repository_metadata.py
 python3 tools/validate_production_authority.py
 python3 tools/validate_source_coverage.py
+python3 tools/validate_module_handoff.py
 python3 -m unittest discover -s services -p 'test_*.py'
 python3 -m unittest discover -s adapters -p 'test_*.py'
 python3 -m compileall -q services adapters tools
