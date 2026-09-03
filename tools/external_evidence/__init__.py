@@ -30,6 +30,17 @@ from . import signing_io as _signing_io
 
 _install_signing_io_openssl_policy(_signing_io, _core)
 
+# Make private-key reads, bundle reads, detached-signature creation, and
+# immutable successor creation one lexical, no-follow directory-generation
+# transaction. This installer runs before the high-level signing module imports
+# its function references.
+from .signing_custody_policy import (
+    install_signing_io_policy as _install_signing_io_policy,
+    install_signing_module_policy as _install_signing_module_policy,
+)
+
+_install_signing_io_policy(_signing_io, _core)
+
 from . import acceptance as _acceptance
 from . import submission as _submission
 from . import trust as _trust
@@ -86,6 +97,13 @@ _acceptance.validate_bundle = validate_bundle
 validate_acceptance = _acceptance.validate_acceptance
 review_set_digest = _complete_closure.review_set_digest
 acceptance_context_digest = _complete_closure.acceptance_context_digest
+
+# Import and patch the high-level signer only after all canonical statement,
+# runtime, executable, and low-level custody policies are installed. Later
+# imports of tools.external_evidence.signing receive these wrapped functions.
+from . import signing as _signing
+
+_install_signing_module_policy(_signing, _core)
 
 __all__ = [
     "EvidenceError",
