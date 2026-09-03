@@ -1,10 +1,10 @@
 """Lexical no-follow and transaction-wide identity policy for evidence reads.
 
 A resolved pathname is not a custody boundary: resolving first follows symbolic
-links and lets different reads in one validation transaction observe different
-ordinary directory generations. This policy keeps canonical lexical names,
-rejects every symbolic-link component, pins ancestor directory identities
-across the whole validation snapshot, and requires the visible final name to
+links and lets different reads in one validation or signing transaction observe
+different ordinary directory generations. This policy keeps canonical lexical
+names, rejects every symbolic-link component, pins ancestor directory
+identities across the whole transaction, and requires the visible final name to
 still identify the opened file after reading.
 """
 
@@ -70,8 +70,8 @@ def _pin_directories(
         previous = snapshot.setdefault(path, identity)
         if previous != identity:
             core.fail(
-                f"{label} directory object changed during the validation "
-                f"transaction: {path}"
+                f"{label} directory object changed during the transaction: "
+                f"{path}"
             )
 
 
@@ -96,6 +96,19 @@ def install_lexical_scope_policy(core: ModuleType) -> None:
 
         return wrapped
 
+    def pin_directory_identities(
+        target: Path,
+        identities: tuple[tuple[int, int, int], ...],
+        *,
+        label: str,
+    ) -> None:
+        _pin_directories(
+            target,
+            identities,
+            core=core,
+            label=label,
+        )
+
     def stable_read_target(
         target: Path,
         *,
@@ -113,10 +126,9 @@ def install_lexical_scope_policy(core: ModuleType) -> None:
             )
         )
         parent = lexical.parent
-        _pin_directories(
+        pin_directory_identities(
             parent,
             directory_identities,
-            core=core,
             label=label,
         )
         descriptor = core._open_absolute_regular_nofollow(
@@ -164,10 +176,9 @@ def install_lexical_scope_policy(core: ModuleType) -> None:
             core.fail(f"{label} ancestor directory changed during read")
         if final_file != file_identity:
             core.fail(f"{label} visible name no longer identifies the opened file")
-        _pin_directories(
+        pin_directory_identities(
             parent,
             final_directories,
-            core=core,
             label=label,
         )
         return data
@@ -183,10 +194,9 @@ def install_lexical_scope_policy(core: ModuleType) -> None:
             label=label,
             fail=core.fail,
         )
-        _pin_directories(
+        pin_directory_identities(
             lexical,
             identities,
-            core=core,
             label=label,
         )
         descriptor = core._open_absolute_directory_nofollow(
@@ -195,7 +205,16 @@ def install_lexical_scope_policy(core: ModuleType) -> None:
             fail=core.fail,
             expected_identities=identities,
         )
-        os.close(descriptor)
+        try:
+            opened_identity = (
+                os.fstat(descriptor).st_dev,
+                os.fstat(descriptor).st_ino,
+                stat.S_IFMT(os.fstat(descriptor).st_mode),
+            )
+            if opened_identity != identities[-1]:
+                core.fail(f"{label} final directory changed during open")
+        finally:
+            os.close(descriptor)
         final = core._capture_absolute_directory_identity(
             lexical,
             label=f"{label}.post_open",
@@ -203,10 +222,9 @@ def install_lexical_scope_policy(core: ModuleType) -> None:
         )
         if final != identities:
             core.fail(f"{label} directory changed during validation")
-        _pin_directories(
+        pin_directory_identities(
             lexical,
             final,
-            core=core,
             label=label,
         )
         return lexical, identities
@@ -252,7 +270,6 @@ def install_lexical_scope_policy(core: ModuleType) -> None:
         except ValueError:
             core.fail(f"{label} escapes its lexical scope")
 
-        # Require every parent component to exist as a real no-follow directory.
         validate_directory(
             lexical_path.parent,
             label=f"{label}.parent",
@@ -383,6 +400,8 @@ def install_lexical_scope_policy(core: ModuleType) -> None:
         return hashlib.sha256(der).hexdigest()
 
     core.validation_snapshot = validation_snapshot
+    core._pin_directory_identities = pin_directory_identities
+    core._validate_lexical_directory = validate_directory
     core._stable_read_target = stable_read_target
     core._safe_scoped_path = safe_scoped_path
     core.safe_artifact_path = safe_artifact_path
