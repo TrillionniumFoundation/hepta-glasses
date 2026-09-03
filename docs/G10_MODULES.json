@@ -15,6 +15,7 @@
         "tools/external_evidence/runtime_policy.py",
         "tools/external_evidence/openssl_policy.py",
         "tools/external_evidence/lexical_scope_policy.py",
+        "tools/external_evidence/signing_custody_policy.py",
         "tools/external_evidence/cli.py",
         "tools/external_evidence/__init__.py",
         "tools/validate_external_evidence.py"
@@ -39,6 +40,7 @@
         "services/qualification/test_external_evidence_entrypoint_snapshot.py",
         "services/qualification/test_external_evidence_lexical_scope_policy.py",
         "services/qualification/test_external_evidence_runtime_policy.py",
+        "services/qualification/test_external_evidence_signing_transaction.py",
         "services/qualification/test_external_evidence_review_order.py",
         "services/qualification/test_external_evidence_repository.py",
         "services/qualification/test_external_evidence_repository_admission.py",
