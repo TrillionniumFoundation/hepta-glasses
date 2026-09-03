@@ -114,6 +114,9 @@ class G10MetadataCoverageTest(unittest.TestCase):
         admission = (
             ROOT / "tools/external_evidence/repository_admission.py"
         ).read_text(encoding="utf-8")
+        lexical_policy = (
+            ROOT / "tools/external_evidence/lexical_scope_policy.py"
+        ).read_text(encoding="utf-8")
         runtime_policy = (
             ROOT / "tools/external_evidence/runtime_policy.py"
         ).read_text(encoding="utf-8")
@@ -136,6 +139,11 @@ class G10MetadataCoverageTest(unittest.TestCase):
             ROOT
             / "services/qualification/test_external_evidence_repository_admission.py"
         ).read_text(encoding="utf-8")
+        self.assertIn("_install_lexical_scope_policy", package_init)
+        self.assertLess(
+            package_init.index("_install_lexical_scope_policy(_core)"),
+            package_init.index("from . import signing_io"),
+        )
         self.assertIn("_install_runtime_policy", package_init)
         self.assertIn("_install_semantic_binding", package_init)
         self.assertIn("_install_global_authority_seat_policy", package_init)
@@ -153,6 +161,11 @@ class G10MetadataCoverageTest(unittest.TestCase):
         self.assertIn("_open_absolute_directory_nofollow", admission)
         self.assertIn("name no longer identifies the opened file", admission)
         self.assertIn("committed evidence directory changed", admission)
+        self.assertIn("_DIRECTORY_SNAPSHOT", lexical_policy)
+        self.assertIn("visible name no longer identifies", lexical_policy)
+        self.assertIn("directory object changed during", lexical_policy)
+        self.assertNotIn("root.resolve", lexical_policy)
+        self.assertNotIn("lexical_path.resolve", lexical_policy)
         self.assertIn(
             "caller-supplied validation time is prohibited",
             runtime_policy,
@@ -166,6 +179,11 @@ class G10MetadataCoverageTest(unittest.TestCase):
         self.assertIn("value.st_uid != 0", openssl_policy)
         self.assertIn("stat.S_IWGRP | stat.S_IWOTH", openssl_policy)
         self.assertIn('"OPENSSL_CONF": "/dev/null"', openssl_policy)
+        self.assertIn(
+            "positional subprocess options are prohibited",
+            openssl_policy,
+        )
+        self.assertIn("_ALLOWED_RUN_KEYWORDS", openssl_policy)
         self.assertIn(
             "caller-supplied subprocess environment is prohibited",
             openssl_policy,
@@ -197,11 +215,37 @@ class G10MetadataCoverageTest(unittest.TestCase):
         )
         self.assertIn("/usr/bin/openssl", runtime_gap["close_criteria"])
         self.assertIn("caller PATH", runtime_gap["close_criteria"])
+        self.assertIn("positional Popen", runtime_gap["close_criteria"])
         runtime_authority = self.state["repository_actionable"][
             "complete_closure_policy"
         ]["runtime_authority"]
         self.assertIn("/usr/bin/openssl", runtime_authority)
         self.assertIn("dynamic-loader", runtime_authority)
+
+    def test_lexical_scope_boundary_is_registered_end_to_end(self) -> None:
+        modules = {item["id"]: item for item in self.modules["modules"]}
+        module = modules["authority-quorum-review-integrity"]
+        self.assertIn(
+            "tools/external_evidence/lexical_scope_policy.py",
+            module["source_roots"],
+        )
+        self.assertIn(
+            "services/qualification/test_external_evidence_lexical_scope_policy.py",
+            module["tests"],
+        )
+        gaps = {item["id"]: item for item in self.gaps["gaps"]}
+        custody_gap = gaps["HG-0079"]
+        self.assertIn(
+            "tools/external_evidence/lexical_scope_policy.py",
+            custody_gap["evidence"],
+        )
+        self.assertIn("canonical lexical names", custody_gap["close_criteria"])
+        self.assertIn("complete validation transaction", custody_gap["close_criteria"])
+        lexical = self.state["repository_actionable"][
+            "complete_closure_policy"
+        ]["lexical_scope_custody"]
+        self.assertIn("canonical lexical names", lexical)
+        self.assertIn("shared ancestor", lexical)
 
     def test_contract_policy_and_claim_partition_are_exact(self) -> None:
         profile = self.contract["complete_closure_profile"]
@@ -244,8 +288,10 @@ class G10MetadataCoverageTest(unittest.TestCase):
             "G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
             "G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md",
             "G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md",
+            "G10_LEXICAL_VALIDATION_CUSTODY.md",
             "ADR-0008-authority-quorum-and-review-set-integrity.md",
             "ADR-0009-trusted-verifier-and-contract-content-binding.md",
+            "ADR-0010-lexical-validation-custody.md",
         ):
             self.assertIn(name, index)
 
@@ -258,6 +304,7 @@ class G10MetadataCoverageTest(unittest.TestCase):
         self.assertIn("cannot manufacture", self.state["claim_ceiling"])
         self.assertIn("one key ID", self.state["authority_owned"]["closure_rule"])
         self.assertIn("descriptor-anchored", self.state["claim_ceiling"])
+        self.assertIn("transaction-wide lexical", self.state["claim_ceiling"])
         self.assertIn("absolute cryptographic-executable", self.state["claim_ceiling"])
         g9_external = set(
             self.g9_gaps["inherited_authority_owned_gap_ids"]
