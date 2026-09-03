@@ -2,11 +2,7 @@
   "schema_version": 1,
   "plan_revision": "2026-09-02-g10-quorum-1",
   "extends_ledger": "docs/G9_GAP_LEDGER.json",
-  "source_summary": {
-    "repository_actionable_open": 0,
-    "closed_source": 6,
-    "inherited_authority_owned_blocked": 12
-  },
+  "source_summary": {"repository_actionable_open": 0, "closed_source": 6, "inherited_authority_owned_blocked": 12},
   "gaps": [
     {
       "id": "HG-0076",
@@ -14,14 +10,10 @@
       "owner": "release-security",
       "status": "CLOSED_SOURCE",
       "evidence": [
-        "contracts/external-evidence-envelope-v1.json",
-        "tools/external_evidence/complete_closure.py",
-        "tools/external_evidence/authority_seat_policy.py",
-        "tools/external_evidence/__init__.py",
-        "services/qualification/external_evidence_test_support.py",
-        "services/qualification/test_external_evidence.py",
-        "services/qualification/test_external_evidence_authority_seat_scope.py",
-        "services/qualification/test_external_evidence_complete_closure.py",
+        "contracts/external-evidence-envelope-v1.json", "tools/external_evidence/complete_closure.py",
+        "tools/external_evidence/authority_seat_policy.py", "tools/external_evidence/__init__.py",
+        "services/qualification/external_evidence_test_support.py", "services/qualification/test_external_evidence.py",
+        "services/qualification/test_external_evidence_authority_seat_scope.py", "services/qualification/test_external_evidence_complete_closure.py",
         "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
         "docs/development/G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md",
         "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md"
@@ -34,12 +26,9 @@
       "owner": "release-security",
       "status": "CLOSED_SOURCE",
       "evidence": [
-        "tools/external_evidence/complete_closure.py",
-        "tools/external_evidence/__init__.py",
-        "services/qualification/external_evidence_test_support.py",
-        "services/qualification/test_external_evidence_complete_closure.py",
-        "services/qualification/test_external_evidence_review_order.py",
-        "evidence/external/README.md",
+        "tools/external_evidence/complete_closure.py", "tools/external_evidence/__init__.py",
+        "services/qualification/external_evidence_test_support.py", "services/qualification/test_external_evidence_complete_closure.py",
+        "services/qualification/test_external_evidence_review_order.py", "evidence/external/README.md",
         "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
         "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md"
       ],
@@ -51,16 +40,11 @@
       "owner": "release-security",
       "status": "CLOSED_SOURCE",
       "evidence": [
-        "contracts/external-evidence-envelope-v1.json",
-        "tools/external_evidence/complete_closure.py",
-        "tools/external_evidence/__init__.py",
-        "tools/validate_external_evidence.py",
-        "services/qualification/external_evidence_test_support.py",
-        "services/qualification/test_external_evidence_complete_closure.py",
-        "services/qualification/test_external_evidence_entrypoint_snapshot.py",
-        "services/qualification/test_g9_metadata.py",
-        "services/qualification/test_g10_metadata.py",
-        "evidence/external/README.md",
+        "contracts/external-evidence-envelope-v1.json", "tools/external_evidence/complete_closure.py",
+        "tools/external_evidence/__init__.py", "tools/validate_external_evidence.py",
+        "services/qualification/external_evidence_test_support.py", "services/qualification/test_external_evidence_complete_closure.py",
+        "services/qualification/test_external_evidence_entrypoint_snapshot.py", "services/qualification/test_g9_metadata.py",
+        "services/qualification/test_g10_metadata.py", "evidence/external/README.md",
         "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
         "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md"
       ],
@@ -72,19 +56,14 @@
       "owner": "quality-gates",
       "status": "CLOSED_SOURCE",
       "evidence": [
-        "tools/external_evidence/repository_admission.py",
-        "tools/external_evidence/lexical_scope_policy.py",
-        "services/qualification/test_external_evidence_repository.py",
-        "services/qualification/test_external_evidence_repository_admission.py",
-        "services/qualification/test_external_evidence_lexical_scope_policy.py",
-        "tools/external_evidence/signing.py",
-        "tools/external_evidence/complete_closure.py",
-        "tools/external_evidence/__init__.py",
-        "evidence/external/README.md",
+        "tools/external_evidence/repository_admission.py", "tools/external_evidence/lexical_scope_policy.py",
+        "services/qualification/test_external_evidence_repository.py", "services/qualification/test_external_evidence_repository_admission.py",
+        "services/qualification/test_external_evidence_lexical_scope_policy.py", "tools/external_evidence/signing.py",
+        "tools/external_evidence/complete_closure.py", "tools/external_evidence/__init__.py", "evidence/external/README.md",
         "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
         "docs/development/G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md"
       ],
-      "close_criteria": "Repository qualification recursively inspects bounded regular files under evidence/external by canonical envelope content rather than only matching a top-level bundle.json filename. Repository admission and ordinary validator scope resolution preserve canonical lexical names instead of resolving symbolic links first. Roots, every parent component and final files are opened with no-follow semantics; lexical, opened and post-read identities must agree, and the visible final name must still identify the opened file. One validation snapshot pins every shared ancestor-directory object across all bundle, registry, key, artifact, signature and review reads, so replacing a custody root or parent directory between otherwise stable reads fails instead of assembling evidence from different filesystem generations. Symbolic links, special objects, ordinary file or directory replacement, unstable reads, excessive resources and unsupported no-follow APIs fail closed. Every discovered accepted envelope is revalidated as complete and accepted under a protected out-of-band registry pin."
+      "close_criteria": "Repository qualification recursively inspects bounded regular files under evidence/external by canonical envelope content rather than only matching a top-level bundle.json filename. Repository admission and ordinary validator scope resolution preserve canonical lexical names instead of resolving symbolic links first. Roots, every parent component and final files are opened with no-follow semantics; lexical, opened and post-read identities must agree, and the visible final name must still identify the opened file. One immutable snapshot pins every shared ancestor-directory object throughout the complete validation transaction across all bundle, registry, key, artifact, signature and review reads, so replacing a custody root or parent directory between otherwise stable reads fails instead of assembling evidence from different filesystem generations. Symbolic links, special objects, ordinary file or directory replacement, unstable reads, excessive resources and unsupported no-follow APIs fail closed. Every discovered accepted envelope is revalidated as complete and accepted under a protected out-of-band registry pin."
     },
     {
       "id": "HG-0080",
@@ -92,11 +71,8 @@
       "owner": "release-security",
       "status": "CLOSED_SOURCE",
       "evidence": [
-        "tools/external_evidence/runtime_policy.py",
-        "tools/external_evidence/openssl_policy.py",
-        "tools/external_evidence/cli.py",
-        "tools/external_evidence/__init__.py",
-        "tools/validate_external_evidence.py",
+        "tools/external_evidence/runtime_policy.py", "tools/external_evidence/openssl_policy.py",
+        "tools/external_evidence/cli.py", "tools/external_evidence/__init__.py", "tools/validate_external_evidence.py",
         "services/qualification/test_external_evidence_runtime_policy.py",
         "docs/development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md",
         "docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md"
@@ -109,28 +85,13 @@
       "owner": "release-security",
       "status": "CLOSED_SOURCE",
       "evidence": [
-        "tools/external_evidence/semantic_binding.py",
-        "tools/external_evidence/__init__.py",
-        "services/qualification/test_external_evidence_contract_binding.py",
-        "services/qualification/test_external_evidence_complete_closure.py",
+        "tools/external_evidence/semantic_binding.py", "tools/external_evidence/__init__.py",
+        "services/qualification/test_external_evidence_contract_binding.py", "services/qualification/test_external_evidence_complete_closure.py",
         "docs/development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md",
         "docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md"
       ],
       "close_criteria": "Every issuer and reviewer canonical Ed25519 preimage contains a contract-binding statement with contract ID, declared revision and the canonical SHA-256 of the complete current contract object. The evidence-set digest carries the same binding. A contract whose revision string is unchanged but whose authority classes, claim partition, review rules, closure rule or any other canonical field changes produces different submission, evidence-set and review digests and invalidates existing signatures. A caller-supplied revision that differs from the current contract bytes fails before signing or verification."
     }
   ],
-  "inherited_authority_owned_gap_ids": [
-    "HG-0010",
-    "HG-0011",
-    "HG-0012",
-    "HG-0013",
-    "HG-0014",
-    "HG-0015",
-    "HG-0016",
-    "HG-0017",
-    "HG-0018",
-    "HG-0021",
-    "HG-0022",
-    "HG-0044"
-  ]
+  "inherited_authority_owned_gap_ids": ["HG-0010", "HG-0011", "HG-0012", "HG-0013", "HG-0014", "HG-0015", "HG-0016", "HG-0017", "HG-0018", "HG-0021", "HG-0022", "HG-0044"]
 }

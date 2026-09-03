@@ -17,7 +17,9 @@ class ExternalEvidenceSigningTransactionTest(unittest.TestCase):
     def test_private_key_symbolic_link_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            target = self._write(root / "actual.pem", b"-----BEGIN PRIVATE KEY-----\ninvalid\n-----END PRIVATE KEY-----\n")
+            # Path custody must reject a symlink before attempting key parsing.
+            # A plain invalid sentinel suffices; never commit a key-shaped fixture.
+            target = self._write(root / "actual.pem", b"invalid-key-sentinel\n")
             alias = root / "alias.pem"
             try:
                 alias.symlink_to(target.name)

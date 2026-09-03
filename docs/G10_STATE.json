@@ -12,14 +12,7 @@
   },
   "repository_actionable": {
     "open": 0,
-    "closed_source": [
-      "HG-0076",
-      "HG-0077",
-      "HG-0078",
-      "HG-0079",
-      "HG-0080",
-      "HG-0081"
-    ],
+    "closed_source": ["HG-0076", "HG-0077", "HG-0078", "HG-0079", "HG-0080", "HG-0081"],
     "module_registry": "docs/G10_MODULES.json",
     "gap_ledger": "docs/G10_GAP_LEDGER.json",
     "validator_test": "services/qualification/test_g10_metadata.py",
@@ -40,21 +33,18 @@
   },
   "authority_owned": {
     "inherited_blocked_count": 12,
-    "gap_ids": [
-      "HG-0010",
-      "HG-0011",
-      "HG-0012",
-      "HG-0013",
-      "HG-0014",
-      "HG-0015",
-      "HG-0016",
-      "HG-0017",
-      "HG-0018",
-      "HG-0021",
-      "HG-0022",
-      "HG-0044"
-    ],
-    "closure_rule": "Every authority class named for a gap signs exactly its versioned class-scoped claims. Seats are distinct inside each gap and cannot cross authority classes. Validation and signing share canonical contract binding, final-review context, trusted runtime, lexical object identity and one transaction-wide custody generation. Real external evidence and independent acceptance remain required."
+    "gap_ids": ["HG-0010", "HG-0011", "HG-0012", "HG-0013", "HG-0014", "HG-0015", "HG-0016", "HG-0017", "HG-0018", "HG-0021", "HG-0022", "HG-0044"],
+    "closure_rule": "Every authority class named for a gap signs exactly its versioned class-scoped claims. Seats are distinct inside each gap; one key ID and one identity/organization pair may span gaps only under one unchanged authority class. Validation and signing share canonical contract binding, final-review context, trusted runtime, lexical object identity and one transaction-wide custody generation. Real external evidence and independent acceptance remain required."
   },
-  "claim_ceiling": "G10 closes repository-controlled authority quorum, role aliasing, claim and contract binding, review integrity, validation and signing custody, trusted cryptographic execution, and committed-package admission only; it does not create administrative, physical, provider, vendor, independent-assurance, production-signing, pilot, store, deployment, or release facts."
+  "claim_ceiling": "G10 closes repository-controlled authority quorum, role aliasing, claim and contract binding, review integrity, transaction-wide lexical validation and signing custody, absolute cryptographic-executable custody, and descriptor-anchored committed-package admission only; it cannot manufacture administrative, physical, provider, vendor, independent-assurance, production-signing, pilot, store, deployment, or release facts.",
+  "validation_controls": {
+    "schema_version": 1,
+    "can_manufacture_external_evidence": false,
+    "repository_admission": "descriptor_anchored",
+    "lexical_custody_scope": "transaction_wide",
+    "crypto_executable_policy": "absolute_verified_path",
+    "cross_authority_role_aliasing_allowed": false,
+    "runtime_clock": "trusted_system_time"
+  },
+  "remediation_tracking": "docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md"
 }
