@@ -1,43 +1,61 @@
-# Hepta Glasses OS
+# Hepta Glasses OS — source candidate
 
-Hepta Glasses OS is a distributed AI-native runtime for Even Realities G1-class smart glasses. The glasses provide low-power sensing, input, and display; the companion phone provides deterministic edge execution; a cloud control plane provides identity, short-lived model/realtime access, revocation, capability routing, and long-running tasks; isolated Codex workers provide coding-focused diagnosis and patch generation.
+A distributed AI-native companion runtime for Even G1-class glasses: phone-side
+deterministic BLE/policy/audit execution, reference cloud control-plane services,
+and isolated development tools. This repository is not vendor firmware and the
+candidate is not a production release. Models, Skills, MCP and Codex propose work;
+deterministic authority admits, journals, executes and reconciles side effects.
 
-Model, realtime, Skill, MCP, and Codex output are proposals. Real side effects are admitted, journaled, executed, and reconciled by deterministic code.
+## Active development authority
 
-## Current product boundary
+The active remediation package continues on PR #101 and
+`work/hepta-g10-trusted-openssl-custody-20260902`; it is not merged into main.
+Read the live PR head rather than copying an old SHA or successful artifact.
+No old G8/G9/G10 receipt automatically qualifies a later repair commit.
 
-This repository began as a Flutter companion application with Android/iOS BLE, LC3 audio, speech, and display integrations imported from Even Realities' demo. It is not the G1 bootloader or firmware source. Until vendor firmware authority exists, the product is a distributed OS spanning the G1 device, mobile edge runtime, control plane, capability adapters, and isolated workers.
+Start with:
 
-## Canonical truth
+- `docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md` — execution order and acceptance;
+- `docs/REMEDIATION_GAP_LEDGER.json` — new findings, including still-OPEN production implementation work;
+- `docs/MODULE_COVERAGE.json` — flattened G8/G9/G10 ownership plus the plugin supplement;
+- `docs/development/SOURCE_COVERAGE_AND_STATE.md` — reverse coverage and truthful current-state projection;
+- `docs/development/REFERENCE_RUNTIME_HARDENING.md` — bounded capability calls and current-consent Memory;
+- `plugins/hepta-glasses-agent-os/DEVELOPMENT.md` — actual read-only plugin launch and tool contract.
 
-- [`docs/HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md`](docs/HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md)
-- [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md)
-- [`docs/PRODUCT_BOUNDARY.md`](docs/PRODUCT_BOUNDARY.md)
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- [`docs/GAP_LEDGER.yaml`](docs/GAP_LEDGER.yaml)
-- [`docs/EVIDENCE_INDEX.yaml`](docs/EVIDENCE_INDEX.yaml)
+`docs/CURRENT_STATE.md` and `docs/PROJECT_STATE.json` describe the inherited G8
+baseline, including its 22-module registry; do not confuse those historical
+counts with the current flattened registry. The canonical product invariants in
+`docs/HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md`, `docs/PRODUCT_BOUNDARY.md`,
+`docs/ARCHITECTURE.md`, `docs/THREAT_MODEL.md`, `docs/PRIVACY_MODEL.md` and
+`docs/CAPABILITY_MODEL.md` remain applicable. `docs/README.md` indexes the retained
+G8/G9/G10 guides and ADRs. The source scanner checks path coverage, not semantic
+completeness or production readiness.
 
-## Implemented repository-side foundation
+## Supported source and explicit limits
 
-- versioned event, intent, task, tool, lease, display, realtime, memory, qualification, and release contracts;
-- deterministic packet framing, G1 digital twin, dual-leg idempotency, retries, and degraded receipts;
-- append-only hash-chained audit, recoverable task lifecycle, cancellation, policy, and Tool Gateway;
-- provider-neutral mobile model gateway boundary;
-- device registry, short-lived key-ID tokens, key rotation, rate limits, and token/session/device/subject revocation;
-- one-time realtime bootstrap with scope/profile allowlists and generation-fenced barge-in;
-- typed capability adapters, exact argument leases, Prompt Injection separation, journal-before-effect, and reconciliation;
-- signed Skill registry, upgrade re-consent, revoke, purpose-bound Memory, TTL, export, and deletion;
-- bounded Codex worker and read-only MCP development tools;
-- Android/iOS physical trace evaluator, source SBOM/provenance, source/product release gate, and branch-protection automation;
-- CI, negative tests, evidence templates, and operational runbooks.
+The mobile source contains dual-leg G1 BLE, bounded text/bitmap/notification
+protocols, LC3 processing, deterministic policy, leases, audit and cancellation.
+Android PCM-to-ASR remains unavailable fail-closed; iOS speech is conditional on
+permission, locale and device support. Production mutation authority, deployed
+model/realtime/OAuth integrations, persistent encrypted Memory and live provider
+receipts are not supplied by the Python reference implementations.
+
+Capability timeouts and post-dispatch errors preserve indeterminate receipts;
+timed-out workers retain a bounded capacity permit, not a right to retry. The
+Memory reference applies current consent atomically and remains process-memory
+only. The plugin exposes development snapshots/previews, never device mutations.
 
 ## Validation
 
 ```bash
 python3 tools/validate_repository.py
+python3 tools/validate_repository_metadata.py
+python3 tools/validate_production_authority.py
+python3 tools/validate_source_coverage.py
 python3 -m unittest discover -s services -p 'test_*.py'
 python3 -m unittest discover -s adapters -p 'test_*.py'
 python3 -m compileall -q services adapters tools
+python3 tools/repository_snapshot.py
 flutter pub get
 dart format --output=none --set-exit-if-changed lib test
 flutter analyze --no-fatal-infos
@@ -45,22 +63,19 @@ flutter test
 bash tools/run_native_sanitizers.sh build/evidence/source-native-sanitizer.json
 ```
 
-CI additionally scans complete bounded Git history and generates exact-head native-sanitizer, source SBOM, provenance, and source release evidence. The current candidate is not E4 until every required lane succeeds on one unchanged head.
+CI additionally performs full fetched-history scanning, both native platform
+lanes and content-verified source SBOM/provenance generation. Only a successful
+unchanged-head seven-context run with its verified artifact is E4. Local tests,
+queued/skipped jobs and metadata summaries cannot substitute for that result.
 
-## Security invariants
+## Release boundary
 
-1. Codex, models, Flutter widgets, MCP clients, and Skills do not own permanent credentials, BLE authority, or final mutation authority.
-2. Every mutation is journaled before effect and keyed for exact replay safety.
-3. Decision leases are short-lived and subject/device/task/action/argument bound.
-4. Untrusted content cannot authorize a mutation.
-5. R4, unrestricted shell, credential reads, firmware flashing, payment, and account mutation are unavailable in the consumer profile.
-6. Uncertain completion requires reconciliation; timeout is not interpreted as failure.
-7. Physical-device and public-release claims require the machine-readable product release gate.
+Keep independent exact-head review, full protection readback, physical G1 traces,
+provider credential revocation, KMS/HSM/attestation, production adapters, vendor
+firmware authority, independent assurance, signed binaries, pilot/rollback and
+store evidence separate. E0–E4 do not close E5–E7. The implementing agent does not
+self-approve, self-merge, weaken protection or fabricate authority evidence.
 
-## External gates
-
-Physical G1 qualification, vendor firmware/OTA access, production credentials and infrastructure, branch protection, independent reviews, signing identities, pilot telemetry, and rollout drills remain explicit external gates until their evidence exists. The repository supplies the runbooks and validators but does not fabricate those inputs.
-
-## Upstream
-
-The upstream import record is retained in [`UPSTREAM.md`](UPSTREAM.md), and the BSD-2-Clause notice remains in [`LICENSE`](LICENSE).
+The upstream import history is preserved in `UPSTREAM.md` and the BSD-2-Clause
+notice remains in `LICENSE`. Historical import instructions are not current
+production credential-handling instructions.
