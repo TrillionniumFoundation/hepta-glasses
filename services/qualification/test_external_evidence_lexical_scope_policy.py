@@ -22,16 +22,8 @@ class ExternalEvidenceLexicalScopePolicyTest(unittest.TestCase):
 
             @core.validation_snapshot
             def transaction() -> tuple[Path, bytes]:
-                path = safe_artifact_path(
-                    root,
-                    "artifact://artifacts/report.json",
-                    label="regular artifact",
-                )
-                return path, core._read_bounded_file(
-                    path,
-                    label="regular artifact",
-                    maximum=1024,
-                )
+                path = safe_artifact_path(root, "artifact://artifacts/report.json", label="regular artifact")
+                return path, core._read_bounded_file(path, label="regular artifact", maximum=1024)
 
             path, payload = transaction()
             self.assertEqual(path, target)
@@ -47,15 +39,8 @@ class ExternalEvidenceLexicalScopePolicyTest(unittest.TestCase):
                 alias.symlink_to(actual, target_is_directory=True)
             except OSError as error:
                 self.skipTest(f"symbolic links are unavailable: {error}")
-            with self.assertRaisesRegex(
-                EvidenceError,
-                "non-directory or symbolic-link component",
-            ):
-                safe_artifact_path(
-                    alias,
-                    "artifact://report.json",
-                    label="linked root artifact",
-                )
+            with self.assertRaisesRegex(EvidenceError, "non-directory or symbolic-link component"):
+                safe_artifact_path(alias, "artifact://report.json", label="linked root artifact")
 
     def test_symbolic_link_parent_inside_scope_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -67,15 +52,8 @@ class ExternalEvidenceLexicalScopePolicyTest(unittest.TestCase):
                 alias.symlink_to(actual.name, target_is_directory=True)
             except OSError as error:
                 self.skipTest(f"symbolic links are unavailable: {error}")
-            with self.assertRaisesRegex(
-                EvidenceError,
-                "non-directory or symbolic-link component",
-            ):
-                safe_artifact_path(
-                    root,
-                    "artifact://alias/report.json",
-                    label="linked parent artifact",
-                )
+            with self.assertRaisesRegex(EvidenceError, "non-directory or symbolic-link component"):
+                safe_artifact_path(root, "artifact://alias/report.json", label="linked parent artifact")
 
     def test_symbolic_link_final_file_inside_scope_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -86,15 +64,8 @@ class ExternalEvidenceLexicalScopePolicyTest(unittest.TestCase):
                 alias.symlink_to(target.name)
             except OSError as error:
                 self.skipTest(f"symbolic links are unavailable: {error}")
-            with self.assertRaisesRegex(
-                EvidenceError,
-                "must reference a regular file",
-            ):
-                safe_artifact_path(
-                    root,
-                    "artifact://alias.json",
-                    label="linked final artifact",
-                )
+            with self.assertRaisesRegex(EvidenceError, "must reference a regular file"):
+                safe_artifact_path(root, "artifact://alias.json", label="linked final artifact")
 
     def test_direct_bounded_read_rejects_final_file_link(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -105,15 +76,8 @@ class ExternalEvidenceLexicalScopePolicyTest(unittest.TestCase):
                 alias.symlink_to(target.name)
             except OSError as error:
                 self.skipTest(f"symbolic links are unavailable: {error}")
-            with self.assertRaisesRegex(
-                EvidenceError,
-                "must reference a regular file",
-            ):
-                core._read_bounded_file(
-                    alias,
-                    label="direct linked read",
-                    maximum=1024,
-                )
+            with self.assertRaisesRegex(EvidenceError, "must reference a regular file"):
+                core._read_bounded_file(alias, label="direct linked read", maximum=1024)
 
     def test_scope_root_replacement_between_reads_fails_transaction(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -125,26 +89,12 @@ class ExternalEvidenceLexicalScopePolicyTest(unittest.TestCase):
 
             @core.validation_snapshot
             def transaction() -> None:
-                self.assertEqual(
-                    core._read_bounded_file(
-                        first,
-                        label="first generation",
-                        maximum=1024,
-                    ),
-                    b"first",
-                )
+                self.assertEqual(core._read_bounded_file(first, label="first generation", maximum=1024), b"first")
                 root.rename(retired)
                 self._write(root / second.name, b"replacement-second")
-                core._read_bounded_file(
-                    root / second.name,
-                    label="replacement generation",
-                    maximum=1024,
-                )
+                core._read_bounded_file(root / second.name, label="replacement generation", maximum=1024)
 
-            with self.assertRaisesRegex(
-                EvidenceError,
-                "directory object changed during the validation transaction",
-            ):
+            with self.assertRaisesRegex(EvidenceError, "directory object changed during"):
                 transaction()
 
     def test_parent_directory_replacement_between_reads_fails_transaction(self) -> None:
@@ -156,23 +106,12 @@ class ExternalEvidenceLexicalScopePolicyTest(unittest.TestCase):
 
             @core.validation_snapshot
             def transaction() -> None:
-                core._read_bounded_file(
-                    first,
-                    label="first parent generation",
-                    maximum=1024,
-                )
+                core._read_bounded_file(first, label="first parent generation", maximum=1024)
                 parent.rename(retired)
                 self._write(parent / "second.json", b"second")
-                core._read_bounded_file(
-                    parent / "second.json",
-                    label="second parent generation",
-                    maximum=1024,
-                )
+                core._read_bounded_file(parent / "second.json", label="second parent generation", maximum=1024)
 
-            with self.assertRaisesRegex(
-                EvidenceError,
-                "directory object changed during the validation transaction",
-            ):
+            with self.assertRaisesRegex(EvidenceError, "directory object changed during"):
                 transaction()
 
 
