@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "contract_id": "hepta-hg0087-production-v1",
+  "claim_ceiling": "source implementation only; deployed credentials, tenants, physical devices, vendor authority and E5-E7 evidence remain external",
+  "requirements": {
+    "identity": ["durable_device_session_token_revocation", "single_use_attestation_nonce", "lost_device_explicit_recovery", "kms_hsm_signing_boundary", "android_apple_attestation_boundary"],
+    "model": ["durable_idempotency", "quota", "metadata_only_receipts", "post_dispatch_indeterminate", "provider_reconciliation", "session_revoke"],
+    "realtime": ["single_use_bootstrap_ticket", "durable_generation_fencing", "post_dispatch_indeterminate", "provider_revoke"],
+    "capabilities": ["opaque_credential_handle", "encrypted_durable_outbox", "single_use_lease", "idempotency", "authoritative_readback", "credential_revoke"],
+    "speech": ["pcm_s16le_16000_mono", "short_lived_bootstrap", "generation_pair_binding", "bounded_audio", "final_only_transcript", "cancel_on_authority_change"],
+    "skills": ["ed25519_public_key_verification", "content_addressed_packages", "hash_chained_transparency", "downgrade_substitution_rejection", "emergency_revoke", "default_no_network_sandbox"],
+    "memory": ["encrypted_persistent_store", "consent_same_transaction", "per_subject_purpose_key_scope", "authenticated_metadata", "export_delete", "key_retirement_queue", "hash_chained_deletion_receipts"]
+  }
+}
