@@ -86,10 +86,16 @@
     {
       "id": "identity-control-plane",
       "source_roots": [
-        "services/control_plane/__init__.py"
+        "services/control_plane/__init__.py",
+        "services/control_plane/durable_state.py"
       ],
       "documentation": [
-        "docs/development/MODULE_HANDOFF.md#identity-control-plane"
+        "docs/development/MODULE_HANDOFF.md#identity-control-plane",
+        "docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md",
+        "docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md"
+      ],
+      "contracts": [
+        "contracts/realtime-speech-custody-v2.json"
       ]
     },
     {
@@ -214,7 +220,19 @@
     {
       "id": "realtime-control-plane",
       "documentation": [
-        "docs/development/MODULE_HANDOFF.md#realtime-control-plane"
+        "docs/development/MODULE_HANDOFF.md#realtime-control-plane",
+        "docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md",
+        "docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md"
+      ],
+      "source_roots": [
+        "services/control_plane/durable_realtime.py"
+      ],
+      "tests": [
+        "services/control_plane/test_durable_realtime.py",
+        "services/control_plane/test_realtime_custody.py"
+      ],
+      "contracts": [
+        "contracts/realtime-speech-custody-v2.json"
       ]
     },
     {

@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "parent_gap": "HG-0087",
+  "aggregate_status": "OPEN",
+  "plan": "docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md",
+  "claim_ceiling": "source implementation and deterministic tests; not exact-head CI or E5-E7",
+  "slices": [
+    {
+      "id": "identity",
+      "owner": "cloud-security",
+      "status": "OPEN",
+      "acceptance": "Persistent identity/device/session/token/revocation, KMS/HSM and platform attestation, authenticated mobile lease integration"
+    },
+    {
+      "id": "model",
+      "owner": "ai-platform",
+      "status": "OPEN",
+      "acceptance": "Production provider exchange, quotas, cancellation, receipts, retention and observability"
+    },
+    {
+      "id": "realtime",
+      "owner": "cloud",
+      "status": "OPEN",
+      "implemented": [
+        "persistent exact-attempt custody",
+        "monotonic revoke",
+        "recoverable activating state",
+        "durable cleanup outbox"
+      ],
+      "tests": [
+        "services/control_plane/test_realtime_custody.py"
+      ],
+      "acceptance": "Real provider exchange/readback adapter and authenticated service integration"
+    },
+    {
+      "id": "capabilities",
+      "owner": "capabilities",
+      "status": "OPEN",
+      "acceptance": "Provider-specific OAuth, vault handles, durable encrypted outbox, recovery and authoritative readback"
+    },
+    {
+      "id": "speech",
+      "owner": "mobile-ai",
+      "status": "OPEN",
+      "acceptance": "Provider broker/readback and Android PCM-to-ASR with cross-platform lifecycle/privacy integration",
+      "repository_patch_status": "Not included: remote write was blocked by the platform safety check; existing speech source remains unchanged."
+    },
+    {
+      "id": "skills",
+      "owner": "skills",
+      "status": "OPEN",
+      "acceptance": "Asymmetric publisher verification, sandbox, egress, transparency, dependency evidence and emergency revoke"
+    },
+    {
+      "id": "memory",
+      "owner": "privacy",
+      "status": "OPEN",
+      "acceptance": "Encrypted persistence, per-subject keys, migration, backup exclusion, export and deletion propagation"
+    }
+  ],
+  "unchanged_authority_owned_gap_ids": [
+    "HG-0010",
+    "HG-0011",
+    "HG-0012",
+    "HG-0013",
+    "HG-0014",
+    "HG-0015",
+    "HG-0016",
+    "HG-0017",
+    "HG-0018",
+    "HG-0021",
+    "HG-0022",
+    "HG-0044"
+  ],
+  "administrative_adoption_gap": "HG-0089",
+  "implementation_scope": "Realtime source, its tests and shared storage primitive only. No full HG-0087 closure.",
+  "validation_scope": "Run current exact-head CI; deterministic local tests are not complete repository or E4 evidence."
+}
