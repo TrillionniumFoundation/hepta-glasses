@@ -32,39 +32,9 @@
     "provenance_type": "unsigned-source-provenance-v1",
     "contracts_version": "2026-09-01-g8"
   },
-  "branch_protection": {
-    "protected": false,
-    "required_approvals": 0,
-    "force_pushes_allowed": true,
-    "required_checks": []
-  },
-  "device_qualification": [],
-  "production": {
-    "identity": "pending",
-    "attestation": "pending",
-    "capabilities": "pending",
-    "firmware_authority": "pending"
-  },
-  "reviews": {
-    "security": "pending",
-    "privacy": "pending",
-    "legal": "pending",
-    "accessibility": "pending"
-  },
-  "drills": {
-    "kill_switch": "pending",
-    "rollback": "pending",
-    "credential_rotation": "pending"
-  },
-  "signing": {
-    "android_digest": "",
-    "ios_digest": "",
-    "provenance_digest": "",
-    "attestation_verified": false
-  },
-  "pilot": {
-    "cohort_size": 0,
-    "crash_free_rate": 0,
-    "duplicate_effects": 0
+  "external_evidence": {
+    "bundle": "evidence/external/REPLACE_WITH_40_HEX_COMMIT/successors/finalized.json",
+    "artifact_root": "evidence/external/REPLACE_WITH_40_HEX_COMMIT/artifacts",
+    "trust_registry": "evidence/external/REPLACE_WITH_40_HEX_COMMIT/trust-registry.json"
   }
 }

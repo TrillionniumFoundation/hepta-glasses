@@ -1,6 +1,18 @@
 {
   "contract_id": "hepta-glasses-qualification-slo-v1",
-  "version": 1,
+  "version": 2,
+  "trace_integrity": {
+    "preserve_acquisition_order": true,
+    "timestamp_order": "monotonic_non_decreasing",
+    "capture_sequence": "when_present_must_be_complete_and_contiguous",
+    "trace_digest_scope": "raw_acquisition_order",
+    "packet_loss_scope": "side_and_connection_generation",
+    "fault_evidence": [
+      "fault_injected",
+      "fault_observed",
+      "fault_recovered"
+    ]
+  },
   "default_thresholds": {
     "minimum_duration_seconds": 3600,
     "maximum_wake_to_listening_p95_ms": 300,
@@ -8,7 +20,13 @@
     "maximum_packet_loss_ratio": 0.01,
     "maximum_temperature_c": 42.0,
     "maximum_duplicate_effects": 0,
-    "minimum_end_battery_percent": 10.0
+    "minimum_end_battery_percent": 10.0,
+    "minimum_wake_to_listening_samples": 30,
+    "minimum_eos_to_first_display_samples": 30,
+    "minimum_packet_samples_per_side": 1000,
+    "minimum_battery_samples": 12,
+    "minimum_temperature_samples": 12,
+    "require_fault_recovery": true
   },
   "required_faults": [
     "left_disconnect",

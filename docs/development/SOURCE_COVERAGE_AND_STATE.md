@@ -1,80 +1,73 @@
 # Reverse source ownership and current-state projection
 
-Owner: architecture / repository-governance. This supplements the active blocker
-execution plan without inventing a new G-number or rewriting frozen G8 evidence.
+Owner: architecture / repository-governance. This document supplements the active
+blocker execution plan without inventing a new G-number or rewriting frozen G8
+source evidence.
 
 ## Inputs and inheritance
 
 `MODULE_COVERAGE.json` extends `G10_MODULES.json`, which extends G9 and then G8.
 The loader flattens the inherited 25 IDs plus `agent-os-plugin`. Extensions add
-previously omitted helper/build/test paths and module-local guides to existing
-IDs; they do not falsely introduce a second owner for the same module.
-Cycles, duplicate IDs, unknown extension targets, empty references and escaping,
-linked or missing paths fail. Every module must still reference actual source,
-documentation, tests, contracts and an explicit external gate.
+previously omitted helper, build, test, and module-local documentation paths to
+existing IDs. Cycles, duplicate IDs, unknown extension targets, empty or escaping
+references, symbolic links, and missing paths fail closed. Every module retains
+source, documentation, tests, contracts, lifecycle, owner, and external gates.
 
 ## Reverse coverage algorithm
 
-Read the checkout's tracked files with `git ls-files -z`; do not infer inventory
-from the registry. Inspect all tracked files under lib, android, ios, services,
-adapters, plugins, tools, contracts, schemas, .github, third_party and test.
-An unknown source path fails even when every existing registry entry is valid.
-The longest matching source prefix wins. Equally specific source owners require
-an explicit registered override; tests referenced by multiple modules are shared.
-Directory boundaries are exact, so `lib/a` cannot silently claim `lib/abc`.
+The validator reads the checkout's tracked files with `git ls-files -z`; it does
+not infer inventory from the registry. It inspects tracked files below `lib`,
+`android`, `ios`, `services`, `adapters`, `plugins`, `tools`, `contracts`,
+`schemas`, `.github`, `third_party`, and `test`. An unknown source path fails even
+when every declared registry entry is internally valid.
 
-The Android native dependency subtree has an explicit native-dependencies owner.
-The shared external-evidence executable has an explicit G10 review-integrity
-owner. New modules under unclaimed service roots cannot hide behind a global
-`services/` fallback. Tests and platform build scaffolding have declared owners.
-This initial source-root scope does not claim standalone web/desktop support,
-asset provenance, arbitrary future top-level directories or semantic API coverage.
-Changes to the scope must be reviewed rather than represented as product closure.
+The longest matching source prefix wins. Equally specific owners require an
+explicit override; referenced tests may be shared. Directory boundaries are
+exact, so `lib/a` cannot claim `lib/abc`. Android native dependencies and the
+shared external-evidence entrypoint have explicit owners. No broad `services/`
+fallback can hide a new module. This source-root scope does not claim standalone
+web/desktop support, asset provenance, or semantic coverage of arbitrary future
+top-level directories.
 
-## CI and commands
-
-```bash
-python3 tools/validate_source_coverage.py
-python3 -m unittest services.qualification.test_source_coverage
-python3 tools/repository_snapshot.py
-```
-
-The actual-checkout coverage assertion runs through the existing service-test
-discovery in `repository-contracts`. It is not an optional manual checklist and
-adds no new workflow identity. The seven canonical contexts remain unchanged.
-Fixture tests prove orphan detection using a real miniature Git index, sibling
-prefix separation, ambiguity, explicit overrides, shared tests, inheritance cycles,
-escaping references, missing references and symbolic links.
-
-## Current state without self-attestation
+## Current-state projection
 
 `repository_snapshot.py` refuses tracked changes, reads commit/tree directly from
-Git, recomputes flattened module/source counts and combines G8/G9/G10/remediation
-gap rows. Duplicate IDs fail. It outputs status counts and the actual OPEN IDs.
-It deliberately emits `ci_status=not_observed`, independent review not observed,
-and release authorization false. This is not a CI receipt and does not fabricate
-an approval from local environment variables or hand-written SHA values.
-
-Collect GitHub jobs, artifact digests and eligible review records separately for
-the reported exact head. Changes after collection require a fresh qualification.
-Store generated observations outside source or as CI artifacts; do not continually
-push updated head-marker files and invalidate the evidence they describe.
+Git, recomputes flattened module/source counts, and combines G8/G9/G10/remediation
+gaps. Duplicate IDs fail. It deliberately reports CI and independent review as
+not observed locally and release authorization as false. Generated observations
+belong in CI artifacts or external custody, not in a self-attesting source file.
 
 `CURRENT_STATE.md` remains the historical G8 narrative and its 22-module count is
-not the flattened current total. The README and this projection identify the
-active supplement. The historical zero-open counts must never conceal OPEN
-production-code, semantic-documentation or main-adoption work in
-`REMEDIATION_GAP_LEDGER.json`.
+not the flattened current total. README and this projection identify the active
+26-module supplement. Historical zero-open counts must not conceal HG-0087,
+HG-0089, or authority-owned external rows.
 
-## Claim ceiling and remaining documentation work
+## Documentation and semantic handoff
 
-This tool proves path ownership and reference existence, not that every function
-is documented or tested. It does not infer coverage from filename, assertion
-count, a 700-character paragraph or a file named widget_test. HG-0088 remains OPEN
-until every module's interfaces, state/error/configuration/migration/operations
-matrix and cross-language conformance tests are reviewed. The plugin and the
-changed reference runtime have new concrete local guides; the other modules
-still inherit their existing central guides and ADRs.
+HG-0088 is source-closed by the machine handoff registry, its 26 primary detailed
+documents, exact module identity/order checks, required platform/evidence fields,
+path validation, placeholder rejection, and cross-language canonical-JSON
+vectors. That closure establishes a reviewable source handoff floor, not permanent
+semantic completeness.
 
-Physical, provider, signing, legal/privacy/accessibility assurance, vendor and
-repository-administrator authority remain outside this source projection.
+A module owner must still update interfaces, state/error/configuration/migration,
+operations, tests, and evidence limits whenever implementation changes. The
+validator cannot infer the truth of prose from file length alone. Reviewers must
+reopen the applicable gap when an exported API, state transition, error meaning,
+configuration key, migration, or operational invariant changes without matching
+documentation and tests.
+
+## Newly closed source defects
+
+HG-0090 removes self-attested product release authority. Product mode now accepts
+only a complete G10 validation result created under an out-of-band trust-registry
+pin and bound to the exact source commit/tree.
+
+HG-0091 preserves physical-trace acquisition order, rejects timestamp and capture-
+sequence drift, groups packet loss by side/generation, enforces production sample
+floors, and requires injected faults to be observed and recovered. These are
+source controls only; they do not create physical evidence.
+
+Physical devices, providers, signing authorities, independent assurance, vendor
+rights, stores, and repository-administrator settings remain outside this source
+projection.

@@ -1,5 +1,5 @@
 {
-  "scenario_id": "android-g1-physical-v1",
+  "scenario_id": "android-g1-physical-v2",
   "platform": "android",
   "minimum_duration_seconds": 3600,
   "maximum_wake_to_listening_p95_ms": 300,
@@ -8,6 +8,12 @@
   "maximum_temperature_c": 42.0,
   "maximum_duplicate_effects": 0,
   "minimum_end_battery_percent": 10.0,
+  "minimum_wake_to_listening_samples": 30,
+  "minimum_eos_to_first_display_samples": 30,
+  "minimum_packet_samples_per_side": 1000,
+  "minimum_battery_samples": 12,
+  "minimum_temperature_samples": 12,
+  "require_fault_recovery": true,
   "required_faults": [
     "left_disconnect",
     "right_disconnect",

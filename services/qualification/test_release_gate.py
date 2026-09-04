@@ -1,143 +1,102 @@
 from __future__ import annotations
 
-import hashlib
-import json
-import tempfile
 import unittest
-from pathlib import Path
 
 from services.qualification.release_gate import ReleaseGate
+from services.qualification.release_gate_test_support import ReleaseGateFixtures
 
 
-class ReleaseGateTest(unittest.TestCase):
-    def source(self) -> dict[str, object]:
-        return {
-            "commit": "a" * 40,
-            "tree": "b" * 40,
-            "ci_checks": [
-                {"name": "android-native", "conclusion": "success"},
-                {"name": "flutter", "conclusion": "success"},
-                {"name": "ios-native", "conclusion": "success"},
-                {"name": "native-sanitizers", "conclusion": "success"},
-                {"name": "repository-contracts", "conclusion": "success"},
-                {"name": "secret-and-boundary-scan", "conclusion": "success"},
-                {"name": "source-evidence", "conclusion": "success"},
-            ],
-            "sbom": {"sha256": "c" * 64},
-            "sbom_ecosystems": [
-                "android/gradle",
-                "dart/pub",
-                "ios/cocoapods",
-                "native/vendored",
-            ],
-            "history_scan": {
-                "sha256": "e" * 64,
-                "scope": "all-fetched-refs-and-deduplicated-blobs",
-                "commit_count": 2,
-                "scanned_blob_count": 10,
-                "finding_count": 0,
-                "unscanned_blob_count": 0,
+class ReleaseGateProductTest(ReleaseGateFixtures, unittest.TestCase):
+    def test_product_mode_rejects_self_attested_status_fields(self) -> None:
+        # These fields used to be accepted as release authority.  They are now
+        # ignored unless the trusted G10 validator supplies the closure result.
+        bundle = {
+            "source": self.source(),
+            "branch_protection": {
+                "protected": True,
+                "required_approvals": 99,
+                "force_pushes_allowed": False,
+                "required_checks": ["source-evidence"],
             },
-            "native_sanitizer": {
-                "sha256": "f" * 64,
-                "passed": True,
-                "lc3_cross_platform_parity": True,
+            "production": {
+                "identity": "verified",
+                "attestation": "verified",
+                "capabilities": "verified",
+                "firmware_authority": "verified",
             },
-            "audit_contract": "authenticated-checkpoint-v3",
-            "provenance": {"sha256": "d" * 64},
-            "provenance_type": "unsigned-source-provenance-v1",
-            "contracts_version": "2026-08-31-g7",
+            "reviews": {
+                "security": "approved",
+                "privacy": "approved",
+                "legal": "approved",
+                "accessibility": "approved",
+            },
+            "drills": {
+                "kill_switch": "passed",
+                "rollback": "passed",
+                "credential_rotation": "passed",
+            },
         }
-
-    def test_source_mode_passes_without_claiming_product_release(self) -> None:
-        result = ReleaseGate().evaluate({"source": self.source()}, mode="source")
-        self.assertTrue(result.passed, result.missing)
-
-    def test_source_mode_rejects_stale_contracts_version(self) -> None:
-        source = self.source()
-        source["contracts_version"] = "2026-08-31-g5"
-        result = ReleaseGate().evaluate({"source": source}, mode="source")
+        result = ReleaseGate().evaluate(bundle, mode="product")
         self.assertFalse(result.passed)
-        self.assertIn("contracts_version", result.missing)
-
-    def test_source_mode_rejects_incomplete_sbom(self) -> None:
-        source = self.source()
-        source["sbom_ecosystems"] = ["dart/pub"]
-        result = ReleaseGate().evaluate({"source": source}, mode="source")
-        self.assertFalse(result.passed)
-        self.assertIn("sbom_ecosystems", result.missing)
-
-    def test_source_mode_rejects_history_finding(self) -> None:
-        source = self.source()
-        history = dict(source["history_scan"])
-        history["finding_count"] = 1
-        source["history_scan"] = history
-        result = ReleaseGate().evaluate({"source": source}, mode="source")
-        self.assertFalse(result.passed)
-        self.assertIn("history_scan", result.missing)
-
-    def test_source_mode_rejects_unscanned_history_blob(self) -> None:
-        source = self.source()
-        history = dict(source["history_scan"])
-        history["unscanned_blob_count"] = 1
-        source["history_scan"] = history
-        result = ReleaseGate().evaluate({"source": source}, mode="source")
-        self.assertFalse(result.passed)
-        self.assertIn("history_scan", result.missing)
-
-    def test_artifact_digest_is_recomputed(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            documents = {
-                "source-sbom.spdx.json": {"spdxVersion": "SPDX-2.3"},
-                "source-provenance.json": {"type": "unsigned-source-provenance-v1"},
-                "source-history-scan.json": {
-                    "head": "a" * 40,
-                    "scope": "all-fetched-refs-and-deduplicated-blobs",
-                    "finding_count": 0,
-                "unscanned_blob_count": 0,
-                },
-                "source-native-sanitizer.json": {
-                    "passed": True,
-                    "lc3_cross_platform_parity": True,
-                },
-            }
-            digests = {}
-            for name, document in documents.items():
-                encoded = json.dumps(document, sort_keys=True).encode() + b"\n"
-                (root / name).write_bytes(encoded)
-                digests[name] = hashlib.sha256(encoded).hexdigest()
-            source = self.source()
-            source["sbom"] = {"sha256": digests["source-sbom.spdx.json"]}
-            source["provenance"] = {
-                "sha256": digests["source-provenance.json"]
-            }
-            source["history_scan"] = {
-                **source["history_scan"],
-                "sha256": digests["source-history-scan.json"],
-            }
-            source["native_sanitizer"] = {
-                **source["native_sanitizer"],
-                "sha256": digests["source-native-sanitizer.json"],
-            }
-            result = ReleaseGate().evaluate(
-                {"source": source}, mode="source", evidence_dir=root
-            )
-            self.assertTrue(result.passed, result.missing)
-            (root / "source-sbom.spdx.json").write_text("tampered\n")
-            result = ReleaseGate().evaluate(
-                {"source": source}, mode="source", evidence_dir=root
-            )
-            self.assertFalse(result.passed)
-            self.assertIn("artifact_sbom_digest", result.missing)
-
-    def test_product_mode_requires_every_external_evidence_class(self) -> None:
-        result = ReleaseGate().evaluate({"source": self.source()}, mode="product")
-        self.assertFalse(result.passed)
+        self.assertIn("authenticated_external_evidence", result.missing)
         self.assertIn("android_device_qualification", result.missing)
         self.assertIn("production_identity", result.missing)
         self.assertIn("security_review", result.missing)
         self.assertIn("rollback_drill", result.missing)
+
+    def test_product_mode_accepts_complete_authenticated_closure(self) -> None:
+        result = ReleaseGate().evaluate(
+            {"source": self.source()},
+            mode="product",
+            external_evidence_result=self.authenticated_external_result(),
+        )
+        self.assertTrue(result.passed, result.missing)
+        self.assertTrue(result.checks["external_registry_pin"])
+        self.assertTrue(result.checks["production_realtime_oauth"])
+        self.assertTrue(result.checks["pilot_duplicate_effects"])
+
+    def test_product_mode_rejects_external_candidate_drift(self) -> None:
+        external = self.authenticated_external_result()
+        external["candidate"] = {
+            **external["candidate"],
+            "commit": "0" * 40,
+        }
+        result = ReleaseGate().evaluate(
+            {"source": self.source()},
+            mode="product",
+            external_evidence_result=external,
+        )
+        self.assertFalse(result.passed)
+        self.assertIn("external_candidate_identity", result.missing)
+        self.assertIn("authenticated_external_evidence", result.missing)
+
+    def test_product_mode_rejects_missing_authority_gap(self) -> None:
+        external = self.authenticated_external_result()
+        external["submitted_gaps"] = [
+            value for value in external["submitted_gaps"] if value != "HG-0013"
+        ]
+        result = ReleaseGate().evaluate(
+            {"source": self.source()},
+            mode="product",
+            external_evidence_result=external,
+        )
+        self.assertFalse(result.passed)
+        self.assertIn("all_authority_owned_gaps", result.missing)
+        self.assertIn("credential_rotation_drill", result.missing)
+
+    def test_product_mode_rejects_unpinned_registry(self) -> None:
+        external = self.authenticated_external_result()
+        external["trust_registry"] = {
+            **external["trust_registry"],
+            "external_pin_verified": False,
+        }
+        result = ReleaseGate().evaluate(
+            {"source": self.source()},
+            mode="product",
+            external_evidence_result=external,
+        )
+        self.assertFalse(result.passed)
+        self.assertIn("external_registry_pin", result.missing)
 
 
 if __name__ == "__main__":

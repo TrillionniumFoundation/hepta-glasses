@@ -1,4 +1,9 @@
-"""Fail-closed source and product release evidence gate."""
+"""Fail-closed source and product release evidence gate.
+
+Product mode intentionally accepts authority-owned facts only from the result of
+``tools.external_evidence.validate_bundle``.  Human-authored booleans and status
+strings in a release JSON document are descriptive data, never release authority.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +12,13 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
+
+from .trusted_release_gate import (
+    EXTERNAL_POLICY_ID,
+    EXTERNAL_POLICY_REVISION,
+    REQUIRED_AUTHORITY_GAPS,
+    authenticated_product_checks,
+)
 
 
 class ReleaseGateError(ValueError):
@@ -32,6 +44,15 @@ class GateResult:
 
 
 class ReleaseGate:
+    """Evaluate source artifacts and authenticated product evidence.
+
+    The source bundle is generated inside exact-head CI and is content-verified
+    against the artifact directory.  Product facts are accepted only through a
+    live result returned by the externally pinned G10 evidence validator.  This
+    prevents a repository writer from closing physical, provider, governance,
+    review, signing, pilot, or store gates by writing ``"verified"`` into JSON.
+    """
+
     SOURCE_REQUIRED_CI_CHECKS = frozenset(
         {
             "android-native",
@@ -42,12 +63,13 @@ class ReleaseGate:
             "secret-and-boundary-scan",
         }
     )
-    PRODUCT_REQUIRED_CI_CHECKS = SOURCE_REQUIRED_CI_CHECKS | frozenset(
-        {"source-evidence"}
-    )
     REQUIRED_SBOM_ECOSYSTEMS = frozenset(
         {"android/gradle", "dart/pub", "ios/cocoapods", "native/vendored"}
     )
+    REQUIRED_AUTHORITY_GAPS = REQUIRED_AUTHORITY_GAPS
+    EXTERNAL_POLICY_ID = EXTERNAL_POLICY_ID
+    EXTERNAL_POLICY_REVISION = EXTERNAL_POLICY_REVISION
+
 
     def __init__(
         self,
@@ -64,6 +86,7 @@ class ReleaseGate:
         *,
         mode: str,
         evidence_dir: Path | None = None,
+        external_evidence_result: Mapping[str, Any] | None = None,
     ) -> GateResult:
         if mode not in {"source", "product"}:
             raise ReleaseGateError("release_mode_invalid")
@@ -115,7 +138,17 @@ class ReleaseGate:
         if evidence_dir is not None:
             checks.update(self._artifact_checks(source, evidence_dir))
         if mode == "product":
-            checks.update(self._product_checks(bundle))
+            # The trusted helper requires all_authority_owned_gaps_closed,
+            # trust_registry.external_pin_verified, and review_set_integrity.
+            checks.update(
+                authenticated_product_checks(
+                    source=source,
+                    external_evidence_result=external_evidence_result,
+                    required_authority_gaps=self.REQUIRED_AUTHORITY_GAPS,
+                    policy_id=self.EXTERNAL_POLICY_ID,
+                    policy_revision=self.EXTERNAL_POLICY_REVISION,
+                )
+            )
         missing = tuple(sorted(name for name, passed in checks.items() if not passed))
         return GateResult(
             mode=mode,
@@ -181,57 +214,6 @@ class ReleaseGate:
         else:
             checks["artifact_native_content"] = False
         return checks
-
-    def _product_checks(self, bundle: Mapping[str, Any]) -> dict[str, bool]:
-        protection = bundle.get("branch_protection")
-        protection = protection if isinstance(protection, Mapping) else {}
-        required_checks = protection.get("required_checks")
-        device = bundle.get("device_qualification")
-        device = device if isinstance(device, list) else []
-        platform_pass = {
-            item.get("platform"): item.get("passed") is True
-            for item in device
-            if isinstance(item, Mapping)
-        }
-        reviews = bundle.get("reviews")
-        reviews = reviews if isinstance(reviews, Mapping) else {}
-        drills = bundle.get("drills")
-        drills = drills if isinstance(drills, Mapping) else {}
-        signing = bundle.get("signing")
-        signing = signing if isinstance(signing, Mapping) else {}
-        pilot = bundle.get("pilot")
-        pilot = pilot if isinstance(pilot, Mapping) else {}
-        production = bundle.get("production")
-        production = production if isinstance(production, Mapping) else {}
-        return {
-            "branch_protected": protection.get("protected") is True,
-            "branch_reviews": int(protection.get("required_approvals", 0)) >= 1,
-            "branch_force_push_disabled": protection.get("force_pushes_allowed") is False,
-            "branch_required_checks": isinstance(required_checks, list)
-            and self.PRODUCT_REQUIRED_CI_CHECKS.issubset(set(required_checks)),
-            "android_device_qualification": platform_pass.get("android") is True,
-            "ios_device_qualification": platform_pass.get("ios") is True,
-            "production_identity": production.get("identity") == "verified",
-            "production_attestation": production.get("attestation") == "verified",
-            "production_capabilities": production.get("capabilities") == "verified",
-            "vendor_firmware_authority": production.get("firmware_authority") == "verified",
-            "security_review": reviews.get("security") == "approved",
-            "privacy_review": reviews.get("privacy") == "approved",
-            "legal_review": reviews.get("legal") == "approved",
-            "accessibility_review": reviews.get("accessibility") == "approved",
-            "kill_switch_drill": drills.get("kill_switch") == "passed",
-            "rollback_drill": drills.get("rollback") == "passed",
-            "credential_rotation_drill": drills.get("credential_rotation") == "passed",
-            "android_signing": self._digest(signing.get("android_digest"), 64),
-            "ios_signing": self._digest(signing.get("ios_digest"), 64),
-            "release_provenance": self._digest(
-                signing.get("provenance_digest"), 64
-            ),
-            "release_attestation_verified": signing.get("attestation_verified") is True,
-            "pilot_cohort": int(pilot.get("cohort_size", 0)) >= 5,
-            "pilot_crash_free": float(pilot.get("crash_free_rate", 0)) >= 0.99,
-            "pilot_duplicate_effects": int(pilot.get("duplicate_effects", 1)) == 0,
-        }
 
     @staticmethod
     def _nested(value: Mapping[str, Any], first: str, second: str) -> Any:

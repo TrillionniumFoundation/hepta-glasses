@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "plan": "docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md",
-  "status_semantics": "CLOSED_SOURCE means implemented with exact-head executable source tests but does not itself grant E4 or external authority. BLOCKED_* rows have no remaining repository-only change that can manufacture the required fact. OPEN is reserved for concrete repository implementation work.",
+  "status_semantics": "CLOSED_SOURCE means implemented with executable repository tests but does not itself grant E4 or external authority. BLOCKED_* rows have no remaining repository-only change that can manufacture the required fact. OPEN is reserved for concrete repository implementation work.",
   "gaps": [
     {
       "id": "HG-0082",
@@ -73,7 +73,8 @@
       "title": "Production implementations behind provider/infrastructure gates",
       "source_preparation": [
         "docs/development/REFERENCE_RUNTIME_HARDENING.md",
-        "docs/development/MODULE_HANDOFF.md"
+        "docs/development/MODULE_HANDOFF.md",
+        "docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md"
       ],
       "close_criteria": "Implement durable identity/revocation and capability recovery, KMS/attestation interfaces, production model/realtime/OAuth adapters, Android PCM-to-ASR, asymmetric Skill verification plus sandbox, and encrypted persistent Memory. Deployed credentials, authorities and physical/provider evidence remain separate BLOCKED_EXTERNAL rows."
     },
@@ -112,6 +113,37 @@
         "authorized adoption of the stacked source into main followed by regenerated exact-head evidence"
       ],
       "unblock_condition": "Repository administrators and an eligible independent reviewer complete and verify every required action without administrator bypass or self-merge. Any source/base movement requires new CI, artifact and review binding."
+    },
+    {
+      "id": "HG-0090",
+      "owner": "release-security",
+      "status": "CLOSED_SOURCE",
+      "title": "Authenticated product release oracle",
+      "evidence": [
+        "services/qualification/release_gate.py",
+        "services/qualification/test_release_gate.py",
+        "tools/evaluate_release_gate.py",
+        "contracts/release-gates-v1.json",
+        "schemas/release-evidence-bundle.schema.json",
+        "evidence/templates/product-release-bundle.template.json",
+        "docs/operations/RELEASE_AND_ROLLBACK_RUNBOOK.md"
+      ],
+      "close_criteria": "Product mode invokes the trusted current-time G10 validator with an out-of-band registry pin and exact repository/commit/tree binding; all twelve authority-owned gaps, issuer classes, accepted review-set integrity and closure are required, while repository-authored status strings and booleans have no release authority."
+    },
+    {
+      "id": "HG-0091",
+      "owner": "device-qualification",
+      "status": "CLOSED_SOURCE",
+      "title": "Physical trace acquisition-order and recovery integrity",
+      "evidence": [
+        "services/qualification/device_report.py",
+        "services/qualification/test_device_report.py",
+        "contracts/qualification-slo-v1.json",
+        "evidence/templates/android-g1-qualification-scenario.json",
+        "evidence/templates/ios-g1-qualification-scenario.json",
+        "docs/operations/DEVICE_QUALIFICATION_RUNBOOK.md"
+      ],
+      "close_criteria": "The evaluator preserves raw acquisition order, rejects timestamp regression and incomplete/non-contiguous capture sequences, digests the raw order, groups packet loss by side/generation, enforces production sample floors, and requires every declared fault to be injected, observed and recovered."
     }
   ]
 }

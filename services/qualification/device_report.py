@@ -1,153 +1,23 @@
-"""Deterministic evaluator for physical G1 qualification traces."""
+"""Deterministic evaluator for physical G1 qualification traces.
+
+The evaluator preserves acquisition order. It never sorts a malformed trace into
+an apparently valid one, and production scenarios require sufficient samples plus
+observed and recovered fault evidence.
+"""
 
 from __future__ import annotations
 
 import hashlib
-import json
 from dataclasses import dataclass
-from math import ceil
 from typing import Any, Iterable, Mapping
 
-
-class QualificationError(ValueError):
-    def __init__(self, code: str):
-        super().__init__(code)
-        self.code = code
-
-
-def _canonical(value: object) -> bytes:
-    return json.dumps(
-        value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
-    ).encode("utf-8")
-
-
-def percentile(values: list[int], percentile_value: float) -> int | None:
-    if not values:
-        return None
-    if not 0 < percentile_value <= 100:
-        raise ValueError("percentile must be in (0, 100]")
-    ordered = sorted(values)
-    index = max(0, ceil(percentile_value / 100 * len(ordered)) - 1)
-    return ordered[index]
-
-
-@dataclass(frozen=True)
-class QualificationScenario:
-    scenario_id: str
-    platform: str
-    minimum_duration_seconds: int
-    maximum_wake_to_listening_p95_ms: int
-    maximum_eos_to_first_display_p95_ms: int
-    maximum_packet_loss_ratio: float
-    maximum_temperature_c: float
-    maximum_duplicate_effects: int
-    minimum_end_battery_percent: float
-    required_faults: frozenset[str]
-
-    @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "QualificationScenario":
-        required = {
-            "scenario_id",
-            "platform",
-            "minimum_duration_seconds",
-            "maximum_wake_to_listening_p95_ms",
-            "maximum_eos_to_first_display_p95_ms",
-            "maximum_packet_loss_ratio",
-            "maximum_temperature_c",
-            "maximum_duplicate_effects",
-            "minimum_end_battery_percent",
-            "required_faults",
-        }
-        if set(value) != required:
-            raise QualificationError("qualification_scenario_fields_invalid")
-        platform = value["platform"]
-        if platform not in {"android", "ios"}:
-            raise QualificationError("qualification_platform_invalid")
-        required_faults = value["required_faults"]
-        if not isinstance(required_faults, list) or not all(
-            isinstance(item, str) and item for item in required_faults
-        ):
-            raise QualificationError("qualification_faults_invalid")
-        scenario = cls(
-            scenario_id=str(value["scenario_id"]),
-            platform=platform,
-            minimum_duration_seconds=int(value["minimum_duration_seconds"]),
-            maximum_wake_to_listening_p95_ms=int(
-                value["maximum_wake_to_listening_p95_ms"]
-            ),
-            maximum_eos_to_first_display_p95_ms=int(
-                value["maximum_eos_to_first_display_p95_ms"]
-            ),
-            maximum_packet_loss_ratio=float(value["maximum_packet_loss_ratio"]),
-            maximum_temperature_c=float(value["maximum_temperature_c"]),
-            maximum_duplicate_effects=int(value["maximum_duplicate_effects"]),
-            minimum_end_battery_percent=float(value["minimum_end_battery_percent"]),
-            required_faults=frozenset(required_faults),
-        )
-        if (
-            scenario.minimum_duration_seconds < 1
-            or scenario.maximum_wake_to_listening_p95_ms < 1
-            or scenario.maximum_eos_to_first_display_p95_ms < 1
-            or not 0 <= scenario.maximum_packet_loss_ratio <= 1
-            or not 0 <= scenario.minimum_end_battery_percent <= 100
-        ):
-            raise QualificationError("qualification_threshold_invalid")
-        return scenario
-
-
-@dataclass(frozen=True)
-class TraceEvent:
-    timestamp_ms: int
-    event: str
-    correlation_id: str | None = None
-    side: str | None = None
-    sequence: int | None = None
-    effect_id: str | None = None
-    battery_percent: float | None = None
-    temperature_c: float | None = None
-    fault: str | None = None
-
-    @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "TraceEvent":
-        allowed = {
-            "timestamp_ms",
-            "event",
-            "correlation_id",
-            "side",
-            "sequence",
-            "effect_id",
-            "battery_percent",
-            "temperature_c",
-            "fault",
-        }
-        if set(value) - allowed:
-            raise QualificationError("trace_event_fields_unknown")
-        if not isinstance(value.get("timestamp_ms"), int) or not isinstance(
-            value.get("event"), str
-        ):
-            raise QualificationError("trace_event_invalid")
-        side = value.get("side")
-        if side is not None and side not in {"left", "right"}:
-            raise QualificationError("trace_side_invalid")
-        return cls(
-            timestamp_ms=value["timestamp_ms"],
-            event=value["event"],
-            correlation_id=value.get("correlation_id"),
-            side=side,
-            sequence=value.get("sequence"),
-            effect_id=value.get("effect_id"),
-            battery_percent=(
-                float(value["battery_percent"])
-                if value.get("battery_percent") is not None
-                else None
-            ),
-            temperature_c=(
-                float(value["temperature_c"])
-                if value.get("temperature_c") is not None
-                else None
-            ),
-            fault=value.get("fault"),
-        )
+from .device_report_contracts import (
+    QualificationError,
+    QualificationScenario,
+    TraceEvent,
+    _canonical,
+    percentile,
+)
 
 
 @dataclass(frozen=True)
@@ -178,7 +48,7 @@ class DeviceQualificationEvaluator:
         scenario: QualificationScenario,
         events: Iterable[TraceEvent],
     ) -> QualificationReport:
-        ordered = sorted(events, key=lambda item: item.timestamp_ms)
+        ordered = list(events)
         if len(ordered) < 2:
             raise QualificationError("trace_too_short")
         if any(
@@ -186,6 +56,7 @@ class DeviceQualificationEvaluator:
             for earlier, later in zip(ordered, ordered[1:])
         ):
             raise QualificationError("trace_not_monotonic")
+        self._validate_capture_sequence(ordered)
 
         duration_seconds = (
             ordered[-1].timestamp_ms - ordered[0].timestamp_ms
@@ -196,7 +67,9 @@ class DeviceQualificationEvaluator:
         display_latencies = self._paired_latencies(
             ordered, start_event="end_of_speech", end_event="first_display"
         )
-        packet_loss_ratio = self._packet_loss_ratio(ordered)
+        packet_loss_ratio, packet_counts, duplicate_packets = self._packet_summary(
+            ordered
+        )
         effects = [
             event.effect_id
             for event in ordered
@@ -213,42 +86,72 @@ class DeviceQualificationEvaluator:
             for event in ordered
             if event.battery_percent is not None
         ]
-        observed_faults = {
-            event.fault
-            for event in ordered
-            if event.event == "fault_injected" and event.fault
-        }
+        injected_faults = self._faults(ordered, "fault_injected")
+        observed_faults = self._faults(ordered, "fault_observed")
+        recovered_faults = self._faults(ordered, "fault_recovered")
 
         wake_p95 = percentile(wake_latencies, 95)
         display_p95 = percentile(display_latencies, 95)
         max_temperature = max(temperatures) if temperatures else None
         end_battery = batteries[-1] if batteries else None
+        enough_packets = all(
+            packet_counts[side] >= scenario.minimum_packet_samples_per_side
+            for side in ("left", "right")
+        )
+        fault_injection_complete = scenario.required_faults.issubset(injected_faults)
+        fault_observation_complete = (
+            not scenario.require_fault_recovery
+            or scenario.required_faults.issubset(observed_faults)
+        )
+        fault_recovery_complete = (
+            not scenario.require_fault_recovery
+            or scenario.required_faults.issubset(recovered_faults)
+        )
         checks = {
             "duration": duration_seconds >= scenario.minimum_duration_seconds,
+            "wake_sample_count": len(wake_latencies)
+            >= scenario.minimum_wake_to_listening_samples,
             "wake_to_listening_p95": wake_p95 is not None
             and wake_p95 <= scenario.maximum_wake_to_listening_p95_ms,
+            "display_sample_count": len(display_latencies)
+            >= scenario.minimum_eos_to_first_display_samples,
             "eos_to_first_display_p95": display_p95 is not None
             and display_p95 <= scenario.maximum_eos_to_first_display_p95_ms,
+            "packet_sample_count": enough_packets,
             "packet_loss": packet_loss_ratio
             <= scenario.maximum_packet_loss_ratio,
+            "temperature_sample_count": len(temperatures)
+            >= scenario.minimum_temperature_samples,
             "temperature": max_temperature is not None
             and max_temperature <= scenario.maximum_temperature_c,
             "duplicate_effects": duplicate_effects
             <= scenario.maximum_duplicate_effects,
+            "battery_sample_count": len(batteries)
+            >= scenario.minimum_battery_samples,
             "end_battery": end_battery is not None
             and end_battery >= scenario.minimum_end_battery_percent,
-            "required_faults": scenario.required_faults.issubset(observed_faults),
+            "required_faults_injected": fault_injection_complete,
+            "required_faults_observed": fault_observation_complete,
+            "required_faults_recovered": fault_recovery_complete,
         }
         serialized_trace = [event.__dict__ for event in ordered]
         metrics = {
             "duration_seconds": duration_seconds,
             "duplicate_effects": duplicate_effects,
+            "duplicate_packets": duplicate_packets,
             "end_battery_percent": end_battery,
+            "battery_sample_count": len(batteries),
             "eos_to_first_display_p95_ms": display_p95,
+            "eos_to_first_display_sample_count": len(display_latencies),
             "maximum_temperature_c": max_temperature,
+            "temperature_sample_count": len(temperatures),
+            "injected_faults": sorted(injected_faults),
             "observed_faults": sorted(observed_faults),
+            "recovered_faults": sorted(recovered_faults),
+            "packet_counts": packet_counts,
             "packet_loss_ratio": packet_loss_ratio,
             "wake_to_listening_p95_ms": wake_p95,
+            "wake_to_listening_sample_count": len(wake_latencies),
         }
         return QualificationReport(
             scenario_id=scenario.scenario_id,
@@ -256,9 +159,21 @@ class DeviceQualificationEvaluator:
             passed=all(checks.values()),
             checks=checks,
             metrics=metrics,
+            # Digest the raw acquisition order, not a timestamp-sorted projection.
             trace_digest=hashlib.sha256(_canonical(serialized_trace)).hexdigest(),
             event_count=len(ordered),
         )
+
+    @staticmethod
+    def _validate_capture_sequence(events: list[TraceEvent]) -> None:
+        supplied = [event.capture_sequence for event in events]
+        if not any(value is not None for value in supplied):
+            return
+        if any(value is None for value in supplied):
+            raise QualificationError("trace_capture_sequence_incomplete")
+        values = [int(value) for value in supplied if value is not None]
+        if any(later != earlier + 1 for earlier, later in zip(values, values[1:])):
+            raise QualificationError("trace_capture_sequence_not_contiguous")
 
     @staticmethod
     def _paired_latencies(
@@ -270,32 +185,57 @@ class DeviceQualificationEvaluator:
             if event.correlation_id is None:
                 continue
             if event.event == start_event:
+                if event.correlation_id in starts:
+                    raise QualificationError("trace_correlation_reused")
                 starts[event.correlation_id] = event.timestamp_ms
-            elif event.event == end_event and event.correlation_id in starts:
-                latency = event.timestamp_ms - starts.pop(event.correlation_id)
-                if latency >= 0:
-                    latencies.append(latency)
+            elif event.event == end_event:
+                start = starts.pop(event.correlation_id, None)
+                if start is None:
+                    raise QualificationError("trace_correlation_unmatched")
+                latency = event.timestamp_ms - start
+                if latency < 0:
+                    raise QualificationError("trace_latency_negative")
+                latencies.append(latency)
         return latencies
 
     @staticmethod
-    def _packet_loss_ratio(events: list[TraceEvent]) -> float:
+    def _packet_summary(
+        events: list[TraceEvent],
+    ) -> tuple[float, dict[str, int], int]:
         total_expected = 0
         total_seen = 0
+        duplicate_packets = 0
+        side_counts = {"left": 0, "right": 0}
         for side in ("left", "right"):
-            sequences = sorted(
-                {
-                    event.sequence
-                    for event in events
-                    if event.event == "packet_received"
+            grouped: dict[int, list[int]] = {}
+            for event in events:
+                if (
+                    event.event == "packet_received"
                     and event.side == side
                     and event.sequence is not None
-                }
-            )
-            if not sequences:
-                continue
-            expected = sequences[-1] - sequences[0] + 1
-            total_expected += expected
-            total_seen += len(sequences)
+                ):
+                    grouped.setdefault(event.generation or 0, []).append(event.sequence)
+            for sequences in grouped.values():
+                unique = sorted(set(sequences))
+                duplicate_packets += len(sequences) - len(unique)
+                side_counts[side] += len(unique)
+                if not unique:
+                    continue
+                expected = unique[-1] - unique[0] + 1
+                total_expected += expected
+                total_seen += len(unique)
         if total_expected == 0:
-            return 1.0
-        return (total_expected - total_seen) / total_expected
+            return 1.0, side_counts, duplicate_packets
+        return (
+            (total_expected - total_seen) / total_expected,
+            side_counts,
+            duplicate_packets,
+        )
+
+    @staticmethod
+    def _faults(events: list[TraceEvent], event_name: str) -> set[str]:
+        return {
+            event.fault
+            for event in events
+            if event.event == event_name and event.fault is not None
+        }
