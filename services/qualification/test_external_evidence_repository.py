@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
+from tools.external_evidence.committed_snapshot import validate_committed_packages
+
 ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = ROOT / "tools/validate_external_evidence.py"
 SPEC = importlib.util.spec_from_file_location(
@@ -175,50 +177,15 @@ class CommittedExternalEvidenceTest(unittest.TestCase):
     def test_committed_accepted_packages_require_external_trust_pin(self) -> None:
         base = ROOT / "evidence/external"
         self.assertTrue((base / "README.md").is_file())
-        packages = _accepted_envelopes(base)
-        if not packages:
-            return
-
-        external_pin = os.environ.get("HEPTA_EXTERNAL_TRUST_REGISTRY_SHA256")
-        self.assertIsNotNone(
-            external_pin,
-            "committed accepted evidence requires a protected, out-of-band "
-            "HEPTA_EXTERNAL_TRUST_REGISTRY_SHA256 value",
+        result = validate_committed_packages(
+            base,
+            expected_trust_registry_sha256=os.environ.get(
+                "HEPTA_EXTERNAL_TRUST_REGISTRY_SHA256"
+            ),
         )
-        for bundle_path in packages:
-            with self.subTest(bundle=str(bundle_path.relative_to(ROOT))):
-                document = _read_json_object(bundle_path)
-                self.assertIsInstance(document, dict)
-                assert document is not None
-                candidate = document.get("candidate")
-                self.assertIsInstance(candidate, dict)
-                custody_root = bundle_path.parent
-                while custody_root != base and not (
-                    custody_root / "trust-registry.json"
-                ).is_file():
-                    custody_root = custody_root.parent
-                registry_path = custody_root / "trust-registry.json"
-                artifact_root = custody_root / "artifacts"
-                self.assertTrue(registry_path.is_file())
-                self.assertTrue(artifact_root.is_dir())
-                result = external_evidence.validate_bundle(
-                    bundle_path,
-                    artifact_root=artifact_root,
-                    expected_commit=candidate.get("source_commit"),
-                    expected_tree=candidate.get("source_tree"),
-                    require_complete=True,
-                    require_accepted=True,
-                    trust_registry_path=registry_path,
-                    expected_trust_registry_sha256=external_pin,
-                )
-                self.assertTrue(result["all_authority_owned_gaps_closed"])
-                self.assertEqual(result["missing_gaps"], [])
-                self.assertEqual(
-                    result["missing_issuer_authority_classes"],
-                    {},
-                )
-                self.assertTrue(result["review_set_integrity"]["verified"])
-                self.assertTrue(result["trust_registry"]["external_pin_verified"])
+        self.assertTrue(result["verified"])
+        # Legacy helpers below remain diagnostic test fixtures only. The actual
+        # repository gate no longer reopens discovered mutable pathnames.
 
     def test_accepted_successor_discovery_cannot_be_filename_bypassed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

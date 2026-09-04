@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from tools import external_evidence
+from tools.external_evidence.committed_snapshot import validate_committed_packages
 from tools.external_evidence import EvidenceError
 from tools.external_evidence import repository_admission
 from tools.external_evidence.repository_admission import (
@@ -27,45 +28,13 @@ def _accepted_document() -> dict[str, object]:
 class DescriptorAnchoredRepositoryAdmissionTest(unittest.TestCase):
     def test_actual_repository_acceptance_is_discovered_and_revalidated(self) -> None:
         base = ROOT / "evidence/external"
-        packages = discover_accepted_envelopes(base)
-        if not packages:
-            return
-
-        external_pin = os.environ.get("HEPTA_EXTERNAL_TRUST_REGISTRY_SHA256")
-        self.assertIsNotNone(
-            external_pin,
-            "committed accepted evidence requires a protected, out-of-band "
-            "HEPTA_EXTERNAL_TRUST_REGISTRY_SHA256 value",
+        result = validate_committed_packages(
+            base,
+            expected_trust_registry_sha256=os.environ.get(
+                "HEPTA_EXTERNAL_TRUST_REGISTRY_SHA256"
+            ),
         )
-        for envelope in packages:
-            with self.subTest(bundle=str(envelope.path.relative_to(ROOT))):
-                candidate = envelope.document.get("candidate")
-                self.assertIsInstance(candidate, dict)
-                assert isinstance(candidate, dict)
-                custody_root = envelope.path.parent
-                while custody_root != base and not (
-                    custody_root / "trust-registry.json"
-                ).is_file():
-                    custody_root = custody_root.parent
-                registry_path = custody_root / "trust-registry.json"
-                artifact_root = custody_root / "artifacts"
-                self.assertTrue(registry_path.is_file())
-                self.assertTrue(artifact_root.is_dir())
-                result = external_evidence.validate_bundle(
-                    envelope.path,
-                    artifact_root=artifact_root,
-                    expected_commit=candidate.get("source_commit"),
-                    expected_tree=candidate.get("source_tree"),
-                    require_complete=True,
-                    require_accepted=True,
-                    trust_registry_path=registry_path,
-                    expected_trust_registry_sha256=external_pin,
-                )
-                self.assertTrue(result["all_authority_owned_gaps_closed"])
-                self.assertEqual(result["missing_gaps"], [])
-                self.assertEqual(result["missing_issuer_authority_classes"], {})
-                self.assertTrue(result["review_set_integrity"]["verified"])
-                self.assertTrue(result["trust_registry"]["external_pin_verified"])
+        self.assertTrue(result["verified"])
 
     def test_opaque_nested_filename_is_discovered(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

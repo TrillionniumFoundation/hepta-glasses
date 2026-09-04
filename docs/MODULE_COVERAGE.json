@@ -272,7 +272,15 @@
     {
       "id": "authority-quorum-review-integrity",
       "documentation": [
-        "docs/development/MODULE_HANDOFF.md#authority-quorum-review-integrity"
+        "docs/development/MODULE_HANDOFF.md#authority-quorum-review-integrity",
+        "docs/development/ADMISSION_CONTINUITY.md"
+      ],
+      "source_roots": [
+        "tools/external_evidence/committed_snapshot.py"
+      ],
+      "tests": [
+        "services/qualification/test_committed_snapshot.py",
+        "services/qualification/test_committed_snapshot_signed.py"
       ]
     }
   ],

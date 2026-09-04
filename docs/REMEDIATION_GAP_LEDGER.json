@@ -144,6 +144,20 @@
         "docs/operations/DEVICE_QUALIFICATION_RUNBOOK.md"
       ],
       "close_criteria": "The evaluator preserves raw acquisition order, rejects timestamp regression and incomplete/non-contiguous capture sequences, digests the raw order, groups packet loss by side/generation, enforces production sample floors, and requires every declared fault to be injected, observed and recovered."
+    },
+    {
+      "id": "HG-0092",
+      "owner": "release-security",
+      "status": "OPEN",
+      "title": "Continuous object and byte custody from committed-evidence discovery through validation",
+      "source_preparation": [
+        "tools/external_evidence/committed_snapshot.py",
+        "services/qualification/test_committed_snapshot.py",
+        "services/qualification/test_committed_snapshot_signed.py",
+        "docs/development/ADMISSION_CONTINUITY.md"
+      ],
+      "implementation_state": "Private read-only snapshot candidate and both repository gate callers implemented; full current-head crypto integration, CI artifact and reviewer confirmation are still required.",
+      "close_criteria": "Both committed-package gates use the canonical private-snapshot entrypoint; original and private-copy byte/object drift fails before returning acceptance; all negative custody tests and real signed-fixture integration pass on the unchanged head; the independent discovery-to-validation objection is addressed without disabling existing tests or weakening the external trust pin."
     }
   ]
 }
