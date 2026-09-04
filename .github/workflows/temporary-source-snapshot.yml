@@ -1,0 +1,40 @@
+name: temporary-source-snapshot
+
+on:
+  push:
+    branches:
+      - work/hepta-g10-trusted-openssl-custody-20260902
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact pushed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Assert exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+      - name: Export source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/source-snapshot
+          git archive --format=tar.gz --output=build/source-snapshot/hepta-glasses-source-${GITHUB_SHA}.tar.gz HEAD
+          sha256sum build/source-snapshot/hepta-glasses-source-${GITHUB_SHA}.tar.gz > build/source-snapshot/SHA256SUMS
+      - name: Upload exact source snapshot
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: temporary-source-snapshot-${{ github.sha }}
+          path: build/source-snapshot
+          if-no-files-found: error
+          retention-days: 1
