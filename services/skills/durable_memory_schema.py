@@ -71,11 +71,14 @@ def ensure_memory_schema(db: sqlite3.Connection, *, version: int = VERSION) -> N
     application_id = db.execute("PRAGMA application_id").fetchone()[0]
     present = tables & REQUIRED_TABLES
     if not present:
-        # A retained component marker or sqlite_sequence residue means this is
-        # not a fresh Memory component. Never turn full table loss into empty
-        # authority. application_id survives VACUUM; sqlite_sequence catches
-        # predecessor v1 databases before their first marker adoption.
-        if application_id == APPLICATION_ID or "sqlite_sequence" in tables:
+        # A retained component marker means this is not a fresh Memory
+        # component. ``sqlite_sequence`` is database-global: an unrelated
+        # AUTOINCREMENT table may create it, so it is evidence of lost Memory
+        # state only when no other user table exists. Current components also
+        # carry APPLICATION_ID, which remains authoritative after full loss.
+        other_user_tables = tables - {"sqlite_sequence"}
+        if (application_id == APPLICATION_ID
+                or ("sqlite_sequence" in tables and not other_user_tables)):
             raise ValueError("durable_memory_schema_integrity_invalid")
         if application_id != 0:
             raise ValueError("durable_memory_application_id_conflict")

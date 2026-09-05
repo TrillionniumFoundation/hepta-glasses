@@ -1,4 +1,4 @@
-import hashlib, hmac, tempfile, threading, unittest
+import hashlib, hmac, sqlite3, tempfile, threading, unittest
 from pathlib import Path
 from services.skills.durable_memory import DurableMemoryConsent, DurableMemoryError, DurableMemoryStore
 
@@ -56,5 +56,26 @@ class DurableMemoryTests(unittest.TestCase):
         r=self.s.remember(subject='u',purpose='p',data_class='personal',value='x',ttl_seconds=50);self.assertFalse(self.s.delete(subject='other',memory_id=r.memory_id));self.assertEqual(self.s.pending_deletions(),[])
     def test_storage_policy_does_not_claim_external_deletion_or_backup(self):
         p=self.s.storage_policy();self.assertFalse(p['plaintext_values_persisted']);self.assertTrue(p['external_backup_exclusion_required']);self.assertTrue(p['deletion_ack_is_external_fact'])
+    def test_failed_begin_releases_instance_lock(self):
+        blocker=sqlite3.connect(self.path,isolation_level=None);blocker.execute('BEGIN IMMEDIATE');self.s.db.execute('PRAGMA busy_timeout=1')
+        try:
+            with self.assertRaises(sqlite3.OperationalError):
+                with self.s._tx():pass
+            acquired=[]
+            def probe():
+                ok=self.s.lock.acquire(timeout=.2);acquired.append(ok)
+                if ok:self.s.lock.release()
+            thread=threading.Thread(target=probe);thread.start();thread.join(1)
+            self.assertEqual(acquired,[True])
+        finally:
+            blocker.execute('ROLLBACK');blocker.close()
+    def test_unrelated_autoincrement_table_can_share_fresh_database(self):
+        path=self.t.name+'/shared.db'
+        with sqlite3.connect(path) as db:
+            db.execute('CREATE TABLE unrelated(id INTEGER PRIMARY KEY AUTOINCREMENT,value TEXT)')
+            db.execute("INSERT INTO unrelated(value) VALUES('retained')")
+        store=DurableMemoryStore(path,cipher=self.c,clock=lambda:self.now);self.addCleanup(store.close)
+        self.assertEqual(store.db.execute('SELECT value FROM unrelated').fetchone()[0],'retained')
+        self.assertEqual(store.db.execute('SELECT COUNT(*) FROM memory_schema').fetchone()[0],1)
 
 if __name__=='__main__':unittest.main()

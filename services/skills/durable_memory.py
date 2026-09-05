@@ -84,7 +84,17 @@ class DurableMemoryStore:
 
     class _Tx:
         def __init__(self, owner: "DurableMemoryStore") -> None: self.owner = owner
-        def __enter__(self): self.owner.lock.acquire(); self.owner.db.execute("BEGIN IMMEDIATE"); return self.owner.db
+        def __enter__(self):
+            self.owner.lock.acquire()
+            try:
+                self.owner.db.execute("BEGIN IMMEDIATE")
+            except BaseException:
+                # __exit__ is not invoked when __enter__ raises. Release the
+                # process lock here so a transient SQLite lock error cannot
+                # permanently deadlock this store for other threads.
+                self.owner.lock.release()
+                raise
+            return self.owner.db
         def __exit__(self, typ, value, tb):
             try: self.owner.db.execute("ROLLBACK" if typ else "COMMIT")
             finally: self.owner.lock.release()

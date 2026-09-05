@@ -35,11 +35,29 @@ rewritten. A different nonzero application ID is rejected rather than overwritte
 This prevents the Memory component from silently taking over a database already
 claimed by another application.
 
-When no Memory table remains, either the retained `HMEM` marker or legacy
-`sqlite_sequence` residue causes startup rejection. `application_id` survives a
-normal `VACUUM`, so a marked component cannot become fresh merely by dropping all
-four tables and vacuuming the file. The constructor closes its connection on the
-failure and does not recreate authority state.
+When no Memory table remains, the retained `HMEM` marker always causes startup
+rejection and survives a normal `VACUUM`. Legacy `sqlite_sequence` residue is
+used only when it is the sole remaining SQLite user-state table. The sequence
+table is database-global: an unrelated `AUTOINCREMENT` table may legitimately
+create it and must not by itself be interpreted as lost Memory custody. A marked
+component therefore cannot become fresh merely by dropping all four tables, and
+a shared fresh database may retain unrelated auto-increment data.
+
+## Shared-database and transaction-entry boundary
+
+A pre-marker Memory database that loses every Memory table while unrelated user
+tables remain is intrinsically ambiguous: neither `application_id` nor a
+Memory-specific table survives. This source does not claim to detect that case.
+Use a dedicated operator-owned database for production Memory custody and adopt
+the marker before relying on complete-loss detection. Whole-file replacement and
+privileged header changes remain outside the source guarantee.
+
+`DurableMemoryStore._Tx` acquires a process lock before `BEGIN IMMEDIATE`. Python
+does not call a context manager's `__exit__` when `__enter__` raises, so a busy or
+failed SQLite begin must release that lock inside `__enter__`. The implementation
+now does so for every `BaseException`; the failed transaction performs no Memory
+state mutation and another thread may continue after the storage condition is
+handled. This is local lock hygiene, not a distributed availability guarantee.
 
 ## Limits and operations
 
@@ -55,7 +73,9 @@ database does not know this rule and can still recreate missing tables. Validate
 upgrade before re-enabling authenticated ingress. Never clear the marker or
 replace missing tables with empty copies as incident recovery.
 
-The four dedicated tests cover complete table loss with and without `VACUUM`,
+The component-identity tests cover complete table loss with and without `VACUUM`,
 row-preserving adoption by an intact pre-marker database and rejection of a
-conflicting application identity. They use real SQLite but are not backup,
+conflicting application identity. The primary Memory suite additionally covers
+shared databases with unrelated `AUTOINCREMENT` state and release of the process
+lock after `BEGIN IMMEDIATE` failure. They use real SQLite but are not backup,
 forensics, KMS, remote deletion or independent deployment evidence.

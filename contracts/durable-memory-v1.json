@@ -27,7 +27,9 @@
     ],
     "missing_or_malformed_established_state": "reject; never recreate authority tables empty",
     "complete_table_loss_after_vacuum": "reject when the retained component application_id identifies prior custody",
-    "legacy_complete_loss_before_marker_adoption": "sqlite_sequence residue is rejected; whole-file replacement remains outside the source guarantee",
+    "legacy_complete_loss_before_marker_adoption": "reject sequence-only residue; a shared database with unrelated user tables is intrinsically ambiguous",
+    "shared_autoincrement_tables": "permitted; database-global sqlite_sequence alone is not Memory identity while unrelated user tables exist",
+    "transaction_begin_failure": "release the process lock from __enter__; no transaction or Memory state mutation is acknowledged",
     "derived_indexes": "may be rebuilt from intact tables",
     "automatic_migration": false,
     "stale_snapshot_restore_supported": false
