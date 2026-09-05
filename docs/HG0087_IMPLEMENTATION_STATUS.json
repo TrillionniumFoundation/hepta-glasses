@@ -141,16 +141,21 @@
         "Exact bounded ZIP inventory, path and byte snapshot validation without extraction or execution",
         "SQLite exact-consent/version admission and terminal Skill/publisher/key/package revocations across restart",
         "Transitive exact dependency resolution, current-authority recheck after verification and final transaction expiry checks",
-        "Bounded verifier workers and local audit-chain consistency without external transparency claims"
+        "Bounded verifier workers and local audit-chain consistency without external transparency claims",
+        "Restricted canonical JSON R0 data VM with a closed finite opcode set, bounded state, cancellation checkpoints and no package-controlled file, process or network access",
+        "Exact registry/package authority is resolved before execution and re-resolved before output release; stale or revoked output is withheld"
       ],
-      "tests": ["services/skills/test_signed_registry.py"],
+      "tests": [
+        "services/skills/test_signed_registry.py",
+        "services/skills/test_data_vm.py"
+      ],
       "remaining": [
-        "execution sandbox",
-        "actual egress enforcement",
+        "arbitrary-code execution sandbox with OS/process resource isolation",
+        "capability-mediated I/O and actual egress enforcement for nonempty network policies",
         "external publisher-root administration",
         "externally witnessed package transparency",
         "authenticated consent service",
-        "running-task termination",
+        "running external-task termination",
         "encrypted package vault",
         "independent package/deployment qualification"
       ]
@@ -185,6 +190,6 @@
   ],
   "unchanged_authority_owned_gap_ids": ["HG-0010","HG-0011","HG-0012","HG-0013","HG-0014","HG-0015","HG-0016","HG-0017","HG-0018","HG-0021","HG-0022","HG-0044"],
   "administrative_adoption_gap": "HG-0089",
-  "implementation_scope": "Incremental realtime, committed-evidence custody, durable identity/capabilities, signed Skill admission, model send and recovery-inventory custody, speech bootstrap custody, and encrypted durable Memory custody with schema/time/component-identity hardening; not full HG-0087 closure. Live provider/device/mobile integration and authority-owned product evidence remain separate.",
+  "implementation_scope": "Incremental realtime, committed-evidence custody, durable identity/capabilities, signed Skill admission plus a restricted zero-egress R0 data VM, model send and recovery-inventory custody, speech bootstrap custody, and encrypted durable Memory custody with schema/time/component-identity hardening; not full HG-0087 closure. Arbitrary-code isolation, live provider/device/mobile integration and authority-owned product evidence remain separate.",
   "validation_scope": "Run current exact-head CI; deterministic local tests are not complete repository or E4 evidence."
 }

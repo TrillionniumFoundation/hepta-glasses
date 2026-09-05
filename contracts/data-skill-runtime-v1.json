@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "contract_id": "data-skill-runtime-v1",
+  "parent_gap": "HG-0087",
+  "owner": "skills",
+  "implementation": "services/skills/data_vm.py",
+  "tests": ["services/skills/test_data_vm.py"],
+  "admission": {
+    "registry": "exact SignedSkillRegistry resolve before and after execution",
+    "risk_tier": "R0",
+    "capabilities": [],
+    "network_domains": [],
+    "entrypoint": "one exact canonical JSON package member",
+    "invocation_data_classes": "exact host-declared subset of signed manifest data_classes",
+    "output_is_effect_authority": false
+  },
+  "execution": {
+    "model": "acyclic finite pure-data instruction list",
+    "opcodes": ["literal", "input", "lower", "upper", "length", "concat", "array", "object", "equal", "select", "slice"],
+    "unknown_opcode": "reject",
+    "package_code_execution": false,
+    "dynamic_import_or_eval": false,
+    "filesystem_access": false,
+    "network_access": false,
+    "subprocess_access": false,
+    "package_callbacks": false,
+    "extraction": false
+  },
+  "bounds": {
+    "program_bytes": 65536,
+    "input_bytes": 65536,
+    "output_bytes": 65536,
+    "working_bytes": 262144,
+    "steps": 256,
+    "collection_members": 256,
+    "depth": 8,
+    "nodes": 2048,
+    "integer_absolute_maximum": 9007199254740991,
+    "floats_supported": false,
+    "caller_timeout_seconds_maximum": 60,
+    "effective_timeout": "minimum of caller timeout and signed manifest timeout_ms"
+  },
+  "termination": {
+    "loops_or_recursion": false,
+    "checkpoint": "before and after every instruction and before result release",
+    "cancellation": "optional trusted threading.Event",
+    "hard_process_isolation": false,
+    "hard_real_time": false
+  },
+  "result": {
+    "encoding": "canonical UTF-8 JSON",
+    "defensive_decode": true,
+    "digest": "SHA-256 of canonical output",
+    "stale_admission_output": "withheld",
+    "persisted_by_runtime": false
+  },
+  "not_implemented": [
+    "arbitrary Python/JavaScript/WASM/native Skill execution",
+    "OS namespace, seccomp or container isolation for publisher code",
+    "capability-mediated I/O",
+    "nonempty-domain egress enforcement",
+    "running external-task termination",
+    "authenticated consent service",
+    "external publisher-root administration and witnessed transparency",
+    "encrypted package vault",
+    "independent package and deployment qualification"
+  ],
+  "claim_ceiling": "Actual zero-egress R0 data-program execution only; not general Skills sandbox closure or product qualification."
+}
