@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hepta.invalid/schemas/tool-request-v1.json",
+  "title": "ToolRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "trace_id",
+    "task_id",
+    "device_id",
+    "subject",
+    "tool_name",
+    "arguments",
+    "idempotency_key",
+    "deadline"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string"
+    },
+    "trace_id": {
+      "type": "string"
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "device_id": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "tool_name": {
+      "type": "string"
+    },
+    "arguments": {
+      "type": "object"
+    },
+    "idempotency_key": {
+      "type": "string"
+    },
+    "deadline": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

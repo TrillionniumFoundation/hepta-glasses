@@ -1,0 +1,119 @@
+{
+  "schema_version": 2,
+  "contract_id": "durable-model-gateway-v2",
+  "parent_gap": "HG-0087",
+  "owner": "ai-platform",
+  "implementations": [
+    "services/model_gateway/production.py",
+    "services/model_gateway/responses_provider.py",
+    "services/model_gateway/recovery_inventory.py"
+  ],
+  "tests": [
+    "services/model_gateway/test_production.py",
+    "services/model_gateway/test_model_boundaries.py",
+    "services/model_gateway/test_responses_provider.py",
+    "services/model_gateway/test_model_send_admission.py",
+    "services/model_gateway/test_recovery_inventory.py"
+  ],
+  "admission": {
+    "authentication": "trusted host authenticates subject/session and exact provider data-processing consent; not client JSON",
+    "clock": "explicit trusted integer-second host clock; rechecked after lock waiting and before result commit",
+    "authority_expiry": "absolute, maximum 300 seconds; immutable across retries",
+    "idempotency": "subject-scoped exact question/context/session/provider/expiry binding",
+    "daily_quota": "atomic count of reserved initial attempts, no refunds; not a price or input-token cap",
+    "effect_authority": false,
+    "checked_transport": "generate_authorized rechecks the original claim, denial, expiry, provider binding and deadline after credential/TLS preparation, before POST",
+    "legacy_transport": "direct generate remains a trusted transport-only API, not authenticated ingress; legacy adapters retain pre-call checks only",
+    "provider_configuration": "public provider and provider_binding are readonly; declared binding rechecked before use and result commit"
+  },
+  "persistence": {
+    "component": "model_gateway",
+    "version": 2,
+    "engine": "SQLite WAL/FULL/BEGIN IMMEDIATE",
+    "scope": "trusted local host with bounded replicas",
+    "atomic_reservation_and_event": true,
+    "unversioned_predecessor": "reject without dropping requests or denials, including empty predecessor tables",
+    "incomplete_known_schema": "reject missing tables or policy row",
+    "plaintext_payloads_stored": false,
+    "encrypted_metadata": false,
+    "old_snapshot_restore_supported": false
+  },
+  "states": [
+    "prepared",
+    "indeterminate",
+    "committed",
+    "cancelled"
+  ],
+  "recovery": {
+    "after_uncertainty": "bounded readback only; never generation replay",
+    "claim_fencing": true,
+    "late_worker_commits": false,
+    "old_consent_extension": false,
+    "provider_result_binding": "exact correlation key required; transport adapter remains trusted host code",
+    "inventory_pagination": {
+      "function": "services.model_gateway.recovery_inventory.recoverable_page",
+      "ordering": "subject-scoped idempotency_key keyset",
+      "cursor": "next_after is last returned key only when another row exists",
+      "maximum_page": 100,
+      "provider_io": false,
+      "claim_or_readback_mutation": false,
+      "concurrent_insert_before_cursor": "requires a new scan from the empty cursor"
+    }
+  },
+  "denial": {
+    "scopes": [
+      "subject and request key",
+      "subject and session ID"
+    ],
+    "unknown_tombstones": true,
+    "terminal": true,
+    "capacity": "suspend entire registry; do not evict denials",
+    "clock_failure": "use last committed observation for emergency denial",
+    "remote_cancellation_confirmed": false
+  },
+  "bounds": {
+    "question_characters": 8000,
+    "context_bytes": 32768,
+    "context_depth": 8,
+    "context_nodes": 2048,
+    "context_collection_members": 256,
+    "answer_bytes": 65536,
+    "http_response_bytes": 262144,
+    "maximum_caller_seconds": 60,
+    "default_daily_requests": 1000,
+    "default_lifetime_request_rows": 4096,
+    "default_combined_denial_rows": 4096,
+    "default_readbacks": 3,
+    "default_workers_per_instance": 4,
+    "maximum_recovery_inventory_page": 100
+  },
+  "concrete_provider": {
+    "profile": "openai-responses-foreground-v1",
+    "endpoint": "https://api.openai.com:443/v1/responses",
+    "model": "operator-configured exact response model identity",
+    "credentials": "trusted bounded callable; no environment/source fallback",
+    "tls": "system trust roots with hostname and certificate verification",
+    "store": false,
+    "background": false,
+    "stream": false,
+    "tools": [],
+    "tool_choice": "none",
+    "default_maximum_output_tokens": 1024,
+    "retry": false,
+    "redirect": false,
+    "proxy": false,
+    "correlation_is_remote_idempotency": false,
+    "lost_response_readback": "unknown; never re-POST",
+    "local_cancellation_is_remote_termination": false,
+    "store_false_is_zero_data_retention": false
+  },
+  "not_implemented": [
+    "authenticated service/mobile/session integration",
+    "live provider tenant, retention, billing and abuse qualification",
+    "remote foreground job cancellation or authoritative recovery",
+    "hard process/service isolation and production egress governance",
+    "encrypted metadata storage, retention and backup anti-rollback",
+    "production observability and independent acceptance"
+  ],
+  "claim_ceiling": "Source and deterministic tests only until exact-head CI and independent acceptance. Not full HG-0087/model closure or E5-E7."
+}

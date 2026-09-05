@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hepta.invalid/schemas/tool-receipt-v1.json",
+  "title": "ToolReceipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "receipt_id",
+    "request_id",
+    "request_fingerprint",
+    "status",
+    "started_at",
+    "completed_at",
+    "result",
+    "reconciled"
+  ],
+  "properties": {
+    "receipt_id": {
+      "type": "string"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "request_fingerprint": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "succeeded",
+        "denied",
+        "failed",
+        "indeterminate"
+      ]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "result": {
+      "type": "object"
+    },
+    "reconciled": {
+      "type": "boolean"
+    },
+    "error_code": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "plan_revision": "2026-09-02-g9-authenticated-1",
+  "extends_plan_revision": "2026-09-01-g8",
+  "source_authority": {
+    "repository": "TrillionniumFoundation/hepta-glasses",
+    "branch": "ops/hepta-g9-terminal-closure-20260902",
+    "pull_request": 83,
+    "identity_rule": "live_pull_request_head_and_tree",
+    "self_attested_sha_is_authoritative": false,
+    "exact_head_ci_required": true,
+    "independent_latest_head_review_required": true,
+    "workflow_concurrency_rule": "one current run per pull request or branch; exact source SHA verified inside every job"
+  },
+  "repository_actionable": {
+    "open": 0,
+    "closed_source": [
+      "HG-0073",
+      "HG-0074",
+      "HG-0075"
+    ],
+    "module_registry": "docs/G9_MODULES.json",
+    "gap_ledger": "docs/G9_GAP_LEDGER.json",
+    "validator_test": "services/qualification/test_g9_metadata.py",
+    "filesystem_custody_profile": {
+      "canonical_scoped_uris": true,
+      "ancestor_and_file_object_identity_bound": true,
+      "aggregate_snapshot_limit_bytes": 536870912,
+      "public_key_spki_uses_pinned_bytes": true,
+      "private_key_type_check_and_sign_use_one_snapshot": true,
+      "input_bundle_within_declared_custody_required": true,
+      "in_place_authority_bundle_update_supported": false,
+      "immutable_bundle_successor_required": true,
+      "signature_and_successor_uris_must_differ": true,
+      "created_outputs_reverified_before_success": true,
+      "normative_adr": "docs/adr/ADR-0007-evidence-object-identity-and-bounded-custody.md"
+    }
+  },
+  "authority_owned": {
+    "inherited_blocked_count": 12,
+    "gap_ids": [
+      "HG-0010",
+      "HG-0011",
+      "HG-0012",
+      "HG-0013",
+      "HG-0014",
+      "HG-0015",
+      "HG-0016",
+      "HG-0017",
+      "HG-0018",
+      "HG-0021",
+      "HG-0022",
+      "HG-0044"
+    ],
+    "closure_rule": "Only real authority-issued, Ed25519-authenticated, externally pinned and independently accepted evidence can change an inherited row to CLOSED_VERIFIED."
+  },
+  "claim_ceiling": "G9 source and exact-head CI can establish E0-E4 only; E5-E7, administrative and upstream claims require their named authorities"
+}

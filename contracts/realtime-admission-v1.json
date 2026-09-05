@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "contract_id": "realtime-admission-v1",
+  "parent_gap": "HG-0087",
+  "owner": "cloud",
+  "implementation": "services/control_plane/durable_realtime.py",
+  "extends_contract": "contracts/realtime-speech-custody-v2.json",
+  "api": {
+    "clock": "required trusted host Callable[[], int], Unix seconds",
+    "caller_now_supported": false,
+    "ticket_expiry": "deadline for initial activation completion; not lifetime of an already-active session",
+    "sample_points": [
+      "after write lock",
+      "before reservation commit",
+      "after worker scheduling, before provider call",
+      "before and after active-state update"
+    ],
+    "expired_recovery": "local terminal revoke with durable lookup/known-session cleanup; never new activation",
+    "provider_binding": "required non-secret trusted host namespace; immutable public property and persistent database match"
+  },
+  "storage": {
+    "component": "realtime",
+    "version": 4,
+    "layout_changed": true,
+    "unmarked_existing_tables": "reject; no synthesized attempts",
+    "incomplete_marked_schema": "reject; no missing outbox recreation",
+    "old_binary_fencing": "on reopening only; stop all already-running old processes",
+    "mixed_version_deployment_supported": false,
+    "existing_ticket_deadlines_preserved": true,
+    "anti_rollback": false,
+    "migration": "explicit offline v3-to-v4 namespace assignment; preserve all seven old tables and spent budgets; v2 must first migrate to v3"
+  },
+  "deadlines": {
+    "maximum_ticket_seconds": 300,
+    "default_ticket_seconds": 60,
+    "maximum_caller_seconds": 60,
+    "cleanup_budget": "one monotonic budget across the batch and nested provider work",
+    "maximum_workers": 16,
+    "hard_process_termination": false
+  },
+  "result_custody": {
+    "late_workers_commit": false,
+    "expiry_denial_and_cleanup": "commit before raising",
+    "historical_active_session": "not expired solely by ticket TTL",
+    "remote_deletion_proof_from_absence": false,
+    "conflicting_known_identity": "terminal local revoke and durable cleanup of all owned known identities before raising",
+    "cross_session_remote_alias": "deny the contender and retain its lookup; never revoke the other owner from a mismatched observation",
+    "same_identity_after_interrupt": "stale-generation error without revoking the newer active generation",
+    "cleanup_adapter_return": "only None is the successful trusted adapter contract; false/error payloads remain pending",
+    "cleanup_summary": "jobs/pending/exhausted_pending count both lookup and known-session cleanup; known_* and lookup_* give breakdowns",
+    "conflict_recovery": "no reactivation or automatic reset; exhausted lookup/cleanup remains pending",
+    "provider_binding_limit": "persistent host namespace pin and optional immutable adapter declaration; not remote authentication or credential/account proof"
+  },
+  "tests": [
+    "services/control_plane/test_durable_realtime.py",
+    "services/control_plane/test_realtime_custody.py",
+    "services/control_plane/test_realtime_admission.py",
+    "services/control_plane/test_realtime_recovery_budget.py",
+    "services/control_plane/test_realtime_result_custody.py",
+    "services/control_plane/test_realtime_provider_binding.py"
+  ],
+  "not_provided": [
+    "real provider exchange",
+    "authenticated ingress and live identity/session revocation",
+    "production session-lifetime enforcement",
+    "authoritative provider lookup/revoke evidence",
+    "external clock/anti-rollback anchor",
+    "encrypted metadata and bounded service deployment",
+    "independent acceptance"
+  ],
+  "claim_ceiling": "Local source and regression behavior, not full HG-0087 closure, physical-device or production qualification.",
+  "recovery_budget": {
+    "implementation": "services/control_plane/realtime_recovery.py",
+    "default_readbacks_per_session": 8,
+    "default_revokes_per_known_job": 8,
+    "maximum_each": 32,
+    "reserve_before_io": true,
+    "refund_on_timeout_crash_or_saturation": false,
+    "reset_api": false,
+    "configuration_change_on_reopen": "reject",
+    "selection": "non-exhausted pending jobs, least reservations used then job ID",
+    "exhausted_work": "retained pending; explicit operator escalation, no new activation",
+    "pre_v3_history": "uncounted; migration reports unknown historical usage and new allowance"
+  },
+  "provider_namespace": {
+    "implementation": "services/control_plane/realtime_provider_binding.py",
+    "scope_table": "realtime_provider_scope",
+    "identifier_maximum_characters": 128,
+    "required": true,
+    "reset_or_relabel_api": false,
+    "recheck_before_provider_io": true,
+    "recheck_before_result_acceptance": true,
+    "local_denial_on_adapter_drift": "retained; no wrong-namespace remote call",
+    "historical_tenant_proven_by_migration": false,
+    "migration_recovery_allowance_added": 0,
+    "conflict_cleanup_semantics_changed": false
+  }
+}

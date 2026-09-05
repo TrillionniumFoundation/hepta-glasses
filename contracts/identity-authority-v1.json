@@ -1,0 +1,69 @@
+{
+  "contract_id": "hepta-durable-identity-authority-v1",
+  "schema_version": 1,
+  "implementation_status": "source_candidate_not_deployed",
+  "owner": "cloud-security",
+  "trust_boundary": "Authenticated service controls subject admission, scopes, audience, clock, broker host and public key set. Models and client JSON do not call store admission methods directly.",
+  "storage": {
+    "engine": "local SQLite WAL, synchronous FULL, BEGIN IMMEDIATE",
+    "component_schema_version": 1,
+    "tables": ["subjects", "devices", "challenges", "sessions", "tokens", "revocations", "events", "policy"],
+    "namespace": "identity_",
+    "maximum_rows_per_admission_table_default": 100000,
+    "capacity_does_not_disable_revocation": true,
+    "persisted_credentials": [],
+    "revocation_state": "terminal; never evicted to admit more work",
+    "policy_change": "explicit migration required for issuer, scope allowlist or token TTL policy"
+  },
+  "attestation": {
+    "supported_platform_labels": ["android", "ios"],
+    "nonce": "32 random bytes, only SHA-256 stored, single-use atomic enrollment",
+    "default_ttl_seconds": 120,
+    "maximum_ttl_seconds": 300,
+    "maximum_proof_bytes": 32768,
+    "bindings": ["subject", "device_id", "platform", "application_id", "signer_digest", "nonce_sha256", "proof_sha256"],
+    "accepted_verdict": "exact field set, boolean true, bounded freshness and trusted broker receipt; never user-authored verified flags",
+    "verifier_implementation_boundary": "HTTPS broker must actually verify Android/Apple evidence; this client does not replace those platform verifiers"
+  },
+  "token": {
+    "format": "canonical JSON JWS-shaped HGAT2 envelope; not advertised as generic JWT interoperability",
+    "algorithm": "EdDSA / Ed25519 only",
+    "header_fields": ["alg", "typ", "kid"],
+    "claims": ["iss", "aud", "sub", "device_id", "session_id", "jti", "scope", "iat", "exp", "kid"],
+    "maximum_ttl_seconds": 900,
+    "maximum_session_ttl_seconds": 86400,
+    "maximum_scopes": 32,
+    "maximum_encoded_characters": 32768,
+    "encoding": "canonical unpadded base64url; duplicate/nonfinite JSON rejected",
+    "verification": "Pinned immutable public Ed25519 SPKI set, current key validity, actual OpenSSL signature check, then exact durable claims and authority recheck",
+    "signing_commit": "prepared metadata before broker call; signature verification before fenced active commit; exceptions retain non-active state",
+    "key_storage": "Public DER only; no local production signing keys",
+    "temporary_verification_material": "sealed Linux anonymous memory descriptors; no disk fallback",
+    "execution_authority": "Authentication does not replace final edge policy, exact decision leases, consent or device effect authorization"
+  },
+  "broker": {
+    "configuration": "protected HTTPS endpoint, exact expected hostname and workload-token callback",
+    "paths": ["/v1/attestations/verify", "/v1/signatures/ed25519"],
+    "redirects": "reject",
+    "tls": "system default certificate verification and hostname checking; no caller TLS context",
+    "maximum_request_response_bytes": 65536,
+    "default_timeout_seconds": 8,
+    "maximum_timeout_seconds": 60,
+    "default_maximum_workers": 4,
+    "late_call": "worker retains permit; late return does not commit local authority",
+    "errors": "redacted stable codes; response bodies and workload credentials are not logged"
+  },
+  "recovery": {
+    "prepared_or_indeterminate_token": "Never promoted after restart; revoke old token ID and issue a fresh one under current authority",
+    "device": "Ordinary registration cannot revive a revoked device or replace a bound proof; step-up lost-device replacement workflow remains OPEN",
+    "fanout": "Monotonic persistent revocation events; external consumers must persist cursor and apply idempotently",
+    "backup": "No stale database restore into active service; forward repair and revocation reconciliation required"
+  },
+  "remaining": [
+    "Real KMS/HSM and Android/Apple verifier behind the broker",
+    "Authenticated account/recovery service and step-up device replacement",
+    "Mobile identity-backed mutation-authority integration",
+    "Cross-service live-session revoke consumers and witnessed deployment drills"
+  ],
+  "evidence_ceiling": "Repository implementation and synthetic signature/transport tests only; not live platform, provider, independent review or release evidence"
+}

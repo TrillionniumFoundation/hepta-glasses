@@ -1,0 +1,49 @@
+{
+  "contract_id": "hepta-realtime-speech-custody-v2",
+  "version": 2,
+  "authority": {
+    "caller": "authenticated server-side service; never arbitrary model arguments",
+    "time": "UTC epoch seconds supplied by trusted service clock; not client JSON",
+    "database": "operator-owned local SQLite WAL with FULL synchronous writes",
+    "admission": "BEGIN IMMEDIATE before quota, ticket or session mutation",
+    "revocation": "monotonic tombstone; late results never restore authority",
+    "provider_output": "untrusted until exact response validation and post-call state recheck"
+  },
+  "realtime": {
+    "session_identity": ["subject", "session_id"],
+    "activation_fence": ["subject", "session_id", "generation", "attempt_id"],
+    "activation_states": ["new", "activating", "indeterminate", "active", "revoked"],
+    "recoverable_states": ["activating", "indeterminate"],
+    "reconciliation": "provider-authoritative lookup only; None remains indeterminate",
+    "duplicate_activation": "forbidden across tickets, reconnects and process restarts",
+    "revoke_queue": "persistent lookup and provider-session cleanup; retry idempotent revoke only"
+  },
+  "speech": {
+    "implementation_status": "OPEN_NOT_INCLUDED",
+    "session_identity": ["subject", "session_id", "generation", "SHA256(pair_identity)"],
+    "consume_requires_subject": true,
+    "endpoint_policy": "explicit exact HTTPS hostname allowlist; no URL credentials, fragments or non-443 port",
+    "quota": "atomic per-subject UTC-day reservation before provider call; includes uncertain attempts",
+    "persisted_secrets": [],
+    "unknown_mint": "does not return a ticket; keeps revoke pending until authoritative resolution",
+    "new_generation": "new authenticated utterance session ID; an existing binding is immutable"
+  },
+  "limits": {
+    "maximum_identifier_characters": 256,
+    "default_maximum_records": 100000,
+    "default_maximum_workers_per_instance": 4,
+    "maximum_provider_timeout_seconds": 60,
+    "maximum_drain_batch": 100,
+    "maximum_ticket_ttl_seconds": 300,
+    "default_maximum_audio_bytes": 960000
+  },
+  "migration": {
+    "component_schema_version": 2,
+    "unknown_version": "reject with schema_migration_required",
+    "legacy_realtime": "invalidate unspent tickets; retain active state and prepare recovery identity for unresolved activation",
+    "legacy_speech": "OPEN: pending a separately reviewed speech implementation; this commit does not migrate speech databases",
+    "rollback": "never restore a stale database that predates revocation"
+  },
+  "implementation_scope": "Realtime custody only. Speech source is unchanged in this commit; the speech rules below are pending requirements, not implemented claims.",
+  "evidence_ceiling": "deterministic local source tests only; not deployed providers, Android ASR, independent review or release"
+}

@@ -1,0 +1,9 @@
+{"timestamp_ms":0,"event":"battery","battery_percent":100,"temperature_c":25}
+{"timestamp_ms":100,"event":"wake","correlation_id":"turn-1"}
+{"timestamp_ms":250,"event":"listening","correlation_id":"turn-1"}
+{"timestamp_ms":1200,"event":"end_of_speech","correlation_id":"turn-1"}
+{"timestamp_ms":2300,"event":"first_display","correlation_id":"turn-1"}
+{"timestamp_ms":3000,"event":"packet_received","side":"left","sequence":1}
+{"timestamp_ms":3001,"event":"packet_received","side":"right","sequence":1}
+{"timestamp_ms":4000,"event":"fault_injected","fault":"left_disconnect"}
+{"timestamp_ms":5000,"event":"effect_committed","effect_id":"effect-1"}

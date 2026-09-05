@@ -1,15 +1,21 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
+
 import 'package:demo_ai_even/ble_manager.dart';
 import 'package:demo_ai_even/controllers/evenai_model_controller.dart';
-import 'package:demo_ai_even/services/api_services_deepseek.dart';
+import 'package:demo_ai_even/runtime/assistant_session.dart';
+import 'package:demo_ai_even/runtime/contracts.dart';
+import 'package:demo_ai_even/runtime/hepta_runtime.dart';
+import 'package:demo_ai_even/runtime/model_gateway.dart';
+import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
 import 'package:demo_ai_even/services/proto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 class EvenAI {
+  EvenAI._();
+
   static EvenAI? _instance;
   static EvenAI get get => _instance ??= EvenAI._();
 
@@ -17,407 +23,561 @@ class EvenAI {
   static bool get isRunning => _isRunning;
 
   bool isReceivingAudio = false;
-  List<int> audioDataBuffer = [];
-  Uint8List? audioData;
+  static const int _linesPerPage = 5;
+  static const Duration _pageInterval = Duration(seconds: 5);
+  static const Duration _singlePageFinalizeDelay = Duration(seconds: 3);
+  static const Duration _recordingLimit = Duration(seconds: 30);
+  static const Duration _startStopDebounce = Duration(milliseconds: 500);
+  static const Duration _finalTranscriptTimeout = Duration(seconds: 3);
+  static const Duration _modelTimeout = Duration(seconds: 60);
 
-  File? lc3File;
-  File? pcmFile;
-  int durationS = 0;
-
-  static int maxRetry = 10;
   static int _currentLine = 0;
-  static Timer? _timer; // Text sending timer
-  static List<String> list = [];
-  static List<String> sendReplys = [];
+  static Timer? _timer;
+  static List<String> list = <String>[];
+  static bool _isManual = false;
 
   Timer? _recordingTimer;
-  final int maxRecordingDuration = 30; // todo
-
-  static bool _isManual = false; 
+  StreamSubscription<dynamic>? _speechSubscription;
+  Completer<String>? _finalTranscript;
+  AssistantSessionToken? _session;
+  ModelRequestCancellation? _modelCancellation;
+  int _lastStartTime = 0;
+  int _lastStopTime = 0;
+  bool _pageSendInFlight = false;
 
   static set isRunning(bool value) {
     _isRunning = value;
     isEvenAIOpen.value = value;
-
     isEvenAISyncing.value = value;
   }
 
-  static RxBool isEvenAIOpen = false.obs;
+  static final RxBool isEvenAIOpen = false.obs;
+  static final RxBool isEvenAISyncing = false.obs;
 
-  static RxBool isEvenAISyncing = false.obs;
-
-  int _lastStartTime = 0; // Avoid repeated startup commands of Android Bluetooth in a short period of time
-  int _lastStopTime = 0; // Avoid repeated termination commands of Android Bluetooth within a short period of time
-  final int startTimeGap = 500; // Filter repeated Bluetooth intervals
-  final int stopTimeGap = 500;
-
-  static const _eventSpeechRecognize = "eventSpeechRecognize"; 
-  final _eventSpeechRecognizeChannel =
-      const EventChannel(_eventSpeechRecognize).receiveBroadcastStream(_eventSpeechRecognize);
+  static const String _eventSpeechRecognize = 'eventSpeechRecognize';
+  final Stream<dynamic> _eventSpeechRecognizeChannel = const EventChannel(
+    _eventSpeechRecognize,
+  ).receiveBroadcastStream(_eventSpeechRecognize);
 
   String combinedText = '';
 
-  static final StreamController<String> _textStreamController = StreamController<String>.broadcast();
+  static final StreamController<String> _textStreamController =
+      StreamController<String>.broadcast();
   static Stream<String> get textStream => _textStreamController.stream;
 
   static void updateDynamicText(String newText) {
     _textStreamController.add(newText);
   }
 
-  EvenAI._(); 
-
-  void startListening() {
+  Future<void> startListening(AssistantSessionToken session) async {
     combinedText = '';
-    _eventSpeechRecognizeChannel.listen((event) {
-      var txt = event["script"] as String;
-      combinedText = txt;
-    }, onError: (error) {
-      print("Error in event: $error");
-    });
+    _finalTranscript = Completer<String>();
+    final previous = _speechSubscription;
+    _speechSubscription = null;
+    await previous?.cancel();
+    _speechSubscription = _eventSpeechRecognizeChannel.listen(
+      (dynamic event) {
+        if (!_isCurrent(session)) {
+          return;
+        }
+        if (event is Map &&
+            event['script'] is String &&
+            event['is_final'] == true &&
+            event['generation'] == session.generation) {
+          combinedText = (event['script']! as String).trim();
+          final completer = _finalTranscript;
+          if (completer != null && !completer.isCompleted) {
+            completer.complete(combinedText);
+          }
+        }
+      },
+      onError: (Object error) {
+        PrivacySafeLog.event(
+          'speech_recognition_error',
+          fields: <String, Object?>{'error_type': error.runtimeType.toString()},
+        );
+      },
+    );
   }
 
-  // receiving starting Even AI request from ble
-  void toStartEvenAIByOS() async {
-    // restart to avoid ble data conflict
+  Future<void> toStartEvenAIByOS() async {
     BleManager.get().startSendBeatHeart();
-
-    startListening(); 
-    
-    // avoid duplicate ble command in short time, especially android
-    int currentTime = DateTime.now().millisecondsSinceEpoch;
-    if (currentTime - _lastStartTime < startTimeGap) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastStartTime < _startStopDebounce.inMilliseconds) {
       return;
     }
+    _lastStartTime = now;
 
-    _lastStartTime = currentTime;
-
-    clear();
+    await clear();
+    final session = HeptaRuntime.current.sessions.begin();
+    _session = session;
+    await startListening(session);
     isReceivingAudio = true;
-
     isRunning = true;
     _currentLine = 0;
 
-    await BleManager.invokeMethod("startEvenAI");
-    
-    await openEvenAIMic();
-
-    startRecordingTimer();
+    try {
+      await BleManager.invokeMethod<void>('startEvenAI', <String, Object?>{
+        'generation': session.generation,
+      });
+      final micOpened = await openEvenAIMic(session);
+      if (!_isCurrent(session)) {
+        return;
+      }
+      if (!micOpened) {
+        HeptaRuntime.current.sessions.fail(session, 'microphone_unavailable');
+        isEvenAISyncing.value = false;
+        updateDynamicText('Microphone unavailable.');
+        await startSendReply('Microphone unavailable.', session: session);
+        await _stopNativeAssistant(session);
+        await clear(cancelSession: false);
+        return;
+      }
+      HeptaRuntime.current.sessions.transition(
+        session,
+        AssistantSessionState.recording,
+      );
+      startRecordingTimer(session);
+      PrivacySafeLog.event(
+        'even_ai_started',
+        fields: <String, Object?>{'generation': session.generation},
+      );
+    } on Object catch (error) {
+      HeptaRuntime.current.sessions.fail(session, 'assistant_start_failed');
+      await _stopNativeAssistant(session);
+      await clear(cancelSession: false);
+      isEvenAISyncing.value = false;
+      updateDynamicText('Voice assistant is unavailable on this platform.');
+      PrivacySafeLog.event(
+        'even_ai_start_failed',
+        fields: <String, Object?>{'error_type': error.runtimeType.toString()},
+      );
+    }
   }
 
-  // Monitor the recording time to prevent the recording from ending when the OS exits unexpectedly
-  void startRecordingTimer() {
-    _recordingTimer = Timer(Duration(seconds: maxRecordingDuration), () {
-      if (isReceivingAudio) {
-        print("${DateTime.now()} Even AI startRecordingTimer-----exit-----");
-        clear();
-        //Proto.exit();
-      } else {
-        _recordingTimer?.cancel();
-        _recordingTimer = null;
+  void startRecordingTimer(AssistantSessionToken session) {
+    _recordingTimer?.cancel();
+    _recordingTimer = Timer(_recordingLimit, () {
+      if (isReceivingAudio && _isCurrent(session)) {
+        PrivacySafeLog.event('recording_limit_reached');
+        unawaited(stopEvenAIByOS(reason: 'recording_limit_reached'));
       }
     });
   }
 
-  // 收到眼镜端Even AI录音结束指令
   Future<void> recordOverByOS() async {
-    print('${DateTime.now()} EvenAI -------recordOverByOS-------');
-
-    int currentTime = DateTime.now().millisecondsSinceEpoch;
-    if (currentTime - _lastStopTime < stopTimeGap) {
+    final session = _session;
+    if (session == null || !_isCurrent(session)) {
       return;
     }
-    _lastStopTime = currentTime;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastStopTime < _startStopDebounce.inMilliseconds) {
+      return;
+    }
+    _lastStopTime = now;
 
     isReceivingAudio = false;
     _recordingTimer?.cancel();
     _recordingTimer = null;
-
-    await BleManager.invokeMethod("stopEvenAI");
-    await Future.delayed(Duration(seconds: 2)); // todo
-
-    print("recordOverByOS----startSendReply---pre------combinedText-------*$combinedText*---");
+    try {
+      HeptaRuntime.current.sessions.transition(
+        session,
+        AssistantSessionState.finalizingSpeech,
+      );
+    } on StateError {
+      return;
+    }
+    if (!await _stopNativeAssistant(session)) {
+      HeptaRuntime.current.sessions.fail(session, 'speech_stop_failed');
+      isEvenAISyncing.value = false;
+      updateDynamicText('Speech recognition could not be finalized.');
+      await clear(cancelSession: false);
+      return;
+    }
+    final transcript = await _awaitFinalTranscript(session);
+    if (!_isCurrent(session)) {
+      return;
+    }
+    combinedText = transcript.trim();
 
     if (combinedText.isEmpty) {
-      
-      updateDynamicText("No Speech Recognized");
+      const message = 'No speech recognized.';
+      HeptaRuntime.current.sessions.transition(
+        session,
+        AssistantSessionState.thinking,
+      );
+      HeptaRuntime.current.sessions.transition(
+        session,
+        AssistantSessionState.rendering,
+      );
+      updateDynamicText(message);
       isEvenAISyncing.value = false;
-      startSendReply("No Speech Recognized");
+      await startSendReply(message, session: session);
       return;
     }
 
-    final apiService = ApiDeepSeekService();
-    String answer = await apiService.sendChatRequest(combinedText);
-  
-    print("recordOverByOS----startSendReply---combinedText-------*$combinedText*-----answer----$answer----");
+    HeptaRuntime.current.sessions.transition(
+      session,
+      AssistantSessionState.thinking,
+    );
+    String answer;
+    final cancellation = ModelRequestCancellation();
+    _modelCancellation = cancellation;
+    try {
+      answer = await ModelGatewayRegistry.current
+          .answer(
+        question: combinedText,
+        taskId: session.sessionId,
+        cancellation: cancellation,
+      )
+          .timeout(
+        _modelTimeout,
+        onTimeout: () {
+          cancellation.cancel('model_deadline_exceeded');
+          throw TimeoutException('model_deadline_exceeded');
+        },
+      );
+    } on TimeoutException {
+      answer = 'AI service timed out.';
+    } on ModelGatewayException catch (error) {
+      answer = error.code == 'model_request_cancelled'
+          ? 'AI request cancelled.'
+          : 'AI service unavailable (${error.code}).';
+    } on Object {
+      answer = 'AI service unavailable.';
+    } finally {
+      if (identical(_modelCancellation, cancellation)) {
+        _modelCancellation = null;
+      }
+    }
+    if (!_isCurrent(session)) {
+      return;
+    }
 
-    updateDynamicText("$combinedText\n\n$answer");
+    HeptaRuntime.current.sessions.transition(
+      session,
+      AssistantSessionState.rendering,
+    );
+    updateDynamicText('$combinedText\n\n$answer');
     isEvenAISyncing.value = false;
     saveQuestionItem(combinedText, answer);
-    startSendReply(answer);
+    await startSendReply(answer, session: session);
+    PrivacySafeLog.event(
+      'even_ai_answer_ready',
+      fields: <String, Object?>{
+        'generation': session.generation,
+        'question_characters': combinedText.runes.length,
+        'answer_characters': answer.runes.length,
+      },
+    );
+  }
+
+  Future<String> _awaitFinalTranscript(AssistantSessionToken session) async {
+    final completer = _finalTranscript;
+    if (completer == null) {
+      return combinedText;
+    }
+    try {
+      final transcript = await completer.future.timeout(
+        _finalTranscriptTimeout,
+        onTimeout: () => combinedText,
+      );
+      return _isCurrent(session) ? transcript : '';
+    } on Object {
+      return _isCurrent(session) ? combinedText : '';
+    }
   }
 
   void saveQuestionItem(String title, String content) {
-    print("saveQuestionItem----title----$title----content---$content-");
     final controller = Get.find<EvenaiModelController>();
     controller.addItem(title, content);
   }
 
-  int getTotalPages() {
+  int getTotalPages() =>
+      list.isEmpty ? 0 : (list.length + _linesPerPage - 1) ~/ _linesPerPage;
+
+  int getCurrentPage() =>
+      list.isEmpty ? 0 : (_currentLine ~/ _linesPerPage) + 1;
+
+  Future<void> sendNetworkErrorReply(String text) async {
+    final session = _session;
+    if (session == null || !_isCurrent(session)) {
+      return;
+    }
+    _currentLine = 0;
+    list = EvenAIDataMethod.measureStringList(text);
+    await sendEvenAIReply(_pageText(0), 0x01, 0x60, 0, session: session);
+    await clear();
+  }
+
+  Future<void> startSendReply(
+    String text, {
+    AssistantSessionToken? session,
+  }) async {
+    final active = session ?? _session;
+    if (active == null || !_isCurrent(active)) {
+      return;
+    }
+    _currentLine = 0;
+    _isManual = false;
+    list = EvenAIDataMethod.measureStringList(text);
     if (list.isEmpty) {
-      return 0;
+      list = <String>['No response available.'];
     }
-    if (list.length < 6) {
-      return 1;
-    }
-    int pages = 0;
-    int div = list.length ~/ 5;
-    int rest = list.length % 5;
-    pages = div;
-    if (rest != 0) {
-      pages++;
-    }
-    return pages;
-  }
 
-  int getCurrentPage() {
-    if (_currentLine == 0) {
-      return 1;
-    }
-    int currentPage = 1;
-    int div = _currentLine ~/ 5;
-    int rest = _currentLine % 5;
-    currentPage = 1 + div;
-    if (rest != 0) {
-      currentPage++;
-    }
-    return currentPage;
-  }
-
-  Future sendNetworkErrorReply(String text) async {
-    _currentLine = 0;
-    list = EvenAIDataMethod.measureStringList(text);
-
-    String ryplyWords =
-        list.sublist(0, min(3, list.length)).map((str) => '$str\n').join();
-    String headString = '\n\n';
-    ryplyWords = headString + ryplyWords;
-
-    // After sending the network error prompt glasses, exit automatically
-    await sendEvenAIReply(ryplyWords, 0x01, 0x60, 0);
-    clear();
-  }
-
-  Future startSendReply(String text) async {
-    _currentLine = 0;
-    list = EvenAIDataMethod.measureStringList(text);
-   
-    if (list.length < 4) {
-      String startScreenWords =
-          list.sublist(0, min(3, list.length)).map((str) => '$str\n').join();
-      String headString = '\n\n';
-      startScreenWords = headString + startScreenWords;
-
-      // The glasses need to have 0x30 before they can process 0x40
-      bool isSuccess = await sendEvenAIReply(startScreenWords, 0x01, 0x30, 0);
-      
-      // Send 0x40 after 3 seconds
-      await Future.delayed(Duration(seconds: 3));
-      // If already switched to manual mode, no need to send 0x40.
-      if (_isManual) {
-        return;
+    final firstPage = _pageText(0);
+    final started = await sendEvenAIReply(
+      firstPage,
+      0x01,
+      0x30,
+      0,
+      session: active,
+    );
+    if (!started || !_isCurrent(active)) {
+      if (_isCurrent(active)) {
+        HeptaRuntime.current.sessions.fail(
+          active,
+          'initial_display_not_acknowledged',
+        );
+        await clear(cancelSession: false);
       }
-      isSuccess = await sendEvenAIReply(startScreenWords, 0x01, 0x40, 0);
-      return;
-    }
-    if (list.length == 4) {
-      String startScreenWords =
-          list.sublist(0, 4).map((str) => '$str\n').join();
-      String headString = '\n';
-      startScreenWords = headString + startScreenWords;
-
-      // // The glasses need to have 0x30 before they can process 0x40
-      bool isSuccess = await sendEvenAIReply(startScreenWords, 0x01, 0x30, 0);
-      await Future.delayed(Duration(seconds: 3));
-      if (_isManual) {
-        return;
-      }
-      isSuccess = await sendEvenAIReply(startScreenWords, 0x01, 0x40, 0);
       return;
     }
 
-    if (list.length == 5) {
-      String startScreenWords =
-          list.sublist(0, 5).map((str) => '$str\n').join();
-      // // The glasses need to have 0x30 before they can process 0x40
-      bool isSuccess = await sendEvenAIReply(startScreenWords, 0x01, 0x30, 0);
-      await Future.delayed(Duration(seconds: 3));
-      if (_isManual) {
-        return;
-      }
-      isSuccess = await sendEvenAIReply(startScreenWords, 0x01, 0x40, 0);
-      return;
-    }
-
-    String startScreenWords = list.sublist(0, 5).map((str) => '$str\n').join();
-    bool isSuccess = await sendEvenAIReply(startScreenWords, 0x01, 0x30, 0);
-
-    if (isSuccess) {
-      _currentLine = 0;
-      await updateReplyToOSByTimer();
-    } else {
-      clear(); 
-    }
-  }
-
-  Future updateReplyToOSByTimer() async {
-
-    int interval = 5; // The paging interval can be customized
-   
-    _timer?.cancel();
-    _timer = Timer.periodic(Duration(seconds: interval), (timer) async {
-      // Switched to manual mode, abolished timer update
-      if (_isManual) {
-        _timer?.cancel();
-        _timer = null;
-        return;
-      }
-
-      _currentLine = min(_currentLine + 5, list.length - 1);
-      sendReplys = list.sublist(_currentLine);
-
-      if (_currentLine > list.length - 1) {
-        _timer?.cancel();
-        _timer = null;
-      } else {
-        if (sendReplys.length < 4) {
-          var mergedStr = sendReplys
-              .sublist(0, sendReplys.length)
-              .map((str) => '$str\n')
-              .join();
-
-          if (_currentLine >= list.length - 5) {
-            await sendEvenAIReply(mergedStr, 0x01, 0x40, 0);
-            _timer?.cancel();
-            _timer = null;
-          } else {
-            await sendEvenAIReply(mergedStr, 0x01, 0x30, 0);
-          }
-        } else {
-          var mergedStr = sendReplys
-              .sublist(0, min(5, sendReplys.length))
-              .map((str) => '$str\n')
-              .join();
-
-          if (_currentLine >= list.length - 5) {
-            await sendEvenAIReply(mergedStr, 0x01, 0x40, 0);
-            _timer?.cancel();
-            _timer = null;
-          } else {
-            await sendEvenAIReply(mergedStr, 0x01, 0x30, 0);
-          }
+    if (getTotalPages() == 1) {
+      await Future<void>.delayed(_singlePageFinalizeDelay);
+      if (!_isManual && isRunning && _isCurrent(active)) {
+        final completed = await sendEvenAIReply(
+          firstPage,
+          0x01,
+          0x40,
+          0,
+          session: active,
+        );
+        if (completed && _isCurrent(active)) {
+          HeptaRuntime.current.sessions.complete(active);
+        } else if (_isCurrent(active)) {
+          HeptaRuntime.current.sessions.fail(
+            active,
+            'final_display_not_acknowledged',
+          );
+          await clear(cancelSession: false);
         }
       }
+      return;
+    }
+    updateReplyToOSByTimer(active);
+  }
+
+  void updateReplyToOSByTimer(AssistantSessionToken session) {
+    _timer?.cancel();
+    _timer = Timer.periodic(_pageInterval, (Timer timer) {
+      unawaited(_advanceAutomaticPage(session));
     });
   }
 
-  // Click the TouchBar on the right to turn the page down
+  Future<void> _advanceAutomaticPage(AssistantSessionToken session) async {
+    if (_pageSendInFlight || _isManual || !isRunning || !_isCurrent(session)) {
+      if (_isManual || !isRunning || !_isCurrent(session)) {
+        _timer?.cancel();
+        _timer = null;
+      }
+      return;
+    }
+    final next = _currentLine + _linesPerPage;
+    if (next >= list.length) {
+      _timer?.cancel();
+      _timer = null;
+      return;
+    }
+    _pageSendInFlight = true;
+    final previousLine = _currentLine;
+    try {
+      _currentLine = next;
+      final finalPage = _currentLine + _linesPerPage >= list.length;
+      final delivered = await sendEvenAIReply(
+        _pageText(_currentLine),
+        0x01,
+        finalPage ? 0x40 : 0x30,
+        0,
+        session: session,
+      );
+      if (!delivered && _isCurrent(session)) {
+        _currentLine = previousLine;
+        HeptaRuntime.current.sessions.fail(
+          session,
+          'page_display_not_acknowledged',
+        );
+        _timer?.cancel();
+        _timer = null;
+        await clear(cancelSession: false);
+      } else if (finalPage) {
+        _timer?.cancel();
+        _timer = null;
+        if (_isCurrent(session)) {
+          HeptaRuntime.current.sessions.complete(session);
+        }
+      }
+    } finally {
+      _pageSendInFlight = false;
+    }
+  }
+
   void nextPageByTouchpad() {
-    if (!isRunning) return;
-    _isManual = true;
-    _timer?.cancel();
-    _timer = null;
-
+    final session = _session;
+    if (!isRunning || session == null || !_isCurrent(session)) {
+      return;
+    }
+    _enterManualMode();
     if (getTotalPages() < 2) {
-      manualForJustOnePage();
+      unawaited(manualForJustOnePage(session: session));
       return;
     }
-
-    if (_currentLine + 5 > list.length - 1) {
-      return;
-    } else {
-      _currentLine += 5;
+    final next = _currentLine + _linesPerPage;
+    if (next < list.length) {
+      unawaited(_sendManualPage(session, next));
     }
-    updateReplyToOSByManual();
   }
 
-  // Click the TouchBar on the right to turn the page down
   void lastPageByTouchpad() {
-    if (!isRunning) return;
+    final session = _session;
+    if (!isRunning || session == null || !_isCurrent(session)) {
+      return;
+    }
+    _enterManualMode();
+    if (getTotalPages() < 2) {
+      unawaited(manualForJustOnePage(session: session));
+      return;
+    }
+    unawaited(_sendManualPage(session, max(0, _currentLine - _linesPerPage)));
+  }
+
+  Future<void> _sendManualPage(
+    AssistantSessionToken session,
+    int targetLine,
+  ) async {
+    if (_pageSendInFlight || !_isCurrent(session)) {
+      return;
+    }
+    final previousLine = _currentLine;
+    _pageSendInFlight = true;
+    _currentLine = targetLine;
+    try {
+      final delivered = await updateReplyToOSByManual(session: session);
+      if (!delivered && _isCurrent(session) && _currentLine == targetLine) {
+        _currentLine = previousLine;
+        HeptaRuntime.current.sessions.fail(
+          session,
+          'manual_display_not_acknowledged',
+        );
+        await clear(cancelSession: false);
+      }
+    } finally {
+      _pageSendInFlight = false;
+    }
+  }
+
+  void _enterManualMode() {
     _isManual = true;
     _timer?.cancel();
     _timer = null;
-
-    if (getTotalPages() < 2) {
-      manualForJustOnePage();
-      return;
-    }
-
-    if (_currentLine - 5 < 0) {
-      _currentLine == 0;
-    } else {
-      _currentLine -= 5;
-    }
-    updateReplyToOSByManual();
   }
 
-  Future updateReplyToOSByManual() async {
-    if (_currentLine < 0 || _currentLine > list.length - 1) {
-      return;
+  Future<bool> updateReplyToOSByManual({AssistantSessionToken? session}) async {
+    final active = session ?? _session;
+    if (active == null ||
+        !_isCurrent(active) ||
+        _currentLine < 0 ||
+        _currentLine >= list.length) {
+      return false;
     }
+    return sendEvenAIReply(
+      _pageText(_currentLine),
+      0x01,
+      0x50,
+      0,
+      session: active,
+    );
+  }
 
-    sendReplys = list.sublist(_currentLine);
-    if (sendReplys.length < 4) {
-      var mergedStr = sendReplys
-          .sublist(0, sendReplys.length)
-          .map((str) => '$str\n')
-          .join();
-      await sendEvenAIReply(mergedStr, 0x01, 0x50, 0);
-    } else {
-      var mergedStr = sendReplys
-          .sublist(0, min(5, sendReplys.length))
-          .map((str) => '$str\n')
-          .join();
-      await sendEvenAIReply(mergedStr, 0x01, 0x50, 0);
+  Future<bool> manualForJustOnePage({AssistantSessionToken? session}) async {
+    final active = session ?? _session;
+    if (active == null || !_isCurrent(active) || list.isEmpty) {
+      return false;
+    }
+    final delivered = await sendEvenAIReply(
+      _pageText(0),
+      0x01,
+      0x50,
+      0,
+      session: active,
+    );
+    if (!delivered && _isCurrent(active)) {
+      HeptaRuntime.current.sessions.fail(
+        active,
+        'manual_display_not_acknowledged',
+      );
+      await clear(cancelSession: false);
+    }
+    return delivered;
+  }
+
+  String _pageText(int start) {
+    if (list.isEmpty || start < 0 || start >= list.length) {
+      return '';
+    }
+    final end = min(start + _linesPerPage, list.length);
+    final lines = list.sublist(start, end);
+    final leadingBlankLines = max(0, (_linesPerPage - lines.length) ~/ 2);
+    final prefix = List<String>.filled(leadingBlankLines, '').join('\n');
+    return '${prefix.isEmpty ? '' : '$prefix\n'}${lines.join('\n')}\n';
+  }
+
+  Future<void> stopEvenAIByOS({String reason = 'user_cancelled'}) async {
+    final session = _session;
+    if (session != null && _isCurrent(session)) {
+      HeptaRuntime.current.sessions.cancel(session, reason: reason);
+      await _stopNativeAssistant(session);
+    }
+    await clear(cancelSession: false);
+  }
+
+  Future<bool> _stopNativeAssistant(AssistantSessionToken session) async {
+    try {
+      await BleManager.invokeMethod<void>('stopEvenAI', <String, Object?>{
+        'generation': session.generation,
+      });
+      return true;
+    } on Object catch (error) {
+      PrivacySafeLog.event(
+        'even_ai_native_stop_failed',
+        fields: <String, Object?>{
+          'generation': session.generation,
+          'error_type': error.runtimeType.toString(),
+        },
+      );
+      return false;
     }
   }
 
-  // When there is only one page of text, click the page turn TouchBar
-  Future manualForJustOnePage() async {
-    if (list.length < 4) {
-      String screenWords =
-          list.sublist(0, min(3, list.length)).map((str) => '$str\n').join();
-      String headString = '\n\n';
-      screenWords = headString + screenWords;
-
-      await sendEvenAIReply(screenWords, 0x01, 0x50, 0);
-      return;
+  Future<void> clear({bool cancelSession = true}) async {
+    final session = _session;
+    if (cancelSession &&
+        session != null &&
+        HeptaRuntime.isInitialized &&
+        _isCurrent(session)) {
+      HeptaRuntime.current.sessions.cancel(session, reason: 'session_cleared');
     }
-
-    if (list.length == 4) {
-      String screenWords = list.sublist(0, 4).map((str) => '$str\n').join();
-      String headString = '\n';
-      screenWords = headString + screenWords;
-
-      await sendEvenAIReply(screenWords, 0x01, 0x50, 0);
-      return;
+    final transcript = _finalTranscript;
+    if (transcript != null && !transcript.isCompleted) {
+      transcript.complete(combinedText);
     }
-
-    if (list.length == 5) {
-      String screenWords = list.sublist(0, 5).map((str) => '$str\n').join();
-
-      await sendEvenAIReply(screenWords, 0x01, 0x50, 0);
-      return;
-    }
-  }
-
-  Future stopEvenAIByOS() async {
-    isRunning = false;
-    clear();
-
-    await BleManager.invokeMethod("stopEvenAI");
-  }
-
-  void clear() {
+    _finalTranscript = null;
+    _session = null;
+    _modelCancellation?.cancel('session_cleared');
+    _modelCancellation = null;
+    combinedText = '';
+    list = <String>[];
     isReceivingAudio = false;
     isRunning = false;
     _isManual = false;
@@ -426,98 +586,130 @@ class EvenAI {
     _recordingTimer = null;
     _timer?.cancel();
     _timer = null;
-    audioDataBuffer.clear();
-    audioDataBuffer = [];
-    audioData = null;
-    list = [];
-    sendReplys = [];
-    durationS = 0;
-    retryCount = 0;
+    final subscription = _speechSubscription;
+    _speechSubscription = null;
+    await subscription?.cancel();
+    _pageSendInFlight = false;
   }
 
-  Future openEvenAIMic() async {
-    final (micStartMs, isStartSucc) = await Proto.micOn(lr: "R"); 
-    print(
-        '${DateTime.now()} openEvenAIMic---isStartSucc----$isStartSucc----micStartMs---$micStartMs---');
-    
-    if (!isStartSucc && isReceivingAudio && isRunning) {
-      await Future.delayed(Duration(seconds: 1));
-      await openEvenAIMic();
-    }
-  }
-
-  // Send text data to the glasses，including status information
-  int retryCount = 0;
-  Future<bool> sendEvenAIReply(
-      String text, int type, int status, int pos) async {
-    // todo
-    print('${DateTime.now()} sendEvenAIReply---text----$text-----type---$type---status---$status----pos---$pos-');
-    if (!isRunning) {
-      return false;
-    }
-
-    bool isSuccess = await Proto.sendEvenAIData(text,
-        newScreen: EvenAIDataMethod.transferToNewScreen(type, status),
-        pos: pos,
-        current_page_num: getCurrentPage(),
-        max_page_num: getTotalPages()); // todo pos
-    if (!isSuccess) {
-      if (retryCount < maxRetry) {
-        retryCount++;
-        await sendEvenAIReply(text, type, status, pos);
-      } else {
-        retryCount = 0;
-        // todo
+  Future<bool> openEvenAIMic(AssistantSessionToken session) async {
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      if (!_isCurrent(session)) {
         return false;
       }
+      final (_, outcome) = await Proto.micOnResult(
+        lr: 'R',
+        attempt: attempt,
+      );
+      if (!_isCurrent(session)) {
+        return false;
+      }
+      if (outcome.committed) {
+        PrivacySafeLog.event(
+          'microphone_opened',
+          fields: <String, Object?>{'attempt': attempt},
+        );
+        return true;
+      }
+      if (!outcome.retrySafe) {
+        PrivacySafeLog.event(
+          'microphone_open_reconciliation_required',
+          fields: <String, Object?>{
+            'attempt': attempt,
+            'code': outcome.code,
+          },
+        );
+        return false;
+      }
+      if (attempt < 3) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+      }
     }
-    retryCount = 0;
-    return true;
+    PrivacySafeLog.event('microphone_open_failed');
+    return false;
   }
 
+  Future<bool> sendEvenAIReply(
+    String text,
+    int type,
+    int status,
+    int pos, {
+    required AssistantSessionToken session,
+  }) async {
+    if (!isRunning || !_isCurrent(session)) {
+      return false;
+    }
+    final receipt = await HeptaRuntime.current.displayText(
+      session: session,
+      text: text,
+      newScreen: EvenAIDataMethod.transferToNewScreen(type, status),
+      position: pos,
+      currentPageNumber: getCurrentPage(),
+      maxPageNumber: getTotalPages(),
+    );
+    if (!_isCurrent(session)) {
+      return false;
+    }
+    if (receipt.status == ToolReceiptStatus.succeeded) {
+      return true;
+    }
+    PrivacySafeLog.event(
+      receipt.status == ToolReceiptStatus.indeterminate
+          ? 'display_reconciliation_required'
+          : 'display_send_failed',
+      fields: <String, Object?>{
+        'page': getCurrentPage(),
+        'page_count': getTotalPages(),
+        'status': receipt.status.name,
+      },
+    );
+    return false;
+  }
+
+  bool _isCurrent(AssistantSessionToken session) =>
+      HeptaRuntime.isInitialized &&
+      HeptaRuntime.current.sessions.isCurrent(session);
+
   static void dispose() {
+    unawaited(_instance?._speechSubscription?.cancel());
     _textStreamController.close();
   }
 }
 
 extension EvenAIDataMethod on EvenAI {
-  static int transferToNewScreen(int type, int status) {
-    int newScreen = status | type;
-    return newScreen;
-  }
+  static int transferToNewScreen(int type, int status) => status | type;
 
   static List<String> measureStringList(String text, [double? maxW]) {
-    final double maxWidth = maxW ?? 488; 
-    const double fontSize = 21; // could be customized
-
-    List<String> paragraphs = text
+    final maxWidth = maxW ?? 488;
+    const fontSize = 21.0;
+    final paragraphs = text
         .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList();
-    List<String> ret = [];
+        .map((String line) => line.trim())
+        .where((String line) => line.isNotEmpty)
+        .toList(growable: false);
+    final result = <String>[];
+    const textStyle = TextStyle(fontSize: fontSize);
 
-    TextStyle ts = TextStyle(fontSize: fontSize);
-
-    for (String paragraph in paragraphs) {
-      final textSpan = TextSpan(text: paragraph, style: ts);
+    for (final paragraph in paragraphs) {
       final textPainter = TextPainter(
-        text: textSpan,
+        text: TextSpan(text: paragraph, style: textStyle),
         textDirection: TextDirection.ltr,
-        maxLines: null,
-      );
-
-      textPainter.layout(maxWidth: maxWidth);
-
+      )..layout(maxWidth: maxWidth);
       final lineCount = textPainter.computeLineMetrics().length;
-
       var start = 0;
-      for (var i = 0; i < lineCount; i++) {
-        final line = textPainter.getLineBoundary(TextPosition(offset: start));
-        ret.add(paragraph.substring(line.start, line.end).trim());
-        start = line.end;
+      for (var index = 0;
+          index < lineCount && start < paragraph.length;
+          index++) {
+        final boundary = textPainter.getLineBoundary(
+          TextPosition(offset: start),
+        );
+        if (boundary.end <= start) {
+          break;
+        }
+        result.add(paragraph.substring(boundary.start, boundary.end).trim());
+        start = boundary.end;
       }
     }
-    return ret;
+    return result;
   }
 }

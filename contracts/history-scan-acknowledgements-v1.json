@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "acknowledgements": [
+    {
+      "id": "synthetic-provider-token-history-scan-test",
+      "pattern": "provider_token",
+      "path": "services/qualification/test_history_scan.py",
+      "fingerprint": "82be8a4d9cdebab78235e6d0618fdea34065fcb6f498073283ff4ec7376e551a",
+      "classification": "synthetic_test_fixture",
+      "reason": "Exact non-production token used to verify redacted provider-token detection."
+    },
+    {
+      "id": "synthetic-provider-token-g7-history-patch",
+      "pattern": "provider_token",
+      "path": "tools/g7-history-fixture.patch",
+      "fingerprint": "82be8a4d9cdebab78235e6d0618fdea34065fcb6f498073283ff4ec7376e551a",
+      "classification": "synthetic_test_fixture",
+      "reason": "Historical patch fixture contains the same exact non-production detector token."
+    },
+    {
+      "id": "invalid-signing-symlink-fixture-exact-historical-blob",
+      "pattern": "private_key",
+      "path": "services/qualification/test_external_evidence_signing_transaction.py",
+      "object": "dc79b851c3b9dfd91fa013cbf2fcb6c4b18bf730",
+      "fingerprint": "3021d90eb9437b2d8f30e8363695c4418b5e5f1870801b5c317e9398ee0f572d",
+      "classification": "synthetic_test_fixture",
+      "reason": "This exact historical blob contains an invalid PEM sentinel for a pre-parse symlink rejection test, not signing material. The replacement uses plain invalid bytes. Pinning the complete Git blob prevents real keys or altered content at the same path from inheriting this exception."
+    },
+    {
+      "id": "invalid-signing-symlink-fixture-initial-historical-blob",
+      "pattern": "private_key",
+      "path": "services/qualification/test_external_evidence_signing_transaction.py",
+      "object": "0e9f2a4d490a04f6b687c514e573f42465fbf339",
+      "fingerprint": "3021d90eb9437b2d8f30e8363695c4418b5e5f1870801b5c317e9398ee0f572d",
+      "classification": "synthetic_test_fixture",
+      "reason": "Exact initial historical version of the same invalid symlink-test sentinel; only formatting and the expected exception type changed later. The complete Git blob pin prevents this exception applying to any future key-shaped content."
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "extends_registry": "docs/G10_MODULES.json",
+  "scope": "Reverse ownership of tracked files in the twelve source roots; not semantic documentation completeness",
+  "modules": [
+    {
+      "id": "agent-os-plugin",
+      "owner": "developer-platform",
+      "lifecycle": "development_reference",
+      "source_roots": ["plugins/hepta-glasses-agent-os"],
+      "documentation": ["plugins/hepta-glasses-agent-os/DEVELOPMENT.md","docs/development/MODULE_HANDOFF.md#agent-os-plugin"],
+      "tests": ["services/qualification/test_source_coverage.py","adapters/mcp/test_mcp_server.py"],
+      "contracts": ["plugins/hepta-glasses-agent-os/.mcp.json","schemas/tool-request.schema.json","schemas/tool-receipt.schema.json"],
+      "external_gates": ["Host plugin installation and compatibility qualification; no physical effects or production credentials permitted"]
+    }
+  ],
+  "module_extensions": [
+    {"id":"mobile-shell","source_roots":["lib/utils"],"documentation":["docs/development/MODULE_HANDOFF.md#mobile-shell"]},
+    {"id":"edge-runtime","source_roots":["lib/runtime/runtime.dart"],"documentation":["docs/development/MODULE_HANDOFF.md#edge-runtime"]},
+    {"id":"g1-protocol-features","source_roots":["lib/runtime/packet_codec.dart"],"documentation":["docs/development/MODULE_HANDOFF.md#g1-protocol-features"]},
+    {"id":"audit-journal","source_roots":["lib/runtime/privacy_safe_log.dart"],"documentation":["docs/development/MODULE_HANDOFF.md#audit-journal"]},
+    {"id":"android-native","source_roots":["android"],"documentation":["docs/development/MODULE_HANDOFF.md#android-native"]},
+    {"id":"ios-native","source_roots":["ios"],"documentation":["docs/development/MODULE_HANDOFF.md#ios-native"]},
+    {
+      "id":"identity-control-plane",
+      "source_roots":["services/control_plane/__init__.py","services/control_plane/durable_state.py","services/control_plane/durable_identity.py","services/control_plane/identity_authority.py"],
+      "documentation":["docs/development/MODULE_HANDOFF.md#identity-control-plane","docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md","docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md","docs/development/DURABLE_IDENTITY.md","docs/operations/IDENTITY_AUTHORITY_RUNBOOK.md","docs/development/IDENTITY_ENROLLMENT_FRESHNESS.md"],
+      "contracts":["contracts/realtime-speech-custody-v2.json","contracts/identity-authority-v1.json"],
+      "tests":["services/control_plane/test_durable_identity.py","services/control_plane/test_identity_authority.py","services/control_plane/test_identity_enrollment_freshness.py"]
+    },
+    {
+      "id":"capability-control-plane",
+      "source_roots":["services/control_plane/bounded_calls.py","services/control_plane/durable_capabilities.py","services/control_plane/google_calendar.py","services/control_plane/capability_suspension.py"],
+      "tests":["services/control_plane/test_capability_boundaries.py","services/control_plane/test_durable_capabilities.py","services/control_plane/test_google_calendar.py","services/control_plane/test_capability_schema_integrity.py","services/control_plane/test_capability_suspension.py"],
+      "documentation":["docs/development/REFERENCE_RUNTIME_HARDENING.md","docs/development/MODULE_HANDOFF.md#capability-control-plane","docs/development/DURABLE_CAPABILITIES.md","docs/operations/DURABLE_CAPABILITY_RUNBOOK.md","docs/development/GOOGLE_CALENDAR_CAPABILITY.md","docs/operations/GOOGLE_CALENDAR_CAPABILITY_RUNBOOK.md","docs/development/CAPABILITY_REVOCATION_SAFETY.md"],
+      "contracts":["contracts/capability-reference-v2.json","contracts/durable-capability-v1.json","contracts/google-calendar-capability-v1.json"]
+    },
+    {
+      "id":"memory",
+      "source_roots":["services/skills/durable_memory.py","services/skills/durable_memory_schema.py"],
+      "tests":["services/skills/test_memory_boundaries.py","services/skills/test_durable_memory.py","services/skills/test_durable_memory_schema.py","services/skills/test_durable_memory_component_identity.py"],
+      "documentation":["docs/development/REFERENCE_RUNTIME_HARDENING.md","docs/development/MODULE_HANDOFF.md#memory","docs/development/DURABLE_MEMORY.md","docs/development/MEMORY_COMPONENT_IDENTITY.md"],
+      "contracts":["contracts/durable-memory-v1.json"]
+    },
+    {
+      "id":"skills-registry",
+      "source_roots":["services/skills/__init__.py","services/skills/signed_package.py","services/skills/signed_registry.py","services/skills/data_vm.py"],
+      "documentation":["docs/development/MODULE_HANDOFF.md#skills-registry","docs/development/SIGNED_SKILLS.md","docs/operations/SIGNED_SKILLS_RUNBOOK.md","docs/development/DATA_SKILL_RUNTIME.md","docs/operations/DATA_SKILL_RUNTIME_RUNBOOK.md"],
+      "tests":["services/skills/test_signed_registry.py","services/skills/test_data_vm.py"],
+      "contracts":["contracts/signed-skill-package-v1.json","contracts/data-skill-runtime-v1.json"]
+    },
+    {"id":"qualification-release","source_roots":["services/__init__.py","tools/__init__.py","test"],"tests":["services/qualification/test_history_object_scope.py","services/qualification/test_g10_structured_controls.py"],"documentation":["docs/development/MODULE_HANDOFF.md#qualification-release"]},
+    {"id":"repository-governance","source_roots":["tools/validate_source_coverage.py","tools/repository_snapshot.py","docs/MODULE_COVERAGE.json","tools/validate_module_handoff.py","docs/MODULE_HANDOFF.json","tools/server_provider_boundary.py"],"tests":["services/qualification/test_source_coverage.py","services/qualification/test_module_handoff.py","services/qualification/test_handoff_status_drift.py","services/qualification/test_server_provider_boundary.py","services/qualification/test_calendar_provider_boundary.py"],"documentation":["docs/development/SOURCE_COVERAGE_AND_STATE.md","docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md","docs/development/MODULE_HANDOFF.md#repository-governance","docs/development/MODULE_HANDOFF.md","docs/development/SERVER_PROVIDER_BOUNDARY.md"],"contracts":["contracts/server-provider-boundary-v1.json"]},
+    {"id":"native-dependencies","source_roots":["tools/native","third_party"],"documentation":["docs/development/MODULE_HANDOFF.md#native-dependencies"]},
+    {"id":"mcp-adapter","source_roots":["adapters/__init__.py"],"documentation":["docs/development/MODULE_HANDOFF.md#mcp-adapter"]},
+    {"id":"policy-tool-gateway","documentation":["docs/development/MODULE_HANDOFF.md#policy-tool-gateway"]},
+    {"id":"g1-transport","documentation":["docs/development/MODULE_HANDOFF.md#g1-transport"]},
+    {"id":"assistant-speech","documentation":["docs/development/MODULE_HANDOFF.md#assistant-speech","docs/development/SPEECH_BOOTSTRAP_CUSTODY.md","docs/operations/SPEECH_BOOTSTRAP_RUNBOOK.md"],"source_roots":["services/model_gateway/speech.py"],"tests":["services/model_gateway/test_speech_custody.py"]},
+    {"id":"digital-twin","documentation":["docs/development/MODULE_HANDOFF.md#digital-twin"]},
+    {"id":"model-gateway-service","documentation":["docs/development/MODULE_HANDOFF.md#model-gateway-service","docs/development/DURABLE_MODEL_GATEWAY.md","docs/operations/DURABLE_MODEL_GATEWAY_RUNBOOK.md","docs/development/MODEL_RECOVERY_INVENTORY.md"],"source_roots":["services/model_gateway/responses_provider.py","services/model_gateway/recovery_inventory.py"],"tests":["services/model_gateway/test_production.py","services/model_gateway/test_model_boundaries.py","services/model_gateway/test_responses_provider.py","services/model_gateway/test_model_send_admission.py","services/model_gateway/test_recovery_inventory.py"],"contracts":["contracts/durable-model-gateway-v2.json"]},
+    {"id":"realtime-control-plane","documentation":["docs/development/MODULE_HANDOFF.md#realtime-control-plane","docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md","docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md","docs/development/REALTIME_ADMISSION.md","docs/operations/REALTIME_ADMISSION_RUNBOOK.md","docs/development/REALTIME_PROVIDER_BINDING.md"],"source_roots":["services/control_plane/durable_realtime.py","services/control_plane/realtime_recovery.py","services/control_plane/realtime_provider_binding.py"],"tests":["services/control_plane/test_durable_realtime.py","services/control_plane/test_realtime_custody.py","services/control_plane/test_realtime_admission.py","services/control_plane/test_realtime_recovery_budget.py","services/control_plane/test_realtime_result_custody.py","services/control_plane/test_realtime_provider_binding.py"],"contracts":["contracts/realtime-speech-custody-v2.json","contracts/realtime-admission-v1.json"]},
+    {"id":"codex-worker","documentation":["docs/development/MODULE_HANDOFF.md#codex-worker"]},
+    {"id":"contracts-compatibility","documentation":["docs/development/MODULE_HANDOFF.md#contracts-compatibility"],"source_roots":["contracts/conformance"],"tests":["services/qualification/test_cross_language_conformance.py","test/runtime/canonical_json_conformance_test.dart"],"contracts":["contracts/conformance/canonical-json-v1.json"]},
+    {"id":"external-evidence-authentication","documentation":["docs/development/MODULE_HANDOFF.md#external-evidence-authentication"]},
+    {"id":"latest-head-ci-custody","documentation":["docs/development/MODULE_HANDOFF.md#latest-head-ci-custody"]},
+    {"id":"authority-quorum-review-integrity","documentation":["docs/development/MODULE_HANDOFF.md#authority-quorum-review-integrity","docs/development/ADMISSION_CONTINUITY.md"],"source_roots":["tools/external_evidence/committed_snapshot.py"],"tests":["services/qualification/test_committed_snapshot.py","services/qualification/test_committed_snapshot_signed.py"]}
+  ],
+  "ownership_overrides": {
+    "android/app/src/main/cpp":"native-dependencies",
+    "tools/validate_external_evidence.py":"authority-quorum-review-integrity"
+  }
+}
