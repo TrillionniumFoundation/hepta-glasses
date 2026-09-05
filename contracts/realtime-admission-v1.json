@@ -19,14 +19,15 @@
   },
   "storage": {
     "component": "realtime",
-    "version": 2,
-    "layout_changed": false,
+    "version": 3,
+    "layout_changed": true,
     "unmarked_existing_tables": "reject; no synthesized attempts",
     "incomplete_marked_schema": "reject; no missing outbox recreation",
-    "old_binary_fencing": false,
+    "old_binary_fencing": "on reopening only; stop all already-running v2 processes",
     "mixed_version_deployment_supported": false,
     "existing_ticket_deadlines_preserved": true,
-    "anti_rollback": false
+    "anti_rollback": false,
+    "migration": "explicit offline v2-to-v3 with required new bounded post-upgrade recovery allowances; no reset on v3"
   },
   "deadlines": {
     "maximum_ticket_seconds": 300,
@@ -45,7 +46,8 @@
   "tests": [
     "services/control_plane/test_durable_realtime.py",
     "services/control_plane/test_realtime_custody.py",
-    "services/control_plane/test_realtime_admission.py"
+    "services/control_plane/test_realtime_admission.py",
+    "services/control_plane/test_realtime_recovery_budget.py"
   ],
   "not_provided": [
     "real provider exchange",
@@ -56,5 +58,18 @@
     "encrypted metadata and bounded service deployment",
     "independent acceptance"
   ],
-  "claim_ceiling": "Local source and regression behavior, not full HG-0087 closure, physical-device or production qualification."
+  "claim_ceiling": "Local source and regression behavior, not full HG-0087 closure, physical-device or production qualification.",
+  "recovery_budget": {
+    "implementation": "services/control_plane/realtime_recovery.py",
+    "default_readbacks_per_session": 8,
+    "default_revokes_per_known_job": 8,
+    "maximum_each": 32,
+    "reserve_before_io": true,
+    "refund_on_timeout_crash_or_saturation": false,
+    "reset_api": false,
+    "configuration_change_on_reopen": "reject",
+    "selection": "non-exhausted pending jobs, least reservations used then job ID",
+    "exhausted_work": "retained pending; explicit operator escalation, no new activation",
+    "pre_v3_history": "uncounted; migration reports unknown historical usage and new allowance"
+  }
 }

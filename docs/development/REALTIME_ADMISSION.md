@@ -1,7 +1,9 @@
 # Realtime activation admission, current time and cleanup custody
 
 Status: HG-0087/realtime source increment; aggregate remains OPEN. Owner: cloud.
-Implementation: `services/control_plane/durable_realtime.py`.
+Recovery budgets and the explicit v2-to-v3 upgrade are specified below.
+Implementation: `services/control_plane/durable_realtime.py` and
+`services/control_plane/realtime_recovery.py`.
 API supplement: `contracts/realtime-admission-v1.json`.
 Operations: `docs/operations/REALTIME_ADMISSION_RUNBOOK.md`.
 The previous realtime custody design still describes subject/generation binding;
@@ -30,7 +32,8 @@ Legacy callers fail visibly instead of silently overriding current authority.
 | `require_generation(session_id, generation)` | Check local active generation, not independent user authentication or a device-effect lease |
 | `revoke(session_id, timeout_seconds=5)` | Commit local terminal revocation and cleanup intent before trying remote cleanup |
 | `drain_revocations(limit=20, timeout_seconds=5)` | Process a bounded page under one shared caller budget; return the number of pending jobs |
-| `pending_recovery(limit=100)` | Bounded local inventory, not an automatic background worker |
+| `pending_recovery(limit=100)` | Bounded local inventory, including exhausted pending work; not an automatic background worker |
+| `recovery_status(session_id)` | Local lookup/cleanup attempt counters and exhaustion summary; never an independent cleanup receipt |
 
 A ticket deadline authorizes completion of INITIAL activation, including an
 uncertain attempt recovered later. It is NOT the maximum lifetime of a session
@@ -41,13 +44,14 @@ Do not claim session-lifetime enforcement from this admission fix.
 
 ## Reproduced source defects
 
-The parent implementation accepted `now` from each call, checked it once before
+At predecessor e2085a7b, the implementation accepted `now` from each call and
+checked it once before
 provider work and did not carry its ticket expiry into the result transaction.
 With an actual parent-code SQLite database, a ticket expiring at 1001 and a
 provider fixture returning at host time 1002 still produced `state=active`.
 An unresolved attempt could likewise be restored long after admission expiry.
 
-The predecessor also reused a full timeout for lookup and cleanup, and for every
+That predecessor also reused a full timeout for lookup and cleanup, and for every
 item in a cleanup batch. The new caller budget is a monotonic absolute deadline
 shared by successive stages. SQLite lock waiting retains its separate engine
 bound; these application checks are not a hard realtime scheduler guarantee.
@@ -119,19 +123,30 @@ verify platform attestation or construct independent cancellation evidence.
 
 ## Configuration, compatibility and resource limits
 
-Storage layout and marker remain `realtime` version 2. Intact marked v2 databases
-reopen WITHOUT row rewriting, and their existing ticket deadlines are preserved.
-New startup rejects an incomplete marked schema and rejects unmarked existing
-component tables. It does not recreate a missing revoke outbox, fabricate attempt
-IDs or automatically reinterpret pre-marker state. Fresh empty databases can be
-initialized. Unknown versions fail the existing version check.
+Storage component `realtime` is now version 3. The four existing tables are
+retained; three additional tables hold the recovery policy, one lookup counter
+per session, and one revoke counter per known remote cleanup job. Fresh stores
+initialize these atomically. Existing v3 stores reject missing tables, missing
+policy/counters, noninteger/out-of-range counts and changed budget configuration.
+Counters are created with the corresponding session/job transaction, never lazily
+recreated at zero when an established record is missing.
 
-This is a source API upgrade, not an automatic schema migration. Update callers
-to inject the trusted clock, remove per-call `now`, stop/drain old application
-processes, and deploy only the new code. Since the storage marker is unchanged,
-it does NOT fence old binaries. Mixed-version operation or binary downgrade can
-restore the old unsafe admission path and is not supported by the deployment
-contract. There is no claim of production migration or rolling-upgrade safety.
+Normal startup rejects v2. Use the separate operator-only
+`migrate_realtime_v2(path, maximum_readbacks=..., maximum_revoke_attempts=...)`
+after stopping/draining all old processes. The migration opens an existing
+regular WAL database without create, verifies v2 and its intact tables, runs
+SQLite integrity checks, adds counters/policy and advances the marker in one
+transaction. It preserves every existing ticket/session/attempt/outbox row and
+absolute expiry. An error rolls back the additions and version update. Missing
+files, unmarked/unknown/incomplete state and already-upgraded v3 are rejected.
+
+Both migration limits are required: migration deliberately grants a NEW bounded
+post-upgrade recovery allowance for legacy work. Historical v2 recovery calls
+were not counted; the report says historical usage is unknown, not zero. This
+allocation is not a claim of a lifetime traffic cap over pre-v3 history, does
+not renew admission, and cannot be repeated on v3 to reset counters. Old binaries
+reject v3 on reopening, but already-open old processes are not retroactively
+stopped. Quiesce all old processes; mixed-version deployment is not supported.
 
 Ticket TTL is 1..300 seconds, default 60; records are limited to 1..1000000,
 default 100000; workers are 1..16, default 4. Caller budgets are finite in (0,60]
@@ -149,15 +164,76 @@ Run `services.control_plane.test_durable_realtime`, `test_realtime_custody` and
 custody assertions with explicit test-clock injection and add real SQLite,
 lock races, final-transaction boundary triggers, process-exit and cleanup tests.
 They use inert local providers, not live model/speech services or physical devices.
+Also run `services.control_plane.test_realtime_recovery_budget` for persistent
+budgets, queue fairness, crash reservations and offline migration.
 Run full repository ownership/handoff checks and all seven canonical jobs on the
 final head before accepting source integration; independent review is separate.
 
 HG-0087/realtime remains OPEN. Missing work includes live provider composition,
 authenticated ingress, provider/tenant binding, production session lifetime and
-revocation delivery, retention, bounded operational recovery, observability,
+revocation delivery, retention, operator escalation and service-level retry
+governance, observability,
 real remote cleanup evidence and independently witnessed deployment. No prior
 identity/speech/Memory/executor patch is included or retried by this increment.
 
 Primary engine references checked 2026-09-05:
 https://www.sqlite.org/lang_transaction.html
 https://docs.python.org/3.12/library/time.html#time.monotonic
+
+
+## Persistent recovery limits, fairness and exhaustion
+
+At parent f22d9e02, an unknown activation was reconciled twelve times across
+reopenings and caused twelve provider lookups with no durable attempt bound.
+Separately, five cleanup batches of limit one repeatedly selected a failing first
+job while the next pending job was never retried. These are local fixture
+reproductions, not actual provider incidents.
+
+`maximum_readbacks` and `maximum_revoke_attempts` default to 8, each configurable
+from 1 through 32. Values are persisted as a fixed policy: reopening with larger
+or smaller values fails rather than replenishing allowances. Every activation
+lookup reserves one per-session counter unit in a write transaction BEFORE
+provider I/O. Every known remote cleanup reserves one per-job unit likewise.
+Separate processes serialize final-slot admission through SQLite. A crash,
+worker timeout, exception, unavailable worker slot or failed result write does
+not refund that committed reservation. A transaction failure before reservation
+commit performs no network work. No reset/eviction API is supplied.
+
+A lookup budget exhausted by earlier calls produces
+`realtime_readback_budget_exhausted`, with no new provider call. Any expiry denial
+and cleanup intent discovered while checking that session is committed before
+the budget error is raised. Unavailable host time likewise cannot prevent
+pending admission from becoming locally revoked and eligible for cleanup-only
+lookup. Generation and original consumed-ticket deadlines are not refreshed.
+Already-active local replay requires no new lookup and consumes no allowance.
+
+A known revoke job with exhausted allowance remains `pending`; `revoke` returns
+the existing pending-cleanup error, never success or evidence of deletion.
+`drain_revocations` excludes exhausted pending jobs from its runnable selection
+and orders runnable jobs by least reservations used, then stable job ID. Thus a
+repeatedly failing first job cannot monopolize successive small batches. With
+concurrent drains, each actual reservation is rechecked under the write lock;
+selection snapshots do not authorize exceeding the limit. A hung call still
+uses its current batch time budget and worker permit; fairness is not a realtime
+scheduling or service-availability guarantee.
+
+Lookup and known-session revocation use independent budgets. Discovery can
+transfer pending responsibility from a lookup job to a known cleanup job without
+replenishing the original lookup counter. Repeated local revoke calls and
+re-enumeration do not reset the known job counter. Provider revoke must remain
+idempotent because a timeout/crash or concurrent permitted attempt can repeat
+cleanup; a finite budget is not an exactly-once remote deletion guarantee.
+
+`pending_recovery()` includes exhausted unresolved sessions. `recovery_status`
+reports lookup units used/limit and aggregate known cleanup attempts, pending
+jobs and exhausted pending jobs. It always labels independent evidence false.
+Exhaustion requires operator escalation with authentic provider facts, not a
+fresh activation, a rewritten expiry, a removed counter or a new empty database.
+This library does not install that operator workflow or a background scheduler.
+
+The bound is per stored session/job since creation or the explicit v3 migration;
+it is not a deployment-wide cost/rate cap, a guarantee that pending remote work
+has stopped, encrypted storage, or an anti-rollback anchor. Trusted operators
+can still defeat local state by restoring old snapshots or privileged row edits.
+Production provider binding, credential/session authority, live cleanup evidence
+and independent review remain open HG-0087 obligations.

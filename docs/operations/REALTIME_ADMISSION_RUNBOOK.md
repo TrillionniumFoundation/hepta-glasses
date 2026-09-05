@@ -13,17 +13,26 @@ client JSON or request arrival time. Validate clock operation before reopening
 mutation ingress. An invalid or regressing operation clock cannot admit a new
 session; fixing the clock does not un-revoke a denied session.
 
-Stop/drain all old service processes for this code upgrade. Marked intact v2
-storage stays v2 and is not rewritten; that SAME marker cannot keep an old binary
-from reopening it. There is no mixed-version rollout or safe binary downgrade
-claim. Do not automatically restart an old image after a failed deployment.
-Keep mutation ingress disabled while diagnosing startup or compatibility errors.
+Stop/drain all old service processes and disable new mutation ingress before
+upgrading. Storage is now realtime v3. Ordinary startup refuses v2; perform the
+explicit offline `migrate_realtime_v2` only on the existing intact WAL database.
+Both lookup and revoke attempt limits are required, from 1..32 (new-store defaults
+are 8). The migration allocates a NEW post-upgrade allowance for legacy work:
+prior v2 attempts were uncounted and must not be represented as zero.
 
-Unknown versions, preexisting unmarked tables, or a missing component table fail
-startup. Do not remove a marker, recreate an empty cleanup outbox or manufacture
-missing ticket/attempt records to make startup pass. Preserve the original local
-SQLite database and journals; privileged row changes and old snapshots are not
-protected by an external anti-rollback service in this component.
+The migration preserves all four legacy tables' rows and ticket deadlines,
+adds the three budget/policy tables and updates the marker in one transaction.
+Failure rolls back. Re-running migration on v3, changing limits on reopen,
+missing files/markers/tables, or inconsistent counters fails closed. There is no
+counter-reset or implicit migration API. An old binary rejects v3 on reopen but
+an already-running old process is not stopped by a marker. This is not a rolling
+upgrade; verify old workers have actually exited before enabling the new service.
+
+Keep SQLite and journals intact. Do not delete exhausted counter rows, recreate
+an empty cleanup table, lower a marker, restore stale snapshots or construct a
+new database to recover. The component has no externally anchored anti-rollback
+or safe destructive compaction protocol. Clock/identity problems remain separate
+operational incidents; the migration does not create consent or provider proof.
 
 ## Normal operation and time semantics
 
@@ -59,6 +68,9 @@ is unknown, not evidence of deletion. Keep remote cleanup and local denial as
 separate facts; do not issue a fabricated provider receipt.
 
 Each cleanup batch shares one caller timeout across jobs and lookup/revoke legs.
+Lookup and known-revoke attempts also consume persistent, nonrefundable budgets
+before I/O. Exhausted jobs stay pending, but the drain selects non-exhausted jobs
+with the least prior attempts so one failure cannot starve every later job.
 A consumed caller budget leaves remaining jobs for another authorized drain
 operation. SQLite locks and noncooperative worker/transport calls can still exceed
 caller waiting budgets; hard process isolation and supervisor controls remain
@@ -75,7 +87,8 @@ success to reopen it. Do not rewrite generation, consumed-ticket state or expiry
 ```bash
 python3 -m unittest services.control_plane.test_durable_realtime \
   services.control_plane.test_realtime_custody \
-  services.control_plane.test_realtime_admission -v
+  services.control_plane.test_realtime_admission \
+  services.control_plane.test_realtime_recovery_budget -v
 python3 tools/validate_repository.py
 python3 tools/validate_repository_metadata.py
 python3 tools/validate_production_authority.py
@@ -92,3 +105,23 @@ main-protection readback, actual provider/device/retention qualification and the
 known separate identity freshness defect remain unresolved acceptance conditions.
 Local SQLite/provider fixtures are not live provider or production evidence.
 Keep PR #101 Draft; no self-approval, merge, deployment, release or bypass.
+
+
+## Budget-exhaustion response
+
+Read `recovery_status(session_id)` through the authenticated operator path. A
+`realtime_readback_budget_exhausted` error or `exhausted_pending>0` is an unresolved
+remote-state incident, not successful cleanup. Preserve both the original
+admission and attempt inventories. Unknown lookup jobs remain in
+`pending_recovery` even when no further automated calls can be reserved.
+
+Escalate using the actual provider's lookup/revocation process and retain genuine
+provider facts. Do not resubmit activation, increase the stored budget, patch
+counter values or represent a local summary as independent acceptance. This
+source has no administrator reset endpoint. Operational repair outside its
+bounded automated path requires a separately reviewed procedure. A crashed
+attempt may have reached the provider; its budget remains spent. A transaction
+failure before reservation cannot be reported as a completed remote action.
+
+The tests use fixture providers only. No real provider is contacted by the test
+suite, and no automated job created here performs background work after it exits.

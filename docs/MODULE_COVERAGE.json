@@ -281,12 +281,14 @@
         "docs/operations/REALTIME_ADMISSION_RUNBOOK.md"
       ],
       "source_roots": [
-        "services/control_plane/durable_realtime.py"
+        "services/control_plane/durable_realtime.py",
+        "services/control_plane/realtime_recovery.py"
       ],
       "tests": [
         "services/control_plane/test_durable_realtime.py",
         "services/control_plane/test_realtime_custody.py",
-        "services/control_plane/test_realtime_admission.py"
+        "services/control_plane/test_realtime_admission.py",
+        "services/control_plane/test_realtime_recovery_budget.py"
       ],
       "contracts": [
         "contracts/realtime-speech-custody-v2.json",

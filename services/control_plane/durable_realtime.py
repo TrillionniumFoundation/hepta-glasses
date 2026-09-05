@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Callable, Protocol
 
 from services.control_plane.bounded_calls import BoundedCalls
+from services.control_plane import realtime_recovery as recovery
 from services.control_plane.durable_state import (
     DurableDatabase, deadline, identifier, timestamp,
 )
@@ -42,13 +43,15 @@ class RealtimeProvider(Protocol):
 class DurableRealtimeStore:
     def __init__(self, path: str, *, provider: RealtimeProvider, clock: Callable[[], int],
                  ticket_ttl_seconds: int = 60, maximum_records: int = 100000,
-                 maximum_workers: int = 4):
+                 maximum_workers: int = 4, maximum_readbacks: int = 8,
+                 maximum_revoke_attempts: int = 8):
         if type(ticket_ttl_seconds) is not int or not 1 <= ticket_ttl_seconds <= 300:
             raise ValueError("invalid ticket ttl")
         if type(maximum_records) is not int or not 1 <= maximum_records <= 1000000:
             raise ValueError("invalid record limit")
         if not callable(clock) or type(maximum_workers) is not int or not 1 <= maximum_workers <= 16:
             raise ValueError("realtime_configuration_invalid")
+        recovery.checked_limits(maximum_readbacks, maximum_revoke_attempts)
         self.clock = clock
         self._storage = DurableDatabase(path)
         self.db, self.lock = self._storage.db, self._storage.lock
@@ -58,8 +61,8 @@ class DurableRealtimeStore:
         self._calls = BoundedCalls(maximum_workers)
         try:
             with self._storage.transaction():
-                unmarked = self._storage.version("realtime", 2)
-                required = {"tickets", "sessions", "realtime_attempts", "realtime_revoke_outbox"}
+                unmarked = self._storage.version("realtime", recovery.VERSION)
+                required = recovery.LEGACY_TABLES | recovery.BUDGET_TABLES
                 tables = {row[0] for row in self.db.execute(
                     "SELECT name FROM sqlite_master WHERE type='table'")}
                 if unmarked and required & tables:
@@ -85,7 +88,10 @@ class DurableRealtimeStore:
                     "session_id TEXT NOT NULL,provider_session_id TEXT,state TEXT NOT NULL)"
                 )
                 self.db.execute("CREATE INDEX IF NOT EXISTS realtime_ticket_session ON tickets(session_id)")
-                self._storage.mark_version("realtime", 2)
+                if unmarked:
+                    recovery.create_budgets(self.db, maximum_readbacks, maximum_revoke_attempts)
+                recovery.validate_budgets(self.db, maximum_readbacks, maximum_revoke_attempts)
+                self._storage.mark_version("realtime", recovery.VERSION)
         except BaseException:
             self.close()
             raise
@@ -161,6 +167,9 @@ class DurableRealtimeStore:
                 raise DurableRealtimeError("realtime_capacity_exhausted")
             if row is None:
                 self.db.execute("INSERT INTO sessions VALUES(?,?,'new',1,NULL,NULL)", (session_id, subject))
+                self.db.execute("INSERT INTO realtime_lookup_budget VALUES(?,0)", (session_id,))
+            else:
+                recovery.usage(self.db, "lookup", session_id)
             self.db.execute(
                 "UPDATE tickets SET state='superseded' WHERE session_id=? AND state='issued'",
                 (session_id,),
@@ -191,6 +200,7 @@ class DurableRealtimeStore:
             session = self._session(session_id)
             if session["subject"] != subject or session["state"] != "new":
                 raise DurableRealtimeError("realtime_session_not_new")
+            recovery.usage(self.db, "lookup", session_id)
             generation = session["generation"]
             self.db.execute("UPDATE tickets SET state='consumed' WHERE ticket_digest=?", (digest,))
             self.db.execute("UPDATE tickets SET state='superseded' WHERE session_id=? AND state='issued'", (session_id,))
@@ -247,8 +257,17 @@ class DurableRealtimeStore:
                     return session
                 raise DurableRealtimeError("realtime_attempt_missing")
             attempt_id = attempt["attempt_id"]
-            earliest = self._now() if session["state"] != "revoked" else 0
+            earliest = 0
+            if session["state"] != "revoked":
+                try:
+                    earliest = self._now()
+                except DurableRealtimeError:
+                    pass  # _expire_pending must still persist denial on clock failure.
             self._expire_pending(session)
+            admitted = recovery.reserve(self.db, "lookup", session_id)
+        if not admitted:
+            # Keep any expiry/revocation transaction committed even at exhaustion.
+            raise DurableRealtimeError("realtime_readback_budget_exhausted")
 
         def lookup() -> RealtimeActivation | None:
             remaining = until - time.monotonic()
@@ -264,8 +283,13 @@ class DurableRealtimeStore:
 
     def _queue_revoke(self, session_id: str, provider_id: str | None) -> None:
         job_id = "provider:" + provider_id if provider_id else "lookup:" + session_id
-        self.db.execute("INSERT OR IGNORE INTO realtime_revoke_outbox VALUES(?,?,?,'pending')",
-                        (job_id, session_id, provider_id))
+        inserted = self.db.execute("INSERT OR IGNORE INTO realtime_revoke_outbox VALUES(?,?,?,'pending')",
+                                   (job_id, session_id, provider_id)).rowcount
+        if provider_id is not None:
+            if inserted:
+                self.db.execute("INSERT INTO realtime_revoke_budget VALUES(?,0)", (job_id,))
+            else:
+                recovery.usage(self.db, "revoke", job_id)
 
     def _commit_activation(self, session_id: str, attempt_id: str,
                            activation: RealtimeActivation, *, until: float, earliest: int) -> sqlite3.Row:
@@ -366,11 +390,13 @@ class DurableRealtimeStore:
 
     def _drain_known(self, job_id: str, timeout_seconds: float) -> bool:
         until = time.monotonic() + timeout_seconds
-        with self.lock:
+        with self._storage.transaction():
             job = self.db.execute("SELECT * FROM realtime_revoke_outbox WHERE job_id=?", (job_id,)).fetchone()
             if job is None or job["state"] == "completed":
                 return True
             if job["provider_session_id"] is None:
+                return False
+            if not recovery.reserve(self.db, "revoke", job_id):
                 return False
         def cleanup() -> None:
             remaining = until - time.monotonic()
@@ -390,9 +416,7 @@ class DurableRealtimeStore:
             raise DurableRealtimeError("realtime_drain_invalid")
         until = time.monotonic() + timeout_seconds
         with self.lock:
-            jobs = self.db.execute(
-                "SELECT * FROM realtime_revoke_outbox WHERE state='pending' ORDER BY job_id LIMIT ?", (limit,)
-            ).fetchall()
+            jobs = recovery.eligible_jobs(self.db, limit)
         for job in jobs:
             remaining = until - time.monotonic()
             if remaining <= 0:
@@ -406,6 +430,31 @@ class DurableRealtimeStore:
                     pass  # Pending is retained; operator retries without replaying activation.
         with self.lock:
             return self.db.execute("SELECT COUNT(*) FROM realtime_revoke_outbox WHERE state='pending'").fetchone()[0]
+
+    def recovery_status(self, session_id: str) -> dict[str, object]:
+        """Operator metadata: exhausted work is pending, never a cleanup receipt."""
+        if not identifier(session_id):
+            raise DurableRealtimeError("realtime_binding_invalid")
+        with self._storage.transaction():
+            session = self._session(session_id)
+            used, maximum = recovery.usage(self.db, "lookup", session_id)
+            _, revoke_limit = recovery.limits(self.db)
+            if self.db.execute(
+                "SELECT 1 FROM realtime_revoke_outbox o LEFT JOIN realtime_revoke_budget b USING(job_id) "
+                "WHERE o.session_id=? AND o.provider_session_id IS NOT NULL "
+                "AND (b.used IS NULL OR typeof(b.used)!='integer' OR b.used<0 OR b.used>?) LIMIT 1",
+                (session_id, revoke_limit)).fetchone():
+                raise ValueError("realtime_recovery_counter_invalid")
+            total, pending, spent, exhausted = self.db.execute(
+                "SELECT COUNT(*),COALESCE(SUM(o.state='pending'),0),COALESCE(SUM(b.used),0),"
+                "COALESCE(SUM(o.state='pending' AND b.used>=?),0) "
+                "FROM realtime_revoke_outbox o JOIN realtime_revoke_budget b USING(job_id) "
+                "WHERE o.session_id=?", (revoke_limit, session_id)).fetchone()
+            return {"session_id": session_id, "state": session["state"],
+                    "lookup": {"used": used, "limit": maximum, "exhausted": used >= maximum},
+                    "cleanup": {"jobs": total, "pending": pending, "attempts": spent,
+                                "exhausted_pending": exhausted, "limit_per_job": revoke_limit},
+                    "independent_evidence": False}
 
     def pending_recovery(self, *, limit: int = 100) -> list[str]:
         if type(limit) is not int or not 1 <= limit <= 1000:
