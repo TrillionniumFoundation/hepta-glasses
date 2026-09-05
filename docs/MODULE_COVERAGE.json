@@ -51,9 +51,10 @@
     },
     {
       "id":"memory",
-      "source_roots":["services/skills/durable_memory.py"],
-      "tests":["services/skills/test_memory_boundaries.py","services/skills/test_durable_memory.py"],
-      "documentation":["docs/development/REFERENCE_RUNTIME_HARDENING.md","docs/development/MODULE_HANDOFF.md#memory","docs/development/DURABLE_MEMORY.md"]
+      "source_roots":["services/skills/durable_memory.py","services/skills/durable_memory_schema.py"],
+      "tests":["services/skills/test_memory_boundaries.py","services/skills/test_durable_memory.py","services/skills/test_durable_memory_schema.py"],
+      "documentation":["docs/development/REFERENCE_RUNTIME_HARDENING.md","docs/development/MODULE_HANDOFF.md#memory","docs/development/DURABLE_MEMORY.md"],
+      "contracts":["contracts/durable-memory-v1.json"]
     },
     {
       "id":"skills-registry",
