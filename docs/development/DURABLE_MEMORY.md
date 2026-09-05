@@ -1,8 +1,11 @@
 # Durable Memory encrypted persistence and deletion custody
 
 Status: HG-0087 Memory source increment; aggregate remains **OPEN**. Owner: privacy.
-Implementation: `services/skills/durable_memory.py`.
-Regression: `services/skills/test_durable_memory.py`.
+Implementation: `services/skills/durable_memory.py` and
+`services/skills/durable_memory_schema.py`.
+Regression: `services/skills/test_durable_memory.py` and
+`services/skills/test_durable_memory_schema.py`.
+Contract: `contracts/durable-memory-v1.json`.
 
 ## Responsibility and trust boundary
 
@@ -20,9 +23,27 @@ A write requires current consent, an allowed data class, capacity and a current 
 
 The reference in-memory `MemoryStore` remains available for development compatibility; there is no automatic migration from its volatile process state. Production callers must deliberately compose the durable store and an approved key provider.
 
+## Current-time admission and delivery
+
+Consent and record freshness are sampled only after the SQLite write lock has been acquired. A request that waited behind another connection cannot use a time captured before that wait. Granting consent also checks its absolute expiry again after any record deletion/re-encryption work; if the consent expired or the operation clock moved backwards, the whole transaction rolls back.
+
+`remember` checks current time after lock acquisition, after external key/encryption work and after the record insert immediately before transaction completion. Expiry or an operation-local clock rollback rolls back the ciphertext row. This closes the reproduced case where a caller sampled time 100, waited behind another database writer until time 201, and inserted under consent that expired at 200.
+
+`search` and `export` recheck time after decryption. Records that expire while key service work is running are purged with the normal deletion tombstone and are not returned. These are best-effort final local checks; scheduler preemption immediately after the final sample is not an atomic clock-and-delivery guarantee. The component does not supply a trusted global clock or whole-database anti-rollback anchor.
+
+Delete, purpose revoke and subject delete sample their deletion timestamp after acquiring the write lock. A clock failure can still prevent creation of an accurately timestamped deletion tombstone; an emergency deletion service with separately persisted last-trusted time is not implemented here.
+
+## Established-schema integrity
+
+A fresh database creates the four authority tables and schema marker atomically. An established version-1 database must contain the exact schema singleton and all four tables: `memory_schema`, `memory_consents`, `memory_records` and `memory_deletions`. Missing authority tables, a missing marker row, incompatible columns, an unknown version or loss of deletion-event uniqueness fail startup. The constructor closes its connection on failure and never recreates the missing table as empty.
+
+This rule closes the reproduced failure where one pending deletion tombstone existed, `memory_deletions` was removed, and the predecessor silently created an empty table on reopen. The new code detects the loss; it cannot recover the already deleted fact. Derived lookup indexes contain no authority facts and may be rebuilt from intact tables.
+
+The layout version remains 1 because no stored column or row is added. This is a stricter reader contract, not a data migration. Stop all old binaries before rollout: an already running predecessor can still recreate missing tables because it does not contain the new check. Do not remove the marker, repair a lost table with an empty replacement, or restore an older snapshot. Production backup integrity and anti-rollback remain open requirements.
+
 ## Key rotation
 
-`rotate_subject_key(subject)` obtains the deployment's current key ID, decrypts records using their recorded older key IDs, and re-encrypts them with the current key while preserving record identity, consent and expiry. Failure rolls back the database transaction. Old keys must remain available to the key provider until all records using them have been rotated or deleted.
+`rotate_subject_key(subject)` obtains the deployment's current key ID inside the write transaction, decrypts records using their recorded older key IDs, and re-encrypts them with the current key while preserving record identity, consent and expiry. Failure rolls back the database transaction. Old keys must remain available to the key provider until all records using them have been rotated or deleted.
 
 The database never stores raw keys. This source does not implement KMS policy, HSM attestation, key escrow, key destruction evidence or compromised-key response.
 
@@ -43,13 +64,15 @@ Do not copy the SQLite database into general-purpose backups until the approved 
 Run:
 
 ```bash
-python3 -m unittest services.skills.test_durable_memory -v
-python3 -m unittest services.skills.test_memory services.skills.test_memory_boundaries -v
+python3 -m unittest services.skills.test_durable_memory \
+  services.skills.test_durable_memory_schema -v
+python3 -m unittest services.skills.test_memory \
+  services.skills.test_memory_boundaries -v
 python3 tools/validate_source_coverage.py
 python3 tools/validate_module_handoff.py
 ```
 
-The new deterministic tests cover plaintext absence in the SQLite database after checkpoint, restart recovery, authenticated metadata tampering failure, per-subject key rotation, unavailable keys, consent narrowing, expiry, paginated deletion custody and concurrent revoke/write serialization.
+The deterministic tests cover plaintext absence after checkpoint, restart recovery, authenticated metadata tampering, key rotation, unavailable keys, consent narrowing, expiry, paginated deletion custody, concurrent revoke/write serialization, missing/malformed schema state, lock-wait freshness, final write/read expiry, clock rollback and constructor lock release.
 
 These tests use a non-production fixture cipher. They do not establish KMS/HSM strength, filesystem full-disk encryption, backup deletion, multi-device propagation, production privacy review or independent acceptance.
 
