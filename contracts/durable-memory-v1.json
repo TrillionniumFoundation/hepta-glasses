@@ -9,11 +9,16 @@
   ],
   "tests": [
     "services/skills/test_durable_memory.py",
-    "services/skills/test_durable_memory_schema.py"
+    "services/skills/test_durable_memory_schema.py",
+    "services/skills/test_durable_memory_component_identity.py"
   ],
   "persistence": {
     "engine": "SQLite WAL/FULL/BEGIN IMMEDIATE",
     "version": 1,
+    "application_id": "0x484D454D",
+    "application_id_meaning": "local component identity only; not cryptographic or anti-rollback evidence",
+    "pre_marker_adoption": "only after a complete valid version-1 authority schema; rows preserved",
+    "conflicting_application_id": "reject; never overwrite",
     "required_tables": [
       "memory_schema",
       "memory_consents",
@@ -21,6 +26,8 @@
       "memory_deletions"
     ],
     "missing_or_malformed_established_state": "reject; never recreate authority tables empty",
+    "complete_table_loss_after_vacuum": "reject when the retained component application_id identifies prior custody",
+    "legacy_complete_loss_before_marker_adoption": "sqlite_sequence residue is rejected; whole-file replacement remains outside the source guarantee",
     "derived_indexes": "may be rebuilt from intact tables",
     "automatic_migration": false,
     "stale_snapshot_restore_supported": false
