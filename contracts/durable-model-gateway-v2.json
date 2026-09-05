@@ -5,13 +5,15 @@
   "owner": "ai-platform",
   "implementations": [
     "services/model_gateway/production.py",
-    "services/model_gateway/responses_provider.py"
+    "services/model_gateway/responses_provider.py",
+    "services/model_gateway/recovery_inventory.py"
   ],
   "tests": [
     "services/model_gateway/test_production.py",
     "services/model_gateway/test_model_boundaries.py",
     "services/model_gateway/test_responses_provider.py",
-    "services/model_gateway/test_model_send_admission.py"
+    "services/model_gateway/test_model_send_admission.py",
+    "services/model_gateway/test_recovery_inventory.py"
   ],
   "admission": {
     "authentication": "trusted host authenticates subject/session and exact provider data-processing consent; not client JSON",
@@ -47,7 +49,16 @@
     "claim_fencing": true,
     "late_worker_commits": false,
     "old_consent_extension": false,
-    "provider_result_binding": "exact correlation key required; transport adapter remains trusted host code"
+    "provider_result_binding": "exact correlation key required; transport adapter remains trusted host code",
+    "inventory_pagination": {
+      "function": "services.model_gateway.recovery_inventory.recoverable_page",
+      "ordering": "subject-scoped idempotency_key keyset",
+      "cursor": "next_after is last returned key only when another row exists",
+      "maximum_page": 100,
+      "provider_io": false,
+      "claim_or_readback_mutation": false,
+      "concurrent_insert_before_cursor": "requires a new scan from the empty cursor"
+    }
   },
   "denial": {
     "scopes": [
@@ -73,7 +84,8 @@
     "default_lifetime_request_rows": 4096,
     "default_combined_denial_rows": 4096,
     "default_readbacks": 3,
-    "default_workers_per_instance": 4
+    "default_workers_per_instance": 4,
+    "maximum_recovery_inventory_page": 100
   },
   "concrete_provider": {
     "profile": "openai-responses-foreground-v1",
