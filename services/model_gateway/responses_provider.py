@@ -70,6 +70,21 @@ class ResponsesProvider:
 
     def generate(self, *, question: str, context: Mapping[str, object], request_key: str,
                  timeout_seconds: float) -> ProviderResult:
+        # Bare transport API retained for trusted direct callers and wire tests.
+        # Gateway composition chooses generate_authorized instead.
+        return self._generate(question=question, context=context, request_key=request_key,
+                              timeout_seconds=timeout_seconds, authorize=None)
+
+    def generate_authorized(self, *, question: str, context: Mapping[str, object],
+                            request_key: str, timeout_seconds: float,
+                            authorize: Callable[[], None]) -> ProviderResult:
+        if not callable(authorize):
+            fail("model_provider_authorizer_required")
+        return self._generate(question=question, context=context, request_key=request_key,
+                              timeout_seconds=timeout_seconds, authorize=authorize)
+
+    def _generate(self, *, question: str, context: Mapping[str, object], request_key: str,
+                  timeout_seconds: float, authorize: Callable[[], None] | None) -> ProviderResult:
         _request_key(request_key)
         if not deadline(timeout_seconds):
             fail("model_provider_deadline_invalid")
@@ -103,6 +118,10 @@ class ResponsesProvider:
             connection = http.client.HTTPSConnection("api.openai.com", 443,
                 context=ssl.create_default_context(), timeout=remaining())
             connection.connect()
+            if authorize is not None:
+                authorize()
+            # The database callback may wait. Never re-use a pre-callback
+            # socket timeout or reset the original deadline after authorization.
             connection.sock.settimeout(remaining())
             connection.request("POST", "/v1/responses", body=payload, headers={
                 "Authorization": "Bearer " + token, "Content-Type": "application/json",

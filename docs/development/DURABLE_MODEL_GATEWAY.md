@@ -21,7 +21,9 @@ The caller authenticates subject/session, establishes actual data-processing
 consent and supplies its absolute expiry. No client JSON field proves consent.
 There is deliberately no automatic HTTP ingress wiring: `app.py` remains a
 separate deterministic development endpoint and consumer mutation authority is
-unchanged. The known identity enrollment-freshness defect is not repaired here.
+unchanged. The separate identity enrollment-freshness repair is documented in
+`docs/development/IDENTITY_ENROLLMENT_FRESHNESS.md`; independent acceptance and
+production identity integration remain open.
 
 | Method | Semantics |
 |---|---|
@@ -107,7 +109,7 @@ not fabricate recovery or silently submit another generation. The gateway's
 readback mechanism is implemented and tested with a contract fixture, but this
 specific provider profile cannot recover an answer from its correlation key.
 
-Local cancellation suppresses delivery only. The documented Responses cancellation
+Local cancellation does not terminate a remote foreground request. The documented Responses cancellation
 endpoint applies to background responses, which this profile does not create.
 Both gateway denial methods explicitly report
 `remote_cancellation_confirmed=false`. No remote job termination, charge reversal
@@ -163,7 +165,7 @@ and retain all request identities, unknown effects, scope, expiry and denials.
 
 ## Operations and verification
 
-Run the three `services.model_gateway` custody/provider suites and the full
+Run the four `services.model_gateway` custody/provider suites and the full
 repository seven-lane matrix on the final unchanged commit. The added regression
 cases use real SQLite, independent connections, actual subprocess exits and
 controlled provider/wire fixtures. They do not call the live API or use real
@@ -204,3 +206,67 @@ merge, deployment, release or protection bypass.
 
 The source contract narrows the supported profile; documentation is not evidence
 of a live tenant test or a provider's agreement to this application's guarantees.
+
+
+## Final pre-send admission after credentials and TLS
+
+The 4a1e0867 source was reproduced with its real gateway, SQLite and transport
+control flow and inert local connection fixtures: cancelling during credential
+resolution or TLS setup still issued one POST before the final result gate
+rejected delivery. Expiry during credential resolution behaved similarly. This
+is the distinction between withholding an answer and preventing prompt egress;
+no live user data or provider request was involved in the reproduction.
+
+The gateway now passes a trusted `authorize()` callback to an optional
+`generate_authorized` adapter method. The callback reopens a write transaction,
+checks the original request key/claim and nonterminal state, subject/session or
+request denial, absolute authority expiry, original monotonic caller deadline
+and unchanged provider binding. The existing transaction checks time again on
+exit. It does not issue a new grant, extend expiry or refund an attempt.
+
+`ResponsesProvider.generate_authorized` requires a callable and invokes it after
+credential lookup and TLS connection establishment, immediately before sending
+HTTP request bytes. It then recalculates the socket timeout from the SAME
+remaining transport budget; database waiting cannot refresh that budget. No
+network call runs inside the authorization transaction. On denial or validation
+failure, connection cleanup runs and no POST is made. The gateway retains its
+existing cancelled or indeterminate metadata and no-auto-replay behavior. Failed
+storage is not permission to send. Prompt/context/credential values are not put
+in the metadata ledger or error text.
+
+The gateway's public `provider` and `provider_binding` properties are readonly.
+An adapter exposing a changed binding ID fails before a new reservation, at the
+pre-send callback, and before result admission. The executing provider object is
+captured for the whole operation; a result cannot silently switch adapters.
+Binding is operator configuration, NOT proof of the credential's actual account.
+Private Python mutation, malicious adapter code and untrusted processes are not
+contained by readonly properties. That requires isolation and actual tenancy
+verification, still outside this component.
+
+Compatibility: constructor/execute arguments and storage version2 are unchanged;
+no data migration or counter reset occurs. Existing simple trusted provider
+adapters retain the old pre-call behavior if they have no checked method. They
+do NOT gain a final post-credential check merely by being registered. A malformed
+checked method is rejected. The bare `ResponsesProvider.generate` transport API
+is retained for trusted direct users/wire tests; only the gateway's checked path
+has this additional live admission guarantee. It is not public authenticated
+consent and must not be exposed as authorization from client JSON.
+
+Stop/drain old workers when rolling out this code fix; the unchanged database
+marker cannot fence old binaries. A cancellation AFTER the last check cannot
+atomically retract bytes from a subsequent socket send under arbitrary scheduler
+delay. Likewise a cancellation after sending suppresses delivery but does not
+prove remote termination, deletion, or refunded cost. Do not turn this local
+race repair into a claim of atomic cross-system revocation or production privacy
+qualification. Existing store=false and no-tools/retry/redirect policy is unchanged.
+
+Run `services.model_gateway.test_model_send_admission` together with all three
+existing model suites. Regressions exercise real SQLite, cross-connection revoke,
+expiry/claim/configuration changes, transaction-exit boundaries, conservative
+recovery and local socketpair HTTP emission/parsing. Socketpair tests are not TLS
+or live tenancy tests. The fixed-file source declaration changes only the hash
+of the reviewed transport bytes; no marker slot, scan root or exception expands.
+
+Technical reference: Python 3.13 http.client documentation (connect/request and
+connection cleanup), checked 2026-09-05:
+https://docs.python.org/3.13/library/http.client.html

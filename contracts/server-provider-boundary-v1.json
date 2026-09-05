@@ -4,7 +4,7 @@
   "entries": [
     {
       "path": "services/model_gateway/responses_provider.py",
-      "sha256": "a2d837e4956f036e3d87c2878eadb7838122f9e3530d5ddf172314b5d4dea07b",
+      "sha256": "4cbacdc38e578ee8a84e8832572898abbdba565ec633f446de32d238250c78e1",
       "role": "cloud_transport"
     },
     {

@@ -3,15 +3,26 @@
   "contract_id": "durable-model-gateway-v2",
   "parent_gap": "HG-0087",
   "owner": "ai-platform",
-  "implementations": ["services/model_gateway/production.py", "services/model_gateway/responses_provider.py"],
-  "tests": ["services/model_gateway/test_production.py", "services/model_gateway/test_model_boundaries.py", "services/model_gateway/test_responses_provider.py"],
+  "implementations": [
+    "services/model_gateway/production.py",
+    "services/model_gateway/responses_provider.py"
+  ],
+  "tests": [
+    "services/model_gateway/test_production.py",
+    "services/model_gateway/test_model_boundaries.py",
+    "services/model_gateway/test_responses_provider.py",
+    "services/model_gateway/test_model_send_admission.py"
+  ],
   "admission": {
     "authentication": "trusted host authenticates subject/session and exact provider data-processing consent; not client JSON",
     "clock": "explicit trusted integer-second host clock; rechecked after lock waiting and before result commit",
     "authority_expiry": "absolute, maximum 300 seconds; immutable across retries",
     "idempotency": "subject-scoped exact question/context/session/provider/expiry binding",
     "daily_quota": "atomic count of reserved initial attempts, no refunds; not a price or input-token cap",
-    "effect_authority": false
+    "effect_authority": false,
+    "checked_transport": "generate_authorized rechecks the original claim, denial, expiry, provider binding and deadline after credential/TLS preparation, before POST",
+    "legacy_transport": "direct generate remains a trusted transport-only API, not authenticated ingress; legacy adapters retain pre-call checks only",
+    "provider_configuration": "public provider and provider_binding are readonly; declared binding rechecked before use and result commit"
   },
   "persistence": {
     "component": "model_gateway",
@@ -25,7 +36,12 @@
     "encrypted_metadata": false,
     "old_snapshot_restore_supported": false
   },
-  "states": ["prepared", "indeterminate", "committed", "cancelled"],
+  "states": [
+    "prepared",
+    "indeterminate",
+    "committed",
+    "cancelled"
+  ],
   "recovery": {
     "after_uncertainty": "bounded readback only; never generation replay",
     "claim_fencing": true,
@@ -34,7 +50,10 @@
     "provider_result_binding": "exact correlation key required; transport adapter remains trusted host code"
   },
   "denial": {
-    "scopes": ["subject and request key", "subject and session ID"],
+    "scopes": [
+      "subject and request key",
+      "subject and session ID"
+    ],
     "unknown_tombstones": true,
     "terminal": true,
     "capacity": "suspend entire registry; do not evict denials",

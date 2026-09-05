@@ -267,7 +267,8 @@
       "tests": [
         "services/model_gateway/test_production.py",
         "services/model_gateway/test_model_boundaries.py",
-        "services/model_gateway/test_responses_provider.py"
+        "services/model_gateway/test_responses_provider.py",
+        "services/model_gateway/test_model_send_admission.py"
       ],
       "contracts": [
         "contracts/durable-model-gateway-v2.json"

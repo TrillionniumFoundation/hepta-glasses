@@ -18,8 +18,10 @@ Authenticate every caller and session out of band. Obtain actual approval to sen
 the exact question/context to the selected provider/deployment. Bound `expires_at`
 to that authority and give the gateway a trusted host `clock`. Do not accept
 subject/session/expiry directly from unauthenticated JSON. The deterministic
-`app.py` endpoint is not connected to this adapter, and this increment does not
-repair the separately blocked identity enrollment-freshness finding.
+`app.py` endpoint is not connected to this adapter. The separately published
+identity enrollment-freshness repair is documented in
+`docs/development/IDENTITY_ENROLLMENT_FRESHNESS.md`; its independent acceptance
+and production identity integration remain open.
 
 Select and qualify an exact provider model ID. `ResponsesProvider.binding_id`
 binds the model, a non-secret deployment label, fixed endpoint/profile and output
@@ -96,7 +98,8 @@ Run:
 ```bash
 python3 -m unittest services.model_gateway.test_production \
   services.model_gateway.test_model_boundaries \
-  services.model_gateway.test_responses_provider -v
+  services.model_gateway.test_responses_provider \
+  services.model_gateway.test_model_send_admission -v
 python3 tools/validate_repository.py
 python3 tools/validate_repository_metadata.py
 python3 tools/validate_production_authority.py
@@ -113,3 +116,27 @@ resolve objections. Do not transfer predecessor CI credit or dismiss the known
 identity and product blockers. A local provider fixture or wire mock is not a
 live TLS/provider, authenticated ingress, remote cancellation or production test.
 Keep Draft; no merge, automatic rollout, deployment or release.
+
+
+## Pre-send cancellation and provider configuration
+
+Use the gateway's checked `generate_authorized` composition, not a direct
+transport call, where live request denial must be rechecked after credential and
+TLS preparation. Confirm that a request cancelled in either phase issues no POST.
+The provider's account/tenant binding must remain consistent with the operator's
+vault mapping; a non-secret binding label alone does not verify account ownership.
+Do not mutate or replace a gateway's provider configuration while it is serving
+requests. Public provider/binding properties are now readonly.
+
+A failed pre-send check keeps the original attempt reserved. Do not clear it,
+renew the stored expiry, refund its budget or re-POST automatically. A known
+cancel remains cancelled; an ambiguous preparation failure remains indeterminate.
+No partial result or provider exception text may enter the caller/logs as success.
+Already-sent data cannot be retracted by this callback; use authentic provider
+facts for remote cancellation, deletion and incident response.
+
+No schema migration is required for this source fix. Drain/stop old workers for
+rollout because their unchanged v2 database marker will not reject the older
+unsafe transport path. Validate the complete new-head CI and artifact and obtain
+independent review. This increment does not provide authenticated ingress, KMS,
+mobile integration or provider qualification.

@@ -137,8 +137,11 @@ class ProductionModelGateway:
             fail("model_configuration_invalid")
         if getattr(provider, "binding_id", provider_binding) != provider_binding:
             fail("model_provider_configuration_binding_mismatch")
-        self.provider, self.clock = provider, clock
-        self.provider_binding = provider_binding
+        checked_generate = getattr(provider, "generate_authorized", None)
+        if checked_generate is not None and not callable(checked_generate):
+            fail("model_provider_configuration_invalid")
+        self._provider, self.clock = provider, clock
+        self._provider_binding = provider_binding
         self.daily_request_limit = daily_request_limit
         self.maximum_question_chars = maximum_question_chars
         self.maximum_entries, self.maximum_readbacks = maximum_entries, maximum_readbacks
@@ -176,6 +179,19 @@ class ProductionModelGateway:
         except BaseException:
             self.storage.close()
             raise
+
+    @property
+    def provider(self) -> ModelProvider:
+        return self._provider
+
+    @property
+    def provider_binding(self) -> str:
+        return self._provider_binding
+
+    def _require_provider(self, expected: ModelProvider | None = None) -> None:
+        if ((expected is not None and self.provider is not expected)
+                or getattr(self.provider, "binding_id", self.provider_binding) != self.provider_binding):
+            fail("model_provider_configuration_binding_mismatch")
 
     def close(self) -> None:
         self.storage.close()
@@ -237,6 +253,8 @@ class ProductionModelGateway:
                 "subject": subject, "session": session_id, "provider": self.provider_binding, "expires_at": expires_at}))
         except UnicodeError:
             raise ModelExecutionError("model_question_invalid") from None
+        self._require_provider()
+        provider = self.provider
         stop, claim = time.monotonic() + timeout_seconds, uuid.uuid4().hex
         with self._transaction(expiry=expires_at, stop=stop) as (db, now):
             self._authority(db, subject, session_id, idempotency_key, expires_at, now)
@@ -270,27 +288,42 @@ class ProductionModelGateway:
                            (subject, idempotency_key, fingerprint, session_id, day, expires_at, request_key, claim, until))
                 self._event(db, "dispatch_reserved", request_key, now)
 
-        def operation():
-            # Resample after worker scheduling/lock waiting. No provider call holds the DB lock.
+        def authorize() -> None:
+            # Trusted transport invokes this after credential/TLS preparation,
+            # immediately before sending prompt bytes. No provider I/O holds
+            # this transaction. Re-check the original claim, never renew it.
             with self._transaction(expiry=expires_at, stop=stop) as (db, now):
+                self._require_provider(provider)
                 current = db.execute("SELECT claim,state FROM requests WHERE request_key=?", (request_key,)).fetchone()
                 self._authority(db, subject, session_id, idempotency_key, expires_at, now)
                 if current is None or current["claim"] != claim or current["state"] not in {"prepared", "indeterminate"}:
                     fail("model_attempt_fenced")
+
+        def operation():
+            authorize()
             remaining = stop - time.monotonic()
             if remaining <= 0:
                 fail("model_deadline_expired")
             if readback:
-                return self.provider.reconcile(request_key=request_key, timeout_seconds=remaining)
-            return self.provider.generate(question=question, context=json.loads(encoded_context),
-                                          request_key=request_key, timeout_seconds=remaining)
+                return provider.reconcile(request_key=request_key, timeout_seconds=remaining)
+            checked_generate = getattr(provider, "generate_authorized", None)
+            if checked_generate is not None:
+                if not callable(checked_generate):
+                    fail("model_provider_configuration_invalid")
+                return checked_generate(question=question, context=json.loads(encoded_context),
+                    request_key=request_key, timeout_seconds=remaining, authorize=authorize)
+            # Legacy trusted adapters keep their previous pre-call guarantee;
+            # they do not acquire post-credential admission checks implicitly.
+            return provider.generate(question=question, context=json.loads(encoded_context),
+                                     request_key=request_key, timeout_seconds=remaining)
 
         outcome = self._calls.run(operation, timeout_seconds=max(0.0, stop - time.monotonic()))
         if outcome.state != "completed" or outcome.value is None:
             self._uncertain(request_key, claim, release=outcome.state != "timeout")
             fail("model_effect_indeterminate")
         try:
-            return self._commit(request_key, claim, outcome.value, stop)
+            self._require_provider(provider)
+            return self._commit(request_key, claim, outcome.value, stop, provider=provider)
         except BaseException:
             self._uncertain(request_key, claim, release=True)
             raise
@@ -300,7 +333,8 @@ class ProductionModelGateway:
         with self._transaction(denial=True) as (db, _):
             db.execute("UPDATE requests SET state='indeterminate',claim_until=CASE WHEN ? THEN 0 ELSE claim_until END WHERE request_key=? AND claim=? AND state IN ('prepared','indeterminate')", (release, key, claim))
 
-    def _commit(self, key: str, claim: str, result: ProviderResult, stop: float) -> tuple[str, ModelReceipt]:
+    def _commit(self, key: str, claim: str, result: ProviderResult, stop: float, *,
+                provider: ModelProvider) -> tuple[str, ModelReceipt]:
         if type(result) is not ProviderResult or result.request_key != key:
             fail("model_provider_binding_invalid")
         if type(result.answer) is not str or not result.answer.strip() or len(result.answer) > MAX_ANSWER_BYTES:
@@ -320,6 +354,7 @@ class ProductionModelGateway:
                 fail("model_attempt_fenced")
             expiry = row[0]
         with self._transaction(expiry=expiry, stop=stop) as (db, now):
+            self._require_provider(provider)
             row = db.execute("SELECT * FROM requests WHERE request_key=?", (key,)).fetchone()
             if row is None or row["claim"] != claim or row["state"] not in {"prepared", "indeterminate"}:
                 fail("model_attempt_fenced")
@@ -328,6 +363,7 @@ class ProductionModelGateway:
                        (digest(answer), digest(result.request_id.encode()), digest(result.receipt_id.encode()), key))
             self._event(db, "committed", key, now)
             saved = db.execute("SELECT * FROM requests WHERE request_key=?", (key,)).fetchone()
+            self._require_provider(provider)
             return result.answer, self._receipt(db, saved)
 
     def _deny(self, subject: str, target: str, *, session: bool) -> dict:
