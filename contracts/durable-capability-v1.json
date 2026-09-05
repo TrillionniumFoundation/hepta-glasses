@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "contract_id": "durable-capability-v1",
+  "parent_gap": "HG-0087",
+  "implementation": "services/control_plane/durable_capabilities.py",
+  "tests": [
+    "services/control_plane/test_durable_capabilities.py"
+  ],
+  "storage": {
+    "engine": "sqlite",
+    "journal_mode": "WAL",
+    "synchronous": "FULL",
+    "transaction": "BEGIN IMMEDIATE",
+    "component": "durable_capabilities",
+    "component_version": 1,
+    "scope": "trusted-host local metadata; not encrypted payload storage"
+  },
+  "states": [
+    "dispatching",
+    "indeterminate",
+    "succeeded",
+    "failed",
+    "denied"
+  ],
+  "admission": {
+    "commit_before_effect": [
+      "operation_intent",
+      "single_use_lease_hash",
+      "prepared_event"
+    ],
+    "idempotency_scope": [
+      "subject",
+      "idempotency_key"
+    ],
+    "fingerprint_binds": [
+      "request",
+      "task",
+      "device",
+      "action",
+      "arguments",
+      "origin",
+      "confirmation",
+      "deadline",
+      "provider_spec"
+    ],
+    "duplicate_dispatch": false,
+    "automatic_recovery_dispatch": false,
+    "r4_enabled": false
+  },
+  "provider_observation": {
+    "required_binding": [
+      "operation_id",
+      "provider_id",
+      "argument_digest"
+    ],
+    "dispositions": [
+      "applied",
+      "not_applied",
+      "unknown"
+    ],
+    "terminal_not_applied": "provider guarantee that this operation cannot later apply; absence alone is insufficient",
+    "authority": "constructed only by trusted adapter after actual provider validation; not client-supplied proof"
+  },
+  "recovery": {
+    "mode": "readback_only",
+    "reserve_readback_before_io": true,
+    "expired_request_readback": true,
+    "revoked_subject_new_dispatch": false,
+    "terminal_conflict": "quarantine; no automatic reset",
+    "stale_database_restore_permitted": false
+  },
+  "limits": {
+    "argument_json_utf8_bytes": 65536,
+    "identifier_characters": 256,
+    "provider_id_characters": 128,
+    "default_wait_seconds": 10,
+    "maximum_wait_seconds": 60,
+    "default_workers": 4,
+    "default_operations": 4096,
+    "maximum_operations": 1000000,
+    "default_readbacks": 8,
+    "maximum_readbacks": 32,
+    "maximum_inventory_page": 100
+  },
+  "not_provided": [
+    "provider-specific OAuth adapter",
+    "authenticated service ingress",
+    "cryptographic lease verification",
+    "encrypted payload vault",
+    "remote cancellation",
+    "anti-rollback recovery anchor",
+    "independent provider evidence"
+  ],
+  "claim_ceiling": "source implementation and local tests; not full HG-0087 closure or product qualification"
+}

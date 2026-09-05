@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate semantic handoff mapping against the flattened module registry."""
+"""Validate structural handoff mapping; semantic adequacy requires owner review."""
 from __future__ import annotations
 
 import json
@@ -178,11 +178,11 @@ def validate(root: Path = ROOT) -> dict[str, int]:
             primary_text(primary, base_sections, module_id)
             if row.get("profile") != machine["dimension_profile"]:
                 fail(f"{module_id} handoff dimension profile drifted")
-            require_status(
+            platform_status = require_status(
                 row.get("platform_status"),
                 label=f"{module_id}.platform_status",
             )
-            require_status(
+            evidence_ceiling = require_status(
                 row.get("evidence_ceiling"),
                 label=f"{module_id}.evidence_ceiling",
             )
@@ -194,6 +194,16 @@ def validate(root: Path = ROOT) -> dict[str, int]:
                 or "Evidence ceiling:" not in index_section
             ):
                 fail(f"{module_id} index section lacks status/ceiling")
+
+            expected_status = (
+                f"Platform status: {platform_status} Evidence ceiling: {evidence_ceiling}"
+            )
+            if (
+                index_section.count("Platform status:") != 1
+                or index_section.count("Evidence ceiling:") != 1
+                or expected_status not in " ".join(index_section.split())
+            ):
+                fail(f"{module_id} index status/ceiling differs from machine handoff")
 
             for field in ("source_roots", "documentation", "tests", "contracts"):
                 values = registry_module.get(field)

@@ -123,27 +123,27 @@
       "lifecycle": "development_reference",
       "profile": "engineering-handoff-v1",
       "index_anchor": "docs/development/MODULE_HANDOFF.md#identity-control-plane",
-      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#identity-control-plane",
-      "platform_status": "Python reference control plane; no multi-instance durability.",
-      "evidence_ceiling": "Does not prove KMS/HSM, attestation, persistent revocation, recovery or deployed identity availability."
+      "primary_document": "docs/development/DURABLE_IDENTITY.md",
+      "platform_status": "Python reference APIs plus SQLite durable identity and an authenticated signing-broker client; trusted Linux verifier host required.",
+      "evidence_ceiling": "Durable source state and signature verification do not establish deployed KMS/HSM, platform attestation, account recovery, mobile lease integration or independent acceptance."
     },
     {
       "id": "realtime-control-plane",
       "lifecycle": "development_reference",
       "profile": "engineering-handoff-v1",
       "index_anchor": "docs/development/MODULE_HANDOFF.md#realtime-control-plane",
-      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#realtime-control-plane",
-      "platform_status": "Python single-process reference broker.",
-      "evidence_ceiling": "Production provider exchange, persistence, OAuth registration, revoke propagation and live latency evidence remain open/external."
+      "primary_document": "docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md",
+      "platform_status": "Python reference APIs plus SQLite exact-attempt realtime custody, persistent revocation and a cleanup outbox on trusted local storage.",
+      "evidence_ceiling": "Source persistence and deterministic recovery tests do not establish a live provider exchange, authenticated service integration, remote cleanup or production latency."
     },
     {
       "id": "capability-control-plane",
       "lifecycle": "development_reference",
       "profile": "engineering-handoff-v1",
       "index_anchor": "docs/development/MODULE_HANDOFF.md#capability-control-plane",
-      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#capability-control-plane",
-      "platform_status": "Python deterministic reference with bounded daemon workers, not a sandbox.",
-      "evidence_ceiling": "Durable idempotency/outbox, live OAuth adapters, provider deadlines, tenant isolation and authoritative receipts remain source/deployment work."
+      "primary_document": "docs/development/DURABLE_CAPABILITIES.md",
+      "platform_status": "Python reference APIs plus a SQLite intent ledger, durable single-use leases, bounded dispatch and readback-only crash recovery; not a sandbox.",
+      "evidence_ceiling": "The durable source runner is not a provider-specific OAuth adapter, authenticated ingress, encrypted payload vault, independently verified receipt or production qualification."
     },
     {
       "id": "skills-registry",

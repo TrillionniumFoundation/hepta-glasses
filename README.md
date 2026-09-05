@@ -12,9 +12,25 @@ Start with `docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md`, `docs/REMEDI
 - `contracts/realtime-speech-custody-v2.json` defines the realtime custody patch and explicitly pending speech requirements.
 
 HG-0087 remains OPEN. Source increments now include realtime correctness,
-committed-evidence custody and durable identity/broker verification. Identity design
+committed-evidence custody, durable identity/broker verification and durable
+capability intent/readback recovery. Identity design
 and operations are in `docs/development/DURABLE_IDENTITY.md` and
 `docs/operations/IDENTITY_AUTHORITY_RUNBOOK.md`. Production integration remains
 explicitly open. Speech source is unchanged by these increments. Local tests are not exact-head CI, production tenancy, physical-device
 qualification, independent review or release evidence. Continue in PR #101
 without force-push, self-approval, self-merge or bypass.
+
+## Durable capability development
+
+`docs/development/DURABLE_CAPABILITIES.md`,
+`docs/operations/DURABLE_CAPABILITY_RUNBOOK.md` and
+`contracts/durable-capability-v1.json` describe the SQLite intent ledger,
+single-use leases, conservative restart semantics and bounded provider readback.
+It is a source component, not a deployed OAuth service or an encrypted payload
+vault. Mutations remain disabled at the consumer entry point until authenticated
+production composition and the applicable gates are satisfied.
+
+The handoff index selects the current identity, realtime and capability designs;
+these supersede the old in-memory-only descriptions for those durable components.
+The legacy reference APIs remain documented separately. Structural validation of
+26 module entries is not proof of semantic completeness or production readiness.

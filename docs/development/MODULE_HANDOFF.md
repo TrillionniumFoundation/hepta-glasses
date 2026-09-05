@@ -4,13 +4,21 @@ Status: active source-candidate supplement. The flattened registry is
 `docs/MODULE_COVERAGE.json`; this index selects the primary detailed development
 document for every one of its 26 modules. The machine mapping is
 `docs/MODULE_HANDOFF.json`, and `tools/validate_module_handoff.py` verifies exact
-identity/order, lifecycle, all required handoff dimensions, source/test/contract
-references, anchors and primary-document substance.
+identity/order, lifecycle, declared dimension profiles, source/test/contract
+references, anchors, minimum document length and exact index/status agreement.
+These are structural checks, not a proof that every engineering dimension is
+semantically complete or current with all code. Module-owner review is required.
 
 The primary documents remain authoritative; this file deliberately does not
 duplicate their protocol, state-machine or security text. Source documentation
 never promotes a reference implementation, simulator or CI result into physical,
 deployed, independent-review or release evidence.
+
+For identity, realtime and capability persistence, the primary documents below
+supersede the corresponding reference-only descriptions in the base guide.
+The reference modules still exist; a persistent subcomponent does not upgrade
+its entire module or close HG-0087. Current remaining work is tracked in
+`docs/HG0087_IMPLEMENTATION_STATUS.json`.
 
 <!-- handoff:mobile-shell -->
 ## mobile-shell
@@ -70,17 +78,17 @@ Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#model-gateway-servi
 <!-- handoff:identity-control-plane -->
 ## identity-control-plane
 
-Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#identity-control-plane`. Platform status: Python reference control plane; no multi-instance durability. Evidence ceiling: Does not prove KMS/HSM, attestation, persistent revocation, recovery or deployed identity availability.
+Primary detailed document: `docs/development/DURABLE_IDENTITY.md`. Platform status: Python reference APIs plus SQLite durable identity and an authenticated signing-broker client; trusted Linux verifier host required. Evidence ceiling: Durable source state and signature verification do not establish deployed KMS/HSM, platform attestation, account recovery, mobile lease integration or independent acceptance.
 
 <!-- handoff:realtime-control-plane -->
 ## realtime-control-plane
 
-Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#realtime-control-plane`. Platform status: Python single-process reference broker. Evidence ceiling: Production provider exchange, persistence, OAuth registration, revoke propagation and live latency evidence remain open/external.
+Primary detailed document: `docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md`. Platform status: Python reference APIs plus SQLite exact-attempt realtime custody, persistent revocation and a cleanup outbox on trusted local storage. Evidence ceiling: Source persistence and deterministic recovery tests do not establish a live provider exchange, authenticated service integration, remote cleanup or production latency.
 
 <!-- handoff:capability-control-plane -->
 ## capability-control-plane
 
-Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#capability-control-plane`. Platform status: Python deterministic reference with bounded daemon workers, not a sandbox. Evidence ceiling: Durable idempotency/outbox, live OAuth adapters, provider deadlines, tenant isolation and authoritative receipts remain source/deployment work.
+Primary detailed document: `docs/development/DURABLE_CAPABILITIES.md`. Platform status: Python reference APIs plus a SQLite intent ledger, durable single-use leases, bounded dispatch and readback-only crash recovery; not a sandbox. Evidence ceiling: The durable source runner is not a provider-specific OAuth adapter, authenticated ingress, encrypted payload vault, independently verified receipt or production qualification.
 
 <!-- handoff:skills-registry -->
 ## skills-registry

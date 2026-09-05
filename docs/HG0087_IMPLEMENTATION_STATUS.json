@@ -53,7 +53,23 @@
       "id": "capabilities",
       "owner": "capabilities",
       "status": "OPEN",
-      "acceptance": "Provider-specific OAuth, vault handles, durable encrypted outbox, recovery and authoritative readback"
+      "acceptance": "Provider-specific OAuth, vault handles, durable encrypted outbox, recovery and authoritative readback",
+      "implemented": [
+        "SQLite intent metadata, globally single-use lease consumption and audit events committed atomically before dispatch",
+        "Subject-scoped persistent idempotency with exact request, policy and provider bindings",
+        "Bounded provider calls, persistent readback budgets and readback-only recovery after process exit",
+        "Monotonic subject revocation and quarantined contradictory terminal provider observations",
+        "No raw arguments, OAuth credentials or unfiltered provider responses in the durable ledger"
+      ],
+      "tests": [
+        "services/control_plane/test_durable_capabilities.py"
+      ],
+      "remaining": [
+        "Real provider-specific OAuth adapter with vault credentials, remote idempotency, cancellation and authenticated terminal readback",
+        "Encrypted payload custody and authorized recovery ingress; the metadata-only ledger is not an encrypted outbox",
+        "Identity-backed lease validation and live downstream revocation integration",
+        "Production capacity, backup anti-rollback, retention and witnessed provider failure/recovery qualification"
+      ]
     },
     {
       "id": "speech",
@@ -90,6 +106,6 @@
     "HG-0044"
   ],
   "administrative_adoption_gap": "HG-0089",
-  "implementation_scope": "Incremental realtime, committed-evidence custody and durable identity source; not full HG-0087 closure.",
+  "implementation_scope": "Incremental realtime, committed-evidence custody, durable identity and durable capability intent/recovery source; not full HG-0087 closure.",
   "validation_scope": "Run current exact-head CI; deterministic local tests are not complete repository or E4 evidence."
 }
