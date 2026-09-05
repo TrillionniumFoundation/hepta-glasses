@@ -14,6 +14,8 @@ import threading
 from dataclasses import dataclass
 from typing import Callable, Iterable, Protocol
 
+from services.skills.durable_memory_schema import ensure_memory_schema
+
 
 class DurableMemoryError(ValueError):
     def __init__(self, code: str):
@@ -73,18 +75,12 @@ class DurableMemoryStore:
         self.db.execute("PRAGMA synchronous=FULL")
         self.db.execute("PRAGMA temp_store=MEMORY")
         self.db.execute("PRAGMA secure_delete=ON")
-        with self._tx():
-            self.db.execute("CREATE TABLE IF NOT EXISTS memory_schema(id INTEGER PRIMARY KEY CHECK(id=1),version INTEGER NOT NULL)")
-            row = self.db.execute("SELECT version FROM memory_schema WHERE id=1").fetchone()
-            if row is None:
-                self.db.execute("INSERT INTO memory_schema VALUES(1,?)", (self.VERSION,))
-            elif row[0] != self.VERSION:
-                raise ValueError("durable_memory_schema_migration_required")
-            self.db.execute("CREATE TABLE IF NOT EXISTS memory_consents(subject TEXT NOT NULL,purpose TEXT NOT NULL,classes TEXT NOT NULL,expires_at INTEGER NOT NULL,PRIMARY KEY(subject,purpose))")
-            self.db.execute("CREATE TABLE IF NOT EXISTS memory_records(memory_id TEXT PRIMARY KEY,subject TEXT NOT NULL,purpose TEXT NOT NULL,data_class TEXT NOT NULL,ciphertext BLOB NOT NULL,value_digest TEXT NOT NULL,created_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,key_id TEXT NOT NULL)")
-            self.db.execute("CREATE INDEX IF NOT EXISTS memory_records_subject ON memory_records(subject,purpose,memory_id)")
-            self.db.execute("CREATE TABLE IF NOT EXISTS memory_deletions(seq INTEGER PRIMARY KEY AUTOINCREMENT,event_id TEXT NOT NULL UNIQUE,subject TEXT NOT NULL,memory_id TEXT NOT NULL,reason TEXT NOT NULL,created_at INTEGER NOT NULL,state TEXT NOT NULL CHECK(state IN ('pending','completed')))")
-            self.db.execute("CREATE INDEX IF NOT EXISTS memory_deletions_pending ON memory_deletions(state,seq)")
+        try:
+            with self._tx():
+                ensure_memory_schema(self.db, version=self.VERSION)
+        except BaseException:
+            self.db.close()
+            raise
 
     class _Tx:
         def __init__(self, owner: "DurableMemoryStore") -> None: self.owner = owner
@@ -100,6 +96,12 @@ class DurableMemoryStore:
         except Exception: raise DurableMemoryError("durable_memory_clock_invalid") from None
         if type(value) is not int or not 0 <= value <= 253402300799:
             raise DurableMemoryError("durable_memory_clock_invalid")
+        return value
+
+    def _final_time(self, earliest: int) -> int:
+        value = self._now()
+        if value < earliest:
+            raise DurableMemoryError("durable_memory_clock_rollback")
         return value
 
     @staticmethod
@@ -124,23 +126,30 @@ class DurableMemoryStore:
 
     def grant_consent(self, consent: DurableMemoryConsent) -> None:
         subject, purpose = self._binding(consent.subject), self._binding(consent.purpose)
-        classes = self._classes(consent.allowed_data_classes); now = self._now()
-        if type(consent.expires_at) is not int or consent.expires_at <= now:
+        classes = self._classes(consent.allowed_data_classes)
+        if type(consent.expires_at) is not int or not 0 <= consent.expires_at <= 253402300799:
             raise DurableMemoryError("durable_memory_consent_invalid")
         with self._tx():
+            now = self._now()  # sample after write-lock waiting
+            if consent.expires_at <= now:
+                raise DurableMemoryError("durable_memory_consent_invalid")
             self._purge_locked(now)
             self.db.execute("INSERT INTO memory_consents VALUES(?,?,?,?) ON CONFLICT(subject,purpose) DO UPDATE SET classes=excluded.classes,expires_at=excluded.expires_at", (subject, purpose, json.dumps(sorted(classes), separators=(",", ":")), consent.expires_at))
             for row in self.db.execute("SELECT memory_id,data_class,expires_at FROM memory_records WHERE subject=? AND purpose=?", (subject, purpose)).fetchall():
                 if row["data_class"] not in classes: self._delete_locked(subject, row["memory_id"], "consent_narrowed", now)
                 elif row["expires_at"] > consent.expires_at: self._rebind_expiry_locked(row["memory_id"], consent.expires_at)
+            if self._final_time(now) >= consent.expires_at:
+                raise DurableMemoryError("durable_memory_consent_invalid")
 
     def remember(self, *, subject: str, purpose: str, data_class: str, value: str, ttl_seconds: int) -> DurableMemoryRecord:
         subject, purpose = self._binding(subject), self._binding(purpose); data_class = next(iter(self._classes([data_class])))
         if type(value) is not str or not value or type(ttl_seconds) is not int or ttl_seconds < 1: raise DurableMemoryError("durable_memory_value_invalid")
-        raw = value.encode("utf-8")
+        try: raw = value.encode("utf-8")
+        except UnicodeError: raise DurableMemoryError("durable_memory_value_invalid") from None
         if len(raw) > self.maximum_value_bytes: raise DurableMemoryError("durable_memory_value_too_large")
-        now = self._now(); memory_id = secrets.token_urlsafe(18)
+        memory_id = secrets.token_urlsafe(18)
         with self._tx():
+            now = self._now()  # sample after write-lock waiting
             self._purge_locked(now)
             consent = self.db.execute("SELECT * FROM memory_consents WHERE subject=? AND purpose=?", (subject, purpose)).fetchone()
             if consent is None or consent["expires_at"] <= now: raise DurableMemoryError("durable_memory_consent_missing")
@@ -151,8 +160,12 @@ class DurableMemoryStore:
             try: ciphertext = self.cipher.encrypt(subject=subject, key_id=key_id, plaintext=raw, aad=aad)
             except Exception: raise DurableMemoryError("durable_memory_encrypt_failed") from None
             if not isinstance(ciphertext, (bytes, bytearray)) or not ciphertext: raise DurableMemoryError("durable_memory_encrypt_failed")
+            if self._final_time(now) >= expires_at:
+                raise DurableMemoryError("durable_memory_authority_expired")
             digest = hashlib.sha256(raw).hexdigest()
             self.db.execute("INSERT INTO memory_records VALUES(?,?,?,?,?,?,?,?,?)", (memory_id, subject, purpose, data_class, bytes(ciphertext), digest, now, expires_at, key_id))
+            if self._final_time(now) >= expires_at:
+                raise DurableMemoryError("durable_memory_authority_expired")
             return DurableMemoryRecord(memory_id, subject, purpose, data_class, value, digest, now, expires_at, key_id)
 
     def _decode(self, row: sqlite3.Row) -> DurableMemoryRecord:
@@ -167,34 +180,44 @@ class DurableMemoryStore:
     def search(self, *, subject: str, purpose: str, data_classes: Iterable[str] = ()) -> list[DurableMemoryRecord]:
         subject, purpose = self._binding(subject), self._binding(purpose); requested = frozenset(data_classes)
         if requested and (requested & self.FORBIDDEN_CLASSES or not requested <= self.ALLOWED_CLASSES): raise DurableMemoryError("durable_memory_data_class_invalid")
-        now = self._now()
         with self._tx():
-            self._purge_locked(now); consent = self.db.execute("SELECT * FROM memory_consents WHERE subject=? AND purpose=?", (subject, purpose)).fetchone()
+            now = self._now(); self._purge_locked(now)
+            consent = self.db.execute("SELECT * FROM memory_consents WHERE subject=? AND purpose=?", (subject, purpose)).fetchone()
             if consent is None: return []
             allowed = frozenset(json.loads(consent["classes"])); allowed = allowed & requested if requested else allowed
-            return [self._decode(row) for row in self.db.execute("SELECT * FROM memory_records WHERE subject=? AND purpose=? ORDER BY created_at,memory_id", (subject, purpose)).fetchall() if row["data_class"] in allowed]
+            records = [self._decode(row) for row in self.db.execute("SELECT * FROM memory_records WHERE subject=? AND purpose=? ORDER BY created_at,memory_id", (subject, purpose)).fetchall() if row["data_class"] in allowed]
+            final = self._final_time(now)
+            if final >= consent["expires_at"] or any(record.expires_at <= final for record in records):
+                self._purge_locked(final)
+                records = [record for record in records if record.expires_at > final and consent["expires_at"] > final]
+            return records
 
     def export(self, *, subject: str) -> list[dict[str, object]]:
-        subject = self._binding(subject); now = self._now()
+        subject = self._binding(subject)
         with self._tx():
-            self._purge_locked(now); rows = self.db.execute("SELECT * FROM memory_records WHERE subject=? ORDER BY memory_id", (subject,)).fetchall()
-            return [{"memory_id": r.memory_id, "purpose": r.purpose, "data_class": r.data_class, "value": r.value, "created_at": r.created_at, "expires_at": r.expires_at} for r in map(self._decode, rows)]
+            now = self._now(); self._purge_locked(now)
+            rows = self.db.execute("SELECT * FROM memory_records WHERE subject=? ORDER BY memory_id", (subject,)).fetchall()
+            records = list(map(self._decode, rows)); final = self._final_time(now)
+            if any(record.expires_at <= final for record in records):
+                self._purge_locked(final)
+                records = [record for record in records if record.expires_at > final]
+            return [{"memory_id": r.memory_id, "purpose": r.purpose, "data_class": r.data_class, "value": r.value, "created_at": r.created_at, "expires_at": r.expires_at} for r in records]
 
     def delete(self, *, subject: str, memory_id: str) -> bool:
-        subject, memory_id = self._binding(subject), self._binding(memory_id); now = self._now()
-        with self._tx(): return self._delete_locked(subject, memory_id, "user_delete", now)
+        subject, memory_id = self._binding(subject), self._binding(memory_id)
+        with self._tx(): return self._delete_locked(subject, memory_id, "user_delete", self._now())
 
     def revoke_purpose(self, *, subject: str, purpose: str) -> int:
-        subject, purpose = self._binding(subject), self._binding(purpose); now = self._now()
+        subject, purpose = self._binding(subject), self._binding(purpose)
         with self._tx():
-            ids = [r[0] for r in self.db.execute("SELECT memory_id FROM memory_records WHERE subject=? AND purpose=?", (subject, purpose))]
+            now = self._now(); ids = [r[0] for r in self.db.execute("SELECT memory_id FROM memory_records WHERE subject=? AND purpose=?", (subject, purpose))]
             for memory_id in ids: self._delete_locked(subject, memory_id, "purpose_revoked", now)
             self.db.execute("DELETE FROM memory_consents WHERE subject=? AND purpose=?", (subject, purpose)); return len(ids)
 
     def delete_all(self, *, subject: str) -> int:
-        subject = self._binding(subject); now = self._now()
+        subject = self._binding(subject)
         with self._tx():
-            ids = [r[0] for r in self.db.execute("SELECT memory_id FROM memory_records WHERE subject=?", (subject,))]
+            now = self._now(); ids = [r[0] for r in self.db.execute("SELECT memory_id FROM memory_records WHERE subject=?", (subject,))]
             for memory_id in ids: self._delete_locked(subject, memory_id, "subject_deleted", now)
             self.db.execute("DELETE FROM memory_consents WHERE subject=?", (subject,)); return len(ids)
 
@@ -216,8 +239,9 @@ class DurableMemoryStore:
         self.db.execute("UPDATE memory_records SET ciphertext=?,expires_at=? WHERE memory_id=?", (bytes(ciphertext), expires_at, memory_id))
 
     def rotate_subject_key(self, *, subject: str) -> int:
-        subject = self._binding(subject); current = self._key_id(subject)
+        subject = self._binding(subject)
         with self._tx():
+            current = self._key_id(subject)
             rows = self.db.execute("SELECT * FROM memory_records WHERE subject=? ORDER BY memory_id", (subject,)).fetchall(); changed = 0
             for row in rows:
                 if row["key_id"] == current: continue
