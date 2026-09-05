@@ -15,6 +15,7 @@ from typing import Callable, Protocol
 
 from services.control_plane.bounded_calls import BoundedCalls
 from services.control_plane import realtime_recovery as recovery
+from services.control_plane import realtime_provider_binding as provider_scope
 from services.control_plane.durable_state import (
     DurableDatabase, deadline, identifier, timestamp,
 )
@@ -41,7 +42,7 @@ class RealtimeProvider(Protocol):
 
 
 class DurableRealtimeStore:
-    def __init__(self, path: str, *, provider: RealtimeProvider, clock: Callable[[], int],
+    def __init__(self, path: str, *, provider: RealtimeProvider, provider_binding: str, clock: Callable[[], int],
                  ticket_ttl_seconds: int = 60, maximum_records: int = 100000,
                  maximum_workers: int = 4, maximum_readbacks: int = 8,
                  maximum_revoke_attempts: int = 8):
@@ -52,17 +53,19 @@ class DurableRealtimeStore:
         if not callable(clock) or type(maximum_workers) is not int or not 1 <= maximum_workers <= 16:
             raise ValueError("realtime_configuration_invalid")
         recovery.checked_limits(maximum_readbacks, maximum_revoke_attempts)
+        provider_scope.checked_binding(provider_binding)
+        provider_scope.check_adapter(provider, provider_binding)
+        self._provider, self._provider_binding = provider, provider_binding
         self.clock = clock
         self._storage = DurableDatabase(path)
         self.db, self.lock = self._storage.db, self._storage.lock
-        self.provider = provider
         self.ticket_ttl_seconds = ticket_ttl_seconds
         self.maximum_records = maximum_records
         self._calls = BoundedCalls(maximum_workers)
         try:
             with self._storage.transaction():
-                unmarked = self._storage.version("realtime", recovery.VERSION)
-                required = recovery.LEGACY_TABLES | recovery.BUDGET_TABLES
+                unmarked = self._storage.version("realtime", provider_scope.VERSION)
+                required = recovery.LEGACY_TABLES | recovery.BUDGET_TABLES | provider_scope.TABLES
                 tables = {row[0] for row in self.db.execute(
                     "SELECT name FROM sqlite_master WHERE type='table'")}
                 if unmarked and required & tables:
@@ -93,11 +96,32 @@ class DurableRealtimeStore:
                 self.db.execute("CREATE INDEX IF NOT EXISTS realtime_cleanup_session ON realtime_revoke_outbox(session_id,state)")
                 if unmarked:
                     recovery.create_budgets(self.db, maximum_readbacks, maximum_revoke_attempts)
+                    provider_scope.create_scope(self.db, provider_binding)
                 recovery.validate_budgets(self.db, maximum_readbacks, maximum_revoke_attempts)
-                self._storage.mark_version("realtime", recovery.VERSION)
+                provider_scope.require_scope(self.db, provider_binding)
+                self._storage.mark_version("realtime", provider_scope.VERSION)
         except BaseException:
             self.close()
             raise
+
+    @property
+    def provider(self) -> RealtimeProvider:
+        return self._provider
+
+    @property
+    def provider_binding(self) -> str:
+        return self._provider_binding
+
+    def _scope(self) -> None:
+        if self._storage.version("realtime", provider_scope.VERSION):
+            raise ValueError("realtime_provider_scope_invalid")
+        provider_scope.require_scope(self.db, self._provider_binding)
+
+    def _checked_provider(self) -> RealtimeProvider:
+        # Call under the local lock/transaction; never hold it for provider I/O.
+        self._scope()
+        provider_scope.check_adapter(self._provider, self._provider_binding)
+        return self._provider
 
     def close(self) -> None:
         self._storage.close()
@@ -145,6 +169,7 @@ class DurableRealtimeStore:
             self._queue_revoke(session["session_id"], session["provider_session_id"])
 
     def _session(self, session_id: str) -> sqlite3.Row:
+        self._scope()
         row = self.db.execute("SELECT * FROM sessions WHERE session_id=?", (session_id,)).fetchone()
         if row is None:
             raise DurableRealtimeError("realtime_session_unknown")
@@ -156,6 +181,7 @@ class DurableRealtimeStore:
         ticket = secrets.token_urlsafe(32)
         digest = hashlib.sha256(ticket.encode()).hexdigest()
         with self._storage.transaction():
+            self._checked_provider()
             now = self._now()  # after lock waiting, never selected by the caller
             expires_at = now + self.ticket_ttl_seconds
             if not timestamp(expires_at):
@@ -180,6 +206,7 @@ class DurableRealtimeStore:
             self.db.execute("INSERT INTO tickets VALUES(?,?,?,?,?)",
                             (digest, subject, session_id, expires_at, "issued"))
             self._window(expires_at, earliest=now)
+            self._checked_provider()
         return ticket
 
     def activate(self, *, ticket: str, subject: str, session_id: str,
@@ -191,6 +218,7 @@ class DurableRealtimeStore:
         attempt_id = secrets.token_hex(16)
         until = time.monotonic() + timeout_seconds
         with self._storage.transaction():
+            self._checked_provider()
             now = self._now()
             ticket_row = self.db.execute("SELECT * FROM tickets WHERE ticket_digest=?", (digest,)).fetchone()
             if (ticket_row is None or ticket_row["subject"] != subject
@@ -211,6 +239,7 @@ class DurableRealtimeStore:
                             (session_id, attempt_id, subject, generation))
             self.db.execute("UPDATE sessions SET state='activating' WHERE session_id=?", (session_id,))
             self._window(ticket_row["expires_at"], earliest=now, until=until)
+            self._checked_provider()
 
         def dispatch() -> RealtimeActivation:
             with self._storage.transaction():
@@ -222,10 +251,11 @@ class DurableRealtimeStore:
                         or attempt["generation"] != current["generation"]):
                     raise DurableRealtimeError("realtime_session_revoked_or_stale")
                 fresh = self._window(self._attempt_expiry(current), earliest=now, until=until)
+                provider = self._checked_provider()
             remaining = min(until - time.monotonic(), ticket_row["expires_at"] - fresh)
             if remaining <= 0:
                 raise DurableRealtimeError("realtime_deadline_expired")
-            return self.provider.activate(ticket=ticket, subject=subject, session_id=session_id,
+            return provider.activate(ticket=ticket, subject=subject, session_id=session_id,
                                           timeout_seconds=remaining)
 
         outcome = self._calls.run(dispatch, timeout_seconds=max(0.0, until - time.monotonic()))
@@ -250,6 +280,7 @@ class DurableRealtimeStore:
         with self._storage.transaction():
             session = self._session(session_id)
             if session["state"] == "active":
+                self._checked_provider()
                 # Ticket expiry is an admission deadline, not a live-session TTL.
                 return session
             if session["state"] not in ("activating", "indeterminate", "revoked"):
@@ -273,10 +304,12 @@ class DurableRealtimeStore:
             raise DurableRealtimeError("realtime_readback_budget_exhausted")
 
         def lookup() -> RealtimeActivation | None:
+            with self._storage.transaction():
+                provider = self._checked_provider()
             remaining = until - time.monotonic()
             if remaining <= 0:
                 raise DurableRealtimeError("realtime_deadline_expired")
-            return self.provider.reconcile_activation(session_id=session_id, timeout_seconds=remaining)
+            return provider.reconcile_activation(session_id=session_id, timeout_seconds=remaining)
 
         outcome = self._calls.run(lookup, timeout_seconds=max(0.0, until - time.monotonic()))
         if outcome.state != "completed" or outcome.value is None:
@@ -329,6 +362,7 @@ class DurableRealtimeStore:
         cleanup = False
         cleanup_jobs: set[str] = set()
         with self._storage.transaction():
+            self._checked_provider()
             session = self._session(session_id)
             attempt = self.db.execute("SELECT * FROM realtime_attempts WHERE session_id=?", (session_id,)).fetchone()
             exact = (attempt is not None and attempt["attempt_id"] == attempt_id
@@ -368,6 +402,7 @@ class DurableRealtimeStore:
                          attempt["subject"], attempt["generation"]),
                     )
                     self._window(expiry, earliest=fresh, until=until)
+                    self._checked_provider()
                 except DurableRealtimeError as error:
                     rejection = error.code
                     if error.code == "realtime_deadline_expired":
@@ -406,6 +441,7 @@ class DurableRealtimeStore:
 
     def interrupt(self, session_id: str, *, generation: int) -> sqlite3.Row:
         with self._storage.transaction():
+            self._checked_provider()
             row = self._session(session_id)
             if row["state"] != "active":
                 raise DurableRealtimeError("realtime_session_not_active")
@@ -417,6 +453,7 @@ class DurableRealtimeStore:
 
     def require_generation(self, session_id: str, generation: int) -> sqlite3.Row:
         with self.lock:
+            self._checked_provider()
             row = self._session(session_id)
             if row["state"] != "active":
                 raise DurableRealtimeError("realtime_session_not_active")
@@ -460,6 +497,7 @@ class DurableRealtimeStore:
     def _drain_known(self, job_id: str, timeout_seconds: float) -> bool:
         until = time.monotonic() + timeout_seconds
         with self._storage.transaction():
+            self._scope()
             job = self.db.execute("SELECT * FROM realtime_revoke_outbox WHERE job_id=?", (job_id,)).fetchone()
             if job is None:
                 raise ValueError("realtime_cleanup_job_missing")
@@ -474,10 +512,16 @@ class DurableRealtimeStore:
                 # session. Charge this bounded attempt and retain pending work.
                 return False
         def cleanup() -> None:
+            with self._storage.transaction():
+                provider = self._checked_provider()
+                current = self.db.execute("SELECT * FROM realtime_revoke_outbox WHERE job_id=?", (job_id,)).fetchone()
+                if (current is None or current["session_id"] != job["session_id"]
+                        or current["provider_session_id"] != job["provider_session_id"]):
+                    raise ValueError("realtime_cleanup_binding_invalid")
             remaining = until - time.monotonic()
             if remaining <= 0:
                 raise DurableRealtimeError("realtime_deadline_expired")
-            return self.provider.revoke(provider_session_id=job["provider_session_id"], timeout_seconds=remaining)
+            return provider.revoke(provider_session_id=job["provider_session_id"], timeout_seconds=remaining)
 
         outcome = self._calls.run(cleanup, timeout_seconds=max(0.0, until - time.monotonic()))
         if outcome.state != "completed" or outcome.value is not None:
@@ -486,6 +530,7 @@ class DurableRealtimeStore:
             # are not success. This still is not independent provider evidence.
             return False
         with self._storage.transaction():
+            self._checked_provider()
             current = self.db.execute("SELECT * FROM realtime_revoke_outbox WHERE job_id=?", (job_id,)).fetchone()
             if (current is None or current["session_id"] != job["session_id"]
                     or current["provider_session_id"] != job["provider_session_id"]):
@@ -498,6 +543,7 @@ class DurableRealtimeStore:
             raise DurableRealtimeError("realtime_drain_invalid")
         until = time.monotonic() + timeout_seconds
         with self.lock:
+            self._scope()
             jobs = recovery.eligible_jobs(self.db, limit)
         for job in jobs:
             remaining = until - time.monotonic()
@@ -549,6 +595,7 @@ class DurableRealtimeStore:
         if type(limit) is not int or not 1 <= limit <= 1000:
             raise DurableRealtimeError("realtime_recovery_limit_invalid")
         with self.lock:
+            self._scope()
             return [row[0] for row in self.db.execute(
                 "SELECT session_id FROM sessions WHERE state IN ('activating','indeterminate') "
                 "UNION SELECT session_id FROM realtime_revoke_outbox WHERE state='pending' ORDER BY session_id LIMIT ?",

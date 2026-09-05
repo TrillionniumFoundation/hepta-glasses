@@ -52,7 +52,7 @@ class RealtimeCustodyTests(unittest.TestCase):
         self.store = self.open_store()
 
     def open_store(self, **kwargs):
-        store = DurableRealtimeStore(self.path, provider=self.provider, clock=lambda:10, **kwargs)
+        store = DurableRealtimeStore(self.path, provider_binding='fixture-namespace', provider=self.provider, clock=lambda:10, **kwargs)
         self.stores.append(store)
         return store
 
@@ -120,7 +120,7 @@ import os, sys
 from services.control_plane.durable_realtime import DurableRealtimeStore
 class Provider:
     def activate(self, **kwargs): os._exit(73)
-s = DurableRealtimeStore(sys.argv[1], provider=Provider(), clock=lambda:10)
+s = DurableRealtimeStore(sys.argv[1], provider_binding='fixture-namespace', provider=Provider(), clock=lambda:10)
 t = s.issue_ticket(subject="owner",session_id="crashed")
 s.activate(ticket=t,subject="owner",session_id="crashed")
 '''
@@ -128,7 +128,7 @@ s.activate(ticket=t,subject="owner",session_id="crashed")
         self.assertEqual(run.returncode, 73, run.stderr.decode())
         with closing(sqlite3.connect(path)) as db:
             self.assertEqual(db.execute("SELECT state FROM sessions").fetchone()[0], "activating")
-        recovered = DurableRealtimeStore(path, provider=self.provider, clock=lambda:10)
+        recovered = DurableRealtimeStore(path, provider_binding='fixture-namespace', provider=self.provider, clock=lambda:10)
         try:
             self.assertEqual(recovered.pending_recovery(), ["crashed"])
             self.assertEqual(recovered.reconcile("crashed")["state"], "active")

@@ -6,7 +6,7 @@ class Provider:
     def reconcile_activation(self,**kw): return self.reconciled
     def revoke(self,**kw): self.revoked=kw["provider_session_id"]
 class Tests(unittest.TestCase):
-    def setUp(self): self.t=tempfile.TemporaryDirectory(); self.p=Provider(); self.s=DurableRealtimeStore(self.t.name+"/r.db",provider=self.p,clock=lambda:1)
+    def setUp(self): self.t=tempfile.TemporaryDirectory(); self.p=Provider(); self.s=DurableRealtimeStore(self.t.name+"/r.db", provider_binding='fixture-namespace',provider=self.p,clock=lambda:1)
     def tearDown(self): self.s.close(); self.t.cleanup()
     def test_ticket_single_use_and_generation(self):
         ticket=self.s.issue_ticket(subject="u",session_id="s"); row=self.s.activate(ticket=ticket,subject="u",session_id="s")

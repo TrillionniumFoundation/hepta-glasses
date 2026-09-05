@@ -11,6 +11,7 @@ import threading
 import unittest
 from unittest.mock import patch
 
+from services.control_plane.realtime_provider_binding import migrate_realtime_v3
 from services.control_plane.bounded_calls import CallOutcome
 from services.control_plane.durable_realtime import DurableRealtimeStore, DurableRealtimeError, RealtimeActivation
 from services.control_plane.realtime_recovery import (
@@ -58,7 +59,7 @@ class RealtimeRecoveryBudgetTests(unittest.TestCase):
     def open(self, **changes):
         opts = dict(provider=self.p, clock=lambda: self.now, maximum_readbacks=2, maximum_revoke_attempts=2)
         opts.update(changes)
-        s = DurableRealtimeStore(self.path, **opts)
+        s = DurableRealtimeStore(self.path, provider_binding='fixture-namespace', **opts)
         self.addCleanup(s.close)
         return s
 
@@ -87,6 +88,7 @@ class RealtimeRecoveryBudgetTests(unittest.TestCase):
     def legacy_fixture(self):
         # Counterpart integration test uses the real hash-verified predecessor.
         with self.s._storage.transaction():
+            self.s.db.execute('DROP TABLE realtime_provider_scope')
             for t in ('realtime_lookup_budget', 'realtime_revoke_budget', 'realtime_recovery_policy'):
                 self.s.db.execute('DROP TABLE ' + t)
             self.s.db.execute("UPDATE hepta_component_schema SET version=2 WHERE component='realtime'")
@@ -296,10 +298,10 @@ class RealtimeRecoveryBudgetTests(unittest.TestCase):
     def test_missing_budget_tables_or_policy_row_fail_startup(self):
         for table in BUDGET_TABLES:
             with self.subTest(table=table),tempfile.TemporaryDirectory() as d:
-                path=d+'/r.db';s=DurableRealtimeStore(path,provider=self.p,clock=lambda:1000);s.close()
+                path=d+'/r.db';s=DurableRealtimeStore(path, provider_binding='fixture-namespace',provider=self.p,clock=lambda:1000);s.close()
                 with closing(sqlite3.connect(path)) as db,db:db.execute('DROP TABLE '+table)
                 with self.assertRaisesRegex(ValueError,'schema_integrity_invalid'):
-                    DurableRealtimeStore(path,provider=self.p,clock=lambda:1000)
+                    DurableRealtimeStore(path, provider_binding='fixture-namespace',provider=self.p,clock=lambda:1000)
         self.s.db.execute('DELETE FROM realtime_recovery_policy')
         with self.assertRaisesRegex(ValueError,'recovery_policy_invalid'):self.open()
 
@@ -323,6 +325,7 @@ class RealtimeRecoveryBudgetTests(unittest.TestCase):
         self.assertEqual(report['to_version'],VERSION)
         self.assertIn('unknown',report['historical_attempts'])
         self.assertEqual(report['additional_lookup_allowance'],2)
+        migrate_realtime_v3(self.path, provider_binding='fixture-namespace')
         self.err('realtime_activation_indeterminate',lambda:self.open().reconcile('s'))
         self.assertEqual(self.s.recovery_status('s')['lookup']['used'],1)
 
@@ -360,7 +363,7 @@ import os,sys
 from services.control_plane.durable_realtime import DurableRealtimeStore
 class P:
  def reconcile_activation(self,**kw):os._exit(31)
-s=DurableRealtimeStore(sys.argv[1],provider=P(),clock=lambda:1000,maximum_readbacks=2,maximum_revoke_attempts=2)
+s=DurableRealtimeStore(sys.argv[1], provider_binding='fixture-namespace',provider=P(),clock=lambda:1000,maximum_readbacks=2,maximum_revoke_attempts=2)
 s.reconcile('s')
 '''
         run=subprocess.run([sys.executable,'-c',script,self.path],capture_output=True,timeout=8)
@@ -377,7 +380,7 @@ import os,sys
 from services.control_plane.durable_realtime import DurableRealtimeStore
 class P:
  def revoke(self,**kw):os._exit(32)
-s=DurableRealtimeStore(sys.argv[1],provider=P(),clock=lambda:1000,maximum_readbacks=2,maximum_revoke_attempts=2)
+s=DurableRealtimeStore(sys.argv[1], provider_binding='fixture-namespace',provider=P(),clock=lambda:1000,maximum_readbacks=2,maximum_revoke_attempts=2)
 s.revoke('s')
 '''
         run=subprocess.run([sys.executable,'-c',script,self.path],capture_output=True,timeout=8)

@@ -278,18 +278,21 @@
         "docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md",
         "docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md",
         "docs/development/REALTIME_ADMISSION.md",
-        "docs/operations/REALTIME_ADMISSION_RUNBOOK.md"
+        "docs/operations/REALTIME_ADMISSION_RUNBOOK.md",
+        "docs/development/REALTIME_PROVIDER_BINDING.md"
       ],
       "source_roots": [
         "services/control_plane/durable_realtime.py",
-        "services/control_plane/realtime_recovery.py"
+        "services/control_plane/realtime_recovery.py",
+        "services/control_plane/realtime_provider_binding.py"
       ],
       "tests": [
         "services/control_plane/test_durable_realtime.py",
         "services/control_plane/test_realtime_custody.py",
         "services/control_plane/test_realtime_admission.py",
         "services/control_plane/test_realtime_recovery_budget.py",
-        "services/control_plane/test_realtime_result_custody.py"
+        "services/control_plane/test_realtime_result_custody.py",
+        "services/control_plane/test_realtime_provider_binding.py"
       ],
       "contracts": [
         "contracts/realtime-speech-custody-v2.json",

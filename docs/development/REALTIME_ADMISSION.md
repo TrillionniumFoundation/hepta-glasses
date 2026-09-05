@@ -1,7 +1,9 @@
 # Realtime activation admission, current time and cleanup custody
 
 Status: HG-0087/realtime source increment; aggregate remains OPEN. Owner: cloud.
-Recovery budgets and the explicit v2-to-v3 upgrade are specified below.
+Storage v4 adds an explicit provider namespace. Recovery budgets, preserved
+result-custody semantics and the offline upgrade sequence are specified below.
+Detailed namespace design: `docs/development/REALTIME_PROVIDER_BINDING.md`.
 Implementation: `services/control_plane/durable_realtime.py` and
 `services/control_plane/realtime_recovery.py`.
 API supplement: `contracts/realtime-admission-v1.json`.
@@ -17,7 +19,8 @@ attempt, records a matching provider result and retains cleanup when admission
 has been revoked or has expired. It is a trusted-host library, not a public
 identity endpoint, speech provider, TLS adapter or service deployment.
 
-Construction now REQUIRES `clock: Callable[[], int]`. The host must supply a
+Construction REQUIRES `clock: Callable[[], int]` and an explicit non-secret
+`provider_binding` fixed to the database and reviewed provider tenant. The host must supply a
 trusted current Unix-seconds clock, for example a service-owned time source;
 it must not be selected by an HTTP body or frozen to the request arrival time.
 The per-call `now` argument is removed from `issue_ticket` and `activate`.
@@ -123,20 +126,22 @@ verify platform attestation or construct independent cancellation evidence.
 
 ## Configuration, compatibility and resource limits
 
-Storage component `realtime` is now version 3. The four existing tables are
+Storage component `realtime` is now version 4. A checked singleton pins the
+provider namespace; the seven preexisting data/budget tables are retained.
+The four original custody tables are
 retained; three additional tables hold the recovery policy, one lookup counter
 per session, and one revoke counter per known remote cleanup job. Fresh stores
-initialize these atomically. Existing v3 stores reject missing tables, missing
+initialize these atomically. Existing v4 stores reject missing tables, missing
 policy/counters, noninteger/out-of-range counts and changed budget configuration.
 Counters are created with the corresponding session/job transaction, never lazily
 recreated at zero when an established record is missing.
 
-Normal startup rejects v2. Use the separate operator-only
+Normal startup rejects v2 and v3. For v2, first use the separate operator-only
 `migrate_realtime_v2(path, maximum_readbacks=..., maximum_revoke_attempts=...)`
 after stopping/draining all old processes. The migration opens an existing
 regular WAL database without create, verifies v2 and its intact tables, runs
 SQLite integrity checks, adds counters/policy and advances the marker in one
-transaction. It preserves every existing ticket/session/attempt/outbox row and
+transaction to reach v3. It preserves every existing ticket/session/attempt/outbox row and
 absolute expiry. An error rolls back the additions and version update. Missing
 files, unmarked/unknown/incomplete state and already-upgraded v3 are rejected.
 
@@ -147,6 +152,13 @@ allocation is not a claim of a lifetime traffic cap over pre-v3 history, does
 not renew admission, and cannot be repeated on v3 to reset counters. Old binaries
 reject v3 on reopening, but already-open old processes are not retroactively
 stopped. Quiesce all old processes; mixed-version deployment is not supported.
+
+Then call `migrate_realtime_v3(path, provider_binding=...)` to reach v4 after
+verifying the actual historical tenant out of band. This adds no recovery
+allowance and preserves every row in the seven v3 tables. Multiple owned remote
+cleanup IDs from the same local session migrate intact; cross-session duplicate
+ownership is rejected, not assigned arbitrarily. Reopened v3 code rejects v4,
+but already-running old code must still be stopped. No relabel/reset is provided.
 
 Ticket TTL is 1..300 seconds, default 60; records are limited to 1..1000000,
 default 100000; workers are 1..16, default 4. Caller budgets are finite in (0,60]
@@ -275,9 +287,9 @@ cleanup and historical session identities participate in this check; an ID canno
 be silently reused under another session. Secondary indexes support these lookups
 without scanning the complete retained inventories for each normal admission.
 
-This is LOCAL ownership in the database's assumed provider namespace. It does not
-supply a persistent tenant/provider configuration pin, authenticate a remote
-response, or prove that a trusted adapter correctly attributed an ID. Those
+This is LOCAL ownership in the database's now-pinned host provider namespace.
+The v4 pin is non-secret configuration; it does not authenticate a remote
+response or prove that a trusted adapter correctly attributed an ID. Those
 production integration requirements remain open. If legacy state is ambiguous,
 do not use that ambiguity as permission to revoke someone else's remote session;
 keep unresolved custody and escalate. Privileged database rewriting and old
@@ -307,11 +319,11 @@ revoke attempts; lookup.used reports lookup attempts. Consumers must not compare
 total pending only with known-job counts or interpret zero pending as independent
 provider evidence. independent_evidence remains false.
 
-Storage stays v3, all row layouts and recovery limits are unchanged, and only
-secondary indexes are added. Stop/drain old code before deploying this semantic
-upgrade: the unchanged marker cannot fence an old binary on reopening. The
-existing offline v2-to-v3 migration remains mandatory for a v2 database and is
-not modified by this increment. No live migration, provider exchange, credential,
+The result-custody repair at 7ff0b7f0 retained v3 and added secondary indexes.
+The current namespace increment advances storage to v4 while preserving those
+rows, budgets and conflict semantics. Stop/drain old code, follow the explicit
+v2-to-v3 step when needed, then the v3-to-v4 namespace migration. Neither step
+can stop already-open old processes or verify the provider account itself. No live migration, provider exchange, credential,
 deployment, hard worker termination or release is performed by these tests.
 
 Regression: services/control_plane/test_realtime_result_custody.py uses real
@@ -320,3 +332,15 @@ probes, write failures and a real subprocess exit during conflict cleanup. Run i
 with all prior realtime tests and the full final-head CI matrix. The known separate
 identity verdict-freshness objection and all actual HG-0087 production and
 independent acceptance conditions remain open.
+
+
+## Current provider namespace
+
+The required `provider_binding` is checked at open, new ticket/activation
+admission, current-generation reads, provider workers and final result/cleanup
+acceptance. Local revoke still commits denial when an adapter declaration drifts;
+remote cleanup stays pending instead of using the wrong namespace. Missing or
+malformed scope cannot be silently initialized on an existing store. See
+`docs/development/REALTIME_PROVIDER_BINDING.md` and its namespace/migration tests.
+All previous conflict-cleanup, lookup-summary, generation and budget guarantees
+remain; this does not introduce the separate older quarantine proposal.

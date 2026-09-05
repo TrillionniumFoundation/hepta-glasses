@@ -64,7 +64,7 @@ class RealtimeResultCustodyTests(unittest.TestCase):
             store.close()
 
     def open(self):
-        store = DurableRealtimeStore(self.path, provider=self.provider, clock=lambda:1000)
+        store = DurableRealtimeStore(self.path, provider_binding='fixture-namespace', provider=self.provider, clock=lambda:1000)
         self.stores.append(store)
         return store
 
@@ -354,7 +354,7 @@ import os,sys,time
 from services.control_plane.durable_realtime import DurableRealtimeStore,RealtimeActivation
 class P:
  def revoke(self,**kw):os._exit(37)
-s=DurableRealtimeStore(sys.argv[1],provider=P(),clock=lambda:1000)
+s=DurableRealtimeStore(sys.argv[1], provider_binding='fixture-namespace',provider=P(),clock=lambda:1000)
 a=s.db.execute("SELECT attempt_id FROM realtime_attempts WHERE session_id='s'").fetchone()[0]
 s._commit_activation('s',a,RealtimeActivation('remote-b','receipt-b'),until=time.monotonic()+5,earliest=1000)
 '''

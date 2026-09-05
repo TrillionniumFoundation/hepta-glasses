@@ -56,7 +56,7 @@ class RealtimeAdmissionTests(unittest.TestCase):
     def open(self, **changes):
         args = dict(provider=self.provider, clock=lambda: self.now, ticket_ttl_seconds=1)
         args.update(changes)
-        store = DurableRealtimeStore(self.path, **args)
+        store = DurableRealtimeStore(self.path, provider_binding='fixture-namespace', **args)
         self.addCleanup(store.close)
         return store
 
@@ -174,7 +174,7 @@ class RealtimeAdmissionTests(unittest.TestCase):
 
     def test_required_host_clock_and_obsolete_caller_time_rejected(self):
         with self.assertRaises(TypeError):
-            DurableRealtimeStore(self.path, provider=self.provider)
+            DurableRealtimeStore(self.path, provider_binding='fixture-namespace', provider=self.provider)
         with self.assertRaises(TypeError):
             self.store.issue_ticket(subject='u', session_id='s', now=1000)
         t = self.ticket()
@@ -290,10 +290,10 @@ class RealtimeAdmissionTests(unittest.TestCase):
     def test_missing_marked_tables_never_recreated(self):
         for table in ('sessions', 'tickets', 'realtime_attempts', 'realtime_revoke_outbox'):
             with self.subTest(table=table), tempfile.TemporaryDirectory() as d:
-                path = d+'/r.db'; s = DurableRealtimeStore(path, provider=self.provider, clock=lambda:1000); s.close()
+                path = d+'/r.db'; s = DurableRealtimeStore(path, provider_binding='fixture-namespace', provider=self.provider, clock=lambda:1000); s.close()
                 with closing(sqlite3.connect(path)) as db, db: db.execute('DROP TABLE '+table)
                 with self.assertRaisesRegex(ValueError, 'realtime_schema_integrity_invalid'):
-                    DurableRealtimeStore(path, provider=self.provider, clock=lambda:1000)
+                    DurableRealtimeStore(path, provider_binding='fixture-namespace', provider=self.provider, clock=lambda:1000)
                 with closing(sqlite3.connect(path)) as db:
                     self.assertIsNone(db.execute('SELECT name FROM sqlite_master WHERE name=?',(table,)).fetchone())
 
@@ -304,7 +304,7 @@ class RealtimeAdmissionTests(unittest.TestCase):
         self.assertEqual(self.store.db.execute('SELECT state FROM tickets').fetchone()[0], 'issued')
         self.assertEqual(self.store.db.execute('SELECT COUNT(*) FROM realtime_attempts').fetchone()[0], 0)
 
-    def test_intact_v2_reopen_preserves_deadline_and_pending_state(self):
+    def test_intact_v4_reopen_preserves_deadline_and_pending_state(self):
         self.uncertain(); before = [tuple(r) for r in self.store.db.execute('SELECT * FROM tickets')]
         other = self.open()
         self.assertEqual(before,[tuple(r) for r in other.db.execute('SELECT * FROM tickets')])
@@ -355,7 +355,7 @@ class Provider:
  def activate(self,**kw): now[0]=1002; return RealtimeActivation('crash-remote','crash-receipt')
  def reconcile_activation(self,**kw): return None
  def revoke(self,**kw): os._exit(29)
-s=DurableRealtimeStore(sys.argv[1],provider=Provider(),clock=lambda:now[0],ticket_ttl_seconds=1)
+s=DurableRealtimeStore(sys.argv[1], provider_binding='fixture-namespace',provider=Provider(),clock=lambda:now[0],ticket_ttl_seconds=1)
 t=s.issue_ticket(subject='u',session_id='s')
 s.activate(ticket=t,subject='u',session_id='s')
 '''

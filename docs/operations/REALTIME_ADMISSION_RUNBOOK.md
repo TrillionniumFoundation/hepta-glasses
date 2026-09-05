@@ -7,16 +7,19 @@ Contract: `contracts/realtime-admission-v1.json`. HG-0087/realtime remains OPEN.
 ## Upgrade preconditions
 
 Authenticate the host caller and subject/session before invoking this library.
-Supply a trusted current Unix-seconds clock to `DurableRealtimeStore(clock=...)`.
+Supply a trusted current Unix-seconds clock and a reviewed non-secret provider
+namespace to `DurableRealtimeStore(clock=..., provider_binding=...)`. Verify the
+actual credential/account/project mapping externally; a matching string is not
+an account proof. An adapter exposing `binding_id` must match that namespace.
 Remove the old per-call `now` argument; never replace it with a lambda capturing
 client JSON or request arrival time. Validate clock operation before reopening
 mutation ingress. An invalid or regressing operation clock cannot admit a new
 session; fixing the clock does not un-revoke a denied session.
 
 Stop/drain all old service processes and disable new mutation ingress before
-upgrading. Storage is now realtime v3. Ordinary startup refuses v2; perform the
+upgrading. Storage is now realtime v4. Ordinary startup refuses v2 and v3. For v2 perform the
 explicit offline `migrate_realtime_v2` only on the existing intact WAL database.
-Both lookup and revoke attempt limits are required, from 1..32 (new-store defaults
+For that first step both lookup and revoke attempt limits are required, from 1..32 (new-store defaults
 are 8). The migration allocates a NEW post-upgrade allowance for legacy work:
 prior v2 attempts were uncounted and must not be represented as zero.
 
@@ -26,7 +29,13 @@ Failure rolls back. Re-running migration on v3, changing limits on reopen,
 missing files/markers/tables, or inconsistent counters fails closed. There is no
 counter-reset or implicit migration API. An old binary rejects v3 on reopen but
 an already-running old process is not stopped by a marker. This is not a rolling
-upgrade; verify old workers have actually exited before enabling the new service.
+upgrade. After reaching v3, verify the actual historical provider tenant and call
+`migrate_realtime_v3(path, provider_binding=...)` explicitly. The second step
+preserves all seven old tables and spent budgets, grants no new allowance and
+adds the namespace singleton with version4. Different known cleanup IDs for one
+local session are retained. Cross-session duplicate ownership is rejected, not
+repaired by guessing. Old binaries reject v4 only on reopening; verify ALL old
+workers have actually exited before enabling the new service.
 
 Keep SQLite and journals intact. Do not delete exhausted counter rows, recreate
 an empty cleanup table, lower a marker, restore stale snapshots or construct a
@@ -89,7 +98,8 @@ python3 -m unittest services.control_plane.test_durable_realtime \
   services.control_plane.test_realtime_custody \
   services.control_plane.test_realtime_admission \
   services.control_plane.test_realtime_recovery_budget \
-  services.control_plane.test_realtime_result_custody -v
+  services.control_plane.test_realtime_result_custody \
+  services.control_plane.test_realtime_provider_binding -v
 python3 tools/validate_repository.py
 python3 tools/validate_repository_metadata.py
 python3 tools/validate_production_authority.py
@@ -158,10 +168,23 @@ them; exhausted_pending also includes exhausted lookup jobs. A revoked session
 with pending lookup has unresolved remote state even when known_pending is zero.
 Zero total pending is not a provider deletion certificate or release acceptance.
 
-No schema marker or recovery limit changes in this semantic update. Secondary
-indexes are added, but existing v3 rows are retained. Stop/drain older application
-binaries before rollout; v3 compatibility does not make the older unsafe result
-path acceptable. Do not use an automatic old-binary restart as rollback. The
+The inherited result-custody semantic repair kept v3 and added secondary
+indexes. The current provider-namespace increment requires v4 without changing
+its cleanup policy or recovery limits. Stop/drain older application binaries
+before rollout; no old unsafe provider route may remain active. Do not use an automatic old-binary restart as rollback. The
 existing explicit v2-to-v3 migration and its unknown-historical-usage disclosure
 remain in force. The tests are local fixtures; production/provider validation and
 eligible independent review are still required.
+
+
+## Namespace drift and interrupted provider work
+
+A differently configured service must not open this database or adopt its old
+remote IDs. Missing scope/marker is a storage incident; never refill or relabel it
+to resume. On an adapter declaration change, new admission and active-generation
+reads fail; local denial remains possible with intact stored scope, but remote
+cleanup must wait for the correctly configured owner. Used allowances stay spent.
+If drift occurs during provider I/O, neither an activation result nor cleanup
+acknowledgement is accepted from the changed declaration. Preserve uncertainty;
+real remote work may already have happened. Do not interpret a local error as
+remote cancellation. See `docs/development/REALTIME_PROVIDER_BINDING.md`.
