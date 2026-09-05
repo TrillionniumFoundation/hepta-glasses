@@ -10,72 +10,25 @@
       "owner": "cloud-security",
       "status": "OPEN",
       "acceptance": "Persistent identity/device/session/token/revocation, KMS/HSM and platform attestation, authenticated mobile lease integration",
-      "implemented": [
-        "SQLite subject/device/challenge/session/token/revocation repositories",
-        "Atomic nonce consumption and final token authority recheck",
-        "Ed25519-only HGAT2 verification using pinned public keys and sealed anonymous memory",
-        "Bounded authenticated HTTPS broker client with exact proof/signature response binding",
-        "Persistent revocation events and interrupted-signing recovery inventory",
-        "Broker-verdict freshness is carried into and rechecked inside final enrollment admission"
-      ],
-      "tests": [
-        "services/control_plane/test_durable_identity.py",
-        "services/control_plane/test_identity_authority.py",
-        "services/control_plane/test_identity_enrollment_freshness.py"
-      ],
-      "remaining": [
-        "Real KMS/HSM and Android/Apple verifier services behind the broker",
-        "Authenticated account and step-up lost-device replacement workflow",
-        "Mobile identity-backed mutation-authority integration",
-        "Downstream live-session revoke consumers and witnessed deployment drills"
-      ]
+      "implemented": ["SQLite subject/device/challenge/session/token/revocation repositories","Atomic nonce consumption and final token authority recheck","Ed25519-only HGAT2 verification using pinned public keys and sealed anonymous memory","Bounded authenticated HTTPS broker client with exact proof/signature response binding","Persistent revocation events and interrupted-signing recovery inventory","Broker-verdict freshness is carried into and rechecked inside final enrollment admission"],
+      "tests": ["services/control_plane/test_durable_identity.py","services/control_plane/test_identity_authority.py","services/control_plane/test_identity_enrollment_freshness.py"],
+      "remaining": ["Real KMS/HSM and Android/Apple verifier services behind the broker","Authenticated account and step-up lost-device replacement workflow","Mobile identity-backed mutation-authority integration","Downstream live-session revoke consumers and witnessed deployment drills"]
     },
     {
       "id": "model",
       "owner": "ai-platform",
       "status": "OPEN",
       "acceptance": "Production provider exchange, quotas, cancellation, receipts, retention and observability",
-      "implemented": [
-        "SQLite v2 atomic subject-scoped request/quota/event reservation with explicit provider binding and live host clock",
-        "Bounded generation/readback, persistent claim fencing, readback-only crash recovery and immutable authority expiry",
-        "Monotonic request/session delivery denial, final result authority recheck and capacity-triggered suspension",
-        "Concrete fixed-endpoint text-only foreground OpenAI Responses HTTPS adapter without retries, redirects, tools or stored responses",
-        "Final pre-send authorization recheck after credential/TLS preparation for the concrete Responses adapter",
-        "Metadata-only receipts with hashed provider IDs; no plaintext payloads or live credential fixtures"
-      ],
-      "tests": [
-        "services/model_gateway/test_production.py",
-        "services/model_gateway/test_model_boundaries.py",
-        "services/model_gateway/test_responses_provider.py",
-        "services/model_gateway/test_model_send_admission.py"
-      ],
-      "remaining": [
-        "authenticated service/mobile/session integration",
-        "live provider tenant, retention, billing and abuse qualification",
-        "remote foreground job cancellation or authoritative recovery",
-        "hard process/service isolation and production egress governance",
-        "encrypted metadata storage, retention and backup anti-rollback",
-        "production observability and independent acceptance"
-      ]
+      "implemented": ["SQLite v2 atomic subject-scoped request/quota/event reservation with explicit provider binding and live host clock","Bounded generation/readback, persistent claim fencing, readback-only crash recovery and immutable authority expiry","Monotonic request/session delivery denial, final result authority recheck and capacity-triggered suspension","Concrete fixed-endpoint text-only foreground OpenAI Responses HTTPS adapter without retries, redirects, tools or stored responses","Final pre-send authorization recheck after credential/TLS preparation for the concrete Responses adapter","Metadata-only receipts with hashed provider IDs; no plaintext payloads or live credential fixtures"],
+      "tests": ["services/model_gateway/test_production.py","services/model_gateway/test_model_boundaries.py","services/model_gateway/test_responses_provider.py","services/model_gateway/test_model_send_admission.py"],
+      "remaining": ["authenticated service/mobile/session integration","live provider tenant, retention, billing and abuse qualification","remote foreground job cancellation or authoritative recovery","hard process/service isolation and production egress governance","encrypted metadata storage, retention and backup anti-rollback","production observability and independent acceptance"]
     },
     {
       "id": "realtime",
       "owner": "cloud",
       "status": "OPEN",
-      "implemented": [
-        "persistent exact-attempt custody",
-        "monotonic revoke",
-        "recoverable activating state",
-        "durable cleanup outbox",
-        "persistent provider/tenant binding and bounded recovery budgets"
-      ],
-      "tests": [
-        "services/control_plane/test_realtime_custody.py",
-        "services/control_plane/test_realtime_admission.py",
-        "services/control_plane/test_realtime_recovery_budget.py",
-        "services/control_plane/test_realtime_result_custody.py",
-        "services/control_plane/test_realtime_provider_binding.py"
-      ],
+      "implemented": ["persistent exact-attempt custody","monotonic revoke","recoverable activating state","durable cleanup outbox","persistent provider/tenant binding and bounded recovery budgets"],
+      "tests": ["services/control_plane/test_realtime_custody.py","services/control_plane/test_realtime_admission.py","services/control_plane/test_realtime_recovery_budget.py","services/control_plane/test_realtime_result_custody.py","services/control_plane/test_realtime_provider_binding.py"],
       "acceptance": "Real provider exchange/readback adapter and authenticated service integration"
     },
     {
@@ -83,89 +36,54 @@
       "owner": "capabilities",
       "status": "OPEN",
       "acceptance": "Provider-specific OAuth, vault handles, durable encrypted outbox, recovery and authoritative readback",
-      "implemented": [
-        "SQLite intent metadata, globally single-use lease consumption and audit events committed atomically before dispatch",
-        "Subject-scoped persistent idempotency with exact request, policy and provider bindings",
-        "Bounded provider calls, persistent readback budgets and readback-only recovery after process exit",
-        "Monotonic subject revocation and quarantined contradictory terminal provider observations",
-        "No raw arguments, OAuth credentials or unfiltered provider responses in the durable ledger",
-        "Concrete Google Calendar owned single-event HTTPS create/get adapter with exact operation and event-field readback",
-        "Gateway-authorized adapter hook rechecks live lease/revocation after OAuth/TLS and before mutation; route/spec binding enforced",
-        "Reject incomplete existing capability schemas instead of recreating missing operation, lease, revocation or audit tables"
-      ],
-      "tests": [
-        "services/control_plane/test_durable_capabilities.py",
-        "services/control_plane/test_google_calendar.py",
-        "services/control_plane/test_capability_schema_integrity.py"
-      ],
-      "remaining": [
-        "Production OAuth consent and refresh-token vault, real account/calendar ownership and provider tenancy verification; the single-event adapter does not implement the complete OAuth service",
-        "Encrypted payload custody and authorized recovery ingress; the metadata-only ledger is not an encrypted outbox",
-        "Identity-backed lease validation and live downstream revocation integration",
-        "Production capacity, backup anti-rollback, retention and witnessed provider failure/recovery qualification"
-      ]
+      "implemented": ["SQLite intent metadata, globally single-use lease consumption and audit events committed atomically before dispatch","Subject-scoped persistent idempotency with exact request, policy and provider bindings","Bounded provider calls, persistent readback budgets and readback-only recovery after process exit","Monotonic subject revocation and quarantined contradictory terminal provider observations","No raw arguments, OAuth credentials or unfiltered provider responses in the durable ledger","Concrete Google Calendar owned single-event HTTPS create/get adapter with exact operation and event-field readback","Gateway-authorized adapter hook rechecks live lease/revocation after OAuth/TLS and before mutation; route/spec binding enforced","Reject incomplete existing capability schemas instead of recreating missing operation, lease, revocation or audit tables"],
+      "tests": ["services/control_plane/test_durable_capabilities.py","services/control_plane/test_google_calendar.py","services/control_plane/test_capability_schema_integrity.py"],
+      "remaining": ["Production OAuth consent and refresh-token vault, real account/calendar ownership and provider tenancy verification; the single-event adapter does not implement the complete OAuth service","Encrypted payload custody and authorized recovery ingress; the metadata-only ledger is not an encrypted outbox","Identity-backed lease validation and live downstream revocation integration","Production capacity, backup anti-rollback, retention and witnessed provider failure/recovery qualification"]
     },
     {
       "id": "speech",
       "owner": "mobile-ai",
       "status": "OPEN",
       "acceptance": "Provider broker/readback and Android PCM-to-ASR with cross-platform lifecycle/privacy integration",
-      "implemented": [
-        "SQLite reservation before broker mint so quota and session-revoke races are durable",
-        "Trusted host clock instead of caller-selected request time",
-        "Provider binding and strict short-lived ticket envelope validation",
-        "Final revocation/expiry recheck before issuing bootstrap and on one-shot consume",
-        "Late-ticket revoke-after-revoke fence for broker mint races",
-        "Indeterminate mint recovery inventory and duplicate-mint denial"
-      ],
-      "tests": [
-        "services/model_gateway/test_speech_custody.py"
-      ],
-      "remaining": [
-        "real speech provider broker and authoritative mint/readback integration",
-        "Android PCM-to-ASR implementation",
-        "authenticated mobile identity/session binding and downstream revoke delivery",
-        "stream lifecycle/finality/privacy integration across Android and iOS",
-        "durable remote revoke retry/outbox and production recovery procedure",
-        "encrypted metadata, retention/deletion and backup anti-rollback",
-        "physical device latency/accuracy/locale qualification and independent acceptance"
-      ]
+      "implemented": ["SQLite reservation before broker mint so quota and session-revoke races are durable","Trusted host clock instead of caller-selected request time","Provider binding and strict short-lived ticket envelope validation","Final revocation/expiry recheck before issuing bootstrap and on one-shot consume","Late-ticket revoke-after-revoke fence for broker mint races","Indeterminate mint recovery inventory and duplicate-mint denial"],
+      "tests": ["services/model_gateway/test_speech_custody.py"],
+      "remaining": ["real speech provider broker and authoritative mint/readback integration","Android PCM-to-ASR implementation","authenticated mobile identity/session binding and downstream revoke delivery","stream lifecycle/finality/privacy integration across Android and iOS","durable remote revoke retry/outbox and production recovery procedure","encrypted metadata, retention/deletion and backup anti-rollback","physical device latency/accuracy/locale qualification and independent acceptance"]
     },
     {
       "id": "skills",
       "owner": "skills",
       "status": "OPEN",
       "acceptance": "Asymmetric publisher verification, sandbox, egress, transparency, dependency evidence and emergency revoke",
-      "implemented": [
-        "Externally pinned publisher-bound Ed25519 manifest verification without legacy HMAC fallback",
-        "Exact bounded ZIP inventory, path and byte snapshot validation without extraction or execution",
-        "SQLite exact-consent/version admission and terminal Skill/publisher/key/package revocations across restart",
-        "Transitive exact dependency resolution, current-authority recheck after verification and final transaction expiry checks",
-        "Bounded verifier workers and local audit-chain consistency without external transparency claims"
-      ],
+      "implemented": ["Externally pinned publisher-bound Ed25519 manifest verification without legacy HMAC fallback","Exact bounded ZIP inventory, path and byte snapshot validation without extraction or execution","SQLite exact-consent/version admission and terminal Skill/publisher/key/package revocations across restart","Transitive exact dependency resolution, current-authority recheck after verification and final transaction expiry checks","Bounded verifier workers and local audit-chain consistency without external transparency claims"],
       "tests": ["services/skills/test_signed_registry.py"],
-      "remaining": [
-        "execution sandbox",
-        "actual egress enforcement",
-        "external publisher-root administration",
-        "externally witnessed package transparency",
-        "authenticated consent service",
-        "running-task termination",
-        "encrypted package vault",
-        "independent package/deployment qualification"
-      ]
+      "remaining": ["execution sandbox","actual egress enforcement","external publisher-root administration","externally witnessed package transparency","authenticated consent service","running-task termination","encrypted package vault","independent package/deployment qualification"]
     },
     {
       "id": "memory",
       "owner": "privacy",
       "status": "OPEN",
-      "acceptance": "Encrypted persistence, per-subject keys, migration, backup exclusion, export and deletion propagation"
+      "acceptance": "Encrypted persistence, per-subject keys, migration, backup exclusion, export and deletion propagation",
+      "implemented": [
+        "SQLite WAL/FULL durable consent and ciphertext-only Memory records with authenticated metadata binding",
+        "External per-subject key-provider interface; key material is never persisted by the Memory database",
+        "Restart-safe export/search with consent, expiry and data-class enforcement",
+        "Per-subject key rotation with transactional re-encryption and no record-identity reset",
+        "Atomic local delete/expiry/consent-narrowing tombstones with cursor-paginated propagation inventory",
+        "Explicit storage policy that refuses to treat local acknowledgement as downstream deletion or backup evidence"
+      ],
+      "tests": ["services/skills/test_memory_boundaries.py","services/skills/test_durable_memory.py"],
+      "remaining": [
+        "production KMS/HSM or approved platform key service implementing the per-subject cipher contract",
+        "authenticated product ingress and integration replacing the process-memory reference path",
+        "approved encrypted backup/exclusion policy, snapshot anti-rollback and witnessed restore/deletion drills",
+        "real downstream deletion propagation/reconciliation across devices, providers and replicas",
+        "migration procedure for any deployed predecessor data plus retention/export governance",
+        "independent privacy/security acceptance on deployed infrastructure"
+      ]
     }
   ],
-  "unchanged_authority_owned_gap_ids": [
-    "HG-0010","HG-0011","HG-0012","HG-0013","HG-0014","HG-0015","HG-0016","HG-0017","HG-0018","HG-0021","HG-0022","HG-0044"
-  ],
+  "unchanged_authority_owned_gap_ids": ["HG-0010","HG-0011","HG-0012","HG-0013","HG-0014","HG-0015","HG-0016","HG-0017","HG-0018","HG-0021","HG-0022","HG-0044"],
   "administrative_adoption_gap": "HG-0089",
-  "implementation_scope": "Incremental realtime, committed-evidence custody, durable identity/capabilities, signed Skill admission, model send custody and speech bootstrap custody; not full HG-0087 closure. Live provider/device/mobile integration and authority-owned product evidence remain separate.",
+  "implementation_scope": "Incremental realtime, committed-evidence custody, durable identity/capabilities, signed Skill admission, model send custody, speech bootstrap custody and encrypted durable Memory custody; not full HG-0087 closure. Live provider/device/mobile/KMS integration and authority-owned product evidence remain separate.",
   "validation_scope": "Run current exact-head CI; deterministic local tests are not complete repository or E4 evidence."
 }
