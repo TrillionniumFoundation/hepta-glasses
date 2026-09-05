@@ -4,7 +4,8 @@
   "parent_gap": "HG-0087",
   "implementation": "services/control_plane/durable_capabilities.py",
   "tests": [
-    "services/control_plane/test_durable_capabilities.py"
+    "services/control_plane/test_durable_capabilities.py",
+    "services/control_plane/test_capability_suspension.py"
   ],
   "storage": {
     "engine": "sqlite",
@@ -12,8 +13,9 @@
     "synchronous": "FULL",
     "transaction": "BEGIN IMMEDIATE",
     "component": "durable_capabilities",
-    "component_version": 1,
-    "scope": "trusted-host local metadata; not encrypted payload storage"
+    "component_version": 2,
+    "scope": "trusted-host local metadata; not encrypted payload storage",
+    "migration": "explicit offline v1-to-v2, existing rows preserved; stop all old processes first"
   },
   "states": [
     "dispatching",
@@ -91,5 +93,15 @@
     "anti-rollback recovery anchor",
     "independent provider evidence"
   ],
-  "claim_ceiling": "source implementation and local tests; not full HG-0087 closure or product qualification"
+  "claim_ceiling": "source implementation and local tests; not full HG-0087 closure or product qualification",
+  "suspension": {
+    "at_revocation_capacity": "persist gateway-wide denial before raising capacity error",
+    "on_clock_failure": "persist gateway-wide denial without inventing time before raising clock error",
+    "control_rows": 1,
+    "terminal": true,
+    "reset_api": false,
+    "new_dispatch": "blocked at reservation, worker admission and authorized-adapter callback",
+    "readback_and_historical_receipts": "remain available without rewriting actual effects",
+    "remote_cancellation_confirmed": false
+  }
 }

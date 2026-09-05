@@ -112,13 +112,15 @@
       "source_roots": [
         "services/control_plane/bounded_calls.py",
         "services/control_plane/durable_capabilities.py",
-        "services/control_plane/google_calendar.py"
+        "services/control_plane/google_calendar.py",
+        "services/control_plane/capability_suspension.py"
       ],
       "tests": [
         "services/control_plane/test_capability_boundaries.py",
         "services/control_plane/test_durable_capabilities.py",
         "services/control_plane/test_google_calendar.py",
-        "services/control_plane/test_capability_schema_integrity.py"
+        "services/control_plane/test_capability_schema_integrity.py",
+        "services/control_plane/test_capability_suspension.py"
       ],
       "documentation": [
         "docs/development/REFERENCE_RUNTIME_HARDENING.md",
@@ -126,7 +128,8 @@
         "docs/development/DURABLE_CAPABILITIES.md",
         "docs/operations/DURABLE_CAPABILITY_RUNBOOK.md",
         "docs/development/GOOGLE_CALENDAR_CAPABILITY.md",
-        "docs/operations/GOOGLE_CALENDAR_CAPABILITY_RUNBOOK.md"
+        "docs/operations/GOOGLE_CALENDAR_CAPABILITY_RUNBOOK.md",
+        "docs/development/CAPABILITY_REVOCATION_SAFETY.md"
       ],
       "contracts": [
         "contracts/capability-reference-v2.json",

@@ -1,4 +1,5 @@
 """Reject incomplete capability state; not a claim of backup anti-rollback."""
+from contextlib import closing
 import sqlite3
 import tempfile
 import unittest
@@ -13,13 +14,13 @@ class CapabilitySchemaIntegrityTests(unittest.TestCase):
             gateway = DurableCapabilityGateway(path, clock=lambda: 1000)
             gateway.revoke_subject('fixture-subject')
             gateway.close()
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.execute('DROP TABLE ' + table)
             with self.assertRaisesRegex(ValueError, 'capability_schema_integrity_invalid'):
                 DurableCapabilityGateway(path, clock=lambda: 1000)
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 self.assertIsNone(db.execute('SELECT 1 FROM sqlite_master WHERE name=?', (table,)).fetchone())
-                self.assertEqual(db.execute("SELECT version FROM hepta_component_schema WHERE component='durable_capabilities'").fetchone()[0], 1)
+                self.assertEqual(db.execute("SELECT version FROM hepta_component_schema WHERE component='durable_capabilities'").fetchone()[0], 2)
 
     def test_missing_revocations_not_recreated(self):
         self.missing('hg_capability_revoked')
@@ -50,11 +51,11 @@ class CapabilitySchemaIntegrityTests(unittest.TestCase):
             path = str(Path(directory) / 'state.sqlite')
             gateway = DurableCapabilityGateway(path, clock=lambda: 1000)
             gateway.close()
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.execute('DROP TABLE hg_capability_leases')
             with self.assertRaises(ValueError):
                 DurableCapabilityGateway(path, clock=lambda: 1000)
-            with sqlite3.connect(path, timeout=0.1) as db:
+            with closing(sqlite3.connect(path, timeout=0.1)) as db, db:
                 db.execute('BEGIN IMMEDIATE')
                 db.rollback()
 

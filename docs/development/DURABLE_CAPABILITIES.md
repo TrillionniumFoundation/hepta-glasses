@@ -20,7 +20,8 @@ A dataclass constructed from untrusted JSON is never an authority proof.
 | `register(spec, provider_id, adapter)` | Startup-only trusted registration; immutable mutating spec, provider namespace and field/risk digest |
 | `execute(request, lease=...)` | Atomically reserve intent, consume the single-use lease and write the prepared event before provider I/O; duplicates never dispatch |
 | `reconcile(request)` | Query an existing operation with the exact original request/provider binding; never dispatch a mutation |
-| `revoke_subject(subject)` | Persist an irreversible local tombstone denying subsequent effect admission |
+| `revoke_subject(subject)` | Persist exact subject denial; at capacity/clock failure commit global suspension before raising the existing failure code |
+| `suspension_status()` | Read persistent gateway suspension and reason; no reset or remote cancellation claim |
 | `pending(subject, limit=100, after="")` | Return a bounded subject-scoped recovery inventory without arguments or credentials |
 | `close()` | Close storage after service-owned workers have drained; not a cancellation primitive |
 
@@ -102,10 +103,14 @@ invalid clocks, reusable leases and R4 actions fail closed; R3 requires verified
 biometric confirmation. Database lock waiting has its separate 5-second timeout;
 the provider wait is not a hard end-to-end service latency guarantee.
 
-Schema version is component `durable_capabilities`, version 1. A different version
-or preexisting unmarked component tables is rejected. There is no destructive
-migration, lease reset, revocation reset or automatic receipt eviction. Capacity
-exhaustion rejects new work. Production retention/compaction must retain durable
+Schema version is component `durable_capabilities`, version 2. Normal startup
+rejects version 1, unknown versions and preexisting unmarked component tables.
+A separate explicit offline `migrate_capability_v1(path)` adds the control
+singleton and advances the version in one transaction without changing existing
+rows. All old processes must be stopped before migration; this is not a rolling
+upgrade. See `docs/development/CAPABILITY_REVOCATION_SAFETY.md`. There is no
+lease reset, revocation reset, unsuspend or automatic receipt eviction. Operation
+capacity rejects new work; revocation capacity permanently suspends new dispatch. Production retention/compaction must retain durable
 anti-replay and revocation facts; deleting this database to free space is unsafe.
 
 Storage is trusted operator-owned local disk. Do not deploy this SQLite contract
@@ -163,9 +168,9 @@ HG-0087 remains OPEN; successful historical effects are not erased by later revo
 
 ## Complete-schema admission and Calendar response integrity
 
-An existing `durable_capabilities` version-1 marker is not permission to recreate
-missing operation, lease, revocation or event tables. Startup checks all four
-required tables before schema creation and rejects an incomplete component as
+An existing `durable_capabilities` version-2 marker is not permission to recreate
+missing operation, lease, revocation, event or control tables. Startup checks all
+five required tables and the valid singleton control row before schema creation and rejects an incomplete component as
 `capability_schema_integrity_invalid`. Rejected construction closes its connection
 and leaves existing records and the marker unchanged. This prevents accidental
 loss of a revocation table from being silently treated as an empty authority

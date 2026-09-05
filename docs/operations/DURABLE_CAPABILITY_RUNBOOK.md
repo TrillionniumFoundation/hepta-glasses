@@ -94,3 +94,19 @@ independent review. Actual provider-tenant authorization, remote idempotency,
 terminal readback, cancellation, failover, backup and deletion drills require
 real provider and operator evidence. Synthetic process-exit tests prove local
 custody behavior only. Do not merge or publish merely because this runbook exists.
+
+## Version 2 emergency suspension and offline migration
+
+The storage component is now `durable_capabilities` version 2. Normal startup
+rejects version 1; stop every old worker/consumer first, then follow the explicit
+row-preserving migration in `docs/development/CAPABILITY_REVOCATION_SAFETY.md`.
+Do not downgrade the marker or delete the control singleton. Already-open old
+processes are not fenced by a version check on a future constructor.
+
+`capability_revocation_capacity_exhausted` or `capability_clock_invalid` from a
+revocation now means the fallback suspension was committed before that code was
+raised (unless storage itself failed, in which case no success is acknowledged).
+Read `suspension_status()` through the trusted operator path. New dispatch stops
+across current-version connections/restart, but historical results and readback
+remain usable. No row eviction, invented timestamp or remote cancellation claim
+is used. Suspension is terminal; there is no automatic reset or retry-to-resume.

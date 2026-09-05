@@ -16,6 +16,7 @@ from dataclasses import dataclass, replace
 from typing import Callable, Protocol
 
 from .bounded_calls import BoundedCalls
+from .capability_suspension import CONTROL_TABLE, VERSION, control_status, create_control, suspend
 from .capabilities import (
     CapabilityError, CapabilityReceipt, CapabilityRequest, CapabilitySpec,
     DecisionLease, RiskTier, TrustClass, canonical_digest,
@@ -83,14 +84,14 @@ class DurableCapabilityGateway:
         self.store = DurableDatabase(path)
         try:
             with self.store.transaction() as db:
-                unmarked = self.store.version("durable_capabilities", 1)
+                unmarked = self.store.version("durable_capabilities", VERSION)
                 if unmarked and db.execute(
                     "SELECT 1 FROM sqlite_master WHERE name LIKE 'hg_capability_%'"
                 ).fetchone():
                     raise ValueError("capability_unmarked_schema_rejected")
                 required_tables = {
                     "hg_capability_operations", "hg_capability_leases",
-                    "hg_capability_revoked", "hg_capability_events",
+                    "hg_capability_revoked", "hg_capability_events", CONTROL_TABLE,
                 }
                 if not unmarked:
                     actual_tables = {row[0] for row in db.execute(
@@ -121,7 +122,10 @@ class DurableCapabilityGateway:
                 )
                 for statement in statements:
                     db.execute(statement)
-                self.store.mark_version("durable_capabilities", 1)
+                if unmarked:
+                    create_control(db)
+                control_status(db)
+                self.store.mark_version("durable_capabilities", VERSION)
         except BaseException:
             self.store.close()
             raise
@@ -269,6 +273,8 @@ class DurableCapabilityGateway:
             existing = self._existing(db, key, fingerprint)
             if existing is not None:
                 return self._receipt(request, existing, replayed=True)
+            if control_status(db)["suspended"]:
+                raise CapabilityError("capability_dispatch_suspended")
             if db.execute("SELECT COUNT(*) FROM hg_capability_operations").fetchone()[0] >= self.maximum_operations:
                 raise CapabilityError("capability_receipt_capacity_exhausted")
             now = self._now()
@@ -303,7 +309,8 @@ class DurableCapabilityGateway:
                 now = self._now()
                 revoked = db.execute("SELECT 1 FROM hg_capability_revoked WHERE subject=?",
                                      (current["subject"],)).fetchone()
-                if revoked or now >= min(request.deadline, lease.expires_at) or time.monotonic() >= until:
+                if (control_status(db)["suspended"] or revoked
+                        or now >= min(request.deadline, lease.expires_at) or time.monotonic() >= until):
                     self._finish(db, key, "failed", "dispatch_authority_expired", None, False)
                     return None
             checked_execute = getattr(registration.adapter, "execute_authorized", None)
@@ -314,6 +321,7 @@ class DurableCapabilityGateway:
                     with self.store.transaction() as db:
                         current = self._existing(db, key, fingerprint)
                         if (current is None or current["state"] != "dispatching"
+                                or control_status(db)["suspended"]
                                 or db.execute("SELECT 1 FROM hg_capability_revoked WHERE subject=?",
                                               (current["subject"],)).fetchone()):
                             raise CapabilityError("capability_dispatch_fenced")
@@ -406,16 +414,42 @@ class DurableCapabilityGateway:
             return self._receipt(request, self._existing(db, key, fingerprint))
 
     def revoke_subject(self, subject: str) -> None:
+        """Persist exact subject denial, or suspend before reporting its failure.
+
+        Preserve the existing capacity error API. It is raised only AFTER the
+        fallback suspension transaction commits, never from inside that
+        transaction. No new dispatch may proceed after failed emergency denial.
+        Already-admitted remote effects and authorized readback remain truthful.
+        """
         if not identifier(subject):
             raise CapabilityError("capability_subject_invalid")
         digest = canonical_digest({"subject": subject})
+        reason = None
         with self.store.transaction() as db:
-            if db.execute("SELECT 1 FROM hg_capability_revoked WHERE subject=?", (digest,)).fetchone():
+            state = control_status(db)
+            if state["suspended"]:
+                reason = state["reason"]
+            elif db.execute("SELECT 1 FROM hg_capability_revoked WHERE subject=?", (digest,)).fetchone():
                 return
-            if db.execute("SELECT COUNT(*) FROM hg_capability_revoked").fetchone()[0] >= self.maximum_operations:
-                raise CapabilityError("capability_revocation_capacity_exhausted")
-            db.execute("INSERT INTO hg_capability_revoked VALUES(?,?)", (digest, self._now()))
-        # Existing effects remain truthful; readback is allowed but dispatch is not.
+            elif db.execute("SELECT COUNT(*) FROM hg_capability_revoked").fetchone()[0] >= self.maximum_operations:
+                reason = suspend(db, "revocation_capacity")["reason"]
+            else:
+                try:
+                    now = self._now()
+                except Exception:
+                    # No invented timestamp or private clock error is recorded.
+                    reason = suspend(db, "clock_unavailable")["reason"]
+                else:
+                    db.execute("INSERT INTO hg_capability_revoked VALUES(?,?)", (digest, now))
+        if reason is not None:
+            code = ("capability_revocation_capacity_exhausted" if reason == "revocation_capacity"
+                    else "capability_clock_invalid")
+            raise CapabilityError(code)
+
+    def suspension_status(self) -> dict[str, object]:
+        """Local control-state snapshot, not a current request's execution lease."""
+        with self.store.transaction() as db:
+            return control_status(db)
 
     def pending(self, subject: str, *, limit: int = 100, after: str = "") -> list[dict[str, object]]:
         if (not identifier(subject) or type(limit) is not int or not 1 <= limit <= 100
