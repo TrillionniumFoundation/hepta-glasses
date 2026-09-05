@@ -142,3 +142,38 @@ capability source scope. Handoff checks validate structure and exact status
 agreement, not semantic completeness of all engineering dimensions. Source tests,
 CI artifacts and documentation cannot grant independent review, deployment or
 E5-E7 product qualification.
+
+## Concrete Calendar adapter and final pre-POST revalidation
+
+`services/control_plane/google_calendar.py` implements a narrow owned-calendar
+create/get route. See `docs/development/GOOGLE_CALENDAR_CAPABILITY.md`, its
+operations runbook and `contracts/google-calendar-capability-v1.json`. The trusted
+registration now rejects mismatched adapter-declared provider_id/capability_spec.
+An optional execute_authorized hook receives a live gateway callback to recheck
+operation state, subject revocation, request/consumed-lease expiry and the caller
+budget after credential acquisition/TLS, before the concrete provider mutation.
+Legacy adapters retain their old path and do not acquire this guarantee implicitly.
+
+The Calendar adapter rejects direct legacy execute, sends at most one POST, and
+uses only GET for uncertain recovery. No 404/409 or mutable private property proves
+terminal non-application. It requires an external authenticated OAuth vault, not
+client-constructed access grants. Neither the hook nor the concrete transport
+implements encrypted payload storage, production identity or independent acceptance.
+HG-0087 remains OPEN; successful historical effects are not erased by later revoke.
+
+## Complete-schema admission and Calendar response integrity
+
+An existing `durable_capabilities` version-1 marker is not permission to recreate
+missing operation, lease, revocation or event tables. Startup checks all four
+required tables before schema creation and rejects an incomplete component as
+`capability_schema_integrity_invalid`. Rejected construction closes its connection
+and leaves existing records and the marker unchanged. This prevents accidental
+loss of a revocation table from being silently treated as an empty authority
+store. It does not detect a privileged writer deleting individual rows or
+restoring an entire old snapshot; backup anti-rollback remains open.
+
+Regression: `services/control_plane/test_capability_schema_integrity.py`.
+The Calendar reader additionally rejects `attendeesOmitted` and open self-
+invitation responses, and rejects malformed timezone offset minutes rather than
+allowing the datetime parser to normalize them. These checks preserve uncertain
+results instead of treating incomplete provider views as exact effects.

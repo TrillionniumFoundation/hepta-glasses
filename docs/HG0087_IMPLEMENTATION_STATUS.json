@@ -79,13 +79,18 @@
         "Subject-scoped persistent idempotency with exact request, policy and provider bindings",
         "Bounded provider calls, persistent readback budgets and readback-only recovery after process exit",
         "Monotonic subject revocation and quarantined contradictory terminal provider observations",
-        "No raw arguments, OAuth credentials or unfiltered provider responses in the durable ledger"
+        "No raw arguments, OAuth credentials or unfiltered provider responses in the durable ledger",
+        "Concrete Google Calendar owned single-event HTTPS create/get adapter with exact operation and event-field readback",
+        "Gateway-authorized adapter hook rechecks live lease/revocation after OAuth/TLS and before mutation; route/spec binding enforced",
+        "Reject incomplete existing capability schemas instead of recreating missing operation, lease, revocation or audit tables"
       ],
       "tests": [
-        "services/control_plane/test_durable_capabilities.py"
+        "services/control_plane/test_durable_capabilities.py",
+        "services/control_plane/test_google_calendar.py",
+        "services/control_plane/test_capability_schema_integrity.py"
       ],
       "remaining": [
-        "Real provider-specific OAuth adapter with vault credentials, remote idempotency, cancellation and authenticated terminal readback",
+        "Production OAuth consent and refresh-token vault, real account/calendar ownership and provider tenancy verification; the single-event adapter does not implement the complete OAuth service",
         "Encrypted payload custody and authorized recovery ingress; the metadata-only ledger is not an encrypted outbox",
         "Identity-backed lease validation and live downstream revocation integration",
         "Production capacity, backup anti-rollback, retention and witnessed provider failure/recovery qualification"

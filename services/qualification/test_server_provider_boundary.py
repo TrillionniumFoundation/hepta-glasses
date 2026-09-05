@@ -24,7 +24,8 @@ class ServerProviderBoundaryTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.contract = json.loads((ROOT / CONTRACT).read_text())
-        for name in (PROVIDER, WIRE):
+        for row in self.contract["entries"]:
+            name = row["path"]
             self.write(name, (ROOT / name).read_bytes())
         self.save()
         self.write("lib/services/evenai.dart", b"// inert boundary fixture\n")

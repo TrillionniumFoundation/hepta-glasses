@@ -111,21 +111,27 @@
       "id": "capability-control-plane",
       "source_roots": [
         "services/control_plane/bounded_calls.py",
-        "services/control_plane/durable_capabilities.py"
+        "services/control_plane/durable_capabilities.py",
+        "services/control_plane/google_calendar.py"
       ],
       "tests": [
         "services/control_plane/test_capability_boundaries.py",
-        "services/control_plane/test_durable_capabilities.py"
+        "services/control_plane/test_durable_capabilities.py",
+        "services/control_plane/test_google_calendar.py",
+        "services/control_plane/test_capability_schema_integrity.py"
       ],
       "documentation": [
         "docs/development/REFERENCE_RUNTIME_HARDENING.md",
         "docs/development/MODULE_HANDOFF.md#capability-control-plane",
         "docs/development/DURABLE_CAPABILITIES.md",
-        "docs/operations/DURABLE_CAPABILITY_RUNBOOK.md"
+        "docs/operations/DURABLE_CAPABILITY_RUNBOOK.md",
+        "docs/development/GOOGLE_CALENDAR_CAPABILITY.md",
+        "docs/operations/GOOGLE_CALENDAR_CAPABILITY_RUNBOOK.md"
       ],
       "contracts": [
         "contracts/capability-reference-v2.json",
-        "contracts/durable-capability-v1.json"
+        "contracts/durable-capability-v1.json",
+        "contracts/google-calendar-capability-v1.json"
       ]
     },
     {
@@ -186,7 +192,8 @@
         "services/qualification/test_source_coverage.py",
         "services/qualification/test_module_handoff.py",
         "services/qualification/test_handoff_status_drift.py",
-        "services/qualification/test_server_provider_boundary.py"
+        "services/qualification/test_server_provider_boundary.py",
+        "services/qualification/test_calendar_provider_boundary.py"
       ],
       "documentation": [
         "docs/development/SOURCE_COVERAGE_AND_STATE.md",

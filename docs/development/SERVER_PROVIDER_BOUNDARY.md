@@ -32,7 +32,7 @@ previously blocked identity, speech or Memory changes.
 
 ## Declaration contract and API
 
-The contract contains exactly a version, contract ID and two entries. Each entry
+The contract contains exactly a version, contract ID and four entries. Each entry
 has exactly `path`, `sha256` and `role`. Duplicate JSON keys, missing/extra rows,
 unknown fields, wrong types, path variants, wildcards and changed roles fail.
 The helper fixes the only supported slots in source; a JSON entry cannot invent
@@ -42,6 +42,8 @@ a new source path, add a pattern exception or choose a new provider.
 |---|---|---|
 | `services/model_gateway/responses_provider.py` | cloud_transport | The existing OpenAI API host marker |
 | `services/model_gateway/test_responses_provider.py` | wire_regression | That host marker and the existing inert provider key-name negative test |
+| `services/control_plane/google_calendar.py` | capability_transport | The fixed Google Calendar API host marker only |
+| `services/control_plane/test_google_calendar.py` | capability_wire_regression | The same Calendar host marker only |
 
 The test key name is not a key value. It appears in an existing negative test
 proving the provider does not consume environment overrides. An actual provider
@@ -55,7 +57,7 @@ bytes. It never trusts a filename plus an earlier independent read. All original
 patterns still run; only a matching marker category/value inside its fixed slot
 can pass the exact-byte declaration. Private-key/token/bypass patterns have no
 slots and are never exempt, even if a digest is deliberately updated.
-`finish()` requires both declared sources actually to have been scanned once.
+`finish()` requires all four declared sources actually to have been scanned once.
 A stale hash, absent file or duplicate scan is an error, not a silent exemption.
 
 Source reads reject noncanonical paths, links, nonregular files, oversize reads,
@@ -70,7 +72,11 @@ all original forbidden pattern categories are retained.
 For Python outside `services/model_gateway/`, the helper rejects direct imports
 of the concrete provider module, including absolute imports, relative imports,
 parent-module named imports and parent-module star imports. Syntax errors fail
-closed. The model service itself may compose its provider internally.
+closed. Each concrete transport is restricted to its own service root: the
+Responses module to `services/model_gateway/`, and the Calendar module to
+`services/control_plane/`. Neither service gets permission to import the other's
+concrete provider. The new Calendar host marker is checked even if a caller only
+passes the original five pattern categories; there is no new caller-side opt-out.
 
 This is a static direct-import fence, not a complete whole-program analysis.
 Dynamic imports, reflection, arbitrary new network clients, maliciously altered
@@ -130,3 +136,14 @@ block without reflecting matched content. Fixtures are inert, not credentials.
 Local affected-path testing is not a full repository checkout or seven-lane CI.
 Full compatibility, signed-device/provider qualification, complete protected-main
 settings and independent review remain separate acceptance requirements.
+
+## Calendar increment validation
+
+The Calendar source and its wire tests must match their independently enumerated
+hash slots. `services/qualification/test_calendar_provider_boundary.py` adds
+copied-source and cross-service import regressions. Existing boundary test
+fixtures now copy every declared file while preserving all forty original tests.
+The runtime provider remains an authenticated-host component, not a consumer API.
+No scheduler, OAuth consent service, production credential or real event is
+introduced by these declarations. Static fences do not prevent dynamic imports
+or a privileged host from changing validators; independent review remains required.

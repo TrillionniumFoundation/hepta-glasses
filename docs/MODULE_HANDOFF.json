@@ -142,8 +142,8 @@
       "profile": "engineering-handoff-v1",
       "index_anchor": "docs/development/MODULE_HANDOFF.md#capability-control-plane",
       "primary_document": "docs/development/DURABLE_CAPABILITIES.md",
-      "platform_status": "Python reference APIs plus a SQLite intent ledger, durable single-use leases, bounded dispatch and readback-only crash recovery; not a sandbox.",
-      "evidence_ceiling": "The durable source runner is not a provider-specific OAuth adapter, authenticated ingress, encrypted payload vault, independently verified receipt or production qualification."
+      "platform_status": "Python reference APIs plus SQLite intent/lease/readback custody and a Google Calendar single-event HTTPS adapter with final pre-POST authority revalidation; no authenticated production ingress is connected.",
+      "evidence_ceiling": "Local source and wire tests do not establish an OAuth consent/refresh vault, live provider ownership, encrypted payload custody, process isolation, independent review or product qualification."
     },
     {
       "id": "skills-registry",

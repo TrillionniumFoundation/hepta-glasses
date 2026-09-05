@@ -11,6 +11,16 @@
       "path": "services/model_gateway/test_responses_provider.py",
       "sha256": "de606a5c05b6eb48e01b0ed19d9c168a61a3620391dfb5e94447ca5225e249e6",
       "role": "wire_regression"
+    },
+    {
+      "path": "services/control_plane/google_calendar.py",
+      "sha256": "0e47db3d17c8878b5ca925f9d1172a5437320fd280695f55c67fb6e572029776",
+      "role": "capability_transport"
+    },
+    {
+      "path": "services/control_plane/test_google_calendar.py",
+      "sha256": "4ba890d13fc9a888019aecb70bfe246fa5bcb7d7164340ad5eb8e8c47e851564",
+      "role": "capability_wire_regression"
     }
   ]
 }

@@ -1,6 +1,6 @@
 """Exact-byte cloud provider declarations inside the existing source scanner.
 
-No source directory is exempt. Only two named marker categories in two fixed
+No source directory is exempt. Only enumerated marker categories in four fixed
 cloud files may be declared; credential material and bypass patterns still fail.
 This source policy is not external approval or a runtime authorization boundary.
 """
@@ -19,14 +19,23 @@ from typing import Mapping
 CONTRACT = "contracts/server-provider-boundary-v1.json"
 _PROVIDER = "services/model_gateway/responses_provider.py"
 _TEST = "services/model_gateway/test_responses_provider.py"
+_CALENDAR = "services/control_plane/google_calendar.py"
+_CALENDAR_TEST = "services/control_plane/test_google_calendar.py"
+_CALENDAR_PATTERN = re.compile(r"www\.googleapis\.com")
 _SLOTS = {
     _PROVIDER: ("cloud_transport", {"direct provider endpoint": frozenset({"api.openai.com"})}),
     _TEST: ("wire_regression", {
         "direct provider endpoint": frozenset({"api.openai.com"}),
         "provider key name": frozenset({"OPENAI_API_KEY"}),
     }),
+    _CALENDAR: ("capability_transport", {"calendar provider endpoint": frozenset({"www.googleapis.com"})}),
+    _CALENDAR_TEST: ("capability_wire_regression", {"calendar provider endpoint": frozenset({"www.googleapis.com"})}),
 }
 _MODULE = "services.model_gateway.responses_provider"
+_MODULE_SCOPES = {
+    _MODULE: "services/model_gateway/",
+    "services.control_plane.google_calendar": "services/control_plane/",
+}
 
 
 def _fail(code: str) -> None:
@@ -81,8 +90,8 @@ def _pairs(values):
 
 
 def _import_violation(relative: str, text: str) -> bool:
-    # Static direct-import fence, not a claim to detect dynamic/reflection imports.
-    if not relative.endswith(".py") or relative.startswith("services/model_gateway/"):
+    # Static direct-import fence; dynamic/reflection imports require runtime policy.
+    if not relative.endswith(".py"):
         return False
     try:
         parsed = ast.parse(text)
@@ -91,20 +100,26 @@ def _import_violation(relative: str, text: str) -> bool:
     package = list(PurePosixPath(relative).parts[:-1])
     for node in ast.walk(parsed):
         modules = []
+        wildcard_prefix = None
         if isinstance(node, ast.Import):
             modules = [alias.name for alias in node.names]
         elif isinstance(node, ast.ImportFrom):
             prefix = node.module or ""
             if node.level:
                 if node.level > len(package):
-                    continue  # Invalid import is not permission to load the provider.
+                    continue
                 prefix = ".".join(package[:len(package) - node.level + 1]
                                   + ([prefix] if prefix else []))
             modules = [prefix, *(prefix + "." + alias.name for alias in node.names)]
-            if prefix == "services.model_gateway" and any(a.name == "*" for a in node.names):
+            if any(a.name == "*" for a in node.names):
+                wildcard_prefix = prefix
+        for protected_module, owner in _MODULE_SCOPES.items():
+            if relative.startswith(owner):
+                continue
+            if wildcard_prefix == protected_module.rsplit(".", 1)[0]:
                 return True
-        if any(m == _MODULE or m.startswith(_MODULE + ".") for m in modules):
-            return True
+            if any(m == protected_module or m.startswith(protected_module + ".") for m in modules):
+                return True
     return False
 
 
@@ -155,8 +170,13 @@ class ServerProviderBoundary:
         for label, pattern in patterns.items():
             if any(match.group(0) not in allowed.get(label, ()) for match in pattern.finditer(text)):
                 violations.append(f"{label}: {relative}")
+        # This new marker is mandatory even when an older caller only supplies
+        # the original provider patterns. Existing categories are never removed.
+        if any(match.group(0) not in allowed.get("calendar provider endpoint", ())
+               for match in _CALENDAR_PATTERN.finditer(text)):
+            violations.append(f"calendar provider endpoint: {relative}")
         if _import_violation(relative, text):
-            violations.append(f"cloud provider direct import outside model service: {relative}")
+            violations.append(f"cloud provider direct import outside owner service: {relative}")
         return violations
 
     def finish(self) -> None:

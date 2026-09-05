@@ -88,6 +88,16 @@ class DurableCapabilityGateway:
                     "SELECT 1 FROM sqlite_master WHERE name LIKE 'hg_capability_%'"
                 ).fetchone():
                     raise ValueError("capability_unmarked_schema_rejected")
+                required_tables = {
+                    "hg_capability_operations", "hg_capability_leases",
+                    "hg_capability_revoked", "hg_capability_events",
+                }
+                if not unmarked:
+                    actual_tables = {row[0] for row in db.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    )}
+                    if not required_tables <= actual_tables:
+                        raise ValueError("capability_schema_integrity_invalid")
                 statements = (
                     "CREATE TABLE IF NOT EXISTS hg_capability_operations ("
                     "key TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, subject TEXT NOT NULL, "
@@ -132,6 +142,13 @@ class DurableCapabilityGateway:
                 or not callable(getattr(adapter, "execute", None))
                 or not callable(getattr(adapter, "readback", None))):
             raise CapabilityError("durable_capability_spec_invalid")
+        # Concrete adapters may pin the exact provider namespace and public
+        # capability contract. Registration must not silently relabel them.
+        if (getattr(adapter, "provider_id", provider_id) != provider_id
+                or getattr(adapter, "capability_spec", spec) != spec
+                or (hasattr(adapter, "execute_authorized")
+                    and not callable(adapter.execute_authorized))):
+            raise CapabilityError("capability_adapter_binding_mismatch")
         spec = replace(spec, required_fields=frozenset(spec.required_fields),
                        optional_fields=frozenset(spec.optional_fields))
         digest = canonical_digest({"name": spec.name, "risk": spec.risk.value,
@@ -289,6 +306,21 @@ class DurableCapabilityGateway:
                 if revoked or now >= min(request.deadline, lease.expires_at) or time.monotonic() >= until:
                     self._finish(db, key, "failed", "dispatch_authority_expired", None, False)
                     return None
+            checked_execute = getattr(registration.adapter, "execute_authorized", None)
+            if checked_execute is not None:
+                def authorize() -> None:
+                    # Called after credential acquisition/TLS, immediately before
+                    # the concrete mutation. Never hold the DB lock during I/O.
+                    with self.store.transaction() as db:
+                        current = self._existing(db, key, fingerprint)
+                        if (current is None or current["state"] != "dispatching"
+                                or db.execute("SELECT 1 FROM hg_capability_revoked WHERE subject=?",
+                                              (current["subject"],)).fetchone()):
+                            raise CapabilityError("capability_dispatch_fenced")
+                        if (self._now() >= min(request.deadline, lease.expires_at)
+                                or time.monotonic() >= until):
+                            raise CapabilityError("capability_dispatch_expired")
+                return checked_execute(request, operation_id, authorize=authorize)
             return registration.adapter.execute(request, operation_id)
 
         outcome = self._calls.run(dispatch, timeout_seconds=min(

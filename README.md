@@ -61,6 +61,17 @@ by retrying its POST. HG-0087/model remains OPEN for authenticated composition,
 real provider/retention/billing qualification, remote cancellation/recovery,
 service isolation, encrypted metadata and independent acceptance.
 
+## Calendar capability implementation
+
+`docs/development/GOOGLE_CALENDAR_CAPABILITY.md`,
+`docs/operations/GOOGLE_CALENDAR_CAPABILITY_RUNBOOK.md` and
+`contracts/google-calendar-capability-v1.json` describe the single owned-calendar
+create/get adapter. It uses the durable capability gateway and a final pre-POST
+lease/revocation check after OAuth/TLS. Missing/conflicting events stay unknown;
+recovery never replays POST. OAuth consent/refresh custody, real account ownership,
+authenticated ingress, encrypted payload recovery and provider qualification remain
+open. No consumer route or real credentials are enabled by this source increment.
+
 ## Source boundary policy for cloud providers
 
 `docs/development/SERVER_PROVIDER_BOUNDARY.md` explains the exact-file, exact-

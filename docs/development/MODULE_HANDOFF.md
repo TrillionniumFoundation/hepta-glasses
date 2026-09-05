@@ -88,7 +88,7 @@ Primary detailed document: `docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md
 <!-- handoff:capability-control-plane -->
 ## capability-control-plane
 
-Primary detailed document: `docs/development/DURABLE_CAPABILITIES.md`. Platform status: Python reference APIs plus a SQLite intent ledger, durable single-use leases, bounded dispatch and readback-only crash recovery; not a sandbox. Evidence ceiling: The durable source runner is not a provider-specific OAuth adapter, authenticated ingress, encrypted payload vault, independently verified receipt or production qualification.
+Primary detailed document: `docs/development/DURABLE_CAPABILITIES.md`. Platform status: Python reference APIs plus SQLite intent/lease/readback custody and a Google Calendar single-event HTTPS adapter with final pre-POST authority revalidation; no authenticated production ingress is connected. Evidence ceiling: Local source and wire tests do not establish an OAuth consent/refresh vault, live provider ownership, encrypted payload custody, process isolation, independent review or product qualification.
 
 <!-- handoff:skills-registry -->
 ## skills-registry
