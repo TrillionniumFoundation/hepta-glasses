@@ -179,18 +179,24 @@
         "tools/repository_snapshot.py",
         "docs/MODULE_COVERAGE.json",
         "tools/validate_module_handoff.py",
-        "docs/MODULE_HANDOFF.json"
+        "docs/MODULE_HANDOFF.json",
+        "tools/server_provider_boundary.py"
       ],
       "tests": [
         "services/qualification/test_source_coverage.py",
         "services/qualification/test_module_handoff.py",
-        "services/qualification/test_handoff_status_drift.py"
+        "services/qualification/test_handoff_status_drift.py",
+        "services/qualification/test_server_provider_boundary.py"
       ],
       "documentation": [
         "docs/development/SOURCE_COVERAGE_AND_STATE.md",
         "docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md",
         "docs/development/MODULE_HANDOFF.md#repository-governance",
-        "docs/development/MODULE_HANDOFF.md"
+        "docs/development/MODULE_HANDOFF.md",
+        "docs/development/SERVER_PROVIDER_BOUNDARY.md"
+      ],
+      "contracts": [
+        "contracts/server-provider-boundary-v1.json"
       ]
     },
     {

@@ -60,3 +60,13 @@ termination; an uncertain nonstored foreground response cannot be reconstructed
 by retrying its POST. HG-0087/model remains OPEN for authenticated composition,
 real provider/retention/billing qualification, remote cancellation/recovery,
 service isolation, encrypted metadata and independent acceptance.
+
+## Source boundary policy for cloud providers
+
+`docs/development/SERVER_PROVIDER_BOUNDARY.md` explains the exact-file, exact-
+SHA-256 declarations in `contracts/server-provider-boundary-v1.json`. They permit
+only the named cloud transport's endpoint markers and its existing wire-test
+markers, not credentials or consumer-side provider access. Repository and CI
+boundary jobs share the same validator; secret/bypass and history checks remain.
+This source-policy correction is not production qualification, independent
+approval or closure of HG-0087.

@@ -239,16 +239,22 @@ def iter_text_files(base: Path):
 
 
 def validate_boundaries() -> None:
+    if __package__:
+        from .server_provider_boundary import ServerProviderBoundary, read_regular
+    else:
+        from server_provider_boundary import ServerProviderBoundary, read_regular
+
+    boundary = ServerProviderBoundary(ROOT)
     violations = []
     for relative in SCAN_SOURCE:
         base = ROOT / relative
         if not base.exists():
             continue
         for path in iter_text_files(base):
-            text = path.read_text(encoding="utf-8", errors="replace")
-            for name, pattern in FORBIDDEN_PATTERNS.items():
-                if pattern.search(text):
-                    violations.append(f"{name}: {path.relative_to(ROOT)}")
+            source_path = path.relative_to(ROOT).as_posix()
+            raw = read_regular(ROOT, source_path)
+            violations.extend(boundary.inspect(source_path, raw, FORBIDDEN_PATTERNS))
+    boundary.finish()
     if violations:
         fail("forbidden product boundary material found: " + ", ".join(sorted(violations)))
 

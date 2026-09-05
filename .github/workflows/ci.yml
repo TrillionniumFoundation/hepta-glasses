@@ -197,10 +197,18 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
       - run: |
           set -euo pipefail
-          ! grep -RInE '(DASHSCOPE_API_KEY|DEEPSEEK_API_KEY|OPENAI_API_KEY|api\.deepseek\.com|dashscope\.aliyuncs\.com|api\.openai\.com)' lib android ios services adapters plugins
-          ! grep -RInE '(dangerously-bypass-approvals-and-sandbox|--yolo|danger-full-access)' services plugins adapters lib
-          ! grep -RInE '(HEPTA_ALLOW_DEVELOPMENT_AUTHORITY|DevelopmentMutationAuthorityProvider|explicit-development-build-flag|development_build_flag|dev-lease-|development-user|development-g1-pair|TestMutationAuthorityProvider|test-only-authority|test-lease-)' lib
-          ! grep -RInE --exclude-dir=.git -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{30,}' lib android ios services adapters plugins evidence
+          python3 -c "from tools.validate_repository import validate_boundaries; validate_boundaries()"
+          assert_no_match() {
+            local result=0
+            grep "$@" >/dev/null || result=$?
+            if [ "$result" -ne 1 ]; then
+              echo "Boundary scan found forbidden material or could not complete" >&2
+              exit 1
+            fi
+          }
+          assert_no_match -RInE '(dangerously-bypass-approvals-and-sandbox|--yolo|danger-full-access)' services plugins adapters lib
+          assert_no_match -RInE '(HEPTA_ALLOW_DEVELOPMENT_AUTHORITY|DevelopmentMutationAuthorityProvider|explicit-development-build-flag|development_build_flag|dev-lease-|development-user|development-g1-pair|TestMutationAuthorityProvider|test-only-authority|test-lease-)' lib
+          assert_no_match -RInE --exclude-dir=.git -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{30,}' lib android ios services adapters plugins evidence
       - name: Scan every fetched Git ref without emitting secret material
         run: python3 tools/scan_git_history.py --output build/evidence/source-history-scan.json
 

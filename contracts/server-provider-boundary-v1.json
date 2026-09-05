@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "contract_id": "server-provider-boundary-v1",
+  "entries": [
+    {
+      "path": "services/model_gateway/responses_provider.py",
+      "sha256": "a2d837e4956f036e3d87c2878eadb7838122f9e3530d5ddf172314b5d4dea07b",
+      "role": "cloud_transport"
+    },
+    {
+      "path": "services/model_gateway/test_responses_provider.py",
+      "sha256": "de606a5c05b6eb48e01b0ed19d9c168a61a3620391dfb5e94447ca5225e249e6",
+      "role": "wire_regression"
+    }
+  ]
+}
