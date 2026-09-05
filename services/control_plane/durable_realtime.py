@@ -88,6 +88,9 @@ class DurableRealtimeStore:
                     "session_id TEXT NOT NULL,provider_session_id TEXT,state TEXT NOT NULL)"
                 )
                 self.db.execute("CREATE INDEX IF NOT EXISTS realtime_ticket_session ON tickets(session_id)")
+                self.db.execute("CREATE INDEX IF NOT EXISTS realtime_remote_session ON sessions(provider_session_id,session_id)")
+                self.db.execute("CREATE INDEX IF NOT EXISTS realtime_remote_cleanup ON realtime_revoke_outbox(provider_session_id,session_id)")
+                self.db.execute("CREATE INDEX IF NOT EXISTS realtime_cleanup_session ON realtime_revoke_outbox(session_id,state)")
                 if unmarked:
                     recovery.create_budgets(self.db, maximum_readbacks, maximum_revoke_attempts)
                 recovery.validate_budgets(self.db, maximum_readbacks, maximum_revoke_attempts)
@@ -281,39 +284,80 @@ class DurableRealtimeStore:
             raise DurableRealtimeError("realtime_activation_indeterminate")
         return self._commit_activation(session_id, attempt_id, outcome.value, until=until, earliest=earliest)
 
-    def _queue_revoke(self, session_id: str, provider_id: str | None) -> None:
+    def _remote_owned_elsewhere(self, session_id: str, provider_id: str) -> bool:
+        # Check under the same write transaction as admission/cleanup. An ID
+        # already bound to another local session is not ours to revoke.
+        return bool(self.db.execute(
+            "SELECT 1 FROM sessions WHERE provider_session_id=? AND session_id!=? LIMIT 1",
+            (provider_id, session_id)).fetchone() or self.db.execute(
+            "SELECT 1 FROM realtime_revoke_outbox WHERE provider_session_id=? AND session_id!=? LIMIT 1",
+            (provider_id, session_id)).fetchone())
+
+    def _queue_revoke(self, session_id: str, provider_id: str | None) -> str:
+        if provider_id is not None and self._remote_owned_elsewhere(session_id, provider_id):
+            # Do not turn a mismatched observation into authority to delete
+            # another session. Retain this session's unresolved lookup instead.
+            provider_id = None
         job_id = "provider:" + provider_id if provider_id else "lookup:" + session_id
-        inserted = self.db.execute("INSERT OR IGNORE INTO realtime_revoke_outbox VALUES(?,?,?,'pending')",
-                                   (job_id, session_id, provider_id)).rowcount
+        inserted = self.db.execute(
+            "INSERT INTO realtime_revoke_outbox VALUES(?,?,?,'pending') "
+            "ON CONFLICT(job_id) DO NOTHING", (job_id, session_id, provider_id)).rowcount
+        existing = self.db.execute(
+            "SELECT session_id,provider_session_id FROM realtime_revoke_outbox WHERE job_id=?",
+            (job_id,)).fetchone()
+        if tuple(existing) != (session_id, provider_id):
+            raise ValueError("realtime_cleanup_binding_invalid")
         if provider_id is not None:
             if inserted:
                 self.db.execute("INSERT INTO realtime_revoke_budget VALUES(?,0)", (job_id,))
             else:
                 recovery.usage(self.db, "revoke", job_id)
+        elif not inserted:
+            # A newly unaccounted result can require lookup again, but the
+            # existing persistent lookup allowance is never replenished.
+            self.db.execute("UPDATE realtime_revoke_outbox SET state='pending' WHERE job_id=?", (job_id,))
+        return job_id
 
     def _commit_activation(self, session_id: str, attempt_id: str,
                            activation: RealtimeActivation, *, until: float, earliest: int) -> sqlite3.Row:
-        if (not isinstance(activation, RealtimeActivation)
+        if (type(activation) is not RealtimeActivation
                 or not identifier(activation.provider_session_id)
                 or not identifier(activation.provider_receipt_id)):
             self._indeterminate(session_id, attempt_id)
             raise DurableRealtimeError("realtime_provider_response_invalid")
         rejection = None
         cleanup = False
+        cleanup_jobs: set[str] = set()
         with self._storage.transaction():
             session = self._session(session_id)
             attempt = self.db.execute("SELECT * FROM realtime_attempts WHERE session_id=?", (session_id,)).fetchone()
             exact = (attempt is not None and attempt["attempt_id"] == attempt_id
                      and attempt["subject"] == session["subject"]
                      and attempt["generation"] == session["generation"])
-            if session["state"] == "active":
-                if (not exact or session["provider_session_id"] != activation.provider_session_id
-                        or session["provider_receipt_id"] != activation.provider_receipt_id):
-                    raise DurableRealtimeError("realtime_provider_identity_conflict")
+            other_owner = self._remote_owned_elsewhere(session_id, activation.provider_session_id)
+            conflicting = (session["provider_session_id"] is not None
+                           and (session["provider_session_id"], session["provider_receipt_id"])
+                           != (activation.provider_session_id, activation.provider_receipt_id))
+            if other_owner or conflicting:
+                # An error alone would leave active authority and lose custody
+                # of a second remote session. Commit terminal local denial and
+                # every owned cleanup responsibility before raising the error.
+                rejection = ("realtime_provider_owner_conflict" if other_owner
+                             else "realtime_provider_identity_conflict")
+                cleanup = True
+                if session["state"] != "revoked":
+                    self.db.execute("UPDATE sessions SET state='revoked',generation=generation+1 WHERE session_id=?",
+                                    (session_id,))
+                self.db.execute("UPDATE tickets SET state='revoked' WHERE session_id=? AND state='issued'", (session_id,))
+            elif session["state"] == "active":
+                if not exact:
+                    # A late identical activation result after a local interrupt
+                    # must not revoke the current generation as a provider conflict.
+                    raise DurableRealtimeError("realtime_session_revoked_or_stale")
                 if time.monotonic() >= until:
                     raise DurableRealtimeError("realtime_deadline_expired")
                 return session
-            if exact and session["state"] in ("activating", "indeterminate"):
+            elif exact and session["state"] in ("activating", "indeterminate"):
                 try:
                     expiry = self._attempt_expiry(session)
                     fresh = self._window(expiry, earliest=earliest, until=until)
@@ -323,8 +367,6 @@ class DurableRealtimeStore:
                         (activation.provider_session_id, activation.provider_receipt_id, session_id,
                          attempt["subject"], attempt["generation"]),
                     )
-                    # A trigger or local work can consume the remaining lifetime.
-                    # If so, change to denied before any transaction becomes visible.
                     self._window(expiry, earliest=fresh, until=until)
                 except DurableRealtimeError as error:
                     rejection = error.code
@@ -337,16 +379,28 @@ class DurableRealtimeStore:
                 rejection = "realtime_session_revoked_or_stale"
                 cleanup = True
             if cleanup:
-                # Persist cleanup before raising: an exception inside the write
-                # transaction would roll back denial and abandon the remote session.
-                self._queue_revoke(session_id, activation.provider_session_id)
-                self.db.execute("UPDATE realtime_revoke_outbox SET state='completed' WHERE job_id=?",
-                                ("lookup:" + session_id,))
+                # Keep both the stored identity and newly observed identity. An
+                # owner collision becomes lookup-only, never cross-session revoke.
+                identities = {activation.provider_session_id}
+                if session["provider_session_id"] is not None:
+                    identities.add(session["provider_session_id"])
+                unresolved = False
+                for provider_id in sorted(identities):
+                    job_id = self._queue_revoke(session_id, provider_id)
+                    if job_id.startswith("provider:"):
+                        cleanup_jobs.add(job_id)
+                    else:
+                        unresolved = True
+                if not unresolved:
+                    self.db.execute("UPDATE realtime_revoke_outbox SET state='completed' WHERE job_id=?",
+                                    ("lookup:" + session_id,))
             result = self._session(session_id)
         if rejection is not None:
-            remaining = until - time.monotonic()
-            if cleanup and remaining > 0:
-                self._drain_known("provider:" + activation.provider_session_id, remaining)
+            for job_id in sorted(cleanup_jobs):
+                remaining = until - time.monotonic()
+                if remaining <= 0:
+                    break
+                self._drain_known(job_id, remaining)
             raise DurableRealtimeError(rejection)
         return result
 
@@ -383,20 +437,41 @@ class DurableRealtimeStore:
                 self._queue_revoke(session_id, row["provider_session_id"])
             elif row["state"] in ("activating", "indeterminate"):
                 self._queue_revoke(session_id, None)
-        if row["provider_session_id"]:
+        # A conflicting observation can leave multiple known remote sessions.
+        # Draining only sessions.provider_session_id would falsely acknowledge
+        # completion while an alternate known cleanup is still pending.
+        with self.lock:
+            jobs = self.db.execute(
+                "SELECT job_id FROM realtime_revoke_outbox WHERE session_id=? "
+                "AND provider_session_id IS NOT NULL AND state='pending' ORDER BY job_id LIMIT 100",
+                (session_id,)).fetchall()
+        for job in jobs:
             remaining = until - time.monotonic()
-            if remaining <= 0 or not self._drain_known("provider:" + row["provider_session_id"], remaining):
-                raise DurableRealtimeError("realtime_provider_revoke_pending")
+            if remaining <= 0:
+                break
+            self._drain_known(job["job_id"], remaining)
+        with self.lock:
+            known_pending = self.db.execute(
+                "SELECT 1 FROM realtime_revoke_outbox WHERE session_id=? "
+                "AND provider_session_id IS NOT NULL AND state='pending' LIMIT 1", (session_id,)).fetchone()
+        if known_pending:
+            raise DurableRealtimeError("realtime_provider_revoke_pending")
 
     def _drain_known(self, job_id: str, timeout_seconds: float) -> bool:
         until = time.monotonic() + timeout_seconds
         with self._storage.transaction():
             job = self.db.execute("SELECT * FROM realtime_revoke_outbox WHERE job_id=?", (job_id,)).fetchone()
-            if job is None or job["state"] == "completed":
+            if job is None:
+                raise ValueError("realtime_cleanup_job_missing")
+            if job["state"] == "completed":
                 return True
             if job["provider_session_id"] is None:
                 return False
             if not recovery.reserve(self.db, "revoke", job_id):
+                return False
+            if self._remote_owned_elsewhere(job["session_id"], job["provider_session_id"]):
+                # Ambiguous legacy custody cannot authorize deleting another
+                # session. Charge this bounded attempt and retain pending work.
                 return False
         def cleanup() -> None:
             remaining = until - time.monotonic()
@@ -405,9 +480,16 @@ class DurableRealtimeStore:
             return self.provider.revoke(provider_session_id=job["provider_session_id"], timeout_seconds=remaining)
 
         outcome = self._calls.run(cleanup, timeout_seconds=max(0.0, until - time.monotonic()))
-        if outcome.state != "completed":
+        if outcome.state != "completed" or outcome.value is not None:
+            # The trusted adapter contract returns None ONLY after successful
+            # revoke/readback. False, error dictionaries and arbitrary payloads
+            # are not success. This still is not independent provider evidence.
             return False
         with self._storage.transaction():
+            current = self.db.execute("SELECT * FROM realtime_revoke_outbox WHERE job_id=?", (job_id,)).fetchone()
+            if (current is None or current["session_id"] != job["session_id"]
+                    or current["provider_session_id"] != job["provider_session_id"]):
+                raise ValueError("realtime_cleanup_binding_invalid")
             self.db.execute("UPDATE realtime_revoke_outbox SET state='completed' WHERE job_id=?", (job_id,))
         return True
 
@@ -450,10 +532,17 @@ class DurableRealtimeStore:
                 "COALESCE(SUM(o.state='pending' AND b.used>=?),0) "
                 "FROM realtime_revoke_outbox o JOIN realtime_revoke_budget b USING(job_id) "
                 "WHERE o.session_id=?", (revoke_limit, session_id)).fetchone()
+            lookup_jobs, pending_lookup = self.db.execute(
+                "SELECT COUNT(*),COALESCE(SUM(state='pending'),0) FROM realtime_revoke_outbox "
+                "WHERE session_id=? AND provider_session_id IS NULL", (session_id,)).fetchone()
+            lookup_exhausted = pending_lookup if used >= maximum else 0
             return {"session_id": session_id, "state": session["state"],
                     "lookup": {"used": used, "limit": maximum, "exhausted": used >= maximum},
-                    "cleanup": {"jobs": total, "pending": pending, "attempts": spent,
-                                "exhausted_pending": exhausted, "limit_per_job": revoke_limit},
+                    "cleanup": {"jobs": total + lookup_jobs, "pending": pending + pending_lookup,
+                                "known_jobs": total, "known_pending": pending,
+                                "lookup_jobs": lookup_jobs, "lookup_pending": pending_lookup,
+                                "attempts": spent, "exhausted_pending": exhausted + lookup_exhausted,
+                                "limit_per_job": revoke_limit},
                     "independent_evidence": False}
 
     def pending_recovery(self, *, limit: int = 100) -> list[str]:

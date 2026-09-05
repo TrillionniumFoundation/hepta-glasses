@@ -225,8 +225,9 @@ idempotent because a timeout/crash or concurrent permitted attempt can repeat
 cleanup; a finite budget is not an exactly-once remote deletion guarantee.
 
 `pending_recovery()` includes exhausted unresolved sessions. `recovery_status`
-reports lookup units used/limit and aggregate known cleanup attempts, pending
-jobs and exhausted pending jobs. It always labels independent evidence false.
+reports lookup units used/limit, known cleanup attempt counts, and totals of
+ALL cleanup jobs, pending jobs and exhausted pending jobs. Separate known/lookup
+fields provide the breakdown. It always labels independent evidence false.
 Exhaustion requires operator escalation with authentic provider facts, not a
 fresh activation, a rewritten expiry, a removed counter or a new empty database.
 This library does not install that operator workflow or a background scheduler.
@@ -237,3 +238,85 @@ has stopped, encrypted storage, or an anti-rollback anchor. Trusted operators
 can still defeat local state by restoring old snapshots or privileged row edits.
 Production provider binding, credential/session authority, live cleanup evidence
 and independent review remain open HG-0087 obligations.
+
+
+## Conflicting results, remote ownership and truthful cleanup status
+
+The current result-custody increment addresses three locally reproduced v3
+source failures. A concurrently returned activation and readback could name two
+different remote sessions: the loser raised an error while local authority stayed
+active and neither remote identity was queued for cleanup. A revoke adapter
+returning False was treated as a successful completed job. Finally, lookup-only
+cleanup was present in the outbox but omitted from recovery_status pending totals.
+These are local source counterexamples, not incidents observed in a live tenant.
+
+Final admission now treats a difference from an already-recorded remote session
+or receipt as a terminal local revocation. The same write transaction preserves
+cleanup for both owned remote session IDs, without overwriting the historical
+identity with the later answer. The exception is raised only after that transaction
+commits. Each cleanup retains its original nonrefundable attempt budget. Cleanup
+can proceed within the remaining caller budget or through later authorized drains;
+no late observation or successful cleanup restores local active authority.
+
+An identical result following a local generation interrupt is not a contradictory
+provider observation. It returns a stale-generation error without revoking the
+newer active generation. Expiry and caller timeout retain their existing distinct
+meanings. A conflicting result remains a reason to deny local authority even when
+there is no caller time left for immediate cleanup; the queued responsibility is
+still committed. Storage failure cannot be acknowledged as a durable denial, and
+the supervisor must close admission on such failures.
+
+A remote ID already present in another local session or its cleanup custody must
+not authorize deletion of that other session. The contender is locally revoked
+and receives its own unresolved lookup job. Any previously owned remote ID of the
+contender is queued normally, but the borrowed ID is not sent to revoke. This is
+checked under the same write transaction as admission/queueing. Retained completed
+cleanup and historical session identities participate in this check; an ID cannot
+be silently reused under another session. Secondary indexes support these lookups
+without scanning the complete retained inventories for each normal admission.
+
+This is LOCAL ownership in the database's assumed provider namespace. It does not
+supply a persistent tenant/provider configuration pin, authenticate a remote
+response, or prove that a trusted adapter correctly attributed an ID. Those
+production integration requirements remain open. If legacy state is ambiguous,
+do not use that ambiguity as permission to revoke someone else's remote session;
+keep unresolved custody and escalate. Privileged database rewriting and old
+snapshot restoration remain outside the local trust boundary.
+
+_queue_revoke validates the exact existing job binding rather than swallowing an
+unrelated integrity failure. A newly unresolved lookup may become pending again,
+but its spent lookup budget is never reset. Known completed cleanup is not
+reclassified as a new successful call or supplied with another allowance. Explicit
+revoke drains this session's pending known jobs, not only the single primary ID in
+sessions. It continues to report pending when any known secondary cleanup remains.
+An unknown-only local revoke retains the existing local-denial API behavior; it
+is never confirmation of remote cancellation.
+
+The trusted RealtimeProvider.revoke contract is a None return only after the
+adapter has verified its successful operation. Any non-None return, including
+False, True, numbers, strings and error dictionaries, stays pending and consumes
+its reserved attempt. None is still an adapter claim, not an independently
+verified provider receipt. A missing or rebound cleanup job cannot be reported
+completed after I/O. Completion and attempt reservations remain separate durable
+transactions, so a completion-write failure leaves spent budget and pending work.
+
+recovery_status.cleanup now reports jobs, pending and exhausted_pending across
+both lookup-only and known-session jobs. known_jobs/known_pending and
+lookup_jobs/lookup_pending expose the breakdown. attempts remains the sum of known
+revoke attempts; lookup.used reports lookup attempts. Consumers must not compare
+total pending only with known-job counts or interpret zero pending as independent
+provider evidence. independent_evidence remains false.
+
+Storage stays v3, all row layouts and recovery limits are unchanged, and only
+secondary indexes are added. Stop/drain old code before deploying this semantic
+upgrade: the unchanged marker cannot fence an old binary on reopening. The
+existing offline v2-to-v3 migration remains mandatory for a v2 database and is
+not modified by this increment. No live migration, provider exchange, credential,
+deployment, hard worker termination or release is performed by these tests.
+
+Regression: services/control_plane/test_realtime_result_custody.py uses real
+SQLite connections, public activation/readback races, deterministic final-method
+probes, write failures and a real subprocess exit during conflict cleanup. Run it
+with all prior realtime tests and the full final-head CI matrix. The known separate
+identity verdict-freshness objection and all actual HG-0087 production and
+independent acceptance conditions remain open.

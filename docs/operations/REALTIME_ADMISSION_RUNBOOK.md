@@ -88,7 +88,8 @@ success to reopen it. Do not rewrite generation, consumed-ticket state or expiry
 python3 -m unittest services.control_plane.test_durable_realtime \
   services.control_plane.test_realtime_custody \
   services.control_plane.test_realtime_admission \
-  services.control_plane.test_realtime_recovery_budget -v
+  services.control_plane.test_realtime_recovery_budget \
+  services.control_plane.test_realtime_result_custody -v
 python3 tools/validate_repository.py
 python3 tools/validate_repository_metadata.py
 python3 tools/validate_production_authority.py
@@ -125,3 +126,42 @@ failure before reservation cannot be reported as a completed remote action.
 
 The tests use fixture providers only. No real provider is contacted by the test
 suite, and no automated job created here performs background work after it exits.
+
+
+## Conflicting results and cleanup acknowledgement
+
+Treat realtime_provider_identity_conflict as a terminal local session denial,
+not merely a failed caller retry. Inspect recovery_status and pending_recovery:
+the original and alternate owned remote IDs can each require cleanup. The
+operator must preserve all jobs and their spent budgets across restart. A
+successful primary cleanup is insufficient while an alternate known job remains
+pending; explicit revoke and the drain now process those additional jobs.
+Do not overwrite the stored provider identity or restore an active generation.
+
+realtime_provider_owner_conflict means an observation named an ID belonging to
+another retained local session or its cleanup. The contender stays revoked with
+lookup-only responsibility. Do not revoke the other session to clear that error;
+resolve attribution using authentic provider records through the approved
+operator process. These checks assume one correctly governed provider namespace
+per database. They do not establish real account/tenant binding or response trust.
+
+The adapter's revoke method must return None only on its verified success and
+raise on uncertainty. Boolean/error-object returns cannot complete an outbox job.
+No return value from this trusted callback is independent evidence. If the
+provider operation happened but the local completion transaction failed, retain
+pending custody and its spent attempt; retry only idempotent cleanup within the
+existing allowance. Missing or rebound jobs are storage incidents, not success.
+
+In recovery_status, cleanup.pending and cleanup.jobs include lookup-only work as
+well as known provider jobs. Use known_pending and lookup_pending to distinguish
+them; exhausted_pending also includes exhausted lookup jobs. A revoked session
+with pending lookup has unresolved remote state even when known_pending is zero.
+Zero total pending is not a provider deletion certificate or release acceptance.
+
+No schema marker or recovery limit changes in this semantic update. Secondary
+indexes are added, but existing v3 rows are retained. Stop/drain older application
+binaries before rollout; v3 compatibility does not make the older unsafe result
+path acceptable. Do not use an automatic old-binary restart as rollback. The
+existing explicit v2-to-v3 migration and its unknown-historical-usage disclosure
+remain in force. The tests are local fixtures; production/provider validation and
+eligible independent review are still required.

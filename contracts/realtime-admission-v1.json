@@ -41,13 +41,21 @@
     "late_workers_commit": false,
     "expiry_denial_and_cleanup": "commit before raising",
     "historical_active_session": "not expired solely by ticket TTL",
-    "remote_deletion_proof_from_absence": false
+    "remote_deletion_proof_from_absence": false,
+    "conflicting_known_identity": "terminal local revoke and durable cleanup of all owned known identities before raising",
+    "cross_session_remote_alias": "deny the contender and retain its lookup; never revoke the other owner from a mismatched observation",
+    "same_identity_after_interrupt": "stale-generation error without revoking the newer active generation",
+    "cleanup_adapter_return": "only None is the successful trusted adapter contract; false/error payloads remain pending",
+    "cleanup_summary": "jobs/pending/exhausted_pending count both lookup and known-session cleanup; known_* and lookup_* give breakdowns",
+    "conflict_recovery": "no reactivation or automatic reset; exhausted lookup/cleanup remains pending",
+    "provider_binding_limit": "local single-provider namespace assumed; no persisted provider/tenant pin or external response authentication added"
   },
   "tests": [
     "services/control_plane/test_durable_realtime.py",
     "services/control_plane/test_realtime_custody.py",
     "services/control_plane/test_realtime_admission.py",
-    "services/control_plane/test_realtime_recovery_budget.py"
+    "services/control_plane/test_realtime_recovery_budget.py",
+    "services/control_plane/test_realtime_result_custody.py"
   ],
   "not_provided": [
     "real provider exchange",

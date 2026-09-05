@@ -288,7 +288,8 @@
         "services/control_plane/test_durable_realtime.py",
         "services/control_plane/test_realtime_custody.py",
         "services/control_plane/test_realtime_admission.py",
-        "services/control_plane/test_realtime_recovery_budget.py"
+        "services/control_plane/test_realtime_recovery_budget.py",
+        "services/control_plane/test_realtime_result_custody.py"
       ],
       "contracts": [
         "contracts/realtime-speech-custody-v2.json",
