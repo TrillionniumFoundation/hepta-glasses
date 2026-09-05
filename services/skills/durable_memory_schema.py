@@ -8,6 +8,7 @@ from __future__ import annotations
 import sqlite3
 
 VERSION = 1
+APPLICATION_ID = 0x484D454D  # ASCII HMEM; component identity, not anti-rollback.
 REQUIRED_TABLES = frozenset({
     "memory_schema", "memory_consents", "memory_records", "memory_deletions",
 })
@@ -67,11 +68,21 @@ def ensure_memory_schema(db: sqlite3.Connection, *, version: int = VERSION) -> N
         raise ValueError("durable_memory_schema_migration_required")
     tables = {row[0] for row in db.execute(
         "SELECT name FROM sqlite_master WHERE type='table'")}
+    application_id = db.execute("PRAGMA application_id").fetchone()[0]
     present = tables & REQUIRED_TABLES
     if not present:
+        # A retained component marker or sqlite_sequence residue means this is
+        # not a fresh Memory component. Never turn full table loss into empty
+        # authority. application_id survives VACUUM; sqlite_sequence catches
+        # predecessor v1 databases before their first marker adoption.
+        if application_id == APPLICATION_ID or "sqlite_sequence" in tables:
+            raise ValueError("durable_memory_schema_integrity_invalid")
+        if application_id != 0:
+            raise ValueError("durable_memory_application_id_conflict")
         for statement in _CREATE_TABLES:
             db.execute(statement)
         db.execute("INSERT INTO memory_schema VALUES(1,?)", (version,))
+        db.execute(f"PRAGMA application_id={APPLICATION_ID}")
     else:
         if present != REQUIRED_TABLES:
             raise ValueError("durable_memory_schema_integrity_invalid")
@@ -83,9 +94,14 @@ def ensure_memory_schema(db: sqlite3.Connection, *, version: int = VERSION) -> N
             raise ValueError("durable_memory_schema_integrity_invalid")
         if rows[0][1] != version:
             raise ValueError("durable_memory_schema_migration_required")
+        if application_id not in (0, APPLICATION_ID):
+            raise ValueError("durable_memory_application_id_conflict")
         if (any(_columns(db, table) != expected
                 for table, expected in _EXPECTED_COLUMNS.items())
                 or not _has_unique_event_id(db)):
             raise ValueError("durable_memory_schema_integrity_invalid")
+        if application_id == 0:
+            # Adopt the marker only after a complete predecessor schema passed.
+            db.execute(f"PRAGMA application_id={APPLICATION_ID}")
     for statement in _CREATE_INDEXES:
         db.execute(statement)
