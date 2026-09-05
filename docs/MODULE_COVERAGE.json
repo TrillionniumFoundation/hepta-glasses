@@ -239,7 +239,20 @@
     {
       "id": "model-gateway-service",
       "documentation": [
-        "docs/development/MODULE_HANDOFF.md#model-gateway-service"
+        "docs/development/MODULE_HANDOFF.md#model-gateway-service",
+        "docs/development/DURABLE_MODEL_GATEWAY.md",
+        "docs/operations/DURABLE_MODEL_GATEWAY_RUNBOOK.md"
+      ],
+      "source_roots": [
+        "services/model_gateway/responses_provider.py"
+      ],
+      "tests": [
+        "services/model_gateway/test_production.py",
+        "services/model_gateway/test_model_boundaries.py",
+        "services/model_gateway/test_responses_provider.py"
+      ],
+      "contracts": [
+        "contracts/durable-model-gateway-v2.json"
       ]
     },
     {

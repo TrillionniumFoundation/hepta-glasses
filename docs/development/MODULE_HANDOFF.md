@@ -73,7 +73,7 @@ Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#digital-twin`. Plat
 <!-- handoff:model-gateway-service -->
 ## model-gateway-service
 
-Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#model-gateway-service`. Platform status: Dependency-free Python development service. Evidence ceiling: Not a production AI service; provider tenancy, KMS references, abuse controls, observability and retention evidence remain external/source backlog.
+Primary detailed document: `docs/development/DURABLE_MODEL_GATEWAY.md`. Platform status: Python deterministic ingress plus SQLite v2 request custody and a fixed-endpoint text-only foreground Responses adapter; authenticated production ingress is not connected. Evidence ceiling: Source tests establish local quota/idempotency/revocation and wire-contract behavior only; live tenancy, retention, remote cancellation/recovery, identity integration, encrypted metadata and independent qualification remain open.
 
 <!-- handoff:identity-control-plane -->
 ## identity-control-plane

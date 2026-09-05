@@ -114,9 +114,9 @@
       "lifecycle": "development_reference",
       "profile": "engineering-handoff-v1",
       "index_anchor": "docs/development/MODULE_HANDOFF.md#model-gateway-service",
-      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#model-gateway-service",
-      "platform_status": "Dependency-free Python development service.",
-      "evidence_ceiling": "Not a production AI service; provider tenancy, KMS references, abuse controls, observability and retention evidence remain external/source backlog."
+      "primary_document": "docs/development/DURABLE_MODEL_GATEWAY.md",
+      "platform_status": "Python deterministic ingress plus SQLite v2 request custody and a fixed-endpoint text-only foreground Responses adapter; authenticated production ingress is not connected.",
+      "evidence_ceiling": "Source tests establish local quota/idempotency/revocation and wire-contract behavior only; live tenancy, retention, remote cancellation/recovery, identity integration, encrypted metadata and independent qualification remain open."
     },
     {
       "id": "identity-control-plane",

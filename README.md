@@ -45,3 +45,18 @@ OPEN for sandbox, egress, externally governed publisher trust/transparency,
 authenticated consent and independent package qualification. The separate known
 identity freshness defect and previously blocked identity/speech/Memory writes
 are not repaired or published by this Skills increment.
+
+## Durable model request development
+
+`docs/development/DURABLE_MODEL_GATEWAY.md`,
+`docs/operations/DURABLE_MODEL_GATEWAY_RUNBOOK.md` and
+`contracts/durable-model-gateway-v2.json` describe atomic subject-scoped quota and
+idempotency, readback-only crash recovery, cancellation/revocation fencing and a
+text-only foreground Responses HTTPS adapter. The v2 API requires explicit host
+clock, provider binding and absolute consent expiry; unversioned databases are
+rejected rather than reset. No credentials or live provider tests are included.
+`app.py` remains a separate development endpoint. Local cancellation is not remote
+termination; an uncertain nonstored foreground response cannot be reconstructed
+by retrying its POST. HG-0087/model remains OPEN for authenticated composition,
+real provider/retention/billing qualification, remote cancellation/recovery,
+service isolation, encrypted metadata and independent acceptance.

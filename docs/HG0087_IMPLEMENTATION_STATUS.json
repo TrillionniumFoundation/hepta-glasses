@@ -32,7 +32,27 @@
       "id": "model",
       "owner": "ai-platform",
       "status": "OPEN",
-      "acceptance": "Production provider exchange, quotas, cancellation, receipts, retention and observability"
+      "acceptance": "Production provider exchange, quotas, cancellation, receipts, retention and observability",
+      "implemented": [
+        "SQLite v2 atomic subject-scoped request/quota/event reservation with explicit provider binding and live host clock",
+        "Bounded generation/readback, persistent claim fencing, readback-only crash recovery and immutable authority expiry",
+        "Monotonic request/session delivery denial, final result authority recheck and capacity-triggered suspension",
+        "Concrete fixed-endpoint text-only foreground OpenAI Responses HTTPS adapter without retries, redirects, tools or stored responses",
+        "Metadata-only receipts with hashed provider IDs; no plaintext payloads or live credential fixtures"
+      ],
+      "tests": [
+        "services/model_gateway/test_production.py",
+        "services/model_gateway/test_model_boundaries.py",
+        "services/model_gateway/test_responses_provider.py"
+      ],
+      "remaining": [
+        "authenticated service/mobile/session integration",
+        "live provider tenant, retention, billing and abuse qualification",
+        "remote foreground job cancellation or authoritative recovery",
+        "hard process/service isolation and production egress governance",
+        "encrypted metadata storage, retention and backup anti-rollback",
+        "production observability and independent acceptance"
+      ]
     },
     {
       "id": "realtime",
@@ -126,6 +146,6 @@
     "HG-0044"
   ],
   "administrative_adoption_gap": "HG-0089",
-  "implementation_scope": "Incremental realtime, committed-evidence custody, durable identity and capabilities, plus signed Skill package admission and persistent revocation; not full HG-0087 closure.",
+  "implementation_scope": "Incremental realtime, committed-evidence custody, durable identity and capabilities, plus signed Skill package admission and persistent revocation; not full HG-0087 closure. Model v2 request custody and a foreground Responses transport are incremental source additions, not authenticated production composition or remote recovery/cancellation.",
   "validation_scope": "Run current exact-head CI; deterministic local tests are not complete repository or E4 evidence."
 }
