@@ -168,11 +168,13 @@
         "Consent and expiry enforcement, restart-safe search/export and transactional key rotation",
         "Cursor-paginated durable deletion tombstones for downstream propagation custody",
         "Established schema integrity rejects missing or malformed consent, record and deletion authority instead of recreating empty tables",
-        "Consent/write time is sampled after SQLite lock waiting and rechecked after encryption/insertion; reads suppress records expiring during decryption"
+        "Consent/write time is sampled after SQLite lock waiting and rechecked after encryption/insertion; reads suppress records expiring during decryption",
+        "Persistent SQLite application identity distinguishes a fresh component from complete authority-table loss, including after VACUUM"
       ],
       "tests": [
         "services/skills/test_durable_memory.py",
-        "services/skills/test_durable_memory_schema.py"
+        "services/skills/test_durable_memory_schema.py",
+        "services/skills/test_durable_memory_component_identity.py"
       ],
       "remaining": [
         "Production per-subject KMS/HSM/platform key service and authenticated application ingress",
@@ -187,6 +189,6 @@
     "HG-0010","HG-0011","HG-0012","HG-0013","HG-0014","HG-0015","HG-0016","HG-0017","HG-0018","HG-0021","HG-0022","HG-0044"
   ],
   "administrative_adoption_gap": "HG-0089",
-  "implementation_scope": "Incremental realtime, committed-evidence custody, durable identity/capabilities, signed Skill admission, model send and recovery-inventory custody, speech bootstrap custody, and encrypted durable Memory custody with schema/time hardening; not full HG-0087 closure. Live provider/device/mobile integration and authority-owned product evidence remain separate.",
+  "implementation_scope": "Incremental realtime, committed-evidence custody, durable identity/capabilities, signed Skill admission, model send and recovery-inventory custody, speech bootstrap custody, and encrypted durable Memory custody with schema/time/component-identity hardening; not full HG-0087 closure. Live provider/device/mobile integration and authority-owned product evidence remain separate.",
   "validation_scope": "Run current exact-head CI; deterministic local tests are not complete repository or E4 evidence."
 }
