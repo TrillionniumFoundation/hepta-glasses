@@ -52,7 +52,7 @@ class RealtimeCustodyTests(unittest.TestCase):
         self.store = self.open_store()
 
     def open_store(self, **kwargs):
-        store = DurableRealtimeStore(self.path, provider=self.provider, **kwargs)
+        store = DurableRealtimeStore(self.path, provider=self.provider, clock=lambda:10, **kwargs)
         self.stores.append(store)
         return store
 
@@ -66,13 +66,13 @@ class RealtimeCustodyTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def ticket(self, subject="owner", session_id="session"):
-        return self.store.issue_ticket(subject=subject, session_id=session_id, now=10)
+        return self.store.issue_ticket(subject=subject, session_id=session_id)
 
     def async_activate(self, ticket):
         values, errors = [], []
         def run():
             try:
-                values.append(self.store.activate(ticket=ticket, subject="owner", session_id="session", now=11))
+                values.append(self.store.activate(ticket=ticket, subject="owner", session_id="session"))
             except BaseException as error:
                 errors.append(error)
         worker = threading.Thread(target=run)
@@ -109,7 +109,7 @@ class RealtimeCustodyTests(unittest.TestCase):
     def test_session_subject_collision_rejected_before_ticket_or_provider(self):
         self.ticket(subject="subject-A")
         with self.assertRaisesRegex(DurableRealtimeError, "subject_conflict"):
-            self.open_store().issue_ticket(subject="subject-B", session_id="session", now=10)
+            self.open_store().issue_ticket(subject="subject-B", session_id="session")
         self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM tickets").fetchone()[0], 1)
         self.assertEqual(self.provider.activation_calls, 0)
 
@@ -120,15 +120,15 @@ import os, sys
 from services.control_plane.durable_realtime import DurableRealtimeStore
 class Provider:
     def activate(self, **kwargs): os._exit(73)
-s = DurableRealtimeStore(sys.argv[1], provider=Provider())
-t = s.issue_ticket(subject="owner",session_id="crashed",now=10)
-s.activate(ticket=t,subject="owner",session_id="crashed",now=11)
+s = DurableRealtimeStore(sys.argv[1], provider=Provider(), clock=lambda:10)
+t = s.issue_ticket(subject="owner",session_id="crashed")
+s.activate(ticket=t,subject="owner",session_id="crashed")
 '''
         run = subprocess.run([sys.executable, "-c", script, path], timeout=5, capture_output=True)
         self.assertEqual(run.returncode, 73, run.stderr.decode())
         with closing(sqlite3.connect(path)) as db:
             self.assertEqual(db.execute("SELECT state FROM sessions").fetchone()[0], "activating")
-        recovered = DurableRealtimeStore(path, provider=self.provider)
+        recovered = DurableRealtimeStore(path, provider=self.provider, clock=lambda:10)
         try:
             self.assertEqual(recovered.pending_recovery(), ["crashed"])
             self.assertEqual(recovered.reconcile("crashed")["state"], "active")
@@ -141,7 +141,7 @@ s.activate(ticket=t,subject="owner",session_id="crashed",now=11)
         self.store.db.execute("CREATE TRIGGER refuse_active BEFORE UPDATE ON sessions "
                               "WHEN NEW.state='active' BEGIN SELECT RAISE(ABORT,'fixture'); END")
         with self.assertRaises(sqlite3.IntegrityError):
-            self.store.activate(ticket=ticket, subject="owner", session_id="session", now=11)
+            self.store.activate(ticket=ticket, subject="owner", session_id="session")
         self.assertEqual(self.store.db.execute("SELECT state FROM sessions").fetchone()[0], "activating")
         self.store.db.execute("DROP TRIGGER refuse_active")
         self.assertEqual(self.open_store().reconcile("session")["state"], "active")
@@ -149,7 +149,7 @@ s.activate(ticket=t,subject="owner",session_id="crashed",now=11)
 
     def test_provider_revoke_failure_is_durable_and_retryable_cleanup_only(self):
         ticket = self.ticket()
-        self.store.activate(ticket=ticket, subject="owner", session_id="session", now=11)
+        self.store.activate(ticket=ticket, subject="owner", session_id="session")
         self.provider.fail_revoke = True
         with self.assertRaisesRegex(DurableRealtimeError, "revoke_pending"):
             self.store.revoke("session")
@@ -164,10 +164,10 @@ s.activate(ticket=t,subject="owner",session_id="crashed",now=11)
         ticket = self.ticket()
         start = time.monotonic()
         with self.assertRaisesRegex(DurableRealtimeError, "indeterminate"):
-            self.store.activate(ticket=ticket, subject="owner", session_id="session", now=11, timeout_seconds=.03)
+            self.store.activate(ticket=ticket, subject="owner", session_id="session", timeout_seconds=.03)
         self.assertLess(time.monotonic() - start, 1)
         with self.assertRaisesRegex(DurableRealtimeError, "replayed"):
-            self.store.activate(ticket=ticket, subject="owner", session_id="session", now=11)
+            self.store.activate(ticket=ticket, subject="owner", session_id="session")
         self.provider.release.set()
         self.assertEqual(self.store.reconcile("session")["state"], "active")
         self.assertEqual(self.provider.activation_calls, 1)
@@ -176,7 +176,7 @@ s.activate(ticket=t,subject="owner",session_id="crashed",now=11)
         ticket = self.ticket()
         self.provider.fail = True
         with self.assertRaises(DurableRealtimeError):
-            self.store.activate(ticket=ticket, subject="owner", session_id="session", now=11)
+            self.store.activate(ticket=ticket, subject="owner", session_id="session")
         self.provider.receipt = None
         with self.assertRaisesRegex(DurableRealtimeError, "indeterminate"):
             self.store.reconcile("session")
@@ -186,15 +186,15 @@ s.activate(ticket=t,subject="owner",session_id="crashed",now=11)
         old = self.ticket()
         current = self.ticket()
         with self.assertRaisesRegex(DurableRealtimeError, "replayed"):
-            self.store.activate(ticket=old, subject="owner", session_id="session", now=11)
-        self.store.activate(ticket=current, subject="owner", session_id="session", now=11)
+            self.store.activate(ticket=old, subject="owner", session_id="session")
+        self.store.activate(ticket=current, subject="owner", session_id="session")
         self.store.revoke("session")
         with self.assertRaisesRegex(DurableRealtimeError, "not_new"):
             self.ticket()
 
     def test_generation_and_boolean_rejection(self):
         ticket = self.ticket()
-        self.store.activate(ticket=ticket, subject="owner", session_id="session", now=11)
+        self.store.activate(ticket=ticket, subject="owner", session_id="session")
         with self.assertRaises(DurableRealtimeError):
             self.store.require_generation("session", True)
         self.assertEqual(self.store.interrupt("session", generation=1)["generation"], 2)
@@ -205,17 +205,17 @@ s.activate(ticket=t,subject="owner",session_id="crashed",now=11)
         ticket = self.ticket()
         self.provider.receipt = RealtimeActivation("", "")
         with self.assertRaisesRegex(DurableRealtimeError, "response_invalid"):
-            self.store.activate(ticket=ticket, subject="owner", session_id="session", now=11)
+            self.store.activate(ticket=ticket, subject="owner", session_id="session")
         self.assertEqual(self.store.pending_recovery(), ["session"])
 
     def test_capacity_and_invalid_deadlines_fail_before_effect(self):
         limited = self.open_store(maximum_records=1)
         self.ticket()
         with self.assertRaisesRegex(DurableRealtimeError, "capacity"):
-            limited.issue_ticket(subject="owner", session_id="second", now=10)
+            limited.issue_ticket(subject="owner", session_id="second")
         for value in [True, float("nan"), float("inf"), 0, -1, 61]:
             with self.assertRaises(DurableRealtimeError):
-                self.store.activate(ticket="x", subject="owner", session_id="s", now=11, timeout_seconds=value)
+                self.store.activate(ticket="x", subject="owner", session_id="s", timeout_seconds=value)
         self.assertEqual(self.provider.activation_calls, 0)
 
     def test_unknown_schema_is_not_silently_reinterpreted(self):

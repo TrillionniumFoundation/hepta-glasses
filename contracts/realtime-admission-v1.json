@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "contract_id": "realtime-admission-v1",
+  "parent_gap": "HG-0087",
+  "owner": "cloud",
+  "implementation": "services/control_plane/durable_realtime.py",
+  "extends_contract": "contracts/realtime-speech-custody-v2.json",
+  "api": {
+    "clock": "required trusted host Callable[[], int], Unix seconds",
+    "caller_now_supported": false,
+    "ticket_expiry": "deadline for initial activation completion; not lifetime of an already-active session",
+    "sample_points": [
+      "after write lock",
+      "before reservation commit",
+      "after worker scheduling, before provider call",
+      "before and after active-state update"
+    ],
+    "expired_recovery": "local terminal revoke with durable lookup/known-session cleanup; never new activation"
+  },
+  "storage": {
+    "component": "realtime",
+    "version": 2,
+    "layout_changed": false,
+    "unmarked_existing_tables": "reject; no synthesized attempts",
+    "incomplete_marked_schema": "reject; no missing outbox recreation",
+    "old_binary_fencing": false,
+    "mixed_version_deployment_supported": false,
+    "existing_ticket_deadlines_preserved": true,
+    "anti_rollback": false
+  },
+  "deadlines": {
+    "maximum_ticket_seconds": 300,
+    "default_ticket_seconds": 60,
+    "maximum_caller_seconds": 60,
+    "cleanup_budget": "one monotonic budget across the batch and nested provider work",
+    "maximum_workers": 16,
+    "hard_process_termination": false
+  },
+  "result_custody": {
+    "late_workers_commit": false,
+    "expiry_denial_and_cleanup": "commit before raising",
+    "historical_active_session": "not expired solely by ticket TTL",
+    "remote_deletion_proof_from_absence": false
+  },
+  "tests": [
+    "services/control_plane/test_durable_realtime.py",
+    "services/control_plane/test_realtime_custody.py",
+    "services/control_plane/test_realtime_admission.py"
+  ],
+  "not_provided": [
+    "real provider exchange",
+    "authenticated ingress and live identity/session revocation",
+    "production session-lifetime enforcement",
+    "authoritative provider lookup/revoke evidence",
+    "external clock/anti-rollback anchor",
+    "encrypted metadata and bounded service deployment",
+    "independent acceptance"
+  ],
+  "claim_ceiling": "Local source and regression behavior, not full HG-0087 closure, physical-device or production qualification."
+}

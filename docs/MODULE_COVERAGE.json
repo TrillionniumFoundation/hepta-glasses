@@ -276,17 +276,21 @@
       "documentation": [
         "docs/development/MODULE_HANDOFF.md#realtime-control-plane",
         "docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md",
-        "docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md"
+        "docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md",
+        "docs/development/REALTIME_ADMISSION.md",
+        "docs/operations/REALTIME_ADMISSION_RUNBOOK.md"
       ],
       "source_roots": [
         "services/control_plane/durable_realtime.py"
       ],
       "tests": [
         "services/control_plane/test_durable_realtime.py",
-        "services/control_plane/test_realtime_custody.py"
+        "services/control_plane/test_realtime_custody.py",
+        "services/control_plane/test_realtime_admission.py"
       ],
       "contracts": [
-        "contracts/realtime-speech-custody-v2.json"
+        "contracts/realtime-speech-custody-v2.json",
+        "contracts/realtime-admission-v1.json"
       ]
     },
     {

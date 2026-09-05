@@ -132,9 +132,9 @@
       "lifecycle": "development_reference",
       "profile": "engineering-handoff-v1",
       "index_anchor": "docs/development/MODULE_HANDOFF.md#realtime-control-plane",
-      "primary_document": "docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md",
-      "platform_status": "Python reference APIs plus SQLite exact-attempt realtime custody, persistent revocation and a cleanup outbox on trusted local storage.",
-      "evidence_ceiling": "Source persistence and deterministic recovery tests do not establish a live provider exchange, authenticated service integration, remote cleanup or production latency."
+      "primary_document": "docs/development/REALTIME_ADMISSION.md",
+      "platform_status": "Python reference APIs plus SQLite realtime custody with an explicit trusted host clock, final admission-expiry checks and durable cleanup of expired activation results.",
+      "evidence_ceiling": "Local custody and deadline tests do not establish live provider exchange, authenticated ingress, session-lifetime enforcement, remote cleanup facts, anti-rollback or production latency."
     },
     {
       "id": "capability-control-plane",

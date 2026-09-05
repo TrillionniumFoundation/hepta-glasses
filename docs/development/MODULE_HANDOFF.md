@@ -83,7 +83,7 @@ Primary detailed document: `docs/development/DURABLE_IDENTITY.md`. Platform stat
 <!-- handoff:realtime-control-plane -->
 ## realtime-control-plane
 
-Primary detailed document: `docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md`. Platform status: Python reference APIs plus SQLite exact-attempt realtime custody, persistent revocation and a cleanup outbox on trusted local storage. Evidence ceiling: Source persistence and deterministic recovery tests do not establish a live provider exchange, authenticated service integration, remote cleanup or production latency.
+Primary detailed document: `docs/development/REALTIME_ADMISSION.md`. Platform status: Python reference APIs plus SQLite realtime custody with an explicit trusted host clock, final admission-expiry checks and durable cleanup of expired activation results. Evidence ceiling: Local custody and deadline tests do not establish live provider exchange, authenticated ingress, session-lifetime enforcement, remote cleanup facts, anti-rollback or production latency.
 
 <!-- handoff:capability-control-plane -->
 ## capability-control-plane
