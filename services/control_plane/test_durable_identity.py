@@ -51,7 +51,7 @@ class DurableIdentityTests(unittest.TestCase):
 
     def enroll(self):
         return self.store.accept_attestation(challenge=self.challenge(),
-                                            proof_digest="b" * 64, verification_receipt="fixture-verified")
+                                            proof_digest="b" * 64, verification_receipt="fixture-verified", verified_at=self.clock.now, verification_expires_at=1002)
 
     def session(self, **kwargs):
         self.enroll()
@@ -94,20 +94,20 @@ class DurableIdentityTests(unittest.TestCase):
         with self.assertRaises(DurableIdentityError):
             self.store.admit_subject("subject")
         with self.assertRaises(DurableIdentityError):
-            self.store.accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture")
+            self.store.accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture", verified_at=self.clock.now, verification_expires_at=1002)
 
     def test_unknown_device_revoked_during_attestation_cannot_be_created(self):
         challenge = self.challenge()
         self.open().revoke("device", "device")
         with self.assertRaisesRegex(DurableIdentityError, "revoked|spent"):
-            self.store.accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture")
+            self.store.accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture", verified_at=self.clock.now, verification_expires_at=1002)
         self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM identity_devices").fetchone()[0], 0)
 
     def test_challenge_replay_is_rejected(self):
         challenge = self.challenge()
-        self.store.accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture")
+        self.store.accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture", verified_at=self.clock.now, verification_expires_at=1002)
         with self.assertRaisesRegex(DurableIdentityError, "spent"):
-            self.open().accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture")
+            self.open().accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture", verified_at=self.clock.now, verification_expires_at=1002)
 
     def test_challenge_exact_fields_are_bound(self):
         challenge = self.challenge()
@@ -117,14 +117,14 @@ class DurableIdentityTests(unittest.TestCase):
                 changed = dataclasses.replace(challenge, **{field: value})
                 with self.assertRaises(DurableIdentityError):
                     self.store.accept_attestation(challenge=changed, proof_digest="b" * 64,
-                                                  verification_receipt="fixture")
-        self.store.accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture")
+                                                  verification_receipt="fixture", verified_at=self.clock.now, verification_expires_at=1002)
+        self.store.accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture", verified_at=self.clock.now, verification_expires_at=1002)
 
     def test_challenge_expired_at_exact_boundary(self):
         challenge = self.challenge(ttl_seconds=10)
         self.clock.now += 10
         with self.assertRaisesRegex(DurableIdentityError, "expired"):
-            self.store.accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture")
+            self.store.accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture", verified_at=self.clock.now, verification_expires_at=1002)
 
     def test_concurrent_challenge_consumption_only_one_wins(self):
         challenge = self.challenge()
@@ -134,7 +134,7 @@ class DurableIdentityTests(unittest.TestCase):
         def consume(store):
             start.wait()
             try:
-                store.accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture")
+                store.accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture", verified_at=self.clock.now, verification_expires_at=1002)
                 results.append("ok")
             except DurableIdentityError:
                 results.append("denied")
@@ -157,7 +157,7 @@ class DurableIdentityTests(unittest.TestCase):
         self.enroll()
         challenge = self.challenge()
         with self.assertRaisesRegex(DurableIdentityError, "recovery_required"):
-            self.store.accept_attestation(challenge=challenge, proof_digest="c" * 64, verification_receipt="fixture")
+            self.store.accept_attestation(challenge=challenge, proof_digest="c" * 64, verification_receipt="fixture", verified_at=self.clock.now, verification_expires_at=1002)
 
     def test_session_scope_admission_is_allowlisted(self):
         self.enroll()
@@ -192,7 +192,7 @@ class DurableIdentityTests(unittest.TestCase):
                     store.admit_subject("s")
                     challenge = store.challenge(subject="s", device_id="d", platform="ios",
                                                 application_id="app", signer_digest="a" * 64)
-                    store.accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture")
+                    store.accept_attestation(challenge=challenge, proof_digest="b" * 64, verification_receipt="fixture", verified_at=self.clock.now, verification_expires_at=1002)
                     session = store.create_session(subject="s", device_id="d", audience="a", scopes=["display"])
                     claims = store.prepare_token(subject="s", device_id="d", session_id=session, audience="a",
                                                  scopes=["display"], key_id="kid")
@@ -297,8 +297,8 @@ class DurableIdentityTests(unittest.TestCase):
         fresh = self.challenge(ttl_seconds=60)
         self.clock.now += 1
         with self.assertRaises(DurableIdentityError):
-            self.store.accept_attestation(challenge=old, proof_digest="b" * 64, verification_receipt="fixture")
-        self.store.accept_attestation(challenge=fresh, proof_digest="b" * 64, verification_receipt="fixture")
+            self.store.accept_attestation(challenge=old, proof_digest="b" * 64, verification_receipt="fixture", verified_at=self.clock.now, verification_expires_at=1002)
+        self.store.accept_attestation(challenge=fresh, proof_digest="b" * 64, verification_receipt="fixture", verified_at=self.clock.now, verification_expires_at=1002)
 
     def test_identity_policy_cannot_silently_change(self):
         for config in ({"issuer": "other"}, {"allowed_scopes": ["display"]}, {"maximum_token_ttl": 600}):
@@ -327,7 +327,7 @@ from services.control_plane.durable_identity import DurableIdentityStore
 s=DurableIdentityStore(sys.argv[1],issuer="test",allowed_scopes=["display"],clock=lambda:1000)
 s.admit_subject("u")
 c=s.challenge(subject="u",device_id="d",platform="ios",application_id="app",signer_digest="a"*64)
-s.accept_attestation(challenge=c,proof_digest="b"*64,verification_receipt="fixture")
+s.accept_attestation(challenge=c,proof_digest="b"*64,verification_receipt="fixture",verified_at=1000,verification_expires_at=1002)
 r=s.create_session(subject="u",device_id="d",audience="a",scopes=["display"])
 s.prepare_token(subject="u",device_id="d",session_id=r,audience="a",scopes=["display"],key_id="k")
 os._exit(73)

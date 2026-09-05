@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 from services.control_plane.bounded_calls import BoundedCalls
 from services.control_plane.durable_identity import (
     DurableIdentityError, DurableIdentityStore, EnrollmentChallenge,
-    _digest, _text, canonical_claims,
+    _attestation_window, _digest, _text, canonical_claims,
 )
 from services.control_plane.durable_state import deadline, timestamp
 
@@ -254,6 +254,9 @@ class DurableIdentityAuthority:
         if not deadline(timeout_seconds):
             raise DurableIdentityError("identity_broker_deadline_invalid")
         verdict = self.broker.verify_attestation(challenge, proof, timeout_seconds=timeout_seconds)
+        if isinstance(verdict, dict):
+            # Snapshot scalar verdict fields before callbacks/lock waiting.
+            verdict = dict(verdict)
         expected = {"subject": challenge.subject, "device_id": challenge.device_id,
                     "platform": challenge.platform, "application_id": challenge.application_id,
                     "signer_digest": challenge.signer_digest,
@@ -263,12 +266,11 @@ class DurableIdentityAuthority:
                 or verdict.get("verified") is not True or any(verdict.get(k) != v for k, v in expected.items())):
             raise DurableIdentityError("identity_attestation_verdict_invalid")
         now = self.store._now()
-        if (not timestamp(verdict["verified_at"]) or not timestamp(verdict["expires_at"])
-                or not now - 120 <= verdict["verified_at"] <= now
-                or not now < verdict["expires_at"] <= challenge.expires_at):
-            raise DurableIdentityError("identity_attestation_freshness_invalid")
-        return self.store.accept_attestation(challenge=challenge, proof_digest=expected["proof_sha256"],
-                                             verification_receipt=_text(verdict["receipt_id"]))
+        _attestation_window(verdict["verified_at"], verdict["expires_at"], challenge.expires_at, now)
+        return self.store.accept_attestation(
+            challenge=challenge, proof_digest=expected["proof_sha256"],
+            verification_receipt=_text(verdict["receipt_id"]),
+            verified_at=verdict["verified_at"], verification_expires_at=verdict["expires_at"])
 
     def issue(self, *, subject: str, device_id: str, session_id: str, audience: str,
               scopes: list[str], ttl_seconds: int = 300, timeout_seconds: float = 8) -> str:

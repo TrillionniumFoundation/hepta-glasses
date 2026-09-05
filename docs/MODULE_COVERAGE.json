@@ -96,7 +96,8 @@
         "docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md",
         "docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md",
         "docs/development/DURABLE_IDENTITY.md",
-        "docs/operations/IDENTITY_AUTHORITY_RUNBOOK.md"
+        "docs/operations/IDENTITY_AUTHORITY_RUNBOOK.md",
+        "docs/development/IDENTITY_ENROLLMENT_FRESHNESS.md"
       ],
       "contracts": [
         "contracts/realtime-speech-custody-v2.json",
@@ -104,7 +105,8 @@
       ],
       "tests": [
         "services/control_plane/test_durable_identity.py",
-        "services/control_plane/test_identity_authority.py"
+        "services/control_plane/test_identity_authority.py",
+        "services/control_plane/test_identity_enrollment_freshness.py"
       ]
     },
     {

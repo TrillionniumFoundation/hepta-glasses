@@ -66,6 +66,14 @@ def canonical_claims(value: Mapping[str, object]) -> bytes:
         raise DurableIdentityError("identity_claims_invalid") from error
 
 
+def _attestation_window(verified_at: int, expires_at: int,
+                        challenge_expires_at: int, now: int) -> None:
+    """Preserve the broker-issued window; receipt strings do not renew it."""
+    if (not timestamp(verified_at) or not timestamp(expires_at)
+            or not now - 120 <= verified_at <= now < expires_at <= challenge_expires_at):
+        raise DurableIdentityError("identity_attestation_freshness_invalid")
+
+
 @dataclass(frozen=True)
 class EnrollmentChallenge:
     nonce: str
@@ -212,9 +220,12 @@ class DurableIdentityStore:
                                    signer_digest, now + ttl_seconds)
 
     def accept_attestation(self, *, challenge: EnrollmentChallenge, proof_digest: str,
-                           verification_receipt: str) -> dict[str, object]:
+                           verification_receipt: str, verified_at: int,
+                           verification_expires_at: int) -> dict[str, object]:
         """Called only AFTER a trusted platform verifier validates the exact challenge.
 
+        Broker timestamps are mandatory and are rechecked under the write lock
+        and after the writes, before commit. There is no receipt-only fallback.
         A string receipt is an audit reference, not authentication of a proof.
         The production composition must use identity_authority.py, not expose
         this method as an endpoint that accepts a client's 'verified' boolean.
@@ -236,6 +247,7 @@ class DurableIdentityStore:
                 raise DurableIdentityError("identity_challenge_binding_invalid")
             if row["state"] != "issued" or row["expires_at"] <= now:
                 raise DurableIdentityError("identity_challenge_spent_or_expired")
+            _attestation_window(verified_at, verification_expires_at, row["expires_at"], now)
             if self._revoked("device", challenge.device_id):
                 raise DurableIdentityError("identity_device_revoked")
             device = self.db.execute("SELECT * FROM identity_devices WHERE id=?", (challenge.device_id,)).fetchone()
@@ -252,6 +264,12 @@ class DurableIdentityStore:
                                 (challenge.device_id, challenge.subject, proof_digest, challenge.platform,
                                  challenge.application_id, challenge.signer_digest, now))
             self.db.execute("UPDATE identity_challenges SET state='consumed' WHERE digest=?", (digest,))
+            # Failure here rolls back both device admission and challenge
+            # consumption, including expiry while local database work ran.
+            final_now = self._now()
+            if final_now < now:
+                raise DurableIdentityError("identity_attestation_clock_rollback")
+            _attestation_window(verified_at, verification_expires_at, row["expires_at"], final_now)
             # Receipt is returned, not persisted with raw platform claims/proof material.
             return {"device_id": challenge.device_id, "subject": challenge.subject,
                     "proof_digest": proof_digest, "verification_receipt": verification_receipt,
