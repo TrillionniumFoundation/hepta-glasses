@@ -3,9 +3,11 @@
 Status: HG-0087 Memory source increment; aggregate remains **OPEN**. Owner: privacy.
 Implementation: `services/skills/durable_memory.py` and
 `services/skills/durable_memory_schema.py`.
-Regression: `services/skills/test_durable_memory.py` and
-`services/skills/test_durable_memory_schema.py`.
-Contract: `contracts/durable-memory-v1.json`.
+Regression: `services/skills/test_durable_memory.py`,
+`services/skills/test_durable_memory_schema.py`, and
+`services/skills/test_durable_memory_component_identity.py`.
+Contract: `contracts/durable-memory-v1.json`. Complete-table-loss detection is
+specified in `docs/development/MEMORY_COMPONENT_IDENTITY.md`.
 
 ## Responsibility and trust boundary
 
@@ -35,11 +37,11 @@ Delete, purpose revoke and subject delete sample their deletion timestamp after 
 
 ## Established-schema integrity
 
-A fresh database creates the four authority tables and schema marker atomically. An established version-1 database must contain the exact schema singleton and all four tables: `memory_schema`, `memory_consents`, `memory_records` and `memory_deletions`. Missing authority tables, a missing marker row, incompatible columns, an unknown version or loss of deletion-event uniqueness fail startup. The constructor closes its connection on failure and never recreates the missing table as empty.
+A fresh database creates the four authority tables, schema row and the fixed SQLite `application_id` component marker atomically. An established version-1 database must contain the exact schema singleton and all four tables: `memory_schema`, `memory_consents`, `memory_records` and `memory_deletions`. Missing authority tables, a missing marker row, incompatible columns, an unknown version or loss of deletion-event uniqueness fail startup. The constructor closes its connection on failure and never recreates missing authority state as empty.
 
-This rule closes the reproduced failure where one pending deletion tombstone existed, `memory_deletions` was removed, and the predecessor silently created an empty table on reopen. The new code detects the loss; it cannot recover the already deleted fact. Derived lookup indexes contain no authority facts and may be rebuilt from intact tables.
+An intact predecessor database whose application ID is zero adopts the marker only after the complete schema validates, without rewriting custody rows. A conflicting nonzero ID is rejected. The marker survives normal `VACUUM`, so deleting all four Memory tables cannot turn a marked database into a fresh component. `sqlite_sequence` residue also catches complete loss of a legacy pre-marker database unless the whole file/header is deliberately replaced. Derived lookup indexes contain no authority facts and may be rebuilt from intact tables.
 
-The layout version remains 1 because no stored column or row is added. This is a stricter reader contract, not a data migration. Stop all old binaries before rollout: an already running predecessor can still recreate missing tables because it does not contain the new check. Do not remove the marker, repair a lost table with an empty replacement, or restore an older snapshot. Production backup integrity and anti-rollback remain open requirements.
+The layout version remains 1 because no stored data row or column is added. This is a stricter reader and component-identity contract, not a record migration. Stop all old binaries before rollout: a running predecessor lacks these checks. The marker is not cryptographic or externally monotonic; a privileged writer or stale whole-file restore remains outside the source guarantee. Do not remove the marker, repair lost tables with empty copies, or restore an older snapshot. Production backup integrity and anti-rollback remain open requirements.
 
 ## Key rotation
 
@@ -65,14 +67,15 @@ Run:
 
 ```bash
 python3 -m unittest services.skills.test_durable_memory \
-  services.skills.test_durable_memory_schema -v
+  services.skills.test_durable_memory_schema \
+  services.skills.test_durable_memory_component_identity -v
 python3 -m unittest services.skills.test_memory \
   services.skills.test_memory_boundaries -v
 python3 tools/validate_source_coverage.py
 python3 tools/validate_module_handoff.py
 ```
 
-The deterministic tests cover plaintext absence after checkpoint, restart recovery, authenticated metadata tampering, key rotation, unavailable keys, consent narrowing, expiry, paginated deletion custody, concurrent revoke/write serialization, missing/malformed schema state, lock-wait freshness, final write/read expiry, clock rollback and constructor lock release.
+The deterministic tests cover plaintext absence after checkpoint, restart recovery, authenticated metadata tampering, key rotation, unavailable keys, consent narrowing, expiry, paginated deletion custody, concurrent revoke/write serialization, partial and complete schema loss, component marker adoption/conflict, lock-wait freshness, final write/read expiry, clock rollback and constructor lock release.
 
 These tests use a non-production fixture cipher. They do not establish KMS/HSM strength, filesystem full-disk encryption, backup deletion, multi-device propagation, production privacy review or independent acceptance.
 
