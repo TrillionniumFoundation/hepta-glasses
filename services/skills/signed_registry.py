@@ -17,6 +17,7 @@ from services.skills.signed_package import (
     PublisherKey, SignedSkillError, canonical, digest, fail, inspect_package,
     name, parse_manifest, sha256, verify_signature, version,
 )
+from services.skills.signed_registry_schema import ensure_signed_skill_schema
 
 
 @dataclass(frozen=True)
@@ -70,20 +71,12 @@ class SignedSkillRegistry:
         try:
             with self.storage.transaction() as db:
                 unmarked = self.storage.version("signed_skills", 1)
-                if unmarked and db.execute("SELECT 1 FROM sqlite_master WHERE name GLOB 'signed_skill_*'").fetchone():
-                    fail("skill_unmarked_schema_rejected")
-                for statement in (
-                    "CREATE TABLE IF NOT EXISTS signed_skill_policy(id INTEGER PRIMARY KEY CHECK(id=1),policy BLOB NOT NULL,last_time INTEGER NOT NULL,suspended INTEGER NOT NULL)",
-                    "CREATE TABLE IF NOT EXISTS signed_skill_keys(id TEXT PRIMARY KEY,fingerprint TEXT UNIQUE NOT NULL,binding BLOB NOT NULL)",
-                    "CREATE TABLE IF NOT EXISTS signed_skill_installed(id TEXT PRIMARY KEY,document BLOB NOT NULL,signature BLOB NOT NULL,digest TEXT NOT NULL,consent_expires_at INTEGER NOT NULL,event_sequence INTEGER NOT NULL)",
-                    "CREATE TABLE IF NOT EXISTS signed_skill_revocations(kind TEXT NOT NULL,target TEXT NOT NULL,PRIMARY KEY(kind,target))",
-                    "CREATE TABLE IF NOT EXISTS signed_skill_events(sequence INTEGER PRIMARY KEY AUTOINCREMENT,event TEXT NOT NULL,target TEXT NOT NULL,digest TEXT NOT NULL,observed_at INTEGER NOT NULL,previous_hash TEXT NOT NULL,event_hash TEXT NOT NULL)",
-                ):
-                    db.execute(statement)
-                old = db.execute("SELECT policy FROM signed_skill_policy WHERE id=1").fetchone()
-                if old and bytes(old[0]) != policy:
-                    fail("skill_registry_policy_migration_required")
-                db.execute("INSERT OR IGNORE INTO signed_skill_policy VALUES(1,?,?,0)", (policy, self._now()))
+                ensure_signed_skill_schema(
+                    db,
+                    fresh=unmarked,
+                    policy=policy,
+                    now=self._now() if unmarked else None,
+                )
                 for kid, key in pins.items():
                     fingerprint = sha256(key.public_der)
                     binding = canonical({"publisher": key.publisher, "not_before": key.not_before, "not_after": key.not_after})
