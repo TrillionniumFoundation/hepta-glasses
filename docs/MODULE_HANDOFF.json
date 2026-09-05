@@ -150,9 +150,9 @@
       "lifecycle": "development_reference",
       "profile": "engineering-handoff-v1",
       "index_anchor": "docs/development/MODULE_HANDOFF.md#skills-registry",
-      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#skills-registry",
-      "platform_status": "Python development registry; execution sandbox is separate and not implemented by admission alone.",
-      "evidence_ceiling": "Asymmetric roots, transparency, encrypted package store, sandbox, emergency revoke and independent package review remain open/external."
+      "primary_document": "docs/development/SIGNED_SKILLS.md",
+      "platform_status": "Python legacy reference plus Linux Ed25519 package verification, exact inventory checks and a SQLite consent/version/revocation registry; no executor is installed.",
+      "evidence_ceiling": "Source checks establish signed-byte admission and local persistence only; actual sandbox/egress, external publisher trust/transparency, authenticated consent and independent package qualification remain open."
     },
     {
       "id": "memory",

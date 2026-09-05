@@ -93,7 +93,7 @@ Primary detailed document: `docs/development/DURABLE_CAPABILITIES.md`. Platform 
 <!-- handoff:skills-registry -->
 ## skills-registry
 
-Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#skills-registry`. Platform status: Python development registry; execution sandbox is separate and not implemented by admission alone. Evidence ceiling: Asymmetric roots, transparency, encrypted package store, sandbox, emergency revoke and independent package review remain open/external.
+Primary detailed document: `docs/development/SIGNED_SKILLS.md`. Platform status: Python legacy reference plus Linux Ed25519 package verification, exact inventory checks and a SQLite consent/version/revocation registry; no executor is installed. Evidence ceiling: Source checks establish signed-byte admission and local persistence only; actual sandbox/egress, external publisher trust/transparency, authenticated consent and independent package qualification remain open.
 
 <!-- handoff:memory -->
 ## memory

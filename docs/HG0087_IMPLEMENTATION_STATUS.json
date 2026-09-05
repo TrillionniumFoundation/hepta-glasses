@@ -82,7 +82,27 @@
       "id": "skills",
       "owner": "skills",
       "status": "OPEN",
-      "acceptance": "Asymmetric publisher verification, sandbox, egress, transparency, dependency evidence and emergency revoke"
+      "acceptance": "Asymmetric publisher verification, sandbox, egress, transparency, dependency evidence and emergency revoke",
+      "implemented": [
+        "Externally pinned publisher-bound Ed25519 manifest verification without legacy HMAC fallback",
+        "Exact bounded ZIP inventory, path and byte snapshot validation without extraction or execution",
+        "SQLite exact-consent/version admission and terminal Skill/publisher/key/package revocations across restart",
+        "Transitive exact dependency resolution, current-authority recheck after verification and final transaction expiry checks",
+        "Bounded verifier workers and local audit-chain consistency without external transparency claims"
+      ],
+      "tests": [
+        "services/skills/test_signed_registry.py"
+      ],
+      "remaining": [
+        "execution sandbox",
+        "actual egress enforcement",
+        "external publisher-root administration",
+        "externally witnessed package transparency",
+        "authenticated consent service",
+        "running-task termination",
+        "encrypted package vault",
+        "independent package/deployment qualification"
+      ]
     },
     {
       "id": "memory",
@@ -106,6 +126,6 @@
     "HG-0044"
   ],
   "administrative_adoption_gap": "HG-0089",
-  "implementation_scope": "Incremental realtime, committed-evidence custody, durable identity and durable capability intent/recovery source; not full HG-0087 closure.",
+  "implementation_scope": "Incremental realtime, committed-evidence custody, durable identity and capabilities, plus signed Skill package admission and persistent revocation; not full HG-0087 closure.",
   "validation_scope": "Run current exact-head CI; deterministic local tests are not complete repository or E4 evidence."
 }

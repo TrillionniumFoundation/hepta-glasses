@@ -34,3 +34,14 @@ The handoff index selects the current identity, realtime and capability designs;
 these supersede the old in-memory-only descriptions for those durable components.
 The legacy reference APIs remain documented separately. Structural validation of
 26 module entries is not proof of semantic completeness or production readiness.
+
+## Signed Skill package development
+
+`docs/development/SIGNED_SKILLS.md`, `docs/operations/SIGNED_SKILLS_RUNBOOK.md`
+and `contracts/signed-skill-package-v1.json` describe the publisher-bound Ed25519
+package format and durable consent/version/revocation registry. This validates
+immutable package bytes without extraction or execution. HG-0087/skills remains
+OPEN for sandbox, egress, externally governed publisher trust/transparency,
+authenticated consent and independent package qualification. The separate known
+identity freshness defect and previously blocked identity/speech/Memory writes
+are not repaired or published by this Skills increment.

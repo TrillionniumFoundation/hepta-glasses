@@ -141,10 +141,20 @@
     {
       "id": "skills-registry",
       "source_roots": [
-        "services/skills/__init__.py"
+        "services/skills/__init__.py",
+        "services/skills/signed_package.py",
+        "services/skills/signed_registry.py"
       ],
       "documentation": [
-        "docs/development/MODULE_HANDOFF.md#skills-registry"
+        "docs/development/MODULE_HANDOFF.md#skills-registry",
+        "docs/development/SIGNED_SKILLS.md",
+        "docs/operations/SIGNED_SKILLS_RUNBOOK.md"
+      ],
+      "tests": [
+        "services/skills/test_signed_registry.py"
+      ],
+      "contracts": [
+        "contracts/signed-skill-package-v1.json"
       ]
     },
     {
