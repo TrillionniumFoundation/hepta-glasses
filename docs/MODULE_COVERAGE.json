@@ -87,15 +87,24 @@
       "id": "identity-control-plane",
       "source_roots": [
         "services/control_plane/__init__.py",
-        "services/control_plane/durable_state.py"
+        "services/control_plane/durable_state.py",
+        "services/control_plane/durable_identity.py",
+        "services/control_plane/identity_authority.py"
       ],
       "documentation": [
         "docs/development/MODULE_HANDOFF.md#identity-control-plane",
         "docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md",
-        "docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md"
+        "docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md",
+        "docs/development/DURABLE_IDENTITY.md",
+        "docs/operations/IDENTITY_AUTHORITY_RUNBOOK.md"
       ],
       "contracts": [
-        "contracts/realtime-speech-custody-v2.json"
+        "contracts/realtime-speech-custody-v2.json",
+        "contracts/identity-authority-v1.json"
+      ],
+      "tests": [
+        "services/control_plane/test_durable_identity.py",
+        "services/control_plane/test_identity_authority.py"
       ]
     },
     {

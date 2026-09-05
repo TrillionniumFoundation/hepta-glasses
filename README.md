@@ -11,8 +11,10 @@ Start with `docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md`, `docs/REMEDI
 - `docs/HG0087_IMPLEMENTATION_STATUS.json` separates the seven still-open production slices.
 - `contracts/realtime-speech-custody-v2.json` defines the realtime custody patch and explicitly pending speech requirements.
 
-HG-0087 remains OPEN. The current patch covers durable realtime correctness,
-recovery, cleanup and documentation only. Speech source is not changed by this
-patch. Local tests are not exact-head CI, production tenancy, physical-device
+HG-0087 remains OPEN. Source increments now include realtime correctness,
+committed-evidence custody and durable identity/broker verification. Identity design
+and operations are in `docs/development/DURABLE_IDENTITY.md` and
+`docs/operations/IDENTITY_AUTHORITY_RUNBOOK.md`. Production integration remains
+explicitly open. Speech source is unchanged by these increments. Local tests are not exact-head CI, production tenancy, physical-device
 qualification, independent review or release evidence. Continue in PR #101
 without force-push, self-approval, self-merge or bypass.

@@ -9,7 +9,24 @@
       "id": "identity",
       "owner": "cloud-security",
       "status": "OPEN",
-      "acceptance": "Persistent identity/device/session/token/revocation, KMS/HSM and platform attestation, authenticated mobile lease integration"
+      "acceptance": "Persistent identity/device/session/token/revocation, KMS/HSM and platform attestation, authenticated mobile lease integration",
+      "implemented": [
+        "SQLite subject/device/challenge/session/token/revocation repositories",
+        "Atomic nonce consumption and final token authority recheck",
+        "Ed25519-only HGAT2 verification using pinned public keys and sealed anonymous memory",
+        "Bounded authenticated HTTPS broker client with exact proof/signature response binding",
+        "Persistent revocation events and interrupted-signing recovery inventory"
+      ],
+      "tests": [
+        "services/control_plane/test_durable_identity.py",
+        "services/control_plane/test_identity_authority.py"
+      ],
+      "remaining": [
+        "Real KMS/HSM and Android/Apple verifier services behind the broker",
+        "Authenticated account and step-up lost-device replacement workflow",
+        "Mobile identity-backed mutation-authority integration",
+        "Downstream live-session revoke consumers and witnessed deployment drills"
+      ]
     },
     {
       "id": "model",
@@ -73,6 +90,6 @@
     "HG-0044"
   ],
   "administrative_adoption_gap": "HG-0089",
-  "implementation_scope": "Realtime source, its tests and shared storage primitive only. No full HG-0087 closure.",
+  "implementation_scope": "Incremental realtime, committed-evidence custody and durable identity source; not full HG-0087 closure.",
   "validation_scope": "Run current exact-head CI; deterministic local tests are not complete repository or E4 evidence."
 }

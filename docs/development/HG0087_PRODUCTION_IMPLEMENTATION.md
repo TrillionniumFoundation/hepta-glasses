@@ -2,7 +2,8 @@
 
 Status: OPEN, partial source candidate. This document supplements the active
 `2026-09-03_BLOCKER_EXECUTION_PLAN.md`; it does not supersede its requirements.
-The current patch implements realtime custody repairs only. The speech gateway
+The initial patch implemented realtime custody repairs; a subsequent identity
+increment is described in `DURABLE_IDENTITY.md` and its dedicated runbook. The speech gateway
 is unchanged: its proposed repair was not published after the remote write was
 blocked by the platform safety check. No source, CI or product closure is inferred.
 `docs/HG0087_IMPLEMENTATION_STATUS.json` is the seven-slice implementation index.
@@ -142,8 +143,9 @@ complete.
 
 ## 7. Remaining vertical slices
 
-Identity still needs durable identity/device/token/revocation stores, KMS/HSM,
-platform attestation, recovery and authenticated mobile authority. Model exchange
+Identity now has durable stores and the broker client described in section 9;
+real KMS/HSM/platform-verifier services, recovery and authenticated mobile
+authority integration remain unfinished. Model exchange
 still needs real provider routing, cancellation, quotas, receipts and retention.
 Realtime still needs an authenticated service and a concrete provider adapter.
 Capabilities still need OAuth integration, durable outbox and provider readback.
@@ -161,3 +163,14 @@ physical G1, KMS/HSM, attestation, firmware, independent assurance, signing, pil
 rollback and store evidence remain separately issued. Administrative protection
 and independent latest-head review remain mandatory. No implementing identity
 self-approves, self-merges or uses a bypass.
+
+## 9. Durable identity increment
+
+`services/control_plane/durable_identity.py` and `identity_authority.py` now add
+persistent authority state, atomic challenges, prepared signing records, current
+revocation checks, actual Ed25519 verification and a bounded HTTPS broker client.
+See `DURABLE_IDENTITY.md`, `../operations/IDENTITY_AUTHORITY_RUNBOOK.md` and
+`contracts/identity-authority-v1.json` for exact behavior and prerequisites.
+This supersedes the earlier blanket description of identity as in-memory only,
+but not the remaining real KMS/platform-verifier, account recovery, mobile
+integration or deployment requirements. HG-0087 stays OPEN.
