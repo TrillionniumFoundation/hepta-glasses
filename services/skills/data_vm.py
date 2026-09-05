@@ -58,45 +58,81 @@ def _error(code: str) -> None:
 
 
 def _plain_json(value: object, *, byte_limit: int, code: str) -> object:
-    """Validate exact built-in JSON values before invoking serialization."""
-    stack = [(value, 0)]
+    """Capture and validate one defensive graph without reopening caller containers."""
     nodes = 0
-    while stack:
-        item, depth = stack.pop()
+    active: set[int] = set()
+
+    def clone(item: object, depth: int) -> object:
+        nonlocal nodes
         nodes += 1
         if nodes > MAX_NODES or depth > MAX_DEPTH:
             _error(code)
+
         if type(item) is dict:
-            if len(item) > MAX_COLLECTION:
+            identity = id(item)
+            if identity in active:
                 _error(code)
-            for key, child in item.items():
-                if (type(key) is not str or not 1 <= len(key) <= 128
-                        or any(ord(char) < 32 for char in key)):
-                    _error(code)
-                stack.append((child, depth + 1))
-        elif type(item) is list:
-            if len(item) > MAX_COLLECTION:
+            try:
+                snapshot = item.copy()
+            except (RuntimeError, TypeError, ValueError, RecursionError):
                 _error(code)
-            stack.extend((child, depth + 1) for child in item)
-        elif type(item) is str:
+            if len(snapshot) > MAX_COLLECTION:
+                _error(code)
+            active.add(identity)
+            try:
+                result: dict[str, object] = {}
+                for key, child in snapshot.items():
+                    if (type(key) is not str or not 1 <= len(key) <= 128
+                            or any(ord(char) < 32 for char in key)):
+                        _error(code)
+                    result[key] = clone(child, depth + 1)
+                return result
+            finally:
+                active.remove(identity)
+
+        if type(item) is list:
+            identity = id(item)
+            if identity in active:
+                _error(code)
+            try:
+                snapshot = item.copy()
+            except (RuntimeError, TypeError, ValueError, RecursionError):
+                _error(code)
+            if len(snapshot) > MAX_COLLECTION:
+                _error(code)
+            active.add(identity)
+            try:
+                return [clone(child, depth + 1) for child in snapshot]
+            finally:
+                active.remove(identity)
+
+        if type(item) is str:
             try:
                 if len(item.encode("utf-8")) > byte_limit:
                     _error(code)
             except UnicodeError:
                 _error(code)
-        elif type(item) is int:
+            return item
+        if type(item) is int:
             if abs(item) > MAX_INTEGER:
                 _error(code)
-        elif type(item) is float:
+            return item
+        if type(item) is float:
             if not math.isfinite(item):
                 _error(code)
             # Cross-language deterministic runtime deliberately excludes floats.
             _error(code)
-        elif item is not None and type(item) is not bool:
-            _error(code)
+        if item is None or type(item) is bool:
+            return item
+        _error(code)
+        raise AssertionError("unreachable")
+
     try:
-        encoded = canonical(value)
-    except (TypeError, ValueError, UnicodeError, RecursionError):
+        captured = clone(value, 0)
+        # Serialize only the captured built-in graph. Mutating the caller-owned
+        # containers after capture cannot alter the bytes that were validated.
+        encoded = canonical(captured)
+    except (RuntimeError, TypeError, ValueError, UnicodeError, RecursionError):
         _error(code)
     if len(encoded) > byte_limit:
         _error(code)
@@ -219,11 +255,19 @@ class DataSkillRuntime:
                 or (cancel is not None and not isinstance(cancel, threading.Event))):
             _error("skill_vm_invocation_invalid")
 
+        # A request already cancelled by its trusted host lifecycle must not
+        # spend registry verification capacity merely to discover that fact.
+        if cancel is not None and cancel.is_set():
+            _error("skill_vm_cancelled")
+        start = self._time()
+        caller_stop = start + float(timeout_seconds)
         data = _plain_json(
             invocation.data, byte_limit=MAX_INPUT_BYTES,
             code="skill_vm_input_invalid",
         )
-        start = self._time()
+        # Input capture is bounded but can consume caller time. Recheck before
+        # the first expensive signature/package/dependency registry resolution.
+        self._checkpoint(stop=caller_stop, cancel=cancel)
         checked = self._registry.resolve(skill_id, package=package)
         manifest, raw_program = self._entrypoint(checked)
         if not invocation.data_classes <= frozenset(manifest.get("data_classes", [])):
@@ -231,7 +275,7 @@ class DataSkillRuntime:
         manifest_timeout = manifest.get("timeout_ms")
         if type(manifest_timeout) is not int or not 1 <= manifest_timeout <= 300000:
             _error("skill_vm_manifest_timeout_invalid")
-        stop = start + min(float(timeout_seconds), manifest_timeout / 1000.0)
+        stop = min(caller_stop, start + manifest_timeout / 1000.0)
         self._checkpoint(stop=stop, cancel=cancel)
         program = _parse_program(raw_program)
 

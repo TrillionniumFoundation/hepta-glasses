@@ -71,7 +71,7 @@ Unknown opcodes, extra fields, forward references, duplicate IDs, malformed or
 noncanonical JSON, missing paths and type mismatches fail closed. There is no
 extension hook that can reinterpret an unknown opcode.
 
-## Bounds, cancellation and determinism
+## Bounds, input capture, cancellation and determinism
 
 Programs are limited to 64 KiB and 256 steps. Inputs and outputs are each limited
 to 64 KiB canonical JSON. Collections are limited to 256 members, depth to 8,
@@ -80,17 +80,32 @@ range. Floating-point values are excluded to avoid cross-language and nonfinite
 ambiguity. Each intermediate is independently bounded and cumulative canonical
 working data is limited to 256 KiB.
 
-The effective deadline is the smaller of the caller timeout and the signed
-manifest `timeout_ms`. A trusted monotonic clock and optional `threading.Event`
-are checked before and after every step and before result release. Because no
-package opcode can perform I/O, spawn code, loop or invoke callbacks, package
-work is cooperatively terminable at those finite checkpoints. Python process
-scheduling and registry signature verification are still host operations; this
-is not hard real-time or hostile-process containment.
+Invocation input is captured into a fresh graph of exact built-in dict/list/scalar
+values during validation. Each caller-owned container is copied once before its
+children are traversed; serialization is performed only on the captured graph.
+The caller graph is never reopened after validation. A mutation that happens
+after capture therefore cannot replace a checked key, collection bound, depth,
+integer or type before serialization. Cycles, custom containers, concurrent-copy
+failures and serialization failures collapse to the fixed input error rather
+than escaping as an implementation exception. This is a defensive process-local
+snapshot, not a multi-object transactional snapshot of another application's
+memory.
 
-Input is accepted only as exact built-in JSON types and is canonicalized before
-the first registry resolution. Custom mappings, objects, surrogates, floats and
-oversized integers cannot execute user-defined methods during interpretation.
+A pre-set trusted cancellation event is checked before input work. The caller
+monotonic deadline starts before input capture, and cancellation/deadline are
+checked again after capture but before the first registry signature/package/
+dependency resolution. An invocation that is already cancelled or that consumes
+its caller budget during input capture therefore does not occupy registry verifier
+capacity. After the signed manifest is resolved, the effective deadline is the
+smaller of the original caller deadline and the signed manifest `timeout_ms`.
+
+The trusted monotonic clock and optional `threading.Event` are then checked before
+and after every step and before result release. Because no package opcode can
+perform I/O, spawn code, loop or invoke callbacks, package work is cooperatively
+terminable at those finite checkpoints. Python process scheduling and registry
+signature verification are still host operations; this is not hard real-time or
+hostile-process containment.
+
 Output is retained as immutable canonical bytes; the decoded `output` property
 returns a fresh defensive object each time.
 
@@ -100,11 +115,16 @@ The runtime stores no package, input, output or task state. The registry remains
 the durable authority for publisher keys, exact consent, dependency binding,
 version replacement and revocation. Execution performs:
 
-1. exact registry `resolve(skill_id, package=...)`;
-2. manifest/profile and entrypoint validation;
-3. bounded pure interpretation under the original deadline/cancellation event;
-4. a second exact registry resolve; and
-5. snapshot equality plus final deadline/cancellation check before output.
+1. validate the invocation envelope, capture caller start time and reject an
+   already-set cancellation event;
+2. capture/validate input into a fresh built-in graph and recheck the original
+   caller deadline/cancellation before registry work;
+3. exact registry `resolve(skill_id, package=...)`;
+4. manifest/profile and entrypoint validation;
+5. bounded pure interpretation under the original caller deadline and signed
+   manifest timeout;
+6. a second exact registry resolve; and
+7. snapshot equality plus final deadline/cancellation check before output.
 
 If final resolution reports revocation or expiry, that fixed registry error is
 returned and computed output is withheld. If the same Skill ID now has a different
@@ -129,10 +149,14 @@ network namespace applied to publisher code.
 The deterministic regression suite exercises valid programs, inert Python package
 members, forbidden network/capability/risk declarations, strict canonical format,
 reference and type errors, bounded input/output/working state, cancellation,
-timeouts, final registry revocation and defensive output. Local tests use a typed
-fixture registry resolver; the existing signed-registry suite separately verifies
-actual Ed25519, SQLite, package and revocation behavior. Exact-head full repository
-CI and independent review remain required.
+timeouts, final registry revocation and defensive output. Hostile snapshot tests
+mutate dict size, keys, collection size, depth, integer/type values and list
+contents at the former validation/serialization boundary; only the captured graph
+is serialized. Pre-cancel and pre-resolve deadline tests require zero registry
+calls. Local tests use a typed fixture registry resolver; the existing
+signed-registry suite separately verifies actual Ed25519, SQLite, package and
+revocation behavior. Exact-head full repository CI and independent review remain
+required.
 
 ## Remaining HG-0087 Skills work
 

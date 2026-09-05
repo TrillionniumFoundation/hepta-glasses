@@ -4,11 +4,14 @@ import json
 import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from services.skills.data_vm import (
+    MAX_INPUT_BYTES,
     DataSkillInvocation,
     DataSkillResult,
     DataSkillRuntime,
+    _plain_json,
 )
 from services.skills.signed_package import SignedSkillError, canonical, sha256
 from services.skills.signed_registry import CheckedSkill, SignedSkillRegistry
@@ -213,17 +216,45 @@ class DataSkillRuntimeTests(unittest.TestCase):
 
     def test_input_is_defensively_snapshotted_before_execution(self):
         original = {"name": "Ada"}
+        real_canonical = canonical
         calls = [0]
-        def clock():
+        def serialize(value):
             calls[0] += 1
             if calls[0] == 1:
                 original["name"] = "changed"
-            return 0.0
-        runtime = DataSkillRuntime(self.registry, monotonic=clock)
-        result = runtime.execute(skill_id="pure", package=b"package",
-            invocation=DataSkillInvocation(original, frozenset({"personal"})))
+            return real_canonical(value)
+        with patch("services.skills.data_vm.canonical", side_effect=serialize):
+            result = self.execute(invocation=DataSkillInvocation(
+                original, frozenset({"personal"})))
         self.assertEqual(result.output, "Hello Ada")
         self.assertEqual(original["name"], "changed")
+
+    def test_capture_and_validation_are_closed_against_hostile_post_capture_mutations(self):
+        mutations = (
+            lambda value: value.__setitem__("added", True),
+            lambda value: value["items"].extend([0] * 300),
+            lambda value: value.__setitem__("name", [[[[[[[[["deep"]]]]]]]]]),
+            lambda value: value.__setitem__("number", 1 << 54),
+            lambda value: value["items"].__setitem__(0, object()),
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                original = {"name": "Ada", "items": [1], "number": 1}
+                expected = {"name": "Ada", "items": [1], "number": 1}
+                real_canonical = canonical
+                called = [False]
+                def race(value):
+                    if not called[0]:
+                        called[0] = True
+                        thread = threading.Thread(target=mutation, args=(original,))
+                        thread.start(); thread.join(1)
+                        self.assertFalse(thread.is_alive())
+                    return real_canonical(value)
+                with patch("services.skills.data_vm.canonical", side_effect=race):
+                    captured = _plain_json(original, byte_limit=MAX_INPUT_BYTES,
+                                           code="skill_vm_input_invalid")
+                self.assertEqual(captured, expected)
+                self.assertIsNot(captured, original)
 
     def test_each_value_and_total_working_set_are_bounded(self):
         huge = "x" * 65000
@@ -239,6 +270,7 @@ class DataSkillRuntimeTests(unittest.TestCase):
     def test_cancel_before_start_and_during_steps(self):
         event = threading.Event(); event.set()
         self.error("skill_vm_cancelled", lambda: self.execute(cancel=event))
+        self.assertEqual(self.registry.calls, 0)
         event.clear(); calls = [0]
         def clock():
             calls[0] += 1
@@ -248,6 +280,26 @@ class DataSkillRuntimeTests(unittest.TestCase):
         runtime = DataSkillRuntime(self.registry, monotonic=clock)
         self.error("skill_vm_cancelled", lambda: runtime.execute(
             skill_id="pure", package=b"package", invocation=self.invocation, cancel=event))
+
+    def test_cancel_or_deadline_after_input_capture_does_not_resolve_registry(self):
+        event = threading.Event()
+        original = {"name": "Ada"}
+        real_canonical = canonical
+        def cancel_during_capture(value):
+            event.set()
+            return real_canonical(value)
+        with patch("services.skills.data_vm.canonical", side_effect=cancel_during_capture):
+            self.error("skill_vm_cancelled", lambda: self.execute(
+                invocation=DataSkillInvocation(original, frozenset({"personal"})),
+                cancel=event))
+        self.assertEqual(self.registry.calls, 0)
+
+        values = iter([0.0, 1.0])
+        runtime = DataSkillRuntime(self.registry, monotonic=lambda: next(values))
+        self.error("skill_vm_deadline_expired", lambda: runtime.execute(
+            skill_id="pure", package=b"package", invocation=self.invocation,
+            timeout_seconds=1))
+        self.assertEqual(self.registry.calls, 0)
 
     def test_deadline_and_invalid_clock_fail_closed(self):
         values = iter([0.0, 0.0, 2.0])

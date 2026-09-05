@@ -14,6 +14,14 @@
     "invocation_data_classes": "exact host-declared subset of signed manifest data_classes",
     "output_is_effect_authority": false
   },
+  "input_capture": {
+    "accepted_types": "exact built-in dict, list, string, integer, boolean and null only",
+    "method": "copy and validate into a fresh built-in graph, then serialize only that graph",
+    "reopen_caller_containers_after_validation": false,
+    "post_capture_mutation_changes_execution": false,
+    "concurrent_copy_or_serialization_failure": "skill_vm_input_invalid",
+    "multi_object_atomic_snapshot": false
+  },
   "execution": {
     "model": "acyclic finite pure-data instruction list",
     "opcodes": ["literal", "input", "lower", "upper", "length", "concat", "array", "object", "equal", "select", "slice"],
@@ -38,11 +46,14 @@
     "integer_absolute_maximum": 9007199254740991,
     "floats_supported": false,
     "caller_timeout_seconds_maximum": 60,
-    "effective_timeout": "minimum of caller timeout and signed manifest timeout_ms"
+    "effective_timeout": "minimum of original caller deadline and signed manifest timeout_ms"
   },
   "termination": {
     "loops_or_recursion": false,
+    "pre_set_cancellation": "reject before input and registry work",
+    "pre_resolve_checkpoint": "after bounded input capture and before initial registry resolve",
     "checkpoint": "before and after every instruction and before result release",
+    "cancelled_or_expired_before_initial_resolve_uses_registry_capacity": false,
     "cancellation": "optional trusted threading.Event",
     "hard_process_isolation": false,
     "hard_real_time": false
