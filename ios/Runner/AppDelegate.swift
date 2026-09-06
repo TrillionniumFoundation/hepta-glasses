@@ -114,11 +114,15 @@ import UIKit
                     )
                     return
                 }
-                result(
-                    SpeechStreamRecognizer.shared.stopRecognition(
+                let finalize = arguments["finalize"] as? Bool ?? true
+                let stopped = finalize
+                    ? SpeechStreamRecognizer.shared.stopRecognition(
                         generation: generation
                     )
-                )
+                    : SpeechStreamRecognizer.shared.cancelRecognition(
+                        generation: generation
+                    )
+                result(stopped)
             case "getApplicationSupportPath":
                 do {
                     let root = try FileManager.default.url(
