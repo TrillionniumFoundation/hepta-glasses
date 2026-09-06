@@ -213,12 +213,23 @@ class SpeechIngressTests(unittest.TestCase):
             ),
         )
         self.identity.failure = RuntimeError("sensitive upstream text")
-        self.error(
-            "speech_ingress_unauthorized",
-            401,
-            self.issue,
+        with self.assertRaises(SpeechIngressError) as raised:
+            self.issue()
+        self.assertEqual(raised.exception.code, "speech_ingress_unauthorized")
+        self.assertEqual(raised.exception.status, 401)
+        self.assertEqual(str(raised.exception), "speech_ingress_unauthorized")
+        self.assertNotIn("sensitive", repr(raised.exception))
+
+    def test_malformed_principal_is_unauthorized_not_client_input_error(self) -> None:
+        self.identity.principal = SpeechPrincipal(
+            subject="bad subject",
+            session_id="session-1",
+            pair_identity="Pair_7",
+            audience=DEFAULT_AUDIENCE,
+            scopes=(REQUIRED_SCOPE,),
         )
-        self.assertNotIn("sensitive", str(self.assertRaises))
+        self.error("speech_ingress_unauthorized", 401, self.issue)
+        self.assertEqual(self.broker.mints, [])
 
     def test_retry_after_delivered_or_lost_response_cannot_remint(self) -> None:
         first = self.issue()
