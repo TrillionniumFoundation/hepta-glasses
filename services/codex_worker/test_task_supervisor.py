@@ -3,9 +3,11 @@ from __future__ import annotations
 import os
 import tempfile
 import threading
+import subprocess
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from services.codex_worker.task_supervisor import (
     SupervisedTask,
@@ -55,6 +57,29 @@ class TaskSupervisorTests(unittest.TestCase):
         link = self.root / "link.py"; link.symlink_to(script)
         self.error("task_executable_linked", lambda: run_supervised(self.task(link)))
 
+    def test_working_directory_symlink_is_rejected(self) -> None:
+        script = self.script("noop-dir.py", "pass\n")
+        real = self.root / "real-work"; real.mkdir()
+        link = self.root / "linked-work"; link.symlink_to(real, target_is_directory=True)
+        self.error("task_working_directory_linked",
+                   lambda: run_supervised(self.task(script, working_directory=str(link))))
+
+    def test_working_directory_replacement_during_spawn_fails_closed(self) -> None:
+        script = self.script("delayed.py", "import time\ntime.sleep(.3)\nopen('ran','w').write('x')\n")
+        workspace = self.root / "workspace"; workspace.mkdir()
+        detached = self.root / "detached"
+        original = subprocess.Popen
+        def replace_then_spawn(*args, **kwargs):
+            workspace.rename(detached)
+            workspace.mkdir()
+            return original(*args, **kwargs)
+        with patch("services.codex_worker.task_supervisor.subprocess.Popen", side_effect=replace_then_spawn):
+            self.error("task_working_directory_replaced",
+                       lambda: run_supervised(self.task(script, working_directory=str(workspace))))
+        time.sleep(.5)
+        self.assertFalse((workspace / "ran").exists())
+        self.assertFalse((detached / "ran").exists())
+
     def test_group_writable_and_hardlinked_executables_are_rejected(self) -> None:
         script = self.script("bad.py", "print('ok')\n")
         script.chmod(0o720)
@@ -87,6 +112,14 @@ class TaskSupervisorTests(unittest.TestCase):
                             file_size_bytes=1024*1024, open_files=32, processes=8, output_bytes=1024)
         self.error("task_timeout", lambda: run_supervised(self.task(script, limits=limits)))
         time.sleep(.7)
+        self.assertFalse(marker.exists())
+
+    def test_successful_leader_cannot_leave_pipe_detached_descendant(self) -> None:
+        marker = self.root / "detached-late"
+        script = self.script("detach.py", f"import os,time\nif os.fork()==0:\n os.close(0); os.close(1); os.close(2); time.sleep(.4); open({str(marker)!r},'w').write('late'); os._exit(0)\nos._exit(0)\n")
+        result = run_supervised(self.task(script))
+        self.assertEqual(result.return_code, 0)
+        time.sleep(.6)
         self.assertFalse(marker.exists())
 
     def test_cancellation_kills_entire_process_group(self) -> None:
