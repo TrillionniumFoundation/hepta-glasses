@@ -186,3 +186,23 @@ package qualification. Source tests cannot close provider/device/product gates.
 Implementation references: Python `zipfile` documentation, SQLite transaction
 documentation and OpenSSL `pkeyutl` Ed25519/raw-input documentation. The component
 contract is authoritative for the intentionally narrower supported ZIP profile.
+
+## Optional signed-log inclusion admission
+
+`services/skills/package_transparency.py` adds an optional, policy-bound
+admission-time transparency verifier. In required mode, `install` must receive a
+canonical signed checkpoint and exact RFC6962 inclusion path for the same
+canonical manifest passed to publisher verification. The externally configured
+log-key set, log identity, key validity and required flag are immutable after
+construction and hashed into the persisted registry policy. A verifier subclass,
+configuration drift, missing strict proof or a supplied invalid optional proof
+fails closed.
+
+The checkpoint/log-key effective expiry participates in the final SQLite
+transaction and stored installation expiry, so verification or lock waiting
+cannot extend a stale proof. The verifier performs no network fetch and the
+registry does not archive the checkpoint/path. This is one-manifest inclusion
+verification only—not an operated log, consistency/gossip, split-view detection,
+independent witness quorum, publisher-root governance or durable provenance
+archive. See `docs/development/PACKAGE_TRANSPARENCY.md` and
+`contracts/signed-skill-transparency-v1.json`.

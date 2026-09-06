@@ -18,6 +18,9 @@ from services.skills.signed_package import (
     name, parse_manifest, sha256, verify_signature, version,
 )
 from services.skills.signed_registry_schema import ensure_signed_skill_schema
+from services.skills.package_transparency import (
+    TransparencyProof, TransparencyVerifier,
+)
 
 
 @dataclass(frozen=True)
@@ -43,11 +46,14 @@ class CheckedSkill:
 class SignedSkillRegistry:
     def __init__(self, path: str, *, subject: str, keys: Mapping[str, PublisherKey],
                  allowed_capabilities: frozenset[str], allowed_domains: frozenset[str],
-                 clock: Callable[[], int], maximum_entries: int = 4096):
+                 clock: Callable[[], int], maximum_entries: int = 4096,
+                 transparency_verifier: TransparencyVerifier | None = None):
         self.subject = name(subject)
         if (not isinstance(keys, Mapping) or not 1 <= len(keys) <= 32
                 or type(maximum_entries) is not int or not 1 <= maximum_entries <= 10000
-                or not callable(clock)):
+                or not callable(clock)
+                or (transparency_verifier is not None
+                    and type(transparency_verifier) is not TransparencyVerifier)):
             fail("skill_registry_configuration_invalid")
         for values in (allowed_capabilities, allowed_domains):
             if type(values) is not frozenset or len(values) > 64:
@@ -64,10 +70,14 @@ class SignedSkillRegistry:
         self.keys = MappingProxyType(pins)
         self.capabilities, self.domains = allowed_capabilities, allowed_domains
         self.clock, self.maximum_entries = clock, maximum_entries
+        self._transparency_verifier = transparency_verifier
         self._calls = BoundedCalls(4)
         self.storage = DurableDatabase(path)
-        policy = canonical({"subject": subject, "capabilities": sorted(allowed_capabilities),
-                            "domains": sorted(allowed_domains), "maximum_entries": maximum_entries})
+        policy_value = {"subject": subject, "capabilities": sorted(allowed_capabilities),
+                        "domains": sorted(allowed_domains), "maximum_entries": maximum_entries}
+        if transparency_verifier is not None:
+            policy_value["transparency"] = transparency_verifier.binding
+        policy = canonical(policy_value)
         try:
             with self.storage.transaction() as db:
                 unmarked = self.storage.version("signed_skills", 1)
@@ -93,6 +103,10 @@ class SignedSkillRegistry:
         except BaseException:
             self.storage.close()
             raise
+
+    @property
+    def transparency_verifier(self) -> TransparencyVerifier | None:
+        return self._transparency_verifier
 
     def close(self) -> None:
         self.storage.close()
@@ -183,14 +197,24 @@ class SignedSkillRegistry:
             fail("skill_package_verification_failed")
         return manifest, outcome.value
 
-    def install(self, document: bytes, *, signature: bytes, package: bytes, consent: InstallConsent) -> CheckedSkill:
+    def install(self, document: bytes, *, signature: bytes, package: bytes,
+                consent: InstallConsent,
+                transparency: TransparencyProof | None = None) -> CheckedSkill:
         if (type(consent) is not InstallConsent or consent.subject != self.subject
                 or not timestamp(consent.expires_at) or type(document) is not bytes
                 or consent.manifest_sha256 != sha256(document)):
             fail("skill_exact_consent_required")
+        if self._transparency_verifier is None:
+            if transparency is not None:
+                fail("skill_transparency_unconfigured")
+            verified_transparency = None
+        else:
+            verified_transparency = self._transparency_verifier.verify(document, transparency)
         manifest, files = self._verify(document, signature, package)
         fingerprint = sha256(document)
         expiries = [consent.expires_at]
+        if verified_transparency is not None:
+            expiries.append(verified_transparency.expires_at)
         with self._transaction(expiries=expiries) as (db, now):
             if consent.expires_at <= now:
                 fail("skill_consent_expired")
@@ -212,7 +236,9 @@ class SignedSkillRegistry:
                     return CheckedSkill(document, files, old["consent_expires_at"], old["event_sequence"])
             if db.execute("SELECT COUNT(*) FROM signed_skill_events WHERE event='installed'").fetchone()[0] >= self.maximum_entries:
                 fail("skill_installation_capacity_exhausted")
-            until = min(consent.expires_at, manifest["expires_at"])
+            until = min([consent.expires_at, manifest["expires_at"]]
+                        + ([verified_transparency.expires_at]
+                           if verified_transparency is not None else []))
             seq = self._event(db, "installed", manifest["skill_id"], fingerprint, now)
             db.execute("INSERT INTO signed_skill_installed VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET "
                 "document=excluded.document,signature=excluded.signature,digest=excluded.digest,consent_expires_at=excluded.consent_expires_at,event_sequence=excluded.event_sequence",

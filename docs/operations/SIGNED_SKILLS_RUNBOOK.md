@@ -93,3 +93,23 @@ A green source suite is not deployment, sandbox/egress qualification, external
 publisher trust or product release approval. Confirm the source and independent
 acceptance states separately. Do not merge, release or enable execution merely
 because `verify_local_audit()` reports a consistent chain.
+
+## Transparency proof admission
+
+Where transparency policy is enabled, construct the exact built-in
+`TransparencyVerifier` from externally reviewed log IDs, Ed25519 public keys and
+validity windows. Do not accept log keys, required mode, clock or verifier objects
+from package/client input. Required/optional mode and the full key policy are
+part of the persistent registry policy; changing them requires reviewed migration.
+
+Acquire checkpoint and inclusion proof bytes through a separate bounded,
+authenticated client and pass them unchanged with the exact canonical manifest.
+A missing strict proof, wrong root/path, invalid signature, expired checkpoint or
+policy drift must stop installation. Do not disable required mode or replace the
+key to recover from outage. Proof/key expiry is checked again at final commit.
+
+This component does not fetch/submit log entries, retain full proofs, validate
+checkpoint consistency, compare client views or establish witness quorum. Archive
+required external provenance separately and preserve its actual issuer identity.
+Follow `docs/operations/PACKAGE_TRANSPARENCY_RUNBOOK.md`; do not call successful
+local inclusion verification “externally witnessed transparency”.
