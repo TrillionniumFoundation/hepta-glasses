@@ -106,6 +106,8 @@ class BleMethodChannel(
         val arguments = call.arguments as? Map<*, *>
         val sessionId = arguments?.get("sessionId") as? String
         val generation = (arguments?.get("generation") as? Number)?.toInt()
+        val connectionGeneration =
+            (arguments?.get("connectionGeneration") as? Number)?.toInt()
         val pairIdentity = arguments?.get("pairIdentity") as? String
         val locale = arguments?.get("locale") as? String
         val endpoint = arguments?.get("endpoint") as? String
@@ -117,6 +119,7 @@ class BleMethodChannel(
 
         if (sessionId.isNullOrBlank() ||
             generation == null || generation <= 0 ||
+            connectionGeneration == null || connectionGeneration <= 0 ||
             pairIdentity.isNullOrBlank() ||
             locale.isNullOrBlank() ||
             endpoint.isNullOrBlank() ||
@@ -137,6 +140,7 @@ class BleMethodChannel(
                 SpeechTicket(
                     sessionId = sessionId,
                     generation = generation,
+                    connectionGeneration = connectionGeneration,
                     pairIdentity = pairIdentity,
                     locale = locale,
                     endpoint = endpoint,
@@ -175,21 +179,25 @@ class BleMethodChannel(
     ) {
         val arguments = call.arguments as? Map<*, *>
         val generation = (arguments?.get("generation") as? Number)?.toInt()
+        val connectionGeneration =
+            (arguments?.get("connectionGeneration") as? Number)?.toInt()
         val pairIdentity = arguments?.get("pairIdentity") as? String
         val finalize = arguments?.get("finalize") as? Boolean
         if (generation == null || generation <= 0 ||
+            connectionGeneration == null || connectionGeneration <= 0 ||
             pairIdentity.isNullOrBlank() ||
             finalize == null
         ) {
             result.error(
                 "InvalidArguments",
-                "generation, pairIdentity and finalize are required",
+                "Both generations, pairIdentity and finalize are required",
                 null,
             )
             return
         }
         if (!BleManager.instance.stopSpeech(
                 generation,
+                connectionGeneration,
                 pairIdentity,
                 finalize,
             )
