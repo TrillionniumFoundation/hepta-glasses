@@ -62,4 +62,55 @@ class AndroidPcmAsrTest {
             AndroidPcmAsr(ticket().copy(connectionGeneration = 0)) { 100 }
         }
     }
+
+    @Test
+    fun providerFinalResponseMustBindEveryAuthorityDimension() {
+        val transport = HttpsSpeechTransport()
+        val valid = """{
+            "session_id":"session",
+            "generation":7,
+            "connection_generation":11,
+            "pair_identity":"Pair_1",
+            "is_final":true,
+            "transcript":"hello"
+        }""".trimIndent()
+        assertEquals("hello", transport.parseFinalResponse(valid, ticket()))
+
+        val staleConnection = valid.replace(
+            "\"connection_generation\":11",
+            "\"connection_generation\":12",
+        )
+        assertThrows(IllegalStateException::class.java) {
+            transport.parseFinalResponse(staleConnection, ticket())
+        }
+        val duplicateGeneration = valid.replace(
+            "\"generation\":7,",
+            "\"generation\":7,\"generation\":7,",
+        )
+        assertThrows(IllegalStateException::class.java) {
+            transport.parseFinalResponse(duplicateGeneration, ticket())
+        }
+    }
+
+    @Test
+    fun providerFinalResponseRejectsPartialOrUnknownFields() {
+        val transport = HttpsSpeechTransport()
+        val partial = """{
+            "session_id":"session",
+            "generation":7,
+            "connection_generation":11,
+            "pair_identity":"Pair_1",
+            "is_final":false,
+            "transcript":"partial"
+        }""".trimIndent()
+        assertThrows(IllegalStateException::class.java) {
+            transport.parseFinalResponse(partial, ticket())
+        }
+        val widened = partial
+            .replace("\"is_final\":false", "\"is_final\":true")
+            .dropLast(1) + ",\"tool_call\":true}"
+        assertThrows(IllegalStateException::class.java) {
+            transport.parseFinalResponse(widened, ticket())
+        }
+    }
 }
