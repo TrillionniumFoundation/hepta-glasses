@@ -10,26 +10,104 @@
     "provider_output": "untrusted until exact response validation and post-call state recheck"
   },
   "realtime": {
-    "session_identity": ["subject", "session_id"],
-    "activation_fence": ["subject", "session_id", "generation", "attempt_id"],
-    "activation_states": ["new", "activating", "indeterminate", "active", "revoked"],
-    "recoverable_states": ["activating", "indeterminate"],
+    "session_identity": [
+      "subject",
+      "session_id"
+    ],
+    "activation_fence": [
+      "subject",
+      "session_id",
+      "generation",
+      "attempt_id"
+    ],
+    "activation_states": [
+      "new",
+      "activating",
+      "indeterminate",
+      "active",
+      "revoked"
+    ],
+    "recoverable_states": [
+      "activating",
+      "indeterminate"
+    ],
     "reconciliation": "provider-authoritative lookup only; None remains indeterminate",
     "duplicate_activation": "forbidden across tickets, reconnects and process restarts",
     "revoke_queue": "persistent lookup and provider-session cleanup; retry idempotent revoke only"
   },
   "speech": {
-    "implementation_status": "OPEN_NOT_INCLUDED",
-    "session_identity": ["subject", "session_id", "generation", "SHA256(pair_identity)"],
-    "consume_requires_subject": true,
-    "endpoint_policy": "explicit exact HTTPS hostname allowlist; no URL credentials, fragments or non-443 port",
+    "implementation_status": "SOURCE_INTEGRATED_FAIL_CLOSED",
+    "server_session_identity": [
+      "subject",
+      "session_id",
+      "assistant_generation",
+      "SHA256(pair_identity)"
+    ],
+    "mobile_native_identity": [
+      "session_id",
+      "assistant_generation",
+      "ble_connection_generation",
+      "pair_identity"
+    ],
+    "authenticated_ingress": {
+      "principal_fields": [
+        "subject",
+        "session_id",
+        "pair_identity",
+        "audience",
+        "scopes"
+      ],
+      "required_scope": "speech.bootstrap",
+      "client_body_fields": [
+        "session_id",
+        "generation",
+        "pair_identity",
+        "locale"
+      ],
+      "rule": "subject, session authority, pair authority, audience and scope come from the verified principal; body mismatch fails before provider mint"
+    },
+    "bootstrap_states": [
+      "minting",
+      "indeterminate",
+      "issued",
+      "consumed",
+      "revoked"
+    ],
+    "delivery": "bootstrap_for_delivery atomically consumes the issued bootstrap before returning provider material; a lost response never permits another mint for the same session",
+    "duplicate_mint": "forbidden for every existing session state, including issued and consumed",
+    "provider_mint_binding": [
+      "subject",
+      "session_id",
+      "assistant_generation",
+      "SHA256(pair_identity)",
+      "locale",
+      "audio_format",
+      "absolute_expiry"
+    ],
+    "android_pcm_ingress": "right-leg G1 LC3 frames are decoded and accepted only under the captured BLE connection generation and pair identity",
+    "provider_final_response": {
+      "exact_fields": [
+        "session_id",
+        "generation",
+        "connection_generation",
+        "pair_identity",
+        "is_final",
+        "transcript"
+      ],
+      "rule": "unknown or duplicate fields, partial results, stale bindings, invalid UTF-8 and oversized bodies fail closed before Flutter delivery"
+    },
+    "cancellation": "cancel invalidates the active session and emits no fabricated final transcript; normal stop requests finalization",
+    "endpoint_policy": "exact HTTPS endpoint, no URL credentials, query, fragment, redirect or non-443 port",
     "quota": "atomic per-subject UTC-day reservation before provider call; includes uncertain attempts",
     "persisted_secrets": [],
-    "unknown_mint": "does not return a ticket; keeps revoke pending until authoritative resolution",
-    "new_generation": "new authenticated utterance session ID; an existing binding is immutable"
+    "unknown_mint": "does not return a ticket; session remains recovery-required and cannot be reminted",
+    "new_generation": "requires a new authenticated utterance session ID; an existing session binding is immutable"
   },
   "limits": {
     "maximum_identifier_characters": 256,
+    "maximum_ingress_request_bytes": 4096,
+    "maximum_provider_response_bytes": 32768,
+    "maximum_transcript_bytes": 8192,
     "default_maximum_records": 100000,
     "default_maximum_workers_per_instance": 4,
     "maximum_provider_timeout_seconds": 60,
@@ -41,9 +119,9 @@
     "component_schema_version": 2,
     "unknown_version": "reject with schema_migration_required",
     "legacy_realtime": "invalidate unspent tickets; retain active state and prepare recovery identity for unresolved activation",
-    "legacy_speech": "OPEN: pending a separately reviewed speech implementation; this commit does not migrate speech databases",
-    "rollback": "never restore a stale database that predates revocation"
+    "legacy_speech": "no automatic import of unauthenticated or unversioned speech state; stop old processes and use a reviewed migration",
+    "rollback": "never restore a stale database that predates revocation or consumed bootstrap state"
   },
-  "implementation_scope": "Realtime custody only. Speech source is unchanged in this commit; the speech rules below are pending requirements, not implemented claims.",
-  "evidence_ceiling": "deterministic local source tests only; not deployed providers, Android ASR, independent review or release"
+  "implementation_scope": "Source-integrated authenticated speech bootstrap, durable one-shot custody, Android decoded-PCM transport, cross-platform generation fencing and final/cancel semantics. No live provider tenant, production identity deployment, encrypted metadata volume, remote revoke outbox, physical device qualification or independent acceptance is claimed.",
+  "evidence_ceiling": "deterministic source, Flutter, Android and iOS tests only; not live provider tenancy, physical speech accuracy/latency/privacy, independent review or release"
 }
