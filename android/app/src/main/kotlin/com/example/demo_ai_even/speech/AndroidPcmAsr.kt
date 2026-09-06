@@ -7,6 +7,7 @@ import javax.net.ssl.HttpsURLConnection
 internal data class SpeechTicket(
     val sessionId: String,
     val generation: Int,
+    val connectionGeneration: Int,
     val pairIdentity: String,
     val locale: String,
     val endpoint: String,
@@ -36,6 +37,10 @@ internal class HttpsSpeechTransport : SpeechTransport {
         connection.setRequestProperty("Accept", "application/json")
         connection.setRequestProperty("X-Hepta-Session", ticket.sessionId)
         connection.setRequestProperty("X-Hepta-Generation", ticket.generation.toString())
+        connection.setRequestProperty(
+            "X-Hepta-Connection-Generation",
+            ticket.connectionGeneration.toString(),
+        )
         connection.setRequestProperty("X-Hepta-Pair", ticket.pairIdentity)
         connection.setRequestProperty("X-Hepta-Locale", ticket.locale)
         connection.outputStream.use { it.write(pcm) }
@@ -73,6 +78,9 @@ internal class AndroidPcmAsr(
     init {
         require(ticket.sessionId.isNotBlank()) { "SpeechSessionInvalid" }
         require(ticket.generation > 0) { "SpeechGenerationInvalid" }
+        require(ticket.connectionGeneration > 0) {
+            "SpeechConnectionGenerationInvalid"
+        }
         require(ticket.pairIdentity.isNotBlank()) { "SpeechPairInvalid" }
         require(ticket.locale.matches(Regex("[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?"))) { "SpeechLocaleInvalid" }
         require(ticket.endpoint.startsWith("https://")) { "SpeechEndpointInvalid" }
