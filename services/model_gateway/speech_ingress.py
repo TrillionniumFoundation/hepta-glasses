@@ -76,11 +76,15 @@ class SpeechBootstrapIngress:
                 audience=self.audience,
                 required_scope=REQUIRED_SCOPE,
             )
-        except SpeechIngressError:
+            self._principal(principal)
+        except SpeechIngressError as error:
+            if error.code == "speech_ingress_unauthorized":
+                raise SpeechIngressError(
+                    "speech_ingress_unauthorized", 401
+                ) from None
             raise
         except Exception:
             raise SpeechIngressError("speech_ingress_unauthorized", 401) from None
-        self._principal(principal)
         if (principal.audience != self.audience
                 or REQUIRED_SCOPE not in principal.scopes
                 or principal.session_id != request["session_id"]
@@ -145,10 +149,13 @@ class SpeechBootstrapIngress:
     def _principal(self, value: object) -> SpeechPrincipal:
         if type(value) is not SpeechPrincipal:
             raise SpeechIngressError("speech_ingress_unauthorized", 401)
-        self._identifier(value.subject, "speech_ingress_unauthorized")
-        self._identifier(value.session_id, "speech_ingress_unauthorized")
-        self._identifier(value.pair_identity, "speech_ingress_unauthorized")
-        self._identifier(value.audience, "speech_ingress_unauthorized")
+        try:
+            self._identifier(value.subject, "speech_ingress_unauthorized")
+            self._identifier(value.session_id, "speech_ingress_unauthorized")
+            self._identifier(value.pair_identity, "speech_ingress_unauthorized")
+            self._identifier(value.audience, "speech_ingress_unauthorized")
+        except SpeechIngressError:
+            raise SpeechIngressError("speech_ingress_unauthorized", 401) from None
         if (type(value.scopes) is not tuple or not value.scopes
                 or len(value.scopes) > 32
                 or any(type(scope) is not str or not scope
