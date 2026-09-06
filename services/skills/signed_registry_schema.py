@@ -30,6 +30,7 @@ def _object_binding_supported() -> bool:
     required = ("O_CLOEXEC", "O_DIRECTORY", "O_NOFOLLOW")
     return (
         os.name == "posix"
+        and hasattr(os, "geteuid")
         and all(hasattr(os, value) for value in required)
         and os.open in os.supports_dir_fd
         and os.mkdir in os.supports_dir_fd
@@ -45,6 +46,26 @@ def _regular_file(value: os.stat_result) -> bool:
 
 def _same_object(left: os.stat_result, right: os.stat_result) -> bool:
     return (left.st_dev, left.st_ino) == (right.st_dev, right.st_ino)
+
+
+def _exclusive_write_custody(value: os.stat_result, *, directory: bool) -> bool:
+    """Require current-process ownership and deny group/world write authority.
+
+    Read/execute visibility is an operator confidentiality policy. This local
+    integrity boundary prevents another Unix uid/group from replacing or
+    modifying the final parent entry or primary database through mode bits.
+    POSIX ACLs, capabilities and a hostile kernel remain outside this source
+    contract and require deployment qualification.
+    """
+    mode = stat.S_IMODE(value.st_mode)
+    required = stat.S_IRUSR | stat.S_IWUSR
+    if directory:
+        required |= stat.S_IXUSR
+    return (
+        value.st_uid == os.geteuid()
+        and mode & required == required
+        and mode & (stat.S_IWGRP | stat.S_IWOTH) == 0
+    )
 
 
 @dataclass(frozen=True)
@@ -65,7 +86,8 @@ class BoundRegistryDatabase:
 
     This is a trusted local Linux-host contract, not hostile-kernel or network
     filesystem isolation. A hard-linked database is rejected because an unseen
-    alias defeats pathname custody.
+    alias defeats pathname custody. The final parent and primary database must
+    remain owned by the effective service uid and not group/world writable.
     """
 
     def __init__(self, path: str, *, create: bool, initialize_schema: bool) -> None:
@@ -86,6 +108,8 @@ class BoundRegistryDatabase:
             parent_before = os.fstat(parent_fd)
             if not stat.S_ISDIR(parent_before.st_mode):
                 fail("skill_registry_database_identity_invalid")
+            if not _exclusive_write_custody(parent_before, directory=True):
+                fail("skill_registry_database_permissions_invalid")
             flags = os.O_RDWR | os.O_CLOEXEC | os.O_NOFOLLOW
             try:
                 file_fd = os.open(basename, flags, dir_fd=parent_fd)
@@ -104,6 +128,8 @@ class BoundRegistryDatabase:
             opened = os.fstat(file_fd)
             if not _regular_file(opened) or opened.st_nlink != 1:
                 fail("skill_registry_database_identity_invalid")
+            if not _exclusive_write_custody(opened, directory=False):
+                fail("skill_registry_database_permissions_invalid")
             self.binding = RegistryDatabaseBinding(
                 absolute, parent_path, basename, parent_fd, file_fd,
                 parent_before.st_dev, parent_before.st_ino,
@@ -208,6 +234,14 @@ class BoundRegistryDatabase:
                 and held_parent.st_ctime_ns != initial_parent_ctime)
         ):
             fail("skill_registry_database_replaced")
+        if not all((
+            _exclusive_write_custody(held_parent, directory=True),
+            _exclusive_write_custody(named_parent, directory=True),
+            _exclusive_write_custody(held_file, directory=False),
+            _exclusive_write_custody(relative_file, directory=False),
+            _exclusive_write_custody(absolute_file, directory=False),
+        )):
+            fail("skill_registry_database_permissions_invalid")
 
     def verify_identity(self) -> None:
         self._verify_identity()
@@ -820,6 +854,7 @@ def migrate_signed_skills_v1(path: str) -> dict[str, object]:
             "old_processes_stopped_verified": False,
             "external_anchor_verified": False,
             "object_bound_sqlite": True,
+            "exclusive_write_permissions": True,
         }
     except SignedSkillError:
         raise

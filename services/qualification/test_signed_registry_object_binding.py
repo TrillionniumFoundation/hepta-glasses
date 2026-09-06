@@ -1,7 +1,7 @@
-"""Object-identity regressions for Signed Registry SQLite custody.
+"""Object-identity and host-permission regressions for Signed Registry SQLite custody.
 
 The races are local deterministic pathname substitutions. They are not a hostile
-kernel, remote anchor, or proof that every legacy process was stopped.
+kernel, remote anchor, ACL verifier, or proof that every legacy process stopped.
 """
 from __future__ import annotations
 
@@ -171,6 +171,44 @@ class SignedRegistryObjectBindingTests(unittest.TestCase):
         for descriptor in (file_fd, parent_fd):
             with self.assertRaises(OSError):
                 storage_module.os.fstat(descriptor)
+
+    def test_owner_and_write_permissions_are_enforced_and_rechecked(self) -> None:
+        insecure_parent = Path(self.tmp.name) / "insecure"
+        insecure_parent.mkdir(mode=0o700)
+        os.chmod(insecure_parent, 0o777)
+        self.error(
+            "skill_registry_database_permissions_invalid",
+            lambda: self.open(insecure_parent / "registry.sqlite"),
+        )
+
+        registry = self.open()
+        registry.close()
+        os.chmod(self.path, 0o666)
+        self.error("skill_registry_database_permissions_invalid", self.open)
+
+        os.chmod(self.path, 0o600)
+        registry = self.open()
+        try:
+            os.chmod(self.path, 0o666)
+            self.error(
+                "skill_registry_database_permissions_invalid",
+                registry.state_checkpoint,
+            )
+        finally:
+            os.chmod(self.path, 0o600)
+            registry.close()
+
+    def test_effective_owner_and_migration_permissions_fail_closed(self) -> None:
+        real_uid = os.geteuid()
+        with mock.patch.object(storage_module.os, "geteuid", return_value=real_uid + 1):
+            self.error("skill_registry_database_permissions_invalid", self.open)
+
+        self.legacy(self.path)
+        os.chmod(self.path, 0o666)
+        self.error(
+            "skill_registry_database_permissions_invalid",
+            lambda: migrate_signed_skills_v1(str(self.path)),
+        )
 
 
 if __name__ == "__main__":
