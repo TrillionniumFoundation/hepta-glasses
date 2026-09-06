@@ -8,7 +8,9 @@ import 'package:demo_ai_even/runtime/contracts.dart';
 import 'package:demo_ai_even/runtime/hepta_runtime.dart';
 import 'package:demo_ai_even/runtime/model_gateway.dart';
 import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
+import 'package:demo_ai_even/services/ble.dart';
 import 'package:demo_ai_even/services/proto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -24,11 +26,13 @@ class EvenAI {
 
   bool isReceivingAudio = false;
   static const int _linesPerPage = 5;
+  static const String _speechLocale = 'en-US';
   static const Duration _pageInterval = Duration(seconds: 5);
   static const Duration _singlePageFinalizeDelay = Duration(seconds: 3);
   static const Duration _recordingLimit = Duration(seconds: 30);
   static const Duration _startStopDebounce = Duration(milliseconds: 500);
-  static const Duration _finalTranscriptTimeout = Duration(seconds: 3);
+  static const Duration _finalTranscriptTimeout = Duration(seconds: 25);
+  static const Duration _speechBootstrapTimeout = Duration(seconds: 10);
   static const Duration _modelTimeout = Duration(seconds: 60);
 
   static int _currentLine = 0;
@@ -41,6 +45,9 @@ class EvenAI {
   Completer<String>? _finalTranscript;
   AssistantSessionToken? _session;
   ModelRequestCancellation? _modelCancellation;
+  ModelRequestCancellation? _speechBootstrapCancellation;
+  String _sessionPairIdentity = unselectedBlePairIdentity;
+  int _sessionConnectionGeneration = 0;
   int _lastStartTime = 0;
   int _lastStopTime = 0;
   bool _pageSendInFlight = false;
@@ -84,6 +91,16 @@ class EvenAI {
             event['script'] is String &&
             event['is_final'] == true &&
             event['generation'] == session.generation) {
+          final errorCode = event['error_code'];
+          if (errorCode is String && errorCode.isNotEmpty) {
+            PrivacySafeLog.event(
+              'speech_provider_finalization_failed',
+              fields: <String, Object?>{
+                'generation': session.generation,
+                'code': errorCode,
+              },
+            );
+          }
           combinedText = (event['script']! as String).trim();
           final completer = _finalTranscript;
           if (completer != null && !completer.isCompleted) {
@@ -109,17 +126,69 @@ class EvenAI {
     _lastStartTime = now;
 
     await clear();
+    final connection = BleManager.get().connectionSnapshot;
+    if (!connection.bothConnected || !connection.hasAuthoritativeIdentity) {
+      isEvenAISyncing.value = false;
+      updateDynamicText('Glasses connection is not ready.');
+      PrivacySafeLog.event('assistant_connection_authority_unavailable');
+      return;
+    }
+
     final session = HeptaRuntime.current.sessions.begin();
     _session = session;
+    _sessionPairIdentity = connection.pairIdentity;
+    _sessionConnectionGeneration = connection.generation;
     await startListening(session);
     isReceivingAudio = true;
     isRunning = true;
     _currentLine = 0;
 
     try {
-      await BleManager.invokeMethod<void>('startEvenAI', <String, Object?>{
+      final nativeArguments = <String, Object?>{
         'generation': session.generation,
-      });
+        'connectionGeneration': connection.generation,
+        'pairIdentity': connection.pairIdentity,
+      };
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        final cancellation = ModelRequestCancellation();
+        _speechBootstrapCancellation = cancellation;
+        try {
+          final bootstrap = await SpeechBootstrapGatewayRegistry.current
+              .issue(
+            sessionId: session.sessionId,
+            generation: session.generation,
+            pairIdentity: connection.pairIdentity,
+            locale: _speechLocale,
+            cancellation: cancellation,
+          )
+              .timeout(
+            _speechBootstrapTimeout,
+            onTimeout: () {
+              cancellation.cancel('speech_bootstrap_deadline_exceeded');
+              throw TimeoutException('speech_bootstrap_deadline_exceeded');
+            },
+          );
+          if (!_isCurrent(session)) {
+            return;
+          }
+          final currentConnection = BleManager.get().connectionSnapshot;
+          if (currentConnection.generation != connection.generation ||
+              currentConnection.pairIdentity != connection.pairIdentity ||
+              !currentConnection.bothConnected) {
+            throw const SpeechBootstrapException(
+              'speech_connection_authority_changed',
+            );
+          }
+          nativeArguments.addAll(bootstrap.toNativeArguments());
+          nativeArguments['connectionGeneration'] = connection.generation;
+        } finally {
+          if (identical(_speechBootstrapCancellation, cancellation)) {
+            _speechBootstrapCancellation = null;
+          }
+        }
+      }
+
+      await BleManager.invokeMethod<void>('startEvenAI', nativeArguments);
       final micOpened = await openEvenAIMic(session);
       if (!_isCurrent(session)) {
         return;
@@ -129,7 +198,7 @@ class EvenAI {
         isEvenAISyncing.value = false;
         updateDynamicText('Microphone unavailable.');
         await startSendReply('Microphone unavailable.', session: session);
-        await _stopNativeAssistant(session);
+        await _stopNativeAssistant(session, finalize: false);
         await clear(cancelSession: false);
         return;
       }
@@ -140,11 +209,15 @@ class EvenAI {
       startRecordingTimer(session);
       PrivacySafeLog.event(
         'even_ai_started',
-        fields: <String, Object?>{'generation': session.generation},
+        fields: <String, Object?>{
+          'generation': session.generation,
+          'connection_generation': connection.generation,
+          'pair_identity': connection.pairIdentity,
+        },
       );
     } on Object catch (error) {
       HeptaRuntime.current.sessions.fail(session, 'assistant_start_failed');
-      await _stopNativeAssistant(session);
+      await _stopNativeAssistant(session, finalize: false);
       await clear(cancelSession: false);
       isEvenAISyncing.value = false;
       updateDynamicText('Voice assistant is unavailable on this platform.');
@@ -187,7 +260,7 @@ class EvenAI {
     } on StateError {
       return;
     }
-    if (!await _stopNativeAssistant(session)) {
+    if (!await _stopNativeAssistant(session, finalize: true)) {
       HeptaRuntime.current.sessions.fail(session, 'speech_stop_failed');
       isEvenAISyncing.value = false;
       updateDynamicText('Speech recognition could not be finalized.');
@@ -537,15 +610,21 @@ class EvenAI {
     final session = _session;
     if (session != null && _isCurrent(session)) {
       HeptaRuntime.current.sessions.cancel(session, reason: reason);
-      await _stopNativeAssistant(session);
+      await _stopNativeAssistant(session, finalize: false);
     }
     await clear(cancelSession: false);
   }
 
-  Future<bool> _stopNativeAssistant(AssistantSessionToken session) async {
+  Future<bool> _stopNativeAssistant(
+    AssistantSessionToken session, {
+    required bool finalize,
+  }) async {
     try {
       await BleManager.invokeMethod<void>('stopEvenAI', <String, Object?>{
         'generation': session.generation,
+        'connectionGeneration': _sessionConnectionGeneration,
+        'pairIdentity': _sessionPairIdentity,
+        'finalize': finalize,
       });
       return true;
     } on Object catch (error) {
@@ -553,6 +632,7 @@ class EvenAI {
         'even_ai_native_stop_failed',
         fields: <String, Object?>{
           'generation': session.generation,
+          'connection_generation': _sessionConnectionGeneration,
           'error_type': error.runtimeType.toString(),
         },
       );
@@ -576,6 +656,10 @@ class EvenAI {
     _session = null;
     _modelCancellation?.cancel('session_cleared');
     _modelCancellation = null;
+    _speechBootstrapCancellation?.cancel('session_cleared');
+    _speechBootstrapCancellation = null;
+    _sessionPairIdentity = unselectedBlePairIdentity;
+    _sessionConnectionGeneration = 0;
     combinedText = '';
     list = <String>[];
     isReceivingAudio = false;
