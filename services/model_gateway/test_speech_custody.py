@@ -1,5 +1,5 @@
 from __future__ import annotations
-import tempfile, threading, unittest
+import hashlib, tempfile, threading, unittest
 from pathlib import Path
 from unittest import mock
 from services.model_gateway.speech import *
@@ -8,12 +8,14 @@ class Broker:
     binding_id='fixture'
     def __init__(self):
         self.enter=threading.Event(); self.release=threading.Event(); self.block=False
-        self.revokes=[]; self.mints=0; self.ticket_expiry=None
+        self.revokes=[]; self.mints=0; self.ticket_expiry=None; self.last_mint=None
+        self.ticket_endpoint='https://speech.example/v1/asr'
+        self.ticket_token='secret-token-123456'
     def mint_ticket(self,**kw):
-        self.mints+=1; self.enter.set()
+        self.mints+=1; self.last_mint=dict(kw); self.enter.set()
         if self.block: self.release.wait(2)
         exp=kw['expires_at'] if self.ticket_expiry is None else self.ticket_expiry
-        return ProviderSpeechTicket('https://speech.example','secret-token','fixture','ticket-'+str(self.mints),exp,kw['maximum_audio_bytes'])
+        return ProviderSpeechTicket(self.ticket_endpoint,self.ticket_token,'fixture','ticket-'+str(self.mints),exp,kw['maximum_audio_bytes'])
     def revoke_session(self,*,session_id,timeout_seconds): self.revokes.append(session_id)
 
 class Tests(unittest.TestCase):
@@ -89,5 +91,40 @@ class Tests(unittest.TestCase):
         with self.assertRaises(SpeechGatewayError) as e:g.bootstrap(subject='u',session_id='s',generation=1,pair_identity='pair',locale='en')
         self.assertEqual(e.exception.code,'speech_bootstrap_recovery_required')
         self.assertEqual(f.mints,0)
+
+    def test_broker_ticket_is_bound_to_generation_and_pair_digest(self):
+        self.bootstrap()
+        self.assertEqual(self.b.last_mint['generation'],1)
+        self.assertEqual(
+            self.b.last_mint['pair_identity_digest'],
+            hashlib.sha256(b'pair').hexdigest(),
+        )
+        self.assertEqual(self.b.last_mint['session_id'],'s')
+
+    def test_issued_or_consumed_session_cannot_mint_again(self):
+        boot=self.bootstrap()
+        self.error('speech_bootstrap_replayed',lambda:self.bootstrap())
+        self.g.consume(boot.bootstrap_id,session_id='s',generation=1,pair_identity='pair')
+        self.error('speech_bootstrap_replayed',lambda:self.bootstrap())
+        self.assertEqual(self.b.mints,1)
+
+    def test_delivery_api_consumes_before_return(self):
+        boot=self.g.bootstrap_for_delivery(subject='u',session_id='delivery',generation=3,pair_identity='pair',locale='en-US')
+        state=self.g.db.execute('select state from bootstraps where session_id=?',('delivery',)).fetchone()[0]
+        self.assertEqual(state,'consumed')
+        self.error('speech_bootstrap_replayed',lambda:self.g.consume(boot.bootstrap_id,session_id='delivery',generation=3,pair_identity='pair'))
+        self.error('speech_bootstrap_replayed',lambda:self.g.bootstrap_for_delivery(subject='u',session_id='delivery',generation=3,pair_identity='pair',locale='en-US'))
+
+    def test_ticket_endpoint_and_token_are_strict(self):
+        self.b.ticket_endpoint='https://user@speech.example/v1/asr'
+        self.error('speech_provider_ticket_invalid',lambda:self.bootstrap())
+        self.assertEqual(self.g.pending_recovery(),('s',))
+
+        other=Broker(); other.ticket_token='short'
+        g=ProductionSpeechGateway(str(Path(self.tmp.name)/'other.db'),broker=other,provider_binding='fixture',clock=lambda:1000)
+        self.addCleanup(g.close)
+        with self.assertRaises(SpeechGatewayError) as raised:
+            g.bootstrap(subject='u',session_id='other',generation=1,pair_identity='pair',locale='en-US')
+        self.assertEqual(raised.exception.code,'speech_provider_ticket_invalid')
 
 if __name__=='__main__': unittest.main()
