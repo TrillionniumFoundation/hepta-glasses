@@ -20,9 +20,12 @@ This increment adds local continuity custody and an optional host-retained lower
 bound. It detects unsynchronised authority-row changes, a different database
 instance, a revision below an anchor, a same-revision fork, malformed continuity
 state and replacement of the configured pathname while the registry is open.
-It does **not** terminate an old process, operate a remote monotonic counter,
-protect against a privileged actor rewriting both authority and continuity state,
-or prove that a restored backup is the newest valid copy.
+It also machine-enforces effective-UID ownership and exclusive mode-bit write
+custody for the final parent directory and primary database file. It does **not**
+terminate an old process, operate a remote monotonic counter, inspect POSIX ACLs
+or Linux capabilities, protect against a privileged actor rewriting both
+authority and continuity state, or prove that a restored backup is the newest
+valid copy.
 
 ## Object-bound SQLite open
 
@@ -45,8 +48,26 @@ Each transaction checks that the held descriptor, the entry reached through the
 held parent-directory descriptor and the absolute configured pathname still name
 the same regular non-symlink inode. Descriptor release is coupled to registry
 close and constructor failure. This is a Linux trusted-host contract; absence of
-`O_NOFOLLOW` or `/proc/self/fd` fails closed rather than falling back to an
-unbound pathname connection.
+`O_NOFOLLOW`, `/proc/self/fd` or an effective-UID API fails closed rather than
+falling back to an unbound pathname connection.
+
+### Effective-UID and mode-bit write custody
+
+Object identity alone does not prove that another local account or group cannot
+modify the path. Before SQLite performs any PRAGMA or schema write, the final
+parent and database file must be owned by the process effective uid. Owner read
+and write bits are required; the final parent also requires owner search. Group
+and world write bits are rejected. The same properties are re-read from the held
+objects and from the named parent-relative/absolute objects around every authority
+transaction and during explicit migration. Permission drift therefore returns
+`skill_registry_database_permissions_invalid` before authority use.
+
+The implementation does not call `chmod`, change ownership or silently repair an
+insecure deployment. Read/execute visibility beyond the required owner bits is a
+separate confidentiality policy. POSIX ACL entries, Linux capabilities, mount or
+network-filesystem trust and permissions of ancestor directories are not proven
+by these mode-bit checks; operators must qualify them independently. A hostile
+kernel or privileged root can still defeat this local source boundary.
 
 The held object eliminates permanent constructor/migration misbinding. It does
 not make SQLite commit and a concurrently changing directory entry one atomic
@@ -75,7 +96,7 @@ The continuity row itself is excluded to avoid recursion.
 Every registry operation using the current implementation:
 
 1. verifies that the held object and configured path still identify the same
-   regular non-symlink database;
+   regular non-symlink database with effective-UID/exclusive-write custody;
 2. obtains `BEGIN IMMEDIATE` and checks both component markers and exact schema;
 3. recomputes and compares the authority digest before reading authority;
 4. evaluates policy, time, consent, dependency and revocation rules;
@@ -116,16 +137,16 @@ startup returns `skill_registry_state_migration_required`; it never adds state
 implicitly.
 
 `migrate_signed_skills_v1(path)` is operator-only and offline. It uses the same
-held no-follow parent/file descriptors and object-bound SQLite connection as
-normal startup. It requires an existing regular local file in WAL mode, the exact
-legacy marker and exact five-table schema, no prior continuity marker, SQLite
-integrity, canonical policy/key/install/revocation/event semantics and stable
-object/path identity. Under one `BEGIN IMMEDIATE` transaction it records row
-counts, adds the singleton, computes revision 1, adds the continuity marker and
-commits. No legacy row, timestamp, signature, consent expiry, revocation or event
-is rewritten. Any failure rolls back both new table and marker. Repeated, partial,
-unknown-version, symlink, replacement and open-interval ABA migrations are
-rejected.
+held no-follow parent/file descriptors, effective-UID/exclusive-write checks and
+object-bound SQLite connection as normal startup. It requires an existing regular
+local file in WAL mode, the exact legacy marker and exact five-table schema, no
+prior continuity marker, SQLite integrity, canonical policy/key/install/
+revocation/event semantics and stable object/path identity. Under one
+`BEGIN IMMEDIATE` transaction it records row counts, adds the singleton, computes
+revision 1, adds the continuity marker and commits. No legacy row, timestamp,
+signature, consent expiry, revocation or event is rewritten. Any failure rolls
+back both new table and marker. Repeated, partial, unknown-version, symlink,
+insecure-permission, replacement and open-interval ABA migrations are rejected.
 
 Stop and drain **every** old process and mutation ingress before migration. A
 reopened old binary rejects the additional namespaced table, but a process that
@@ -140,7 +161,7 @@ WAL and SHM consistently and publish the checkpoint to the deployment's
 independently controlled anchor. Before restored state serves any install,
 resolve or execution path, reopen it with that anchor. Keep ingress closed on
 instance mismatch, rollback, same-revision fork, digest mismatch, object/path
-replacement or SQLite integrity failure.
+replacement, permission failure or SQLite integrity failure.
 
 An unanchored, internally consistent old backup may pass local checks. Deleting a
 WAL, lowering either marker, resetting revision/digest or creating an empty
@@ -156,11 +177,13 @@ rollback, an already-open legacy writer, missing markers, symlinks and sanitized
 clock failures. Dedicated object-binding tests replace the pathname after the
 SQLite handle is returned but before constructor identity capture, exercise a
 migration A→B→A open-interval ABA, verify no wrong object is initialized or
-migrated, and confirm held descriptors close with the registry. Existing
-Ed25519/package/Transparency tests remain required.
+migrated, confirm held descriptors close with the registry, and reject insecure
+parent/file modes, effective-UID mismatch, permission drift and insecure legacy
+migration input. Existing Ed25519/package/Transparency tests remain required.
 
 These tests establish deterministic local behavior only. They do not prove
-production process quiescence, a real TPM/KMS anchor, backup operator correctness,
-remote replication, hostile-kernel resistance, operated transparency, arbitrary
-code isolation or independent qualification. Exact-head CI, artifact inspection
-and fresh independent review remain separate gates.
+production process quiescence, POSIX ACL/capability or mount policy, a real
+TPM/KMS anchor, backup operator correctness, remote replication, hostile-kernel
+resistance, operated transparency, arbitrary code isolation or independent
+qualification. Exact-head CI, artifact inspection and fresh independent review
+remain separate gates.

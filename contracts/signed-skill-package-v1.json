@@ -82,8 +82,12 @@
     "sqlite_connection": "open through /proc/self/fd/<held-file-fd>; first object/path/ctime check occurs before PRAGMA or schema write",
     "path_identity": "held object, parent-relative entry and absolute configured path must identify the same inode before, inside and after transactions",
     "open_interval_aba": "initial file and parent-directory ctime mismatch rejects A-to-B-to-A substitution before authority writes",
-    "platform_fallback": "absence of O_NOFOLLOW or /proc/self/fd fails closed; no pathname-only fallback",
-    "legacy_upgrade": "explicit offline object-bound migrate_signed_skills_v1; no automatic migration or source proof of old-process drain"
+    "filesystem_owner": "the final parent directory and primary database file must be owned by the effective service uid",
+    "filesystem_write_mode": "owner read/write is required; the final parent also requires owner search; group/world write bits are rejected and rechecked around transactions",
+    "filesystem_permission_failure": "fail with skill_registry_database_permissions_invalid before authority use or migration",
+    "filesystem_boundary": "POSIX ACLs, Linux capabilities, ancestor-directory and mount trust, hostile-kernel behavior and confidentiality/read policy are not established by these mode-bit checks",
+    "platform_fallback": "absence of O_NOFOLLOW, /proc/self/fd or effective-uid support fails closed; no pathname-only fallback",
+    "legacy_upgrade": "explicit offline object-bound migrate_signed_skills_v1 with the same owner/write checks; no automatic migration or source proof of old-process drain"
   },
   "dependencies": {
     "maximum_direct": 32,
@@ -144,6 +148,7 @@
     ],
     "failure": "rollback continuity table, marker and all migration writes",
     "path_replacement_or_aba": "reject without migrating a replacement or wrong inode",
+    "filesystem_permissions": "effective-uid ownership and exclusive mode-bit write custody are required and reported; no repair or chmod is performed",
     "old_processes_must_be_stopped": true,
     "old_process_stop_verified_by_source": false
   },
@@ -158,8 +163,9 @@
     "independent package/deployment qualification",
     "remote monotonic/TPM anti-rollback anchor",
     "proof that legacy processes were stopped before migration",
+    "POSIX ACL, Linux capability, ancestor-directory or mount-policy verification",
     "privileged operator/kernel/storage resistance",
     "atomicity between SQLite commit and arbitrary post-check pathname changes"
   ],
-  "claim_ceiling": "Repository source implementation and tests only. Object-bound local continuity and optional host-anchor checks are not independent anti-rollback, E5-E7, global log honesty, general execution permission or full HG-0087/skills closure."
+  "claim_ceiling": "Repository source implementation and tests only. Object-bound local continuity, Unix ownership/mode checks and optional host-anchor checks are not independent anti-rollback, E5-E7, global log honesty, general execution permission or full HG-0087/skills closure."
 }
