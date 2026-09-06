@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -16,17 +17,24 @@ def _synthetic_provider_token() -> bytes:
     return b"sk-" + bytes(97 + (index % 26) for index in range(32))
 
 
+def _synthetic_history_fixture() -> bytes:
+    """Benign end-to-end sentinel; it is not shaped like any provider credential."""
+    return b"HEPTA-HISTORY-FIXTURE-" + bytes(
+        65 + (index % 26) for index in range(24)
+    )
+
+
 class HistoryScanTest(unittest.TestCase):
     def test_finding_is_fingerprinted_without_secret_material(self) -> None:
-        secret = _synthetic_provider_token()
-        findings = scan_blob(secret, path="lib/example.dart", object_id="a" * 40)
+        token_bytes = _synthetic_provider_token()
+        findings = scan_blob(token_bytes, path="lib/example.dart", object_id="a" * 40)
         self.assertEqual(len(findings), 1)
-        self.assertNotIn(secret.decode(), str(findings))
+        self.assertNotIn(token_bytes.decode(), str(findings))
         self.assertEqual(len(findings[0]["fingerprint"]), 64)
 
     def test_binary_blob_is_not_silently_skipped(self) -> None:
-        secret = b"prefix\x00" + _synthetic_provider_token() + b"\x00suffix"
-        findings = scan_blob(secret, path="assets/sample.bin", object_id="b" * 40)
+        token_bytes = b"prefix\x00" + _synthetic_provider_token() + b"\x00suffix"
+        findings = scan_blob(token_bytes, path="assets/sample.bin", object_id="b" * 40)
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0]["pattern"], "provider_token")
 
@@ -58,34 +66,81 @@ class HistoryScanTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             subprocess.check_call(["git", "init", "-q"], cwd=root)
-            subprocess.check_call(["git", "config", "user.email", "test@example.invalid"], cwd=root)
+            subprocess.check_call(
+                ["git", "config", "user.email", "test@example.invalid"], cwd=root
+            )
             subprocess.check_call(["git", "config", "user.name", "Test"], cwd=root)
-            secret = _synthetic_provider_token()
+            fixture_bytes = _synthetic_history_fixture()
             fixture = root / "services/qualification/test_history_scan.py"
             fixture.parent.mkdir(parents=True)
-            fixture.write_bytes(secret)
+            fixture.write_bytes(fixture_bytes)
             contract = root / "contracts/history-scan-acknowledgements-v1.json"
             contract.parent.mkdir(parents=True)
-            contract.write_text(json.dumps({"schema_version": 1, "acknowledgements": [{"id": "synthetic-fixture", "pattern": "provider_token", "path": str(fixture.relative_to(root)), "fingerprint": hashlib.sha256(secret).hexdigest(), "classification": "synthetic_test_fixture", "reason": "unit-test fixture"}]}), encoding="utf-8")
+            contract.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "acknowledgements": [
+                            {
+                                "id": "synthetic-fixture",
+                                "pattern": "synthetic_fixture",
+                                "path": str(fixture.relative_to(root)),
+                                "fingerprint": hashlib.sha256(fixture_bytes).hexdigest(),
+                                "classification": "synthetic_test_fixture",
+                                "reason": "unit-test fixture",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             subprocess.check_call(["git", "add", "."], cwd=root)
             subprocess.check_call(["git", "commit", "-qm", "fixture"], cwd=root)
-            report = build_report(root)
+            with mock.patch.dict(
+                "tools.scan_git_history.PATTERNS",
+                {
+                    "synthetic_fixture": re.compile(
+                        rb"HEPTA-HISTORY-FIXTURE-[A-Z]{24}"
+                    )
+                },
+                clear=True,
+            ):
+                report = build_report(root)
             self.assertEqual(report["raw_finding_count"], 1)
             self.assertEqual(report["acknowledged_finding_count"], 1)
             self.assertEqual(report["finding_count"], 0)
             self.assertEqual(report["unused_acknowledgement_count"], 0)
-            self.assertNotIn(secret.decode(), str(report))
+            self.assertNotIn(fixture_bytes.decode(), str(report))
 
     def test_stale_history_acknowledgement_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             subprocess.check_call(["git", "init", "-q"], cwd=root)
-            subprocess.check_call(["git", "config", "user.email", "test@example.invalid"], cwd=root)
+            subprocess.check_call(
+                ["git", "config", "user.email", "test@example.invalid"], cwd=root
+            )
             subprocess.check_call(["git", "config", "user.name", "Test"], cwd=root)
             (root / "safe.txt").write_text("safe\n", encoding="utf-8")
             contract = root / "contracts/history-scan-acknowledgements-v1.json"
             contract.parent.mkdir(parents=True)
-            contract.write_text(json.dumps({"schema_version": 1, "acknowledgements": [{"id": "stale-fixture", "pattern": "provider_token", "path": "services/qualification/test_history_scan.py", "fingerprint": "0" * 64, "classification": "synthetic_test_fixture", "reason": "must be consumed"}]}), encoding="utf-8")
+            contract.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "acknowledgements": [
+                            {
+                                "id": "stale-fixture",
+                                "pattern": "provider_token",
+                                "path": "services/qualification/test_history_scan.py",
+                                "fingerprint": "0" * 64,
+                                "classification": "synthetic_test_fixture",
+                                "reason": "must be consumed",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             subprocess.check_call(["git", "add", "."], cwd=root)
             subprocess.check_call(["git", "commit", "-qm", "safe"], cwd=root)
             report = build_report(root)
