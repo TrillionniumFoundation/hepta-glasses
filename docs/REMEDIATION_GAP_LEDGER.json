@@ -76,7 +76,7 @@
         "docs/development/MODULE_HANDOFF.md",
         "docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md"
       ],
-      "close_criteria": "Implement durable identity/revocation and capability recovery, KMS/attestation interfaces, production model/realtime/OAuth adapters, Android PCM-to-ASR, asymmetric Skill verification plus sandbox, and encrypted persistent Memory. Deployed credentials, authorities and physical/provider evidence remain separate BLOCKED_EXTERNAL rows."
+      "close_criteria": "Complete authenticated product integration for durable identity/revocation, model/realtime/OAuth providers, Android PCM-to-ASR, capability-mediated arbitrary-code Skill execution and encrypted persistent Memory. Deployed credentials, authorities and physical/provider evidence remain separate BLOCKED_EXTERNAL rows."
     },
     {
       "id": "HG-0088",
@@ -148,16 +148,18 @@
     {
       "id": "HG-0092",
       "owner": "release-security",
-      "status": "OPEN",
+      "status": "CLOSED_SOURCE",
       "title": "Continuous object and byte custody from committed-evidence discovery through validation",
-      "source_preparation": [
+      "evidence": [
         "tools/external_evidence/committed_snapshot.py",
         "services/qualification/test_committed_snapshot.py",
         "services/qualification/test_committed_snapshot_signed.py",
+        "services/qualification/test_external_evidence_repository.py",
+        "services/qualification/test_external_evidence_repository_admission.py",
         "docs/development/ADMISSION_CONTINUITY.md"
       ],
-      "implementation_state": "Private read-only snapshot candidate and both repository gate callers implemented; full current-head crypto integration, CI artifact and reviewer confirmation are still required.",
-      "close_criteria": "Both committed-package gates use the canonical private-snapshot entrypoint; original and private-copy byte/object drift fails before returning acceptance; all negative custody tests and real signed-fixture integration pass on the unchanged head; the independent discovery-to-validation objection is addressed without disabling existing tests or weakening the external trust pin."
+      "close_criteria": "Both committed-package repository gates use validate_committed_packages; discovery and all G10 authority reads operate on one bounded private read-only snapshot; original and private-copy byte/object drift fails before returning acceptance; negative custody and real signed-fixture integration execute without weakening the external trust pin.",
+      "evidence_ceiling": "CLOSED_SOURCE records implementation and executable tests only. Exact-head E4, eligible independent review and protected-main adoption remain governed by HG-0089 and the authority-owned review/protection gaps."
     }
   ]
 }
