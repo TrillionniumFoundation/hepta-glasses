@@ -115,11 +115,47 @@ class TaskSupervisorTests(unittest.TestCase):
         self.assertFalse(marker.exists())
 
     def test_successful_leader_cannot_leave_pipe_detached_descendant(self) -> None:
+        started = self.root / "detached-started"
         marker = self.root / "detached-late"
         interpreter = Path("/usr/bin/python3").resolve(strict=True)
-        code = f"import os,time\nif os.fork()==0:\n fd=os.open('/dev/null',os.O_RDWR); [os.dup2(fd,n) for n in (0,1,2)]; fd>2 and os.close(fd); time.sleep(.4); open({str(marker)!r},'w').write('late'); os._exit(0)\nos._exit(0)\n"
-        result = run_supervised(self.task(interpreter, "-I", "-c", code))
-        self.assertEqual(result.return_code, 0)
+        code = (
+            "import os,time\n"
+            "pid=os.fork()\n"
+            "if pid==0:\n"
+            " fd=os.open('/dev/null',os.O_RDWR)\n"
+            " [os.dup2(fd,n) for n in (0,1,2)]\n"
+            " fd>2 and os.close(fd)\n"
+            f" open({str(started)!r},'w').write('started')\n"
+            " time.sleep(.4)\n"
+            f" open({str(marker)!r},'w').write('late')\n"
+            " os._exit(0)\n"
+            "deadline=time.monotonic()+1.0\n"
+            f"while not os.path.exists({str(started)!r}) and time.monotonic()<deadline: time.sleep(.01)\n"
+            f"if not os.path.exists({str(started)!r}): os._exit(2)\n"
+            "os._exit(0)\n"
+        )
+        # RLIMIT_NPROC is per real UID, not per supervised process tree. A
+        # shared CI runner may already have more than eight processes for its
+        # account, so this descendant-cleanup regression uses the maximum
+        # accepted allowance and proves child creation through `started`.
+        limits = TaskLimits(
+            wall_seconds=2,
+            cpu_seconds=2,
+            address_space_bytes=512*1024*1024,
+            file_size_bytes=1024*1024,
+            open_files=32,
+            processes=1024,
+            output_bytes=65536,
+        )
+        result = run_supervised(
+            self.task(interpreter, "-I", "-c", code, limits=limits),
+        )
+        self.assertEqual(
+            result.return_code,
+            0,
+            result.stderr.decode("utf-8", errors="replace"),
+        )
+        self.assertTrue(started.exists(), "detached descendant never started")
         time.sleep(.6)
         self.assertFalse(marker.exists())
 
