@@ -4,8 +4,9 @@ Status: incremental source repair under HG-0087/skills; the Skills slice and
 aggregate HG-0087 remain **OPEN**. Owner: skills. Implementation:
 `services/skills/signed_registry_schema.py` and
 `services/skills/signed_registry.py`. Regression:
-`services/skills/test_signed_registry_schema.py`. Package/admission design:
-`docs/development/SIGNED_SKILLS.md`.
+`services/skills/test_signed_registry_schema.py` and
+`services/qualification/test_signed_registry_runtime_policy.py`. Package/admission
+design: `docs/development/SIGNED_SKILLS.md`.
 
 ## Problem and required invariant
 
@@ -70,20 +71,45 @@ policy row and does not set it back to active. Ordinary operations retain their
 existing clock-rollback and suspension checks. This repair does not add an
 unsuspend, un-revoke, destructive reset or row-reconstruction API.
 
+## Runtime configuration custody
+
+The persisted policy would not be meaningful if trusted host code could later
+replace the live object fields used by admission. The public `subject`, `keys`,
+`capabilities`, `domains`, `clock`, `maximum_entries`, transparency verifier and
+state anchor are therefore read-only properties backed by private constructor
+state. The publisher-key mapping is copied before use and exposed through a
+read-only mapping; capability and domain sets remain immutable `frozenset`
+instances. Admission and capacity checks read the private constructor bindings,
+not assignable public attributes.
+
+A host clock callable can still depend on mutable external state; that is an
+operator responsibility, not a reason to let callers replace the binding after
+open. Any ordinary exception raised by the clock is reduced to the fixed
+`skill_clock_invalid` error without propagating private exception text or an
+exception cause. Invalid return shapes use the same fixed code. Emergency
+revocation retains its separate last-observed-time behavior.
+
+This protection prevents accidental or ordinary application reassignment. It is
+not hostile-Python-interpreter isolation: code able to mutate private fields,
+monkeypatch methods or control the process can still subvert in-process objects.
+Such code must not share the registry service boundary. OS/process isolation,
+least privilege and an independently governed configuration source remain
+production requirements.
+
 ## Compatibility and migration
 
 The component version remains **1** because this repair does not change any
 column or persisted data representation. Databases produced by the preceding
 version use the same five table definitions and reopen after validation. This is
-stricter startup behavior, not an automatic data migration.
+stricter startup and runtime behavior, not an automatic data migration.
 
 Stop and drain old processes before deploying the repaired binary. A process
 already running the predecessor can still recreate a table after an operator or
-storage failure; a source update cannot retroactively fence it. Do not respond to
-a startup failure by deleting the component marker, creating an empty table,
-copying a policy row, changing the version or restoring an unverified old
-snapshot. Recover the actual authoritative database through a separately
-reviewed, evidence-preserving procedure.
+storage failure or continue using mutable public policy fields; a source update
+cannot retroactively fence it. Do not respond to a startup failure by deleting
+the component marker, creating an empty table, copying a policy row, changing the
+version or restoring an unverified old snapshot. Recover the actual authoritative
+database through a separately reviewed, evidence-preserving procedure.
 
 The helper detects missing tables, malformed local schema and policy singleton
 loss in the database it opens. It does **not** prevent privileged row deletion,
@@ -101,8 +127,13 @@ invalid policy state, policy drift, removed fingerprint uniqueness, removed
 event AUTOINCREMENT, changed columns, suspension/time persistence, invalid fresh
 clock rollback and write-lock release after failed construction.
 
-Run this suite with the existing real Ed25519/package registry suite and the full
-repository matrix. These tests establish local source behavior only. They do not
-supply external publisher governance, witnessed transparency, encrypted package
-custody, arbitrary-code isolation, provider/device evidence, independent review
-or product release authority.
+Runtime-policy regressions additionally cover assignment denial for every public
+policy surface, defensive key-map copying, immutable policy collections, clock
+exception sanitization during fresh initialization and established operation, and
+unchanged continuity state after a rejected clock call.
+
+Run these suites with the existing real Ed25519/package registry suite and the
+full repository matrix. These tests establish local source behavior only. They
+do not supply external publisher governance, operated transparency, encrypted
+package custody, arbitrary-code isolation, provider/device evidence, independent
+review or product release authority.

@@ -61,7 +61,7 @@ class SignedSkillRegistry:
                  clock: Callable[[], int], maximum_entries: int = 4096,
                  transparency_verifier: TransparencyVerifier | None = None,
                  state_anchor: RegistryStateAnchor | None = None):
-        self.subject = name(subject)
+        configured_subject = name(subject)
         if (not isinstance(keys, Mapping) or not 1 <= len(keys) <= 32
                 or type(maximum_entries) is not int or not 1 <= maximum_entries <= 10000
                 or not callable(clock)
@@ -86,9 +86,14 @@ class SignedSkillRegistry:
         if state_anchor is not None and isinstance(path, str) and not Path(path).is_file():
             fail("skill_registry_state_instance_mismatch")
 
-        self.keys = MappingProxyType(pins)
-        self.capabilities, self.domains = allowed_capabilities, allowed_domains
-        self.clock, self.maximum_entries = clock, maximum_entries
+        # Public policy surfaces are read-only properties. Trusted composition
+        # cannot accidentally replace a persisted authority binding after open.
+        self._subject = configured_subject
+        self._keys = MappingProxyType(pins)
+        self._capabilities = allowed_capabilities
+        self._domains = allowed_domains
+        self._clock = clock
+        self._maximum_entries = maximum_entries
         self._transparency_verifier = transparency_verifier
         self._state_anchor = state_anchor
         self._calls = BoundedCalls(4)
@@ -97,7 +102,7 @@ class SignedSkillRegistry:
         try:
             self._database_identity = database_identity(path)
             policy_value = {
-                "subject": subject,
+                "subject": configured_subject,
                 "capabilities": sorted(allowed_capabilities),
                 "domains": sorted(allowed_domains),
                 "maximum_entries": maximum_entries,
@@ -162,6 +167,30 @@ class SignedSkillRegistry:
             raise
 
     @property
+    def subject(self) -> str:
+        return self._subject
+
+    @property
+    def keys(self) -> Mapping[str, PublisherKey]:
+        return self._keys
+
+    @property
+    def capabilities(self) -> frozenset[str]:
+        return self._capabilities
+
+    @property
+    def domains(self) -> frozenset[str]:
+        return self._domains
+
+    @property
+    def clock(self) -> Callable[[], int]:
+        return self._clock
+
+    @property
+    def maximum_entries(self) -> int:
+        return self._maximum_entries
+
+    @property
     def transparency_verifier(self) -> TransparencyVerifier | None:
         return self._transparency_verifier
 
@@ -174,7 +203,7 @@ class SignedSkillRegistry:
 
     def _now(self) -> int:
         try:
-            now = self.clock()
+            now = self._clock()
         except Exception:
             raise SignedSkillError("skill_clock_invalid") from None
         if not timestamp(now):
@@ -228,7 +257,7 @@ class SignedSkillRegistry:
         return checkpoint
 
     def _key(self, manifest: dict, now: int) -> PublisherKey:
-        key = self.keys.get(manifest["key_id"])
+        key = self._keys.get(manifest["key_id"])
         if key is None or key.publisher != manifest["publisher"]:
             fail("skill_publisher_key_mismatch")
         if not key.not_before <= manifest["issued_at"] <= now < min(
@@ -254,9 +283,9 @@ class SignedSkillRegistry:
                 (kind, target),
             ).fetchone():
                 fail("skill_revoked")
-        if not set(manifest["capabilities"]) <= self.capabilities:
+        if not set(manifest["capabilities"]) <= self._capabilities:
             fail("skill_capability_not_allowed")
-        if not set(manifest["network_domains"]) <= self.domains:
+        if not set(manifest["network_domains"]) <= self._domains:
             fail("skill_network_domain_not_allowed")
         expiries.extend((key.not_after, manifest["expires_at"]))
 
@@ -312,7 +341,7 @@ class SignedSkillRegistry:
     def install(self, document: bytes, *, signature: bytes, package: bytes,
                 consent: InstallConsent,
                 transparency: TransparencyProof | None = None) -> CheckedSkill:
-        if (type(consent) is not InstallConsent or consent.subject != self.subject
+        if (type(consent) is not InstallConsent or consent.subject != self._subject
                 or not timestamp(consent.expires_at) or type(document) is not bytes
                 or consent.manifest_sha256 != sha256(document)):
             fail("skill_exact_consent_required")
@@ -353,7 +382,7 @@ class SignedSkillRegistry:
                     )
             if db.execute(
                 "SELECT COUNT(*) FROM signed_skill_events WHERE event='installed'"
-            ).fetchone()[0] >= self.maximum_entries:
+            ).fetchone()[0] >= self._maximum_entries:
                 fail("skill_installation_capacity_exhausted")
             until = min(
                 [consent.expires_at, manifest["expires_at"]]
@@ -413,7 +442,7 @@ class SignedSkillRegistry:
             ).fetchone():
                 return {"revoked": True, "scope": kind}
             count = db.execute("SELECT COUNT(*) FROM signed_skill_revocations").fetchone()[0]
-            if count >= self.maximum_entries:
+            if count >= self._maximum_entries:
                 if not db.execute(
                     "SELECT suspended FROM signed_skill_policy WHERE id=1"
                 ).fetchone()[0]:
