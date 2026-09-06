@@ -13,7 +13,7 @@ from types import MappingProxyType
 from typing import Callable, Mapping
 
 from services.control_plane.bounded_calls import BoundedCalls
-from services.control_plane.durable_state import DurableDatabase, timestamp
+from services.control_plane.durable_state import timestamp
 from services.skills.signed_package import (
     PublisherKey, SignedSkillError, canonical, digest, fail, inspect_package,
     name, parse_manifest, sha256, verify_signature, version,
@@ -23,12 +23,11 @@ from services.skills.signed_registry_schema import (
     STATE_VERSION,
     RegistryStateAnchor,
     RegistryStateCheckpoint,
-    database_identity,
     ensure_signed_skill_schema,
     initialize_registry_state,
     seal_registry_state,
-    verify_database_identity,
     verify_registry_state,
+    BoundRegistryDatabase,
 )
 from services.skills.package_transparency import (
     TransparencyProof, TransparencyVerifier,
@@ -98,9 +97,14 @@ class SignedSkillRegistry:
         self._state_anchor = state_anchor
         self._calls = BoundedCalls(4)
         self._path = path
-        self.storage = DurableDatabase(path)
+        self.storage = BoundRegistryDatabase(
+            path,
+            create=state_anchor is None,
+            initialize_schema=True,
+        )
+        self._database_binding = self.storage.binding
+        self._database_identity = self.storage.identity
         try:
-            self._database_identity = database_identity(path)
             policy_value = {
                 "subject": configured_subject,
                 "capabilities": sorted(allowed_capabilities),
@@ -111,7 +115,7 @@ class SignedSkillRegistry:
                 policy_value["transparency"] = transparency_verifier.binding
             self._policy = canonical(policy_value)
             with self.storage.transaction() as db:
-                verify_database_identity(self._path, self._database_identity)
+                self.storage.verify_identity()
                 registry_fresh = self.storage.version("signed_skills", 1)
                 state_fresh = self.storage.version(STATE_COMPONENT, STATE_VERSION)
                 if registry_fresh != state_fresh:
@@ -160,8 +164,8 @@ class SignedSkillRegistry:
                 self.storage.mark_version("signed_skills", 1)
                 self.storage.mark_version(STATE_COMPONENT, STATE_VERSION)
                 seal_registry_state(db, prior)
-                verify_database_identity(self._path, self._database_identity)
-            verify_database_identity(self._path, self._database_identity)
+                self.storage.verify_identity()
+            self.storage.verify_identity()
         except BaseException:
             self.storage.close()
             raise
@@ -221,9 +225,9 @@ class SignedSkillRegistry:
     @contextmanager
     def _transaction(self, *, expiries: list[int] | None = None,
                      revocation: bool = False):
-        verify_database_identity(self._path, self._database_identity)
+        self.storage.verify_identity()
         with self.storage.transaction() as db:
-            verify_database_identity(self._path, self._database_identity)
+            self.storage.verify_identity()
             prior = self._established(db)
             last = db.execute(
                 "SELECT last_time FROM signed_skill_policy WHERE id=1"
@@ -242,18 +246,18 @@ class SignedSkillRegistry:
                 fail("skill_admission_expired")
             db.execute("UPDATE signed_skill_policy SET last_time=? WHERE id=1", (final,))
             seal_registry_state(db, prior)
-            verify_database_identity(self._path, self._database_identity)
-        verify_database_identity(self._path, self._database_identity)
+            self.storage.verify_identity()
+        self.storage.verify_identity()
 
     def state_checkpoint(self) -> RegistryStateCheckpoint:
         """Return local continuity metadata; never claim an external witness."""
-        verify_database_identity(self._path, self._database_identity)
+        self.storage.verify_identity()
         with self.storage.transaction() as db:
-            verify_database_identity(self._path, self._database_identity)
+            self.storage.verify_identity()
             checkpoint = self._established(db)
             checkpoint = verify_registry_state(db, self._state_anchor, deep=True)
-            verify_database_identity(self._path, self._database_identity)
-        verify_database_identity(self._path, self._database_identity)
+            self.storage.verify_identity()
+        self.storage.verify_identity()
         return checkpoint
 
     def _key(self, manifest: dict, now: int) -> PublisherKey:
@@ -461,9 +465,9 @@ class SignedSkillRegistry:
 
     def verify_local_audit(self) -> dict:
         """Check the local event chain without converting it into external proof."""
-        verify_database_identity(self._path, self._database_identity)
+        self.storage.verify_identity()
         with self.storage.transaction() as db:
-            verify_database_identity(self._path, self._database_identity)
+            self.storage.verify_identity()
             if self.storage.version("signed_skills", 1):
                 fail("skill_registry_schema_integrity_invalid")
             if self.storage.version(STATE_COMPONENT, STATE_VERSION):
@@ -481,8 +485,8 @@ class SignedSkillRegistry:
                     fail("skill_local_audit_invalid")
                 previous = row["event_hash"]
             verify_registry_state(db, self._state_anchor)
-            verify_database_identity(self._path, self._database_identity)
-        verify_database_identity(self._path, self._database_identity)
+            self.storage.verify_identity()
+        self.storage.verify_identity()
         return {
             "events": count,
             "last_hash": previous,

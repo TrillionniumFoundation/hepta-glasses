@@ -8,9 +8,11 @@ import re
 import secrets
 import sqlite3
 import stat
+import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import quote
+from typing import Iterator
 
 from services.control_plane.durable_state import timestamp
 from services.skills.signed_package import (
@@ -22,6 +24,245 @@ from services.skills.signed_package import (
     parse_manifest,
     sha256,
 )
+
+
+def _object_binding_supported() -> bool:
+    required = ("O_CLOEXEC", "O_DIRECTORY", "O_NOFOLLOW")
+    return (
+        os.name == "posix"
+        and all(hasattr(os, value) for value in required)
+        and os.open in os.supports_dir_fd
+        and os.mkdir in os.supports_dir_fd
+        and os.stat in os.supports_dir_fd
+        and os.stat in os.supports_follow_symlinks
+        and Path("/proc/self/fd").is_dir()
+    )
+
+
+def _regular_file(value: os.stat_result) -> bool:
+    return stat.S_ISREG(value.st_mode) and not stat.S_ISLNK(value.st_mode)
+
+
+def _same_object(left: os.stat_result, right: os.stat_result) -> bool:
+    return (left.st_dev, left.st_ino) == (right.st_dev, right.st_ino)
+
+
+@dataclass(frozen=True)
+class RegistryDatabaseBinding:
+    absolute_path: str
+    parent_path: str
+    basename: str
+    parent_fd: int
+    file_fd: int
+    parent_dev: int
+    parent_ino: int
+    file_dev: int
+    file_ino: int
+
+
+class BoundRegistryDatabase:
+    """Bind SQLite to one held no-follow file object for its full lifetime.
+
+    This is a trusted local Linux-host contract, not hostile-kernel or network
+    filesystem isolation. A hard-linked database is rejected because an unseen
+    alias defeats pathname custody.
+    """
+
+    def __init__(self, path: str, *, create: bool, initialize_schema: bool) -> None:
+        if type(path) is not str or not path or path == ":memory:":
+            fail("skill_registry_database_identity_invalid")
+        if not _object_binding_supported():
+            fail("skill_registry_database_identity_unavailable")
+        absolute = os.path.abspath(path)
+        parent_path, basename = os.path.split(absolute)
+        if not basename or basename in (".", ".."):
+            fail("skill_registry_database_identity_invalid")
+
+        self.lock = threading.RLock()
+        self.db: sqlite3.Connection | None = None
+        parent_fd = file_fd = -1
+        try:
+            parent_fd = self._open_parent(parent_path, create=create)
+            parent_before = os.fstat(parent_fd)
+            if not stat.S_ISDIR(parent_before.st_mode):
+                fail("skill_registry_database_identity_invalid")
+            flags = os.O_RDWR | os.O_CLOEXEC | os.O_NOFOLLOW
+            try:
+                file_fd = os.open(basename, flags, dir_fd=parent_fd)
+            except FileNotFoundError:
+                if not create:
+                    fail("skill_registry_database_identity_invalid")
+                try:
+                    file_fd = os.open(
+                        basename, flags | os.O_CREAT | os.O_EXCL, 0o600,
+                        dir_fd=parent_fd,
+                    )
+                except OSError:
+                    fail("skill_registry_database_identity_invalid")
+            except OSError:
+                fail("skill_registry_database_identity_invalid")
+            opened = os.fstat(file_fd)
+            if not _regular_file(opened) or opened.st_nlink != 1:
+                fail("skill_registry_database_identity_invalid")
+            self.binding = RegistryDatabaseBinding(
+                absolute, parent_path, basename, parent_fd, file_fd,
+                parent_before.st_dev, parent_before.st_ino,
+                opened.st_dev, opened.st_ino,
+            )
+            self.identity = (opened.st_dev, opened.st_ino)
+            parent_ctime = os.fstat(parent_fd).st_ctime_ns
+            try:
+                db = sqlite3.connect(
+                    f"/proc/self/fd/{file_fd}", isolation_level=None,
+                    check_same_thread=False, timeout=5,
+                )
+            except sqlite3.DatabaseError:
+                fail("skill_registry_storage_integrity_invalid")
+            self.db = db
+            self._closed = False
+            db.row_factory = sqlite3.Row
+            # Before any PRAGMA/schema write, bind the SQLite-opened object to
+            # the held inode and reject connect-interval pathname ABA.
+            self._verify_identity(initial_parent_ctime=parent_ctime)
+            try:
+                db.execute("PRAGMA foreign_keys=ON")
+                db.execute("PRAGMA synchronous=FULL")
+                if initialize_schema:
+                    mode = db.execute("PRAGMA journal_mode=WAL").fetchone()[0]
+                    if mode != "wal" or db.execute("PRAGMA synchronous").fetchone()[0] != 2:
+                        fail("skill_registry_storage_configuration_unavailable")
+                    db.execute(
+                        "CREATE TABLE IF NOT EXISTS hepta_component_schema("
+                        "component TEXT PRIMARY KEY, version INTEGER NOT NULL)"
+                    )
+                self.verify_identity()
+            except sqlite3.DatabaseError:
+                fail("skill_registry_storage_integrity_invalid")
+        except BaseException:
+            if self.db is not None:
+                self.db.close()
+                self.db = None
+            if file_fd >= 0:
+                os.close(file_fd)
+            if parent_fd >= 0:
+                os.close(parent_fd)
+            raise
+
+    @staticmethod
+    def _open_parent(parent_path: str, *, create: bool) -> int:
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+        try:
+            current = os.open("/", flags)
+            for component in (part for part in parent_path.split(os.sep) if part):
+                try:
+                    next_fd = os.open(component, flags, dir_fd=current)
+                except FileNotFoundError:
+                    if not create:
+                        raise
+                    try:
+                        os.mkdir(component, 0o700, dir_fd=current)
+                    except FileExistsError:
+                        pass
+                    next_fd = os.open(component, flags, dir_fd=current)
+                os.close(current)
+                current = next_fd
+            return current
+        except OSError:
+            try:
+                if "current" in locals() and current >= 0:
+                    os.close(current)
+            except OSError:
+                pass
+            fail("skill_registry_database_identity_invalid")
+        raise AssertionError("unreachable")
+
+    def _verify_identity(self, *, initial_parent_ctime: int | None = None) -> None:
+        binding = self.binding
+        try:
+            held_parent = os.fstat(binding.parent_fd)
+            named_parent = os.stat(binding.parent_path, follow_symlinks=False)
+            held_file = os.fstat(binding.file_fd)
+            relative_file = os.stat(
+                binding.basename, dir_fd=binding.parent_fd, follow_symlinks=False,
+            )
+            absolute_file = os.stat(binding.absolute_path, follow_symlinks=False)
+        except OSError:
+            fail("skill_registry_database_replaced")
+        if (
+            not stat.S_ISDIR(held_parent.st_mode)
+            or not stat.S_ISDIR(named_parent.st_mode)
+            or (held_parent.st_dev, held_parent.st_ino)
+                != (binding.parent_dev, binding.parent_ino)
+            or not _same_object(held_parent, named_parent)
+            or not _regular_file(held_file)
+            or not _regular_file(relative_file)
+            or not _regular_file(absolute_file)
+            or held_file.st_nlink != 1
+            or relative_file.st_nlink != 1
+            or absolute_file.st_nlink != 1
+            or (held_file.st_dev, held_file.st_ino)
+                != (binding.file_dev, binding.file_ino)
+            or not _same_object(held_file, relative_file)
+            or not _same_object(held_file, absolute_file)
+            or (initial_parent_ctime is not None
+                and held_parent.st_ctime_ns != initial_parent_ctime)
+        ):
+            fail("skill_registry_database_replaced")
+
+    def verify_identity(self) -> None:
+        self._verify_identity()
+
+    @contextmanager
+    def transaction(self) -> Iterator[sqlite3.Connection]:
+        if self.db is None:
+            fail("skill_registry_storage_integrity_invalid")
+        with self.lock:
+            self.verify_identity()
+            try:
+                self.db.execute("BEGIN IMMEDIATE")
+                self.verify_identity()
+                yield self.db
+                self.verify_identity()
+                self.db.execute("COMMIT")
+                self.verify_identity()
+            except BaseException:
+                if self.db.in_transaction:
+                    self.db.execute("ROLLBACK")
+                raise
+
+    def version(self, component: str, expected: int) -> bool:
+        if self.db is None:
+            fail("skill_registry_storage_integrity_invalid")
+        row = self.db.execute(
+            "SELECT version FROM hepta_component_schema WHERE component=?",
+            (component,),
+        ).fetchone()
+        if row is not None and row["version"] != expected:
+            raise ValueError(f"{component}_schema_migration_required")
+        return row is None
+
+    def mark_version(self, component: str, version: int) -> None:
+        if self.db is None:
+            fail("skill_registry_storage_integrity_invalid")
+        self.db.execute(
+            "INSERT OR IGNORE INTO hepta_component_schema VALUES(?,?)",
+            (component, version),
+        )
+
+    def close(self) -> None:
+        with self.lock:
+            if getattr(self, "_closed", False):
+                return
+            self._closed = True
+            db, self.db = self.db, None
+            if db is not None:
+                db.close()
+            for descriptor in (self.binding.file_fd, self.binding.parent_fd):
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
+
 
 STATE_COMPONENT = "signed_skills_state"
 STATE_VERSION = 1
@@ -217,6 +458,7 @@ def ensure_signed_skill_schema(db: sqlite3.Connection, *, fresh: bool,
 
 
 def database_identity(path: str) -> tuple[int, int]:
+    """Legacy pathname helper retained for compatibility; not a connection binding."""
     try:
         value = os.lstat(path)
     except OSError:
@@ -531,21 +773,14 @@ def migrate_signed_skills_v1(path: str) -> dict[str, object]:
     source = Path(path)
     if source.is_symlink() or not source.is_file():
         fail("skill_registry_migration_existing_file_required")
-    before_identity = database_identity(path)
-    uri = "file:" + quote(str(source.absolute()), safe="/") + "?mode=rw"
+    storage = BoundRegistryDatabase(path, create=False, initialize_schema=False)
     try:
-        db = sqlite3.connect(uri, uri=True, isolation_level=None, timeout=5)
-    except sqlite3.DatabaseError:
-        fail("skill_registry_storage_integrity_invalid")
-    db.row_factory = sqlite3.Row
-    try:
-        db.execute("PRAGMA foreign_keys=ON")
-        db.execute("PRAGMA synchronous=FULL")
+        db = storage.db
+        if db is None:
+            fail("skill_registry_storage_integrity_invalid")
         if db.execute("PRAGMA journal_mode").fetchone()[0] != "wal":
             fail("skill_registry_migration_wal_required")
-        db.execute("BEGIN IMMEDIATE")
-        try:
-            verify_database_identity(path, before_identity)
+        with storage.transaction() as db:
             tables = {row[0] for row in db.execute(
                 "SELECT name FROM sqlite_master WHERE type='table'")}
             owned = {table for table in tables if table.startswith("signed_skill_")}
@@ -572,27 +807,23 @@ def migrate_signed_skills_v1(path: str) -> dict[str, object]:
                 "INSERT INTO hepta_component_schema(component,version) VALUES(?,?)",
                 (STATE_COMPONENT, STATE_VERSION),
             )
-            verify_database_identity(path, before_identity)
-            db.execute("COMMIT")
-            verify_database_identity(path, before_identity)
-            return {
-                "component": "signed_skills",
-                "state_component": STATE_COMPONENT,
-                "state_version": STATE_VERSION,
-                "instance_id": checkpoint.instance_id,
-                "revision": checkpoint.revision,
-                "authority_digest": checkpoint.authority_digest,
-                "preserved_rows": counts,
-                "old_processes_stopped_verified": False,
-                "external_anchor_verified": False,
-            }
-        except BaseException:
-            if db.in_transaction:
-                db.execute("ROLLBACK")
-            raise
+            storage.verify_identity()
+        storage.verify_identity()
+        return {
+            "component": "signed_skills",
+            "state_component": STATE_COMPONENT,
+            "state_version": STATE_VERSION,
+            "instance_id": checkpoint.instance_id,
+            "revision": checkpoint.revision,
+            "authority_digest": checkpoint.authority_digest,
+            "preserved_rows": counts,
+            "old_processes_stopped_verified": False,
+            "external_anchor_verified": False,
+            "object_bound_sqlite": True,
+        }
     except SignedSkillError:
         raise
     except sqlite3.DatabaseError:
         fail("skill_registry_storage_integrity_invalid")
     finally:
-        db.close()
+        storage.close()

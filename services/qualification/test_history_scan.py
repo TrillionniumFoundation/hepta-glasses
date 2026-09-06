@@ -11,16 +11,21 @@ from unittest import mock
 from tools.scan_git_history import MAX_BLOB_BYTES, build_report, scan_blob
 
 
+def _synthetic_provider_token() -> bytes:
+    """Build an inert scanner fixture without storing token-shaped source text."""
+    return b"sk-" + bytes(97 + (index % 26) for index in range(32))
+
+
 class HistoryScanTest(unittest.TestCase):
     def test_finding_is_fingerprinted_without_secret_material(self) -> None:
-        secret = b"sk-abcdefghijklmnopqrstuvwxyz123456"
+        secret = _synthetic_provider_token()
         findings = scan_blob(secret, path="lib/example.dart", object_id="a" * 40)
         self.assertEqual(len(findings), 1)
         self.assertNotIn(secret.decode(), str(findings))
         self.assertEqual(len(findings[0]["fingerprint"]), 64)
 
     def test_binary_blob_is_not_silently_skipped(self) -> None:
-        secret = b"prefix\x00sk-abcdefghijklmnopqrstuvwxyz123456\x00suffix"
+        secret = b"prefix\x00" + _synthetic_provider_token() + b"\x00suffix"
         findings = scan_blob(secret, path="assets/sample.bin", object_id="b" * 40)
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0]["pattern"], "provider_token")
@@ -49,14 +54,13 @@ class HistoryScanTest(unittest.TestCase):
             self.assertGreaterEqual(report["commit_count"], 2)
             self.assertGreaterEqual(report["ref_count"], 2)
 
-
     def test_exact_synthetic_fixture_acknowledgement_is_auditable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             subprocess.check_call(["git", "init", "-q"], cwd=root)
             subprocess.check_call(["git", "config", "user.email", "test@example.invalid"], cwd=root)
             subprocess.check_call(["git", "config", "user.name", "Test"], cwd=root)
-            secret = b"sk-abcdefghijklmnopqrstuvwxyz123456"
+            secret = _synthetic_provider_token()
             fixture = root / "services/qualification/test_history_scan.py"
             fixture.parent.mkdir(parents=True)
             fixture.write_bytes(secret)

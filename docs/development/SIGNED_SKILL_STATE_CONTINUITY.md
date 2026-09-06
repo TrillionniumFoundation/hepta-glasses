@@ -4,7 +4,8 @@ Status: incremental HG-0087/skills source hardening; Skills and aggregate
 HG-0087 remain **OPEN**. Owner: skills. Implementation:
 `services/skills/signed_registry_schema.py` and
 `services/skills/signed_registry.py`. Regression:
-`services/skills/test_signed_registry_schema.py`. Contract:
+`services/skills/test_signed_registry_schema.py` and
+`services/qualification/test_signed_registry_object_binding.py`. Contract:
 `contracts/signed-skill-package-v1.json`. Operations:
 `docs/operations/SIGNED_SKILL_STATE_RUNBOOK.md`.
 
@@ -22,6 +23,37 @@ state and replacement of the configured pathname while the registry is open.
 It does **not** terminate an old process, operate a remote monotonic counter,
 protect against a privileged actor rewriting both authority and continuity state,
 or prove that a restored backup is the newest valid copy.
+
+## Object-bound SQLite open
+
+Path checks performed only after `sqlite3.connect(path)` have a constructor race:
+the connection can retain file A while a later path lookup observes replacement
+file B. Checking B before every transaction then says nothing about the SQLite
+handle still attached to A. The offline migration had the same gap and could be
+redirected by pathname substitution or an A→B→A sequence.
+
+The registry now walks the local parent directory with held directory descriptors
+and `O_NOFOLLOW`, opens the final database as one regular file object, and retains
+both the parent-directory and file descriptors until the SQLite connection is
+closed. SQLite is opened through `/proc/self/fd/<held-fd>`, so the connection is
+bound to the inspected object rather than resolving the caller pathname again.
+The first post-connect device/inode and ctime check runs before any PRAGMA or
+schema write. Initial parent-directory ctime is also checked, making a pathname
+ABA during the open interval fail closed.
+
+Each transaction checks that the held descriptor, the entry reached through the
+held parent-directory descriptor and the absolute configured pathname still name
+the same regular non-symlink inode. Descriptor release is coupled to registry
+close and constructor failure. This is a Linux trusted-host contract; absence of
+`O_NOFOLLOW` or `/proc/self/fd` fails closed rather than falling back to an
+unbound pathname connection.
+
+The held object eliminates permanent constructor/migration misbinding. It does
+not make SQLite commit and a concurrently changing directory entry one atomic
+cross-kernel operation. A replacement after the last pre-commit check can still
+leave a change committed to the held, now-detached inode before the post-commit
+check returns an error. Preserve both objects and handle that as a storage
+incident; the operation never reports success after observing replacement.
 
 ## State and authority digest
 
@@ -42,8 +74,8 @@ The continuity row itself is excluded to avoid recursion.
 
 Every registry operation using the current implementation:
 
-1. verifies that the configured path still names the captured regular-file
-   device/inode;
+1. verifies that the held object and configured path still identify the same
+   regular non-symlink database;
 2. obtains `BEGIN IMMEDIATE` and checks both component markers and exact schema;
 3. recomputes and compares the authority digest before reading authority;
 4. evaluates policy, time, consent, dependency and revocation rules;
@@ -57,13 +89,6 @@ next current-version operation fail `skill_registry_state_integrity_invalid`.
 Established startup and explicit checkpoint verification also run SQLite
 `quick_check`, foreign-key checks and semantic validation of policy, keys,
 installed records, revocations, event ordering/hash linkage and event sequence.
-
-The path identity checks occur before, inside and after transactions. They ensure
-a pathname replacement never returns success from the operation. Because path
-lookup and SQLite commit cannot be one cross-kernel atomic operation, replacement
-racing the final check may still leave a committed change in the detached old
-inode before the post-commit error. Preserve both files and treat that as an
-incident; this mechanism is detection, not hostile-filesystem isolation.
 
 ## Optional host anchor
 
@@ -90,15 +115,17 @@ A five-table predecessor has `signed_skills=1` but no continuity marker. Normal
 startup returns `skill_registry_state_migration_required`; it never adds state
 implicitly.
 
-`migrate_signed_skills_v1(path)` is operator-only and offline. It requires an
-existing regular non-symlink local file in WAL mode, the exact legacy marker and
-exact five-table schema, no prior continuity marker, SQLite integrity, canonical
-policy/key/install/revocation/event semantics and stable path identity. Under one
-`BEGIN IMMEDIATE` transaction it records row counts, adds the singleton, computes
-revision 1, adds the continuity marker and commits. No legacy row, timestamp,
-signature, consent expiry, revocation or event is rewritten. Any failure rolls
-back both new table and marker. Repeated, partial, unknown-version and symlink
-migrations are rejected.
+`migrate_signed_skills_v1(path)` is operator-only and offline. It uses the same
+held no-follow parent/file descriptors and object-bound SQLite connection as
+normal startup. It requires an existing regular local file in WAL mode, the exact
+legacy marker and exact five-table schema, no prior continuity marker, SQLite
+integrity, canonical policy/key/install/revocation/event semantics and stable
+object/path identity. Under one `BEGIN IMMEDIATE` transaction it records row
+counts, adds the singleton, computes revision 1, adds the continuity marker and
+commits. No legacy row, timestamp, signature, consent expiry, revocation or event
+is rewritten. Any failure rolls back both new table and marker. Repeated, partial,
+unknown-version, symlink, replacement and open-interval ABA migrations are
+rejected.
 
 Stop and drain **every** old process and mutation ingress before migration. A
 reopened old binary rejects the additional namespaced table, but a process that
@@ -112,8 +139,8 @@ Before backup, quiesce writers, call `state_checkpoint()`, retain the database,
 WAL and SHM consistently and publish the checkpoint to the deployment's
 independently controlled anchor. Before restored state serves any install,
 resolve or execution path, reopen it with that anchor. Keep ingress closed on
-instance mismatch, rollback, same-revision fork, digest mismatch, path replacement
-or SQLite integrity failure.
+instance mismatch, rollback, same-revision fork, digest mismatch, object/path
+replacement or SQLite integrity failure.
 
 An unanchored, internally consistent old backup may pass local checks. Deleting a
 WAL, lowering either marker, resetting revision/digest or creating an empty
@@ -126,7 +153,11 @@ The test suite uses real SQLite and covers fresh state, no-op revisions, direct
 row tampering, anchored rollback/fork detection, missing-database anchors, live
 path replacement, state-seal rollback, explicit migration preservation and
 rollback, an already-open legacy writer, missing markers, symlinks and sanitized
-clock failures. Existing Ed25519/package/Transparency tests remain required.
+clock failures. Dedicated object-binding tests replace the pathname after the
+SQLite handle is returned but before constructor identity capture, exercise a
+migration A→B→A open-interval ABA, verify no wrong object is initialized or
+migrated, and confirm held descriptors close with the registry. Existing
+Ed25519/package/Transparency tests remain required.
 
 These tests establish deterministic local behavior only. They do not prove
 production process quiescence, a real TPM/KMS anchor, backup operator correctness,
