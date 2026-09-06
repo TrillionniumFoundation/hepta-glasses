@@ -1,18 +1,20 @@
 # Committed external-evidence admission continuity
 
-Status: implementation candidate for the discovery-to-validation replacement
-finding inherited from PR #99. This is not a new G-number or product-evidence
-claim. HG-0087 and all administrative/external gates remain unchanged. This
-source change needs exact-head CI and independent review; the implementing actor
-does not resolve or dismiss another reviewer's objection.
+Status: **CLOSED_SOURCE** for HG-0092. The discovery-to-validation replacement
+is implemented and exercised by the repository test lane. This status is not an
+exact-head E4, independent-review, product-evidence, deployment or release claim.
+HG-0087 and all administrative/external gates remain unchanged. Final source
+acceptance still requires an unchanged seven-lane CI run, content-verified source
+artifact and an eligible independent latest-head decision.
 
 ## Responsibility and entrypoint
 
 `tools/external_evidence/committed_snapshot.py:validate_committed_packages` is the
-canonical repository gate. Both committed-package tests call this entrypoint.
-The older discovery helpers remain diagnostic/negative-test surfaces, not an
-alternate authorization gate. Direct product bundle validation remains separate
-and must still bind the exact product source and externally pinned registry.
+canonical repository gate. Both committed-package repository tests call this
+entrypoint. The older discovery helpers remain diagnostic/negative-test surfaces,
+not alternate authorization gates. Direct product bundle validation remains a
+separate trusted entrypoint and must still bind exact product source identity and
+an externally pinned registry.
 
 The function accepts the repository evidence root and an externally obtained
 trust-registry SHA-256. It does not accept a custom validator, clock, executable,
@@ -27,7 +29,7 @@ closing descriptors. The later gate reopened bundle, custody, registry and
 artifact names without binding the discovered object to those reads. Stable
 individual reads were not a continuous transaction.
 
-The new path is:
+The closed source path is:
 
 ```text
 original no-follow descriptor tree
@@ -42,17 +44,17 @@ original no-follow descriptor tree
 
 The capture includes envelope, registry, keys, signatures, reviews, artifacts and
 ordinary files under the evidence root. It uses canonical relative names, rejects
-links/special objects, captures every root ancestor without following links and
-checks opened/final-visible object identity. File opening uses O_NONBLOCK to
-avoid a regular-file-to-FIFO replacement hanging the verifier. Directory entry
-bounds are enforced during enumeration, before collecting an unbounded list.
+links and special objects, captures every root ancestor without following links,
+and checks opened/final-visible object identity. File opening uses `O_NONBLOCK`
+to avoid a regular-file-to-FIFO replacement hanging the verifier. Directory
+entry bounds are enforced during enumeration before collecting an unbounded list.
 
 The copy lives in a fresh process-private temporary directory. Files are mode
-0400, directories 0500 during validation. Source directories are never chmod'ed.
-Discovery and every authority read operate on this one copy. Replacing an
-original path cannot substitute new bytes into the validator. Source replacement,
-new packages, permission/inode/content drift or private-copy modification also
-prevents a successful context return.
+`0400` and directories are `0500` during validation. Source directories are never
+chmod'ed. Discovery and every authority read operate on this one copy. Replacing
+an original path cannot substitute new bytes into the validator. Source
+replacement, late package addition, permission/inode/content drift or private-copy
+modification prevents a successful context return.
 
 The trusted verifier process, operating system, temporary-directory owner,
 installed cryptographic runtime and external trust pin remain trusted boundaries.
@@ -72,29 +74,29 @@ package set, not that any external gap is closed.
 Per-file bound: 16 MiB. Total captured bytes: 256 MiB. Entry count: 100,000.
 Directory depth: 64. Bounds are conservative source limits, not an external
 provider capacity claim. Captured original bytes, private verification capture
-and a postcondition scan can coexist; provision for bounded peak memory and
-private temporary disk. Keep this gate off the interactive mobile path.
+and a postcondition scan can coexist; operators must provision for bounded peak
+memory and private temporary disk. Keep this gate off the interactive mobile path.
 
-Every retry starts a new capture; never combine discovery from one attempt with
-validation from another. Any original mutation during an attempt fails closed.
-A trusted verifier exception also returns no acceptance. Temporary storage is
-removed after use; private cleanup never changes original authority files.
+Every retry starts a new capture; discovery from one attempt is never combined
+with validation from another. Any original mutation during an attempt fails
+closed. A trusted verifier exception also returns no acceptance. Temporary
+storage is removed after use; cleanup never changes original authority files.
 
 ## Configuration, compatibility and operations
 
 The caller supplies `HEPTA_EXTERNAL_TRUST_REGISTRY_SHA256` from protected
 out-of-band configuration. It cannot be copied from the submitted package as its
 own authority. A missing pin fails whenever accepted envelopes exist. The
-canonical wrapper retains the existing signed candidate for historical accepted
-packages; it does not certify them against the latest code automatically.
+canonical wrapper retains the existing signed candidate identity for historical
+accepted packages; it does not certify them against the latest code automatically.
 
 The envelope/signature schema and contract revision are unchanged: this is a
 custody implementation repair, not a weakening or expansion of signed claims.
 No production private key or signature is created. Existing valid packages are
 verified by the same G10 entrypoint. Rollback to the prior mutable-path gate would
-reopen this finding and is not an approved security downgrade.
+reopen HG-0092 and is not an approved security downgrade.
 
-Run the ordinary repository service test lane and the targeted suites:
+Run the ordinary repository service lane and the targeted suites:
 
 ```bash
 python3 -m unittest services.qualification.test_committed_snapshot -v
@@ -104,7 +106,7 @@ python3 -m unittest services.qualification.test_external_evidence_repository ser
 
 If validation fails, stop admission, preserve the redacted error and investigate
 source churn or trust/crypto failures. Do not increase bounds, remove a package,
-change its accepted flag or disable negative tests to obtain a passing result.
+change its accepted flag or disable negative tests merely to obtain a pass.
 
 ## Verification and evidence ceiling
 
@@ -115,11 +117,14 @@ copy mutation, pre-validation source mutation, missing prerequisites, incomplete
 verdicts, linked root/parent/leaf, FIFO race, resource bounds and malformed JSON.
 Their mocked verdicts test custody wiring only, not cryptography or real evidence.
 
-The separate integration suite uses existing cryptographically signed G10 unit
-fixtures and the existing private deterministic test clock. It checks real
-verification of the copied complete package, registry-pin tampering, and refusal
-to return success when the original changes after successful crypto validation.
-Those fixtures are synthetic source tests, never E5-E7 submissions.
+The separate integration suite uses cryptographically signed G10 test fixtures
+and the private deterministic test clock. It checks real verification of the
+copied complete package, registry-pin tampering, and refusal to return success
+when the original changes after successful cryptographic validation. Those
+fixtures are synthetic source tests, never E5-E7 submissions.
 
-An exact-head CI pass does not provide an independent approval. Keep the review
-finding awaiting its author's fresh decision after test and artifact inspection.
+`CLOSED_SOURCE` means the implementation and executable regressions exist. A
+successful repository-contracts lane demonstrates those tests on one commit, but
+only the final unchanged seven-lane run plus its content-addressed artifact can
+supply E4. Independent approval and protected-main adoption remain under HG-0089,
+HG-0017 and HG-0044; the implementing identity does not approve its own change.
