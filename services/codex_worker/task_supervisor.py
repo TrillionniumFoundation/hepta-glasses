@@ -135,6 +135,79 @@ class TaskResult:
 
 
 @dataclass
+class _HeldDirectory:
+    parent_fd: int
+    directory_fd: int
+    expected: tuple[int, int]
+    path: str
+    name: str
+
+    def close(self) -> None:
+        for fd in (self.directory_fd, self.parent_fd):
+            if fd >= 0:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+        self.directory_fd = self.parent_fd = -1
+
+
+def _open_working_directory(path: str) -> _HeldDirectory:
+    if os.name != "posix" or not Path("/proc/self/fd").is_dir() or not hasattr(os, "O_NOFOLLOW"):
+        raise SupervisorError("task_supervisor_platform_unsupported")
+    parts = Path(path).parts
+    if not parts or parts[0] != "/" or any(part in ("", ".", "..") for part in parts[1:]):
+        raise SupervisorError("task_working_directory_invalid")
+    if len(parts) == 1:
+        directory_fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+        parent_fd = os.dup(directory_fd)
+        current = os.fstat(directory_fd)
+        return _HeldDirectory(parent_fd, directory_fd, (current.st_dev, current.st_ino), path, ".")
+    parent_fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        for part in parts[1:-1]:
+            next_fd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=parent_fd)
+            os.close(parent_fd)
+            parent_fd = next_fd
+        directory_fd = os.open(parts[-1], os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=parent_fd)
+    except OSError as error:
+        try:
+            os.close(parent_fd)
+        except OSError:
+            pass
+        code = ("task_working_directory_linked"
+                if error.errno in (errno.ELOOP, errno.ENOTDIR)
+                else "task_working_directory_unavailable")
+        raise SupervisorError(code) from None
+    try:
+        held = os.fstat(directory_fd)
+        named = os.stat(parts[-1], dir_fd=parent_fd, follow_symlinks=False)
+        if not stat.S_ISDIR(held.st_mode) or (held.st_dev, held.st_ino) != (named.st_dev, named.st_ino):
+            raise SupervisorError("task_working_directory_identity_invalid")
+        return _HeldDirectory(parent_fd, directory_fd, (held.st_dev, held.st_ino), path, parts[-1])
+    except BaseException:
+        os.close(directory_fd)
+        os.close(parent_fd)
+        raise
+
+
+def _verify_working_directory(held: _HeldDirectory) -> None:
+    if held.directory_fd < 0:
+        raise SupervisorError("task_working_directory_closed")
+    current = os.fstat(held.directory_fd)
+    try:
+        named = os.stat(held.name, dir_fd=held.parent_fd, follow_symlinks=False)
+        absolute = os.stat(held.path, follow_symlinks=False)
+    except OSError:
+        raise SupervisorError("task_working_directory_replaced") from None
+    if (not stat.S_ISDIR(current.st_mode)
+            or (current.st_dev, current.st_ino) != held.expected
+            or (named.st_dev, named.st_ino) != held.expected
+            or (absolute.st_dev, absolute.st_ino) != held.expected):
+        raise SupervisorError("task_working_directory_replaced")
+
+
+@dataclass
 class _HeldExecutable:
     parent_fd: int
     executable_fd: int
@@ -255,19 +328,14 @@ def run_supervised(task: SupervisedTask, *, cancel: threading.Event | None = Non
         raise SupervisorError("task_cancel_invalid")
     if cancel is not None and cancel.is_set():
         raise SupervisorError("task_cancelled")
-    working = Path(task.working_directory)
-    try:
-        st = working.lstat()
-    except OSError:
-        raise SupervisorError("task_working_directory_unavailable") from None
-    if not stat.S_ISDIR(st.st_mode):
-        raise SupervisorError("task_working_directory_unavailable")
-
-    held = _open_executable(task.executable)
+    working = _open_working_directory(task.working_directory)
+    held: _HeldExecutable | None = None
     spec_fd = -1
     process: subprocess.Popen[bytes] | None = None
     temporary: tempfile.TemporaryDirectory[str] | None = None
     try:
+        held = _open_executable(task.executable)
+        _verify_working_directory(working)
         _verify_executable(held)
         temporary = tempfile.TemporaryDirectory(prefix="hepta-task-")
         home = Path(temporary.name)
@@ -286,21 +354,23 @@ def run_supervised(task: SupervisedTask, *, cancel: threading.Event | None = Non
                 ["RLIMIT_NPROC", limits.processes],
             ],
         })
+        _verify_working_directory(working)
         _verify_executable(held)
         try:
             process = subprocess.Popen(
                 ["/proc/self/exe", "-I", "-S", "-c", _LAUNCHER, str(spec_fd), str(held.executable_fd)],
-                cwd=task.working_directory,
+                cwd=f"/proc/self/fd/{working.directory_fd}",
                 env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                pass_fds=(spec_fd, held.executable_fd),
+                pass_fds=(spec_fd, held.executable_fd, working.directory_fd),
                 close_fds=True,
                 start_new_session=True,
             )
         except OSError:
             raise SupervisorError("task_start_failed") from None
+        _verify_working_directory(working)
         _verify_executable(held)
         assert process.stdin is not None and process.stdout is not None and process.stderr is not None
         for stream in (process.stdin, process.stdout, process.stderr):
@@ -371,15 +441,25 @@ def run_supervised(task: SupervisedTask, *, cancel: threading.Event | None = Non
             for stream in (process.stdin, process.stdout, process.stderr):
                 if stream is not None and not stream.closed:
                     stream.close()
+        _verify_working_directory(working)
         return TaskResult(return_code, bytes(output["stdout"]), bytes(output["stderr"]))
     finally:
-        if process is not None and process.poll() is None:
+        # A successful group leader can deliberately close all inherited pipes,
+        # fork a descendant, and exit. Always signal the original process group
+        # before returning so pipe closure cannot turn a live descendant into a
+        # successful terminal result. killpg is harmless when the group is empty.
+        if process is not None:
             _kill_group(process)
+            for stream in (process.stdin, process.stdout, process.stderr):
+                if stream is not None and not stream.closed:
+                    stream.close()
         if spec_fd >= 0:
             try:
                 os.close(spec_fd)
             except OSError:
                 pass
-        held.close()
+        if held is not None:
+            held.close()
+        working.close()
         if temporary is not None:
             temporary.cleanup()
