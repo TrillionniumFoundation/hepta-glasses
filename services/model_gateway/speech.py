@@ -158,7 +158,10 @@ class ProductionSpeechGateway:
         expiry = now + self.ticket_ttl_seconds
         if expiry > MAX_TIME:
             raise SpeechGatewayError("speech_ticket_expiry_invalid")
-        bootstrap_id = secrets.token_urlsafe(24)
+        # token_urlsafe may begin with '-' or '_', while bootstrap IDs are part
+        # of the strict identifier contract. A fixed alphanumeric prefix makes
+        # every generated identifier valid without reducing token entropy.
+        bootstrap_id = "b-" + secrets.token_urlsafe(24)
         digest = hashlib.sha256(bootstrap_id.encode()).hexdigest()
         pair_digest = hashlib.sha256(pair_identity.encode()).hexdigest()
         day = now // 86400

@@ -266,6 +266,7 @@ class HttpsAuthorityTransportTests(unittest.TestCase):
     def test_timeout_is_bounded_and_worker_capacity_retained(self):
         connection = mock.Mock()
         release, entered = threading.Event(), threading.Event()
+        errors = []
         def blocked():
             entered.set()
             release.wait(3)
@@ -273,16 +274,29 @@ class HttpsAuthorityTransportTests(unittest.TestCase):
         connection.getresponse.side_effect = blocked
         broker = self.broker(maximum_workers=1)
         with mock.patch.object(module.http.client, "HTTPSConnection", return_value=connection) as constructor:
+            caller = None
             try:
                 started = time.monotonic()
-                with self.assertRaises(DurableIdentityError):
-                    broker.sign(b"p", key_id="k", request_id="r", timeout_seconds=.02)
+                def first_call():
+                    try:
+                        broker.sign(b"p", key_id="k", request_id="r", timeout_seconds=.1)
+                    except DurableIdentityError as error:
+                        errors.append(error)
+                caller = threading.Thread(target=first_call)
+                caller.start()
+                self.assertTrue(entered.wait(1), "fixture provider worker never entered")
+                caller.join(1)
+                self.assertFalse(caller.is_alive())
+                self.assertEqual(len(errors), 1)
                 self.assertLess(time.monotonic() - started, 1)
+                # The provider worker remains blocked and retains the only permit.
                 with self.assertRaises(DurableIdentityError):
                     broker.sign(b"p", key_id="k", request_id="r2", timeout_seconds=.02)
                 self.assertEqual(constructor.call_count, 1)
             finally:
                 release.set()
+                if caller is not None:
+                    caller.join(1)
                 # Wait for the single test worker to close its connection before patch exit.
                 for _ in range(100):
                     if connection.close.called: break

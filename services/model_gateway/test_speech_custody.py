@@ -1,6 +1,7 @@
 from __future__ import annotations
 import tempfile, threading, unittest
 from pathlib import Path
+from unittest import mock
 from services.model_gateway.speech import *
 
 class Broker:
@@ -41,6 +42,13 @@ class Tests(unittest.TestCase):
         boot=self.bootstrap(); self.g.revoke_session('s')
         self.error('speech_session_revoked',lambda:self.g.consume(boot.bootstrap_id,session_id='s',generation=1,pair_identity='pair'))
         self.assertEqual(self.g.db.execute('select state from bootstraps').fetchone()[0],'revoked')
+
+    def test_generated_bootstrap_id_is_always_in_identifier_domain(self):
+        with mock.patch('services.model_gateway.speech.secrets.token_urlsafe',return_value='_leading-token'):
+            boot=self.bootstrap()
+        self.assertEqual(boot.bootstrap_id,'b-_leading-token')
+        self.g.consume(boot.bootstrap_id,session_id='s',generation=1,pair_identity='pair')
+        self.assertEqual(self.g.db.execute('select state from bootstraps').fetchone()[0],'consumed')
 
     def test_host_clock_controls_expiry_and_caller_now_is_removed(self):
         boot=self.bootstrap(); self.now=boot.expires_at
