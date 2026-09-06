@@ -111,13 +111,16 @@
   },
   "transparency": {
     "contract": "contracts/signed-skill-transparency-v1.json",
-    "configuration": "optional exact built-in verifier whose full key/required policy digest is persisted",
+    "configuration": "optional exact built-in verifier whose complete inclusion/consistency/witness policy digest is persisted",
     "manifest_binding": "RFC6962 inclusion leaf is exact canonical manifest bytes",
+    "consistency_floor": "optional immutable log ID/tree size/root with RFC6962 consistency verification",
+    "witness_quorum": "optional immutable Ed25519 witness identity/key quorum over exact checkpoint hash and root",
+    "legacy_binding": "unchanged when advanced consistency/witness policy is absent",
     "final_transaction_expiry_recheck": true,
-    "stored_installation_expiry": "also bounded by verified checkpoint/log-key expiry",
-    "unconfigured_supplied_proof": "reject",
+    "stored_installation_expiry": "also bounded by checkpoint, log-key, witness-statement and witness-key expiry",
+    "unconfigured_supplied_evidence": "reject rather than ignore",
     "proof_archive": false,
-    "global_consistency_or_witness": false
+    "operated_global_transparency": false
   },
   "migration": {
     "function": "migrate_signed_skills_v1(path)",
@@ -139,7 +142,7 @@
     "execution sandbox",
     "actual egress enforcement",
     "external publisher-root administration",
-    "operated append-only log, checkpoint consistency, gossip or independent witness quorum",
+    "operated append-only log, authenticated proof retrieval, dynamic checkpoint persistence, cross-client gossip, split-view detection or proof of witness-operator independence",
     "authenticated consent service",
     "running-task termination",
     "encrypted package vault",

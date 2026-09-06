@@ -2,10 +2,22 @@
 from __future__ import annotations
 from contextlib import closing
 from pathlib import Path
-import shutil, sqlite3, tempfile, unittest
+import hashlib, shutil, sqlite3, subprocess, tempfile, unittest
 
-from services.skills.signed_package import PublisherKey, SPKI_PREFIX, SignedSkillError, canonical, sha256
+from services.skills.signed_package import PublisherKey, SPKI_PREFIX, SignedSkillError, canonical, sealed_inputs, sha256
 from services.skills.signed_registry import SignedSkillRegistry
+
+from services.skills.package_transparency import (
+    PREFIX as TRANSPARENCY_PREFIX,
+    WITNESS_PREFIX,
+    TransparencyCheckpointAnchor,
+    TransparencyLogKey,
+    TransparencyProof,
+    TransparencyVerifier,
+    TransparencyWitnessKey,
+    TransparencyWitnessProof,
+    _verify_consistency,
+)
 from services.skills.signed_registry_schema import (
     CREATE_STATEMENTS, LEGACY_TABLES, REQUIRED_TABLES, RegistryStateAnchor,
     authority_digest, migrate_signed_skills_v1,
@@ -153,6 +165,406 @@ class RegistryStateTests(unittest.TestCase):
         try:self.open(self.path("badclock.db"),clock=broken)
         except SignedSkillError as e:caught=e
         self.assertEqual(caught.code,"skill_clock_invalid"); self.assertIsNone(caught.__cause__); self.assertNotIn("private-clock-marker",repr(caught))
+
+
+def _leaf(value: bytes) -> bytes:
+    return hashlib.sha256(b"\x00" + value).digest()
+
+
+def _node(left: bytes, right: bytes) -> bytes:
+    return hashlib.sha256(b"\x01" + left + right).digest()
+
+
+def _split(size: int) -> int:
+    return 1 << ((size - 1).bit_length() - 1)
+
+
+def _root(values: list[bytes]) -> bytes:
+    if len(values) == 1:
+        return _leaf(values[0])
+    point = _split(len(values))
+    return _node(_root(values[:point]), _root(values[point:]))
+
+
+def _inclusion(values: list[bytes], index: int) -> tuple[bytes, ...]:
+    if len(values) == 1:
+        return ()
+    point = _split(len(values))
+    if index < point:
+        return _inclusion(values[:point], index) + (_root(values[point:]),)
+    return _inclusion(values[point:], index - point) + (_root(values[:point]),)
+
+
+def _consistency(values: list[bytes], old_size: int) -> tuple[bytes, ...]:
+    def subproof(items: list[bytes], size: int, complete: bool) -> tuple[bytes, ...]:
+        if size == len(items):
+            return () if complete else (_root(items),)
+        point = _split(len(items))
+        if size <= point:
+            return subproof(items[:point], size, complete) + (_root(items[point:]),)
+        return subproof(items[point:], size - point, False) + (_root(items[:point]),)
+    return subproof(values, old_size, True)
+
+
+class TransparencyConsistencyWitnessTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.log_private, cls.log_public = cls.keypair()
+        cls.a_private, cls.a_public = cls.keypair()
+        cls.a2_private, cls.a2_public = cls.keypair()
+        cls.b_private, cls.b_public = cls.keypair()
+        cls.other_private, cls.other_public = cls.keypair()
+
+    @staticmethod
+    def keypair():
+        private = subprocess.run(
+            ["/usr/bin/openssl", "genpkey", "-algorithm", "ED25519", "-outform", "DER"],
+            capture_output=True, check=True, timeout=5,
+        ).stdout
+        public = subprocess.run(
+            ["/usr/bin/openssl", "pkey", "-inform", "DER", "-pubout", "-outform", "DER"],
+            input=private, capture_output=True, check=True, timeout=5,
+        ).stdout
+        return private, public
+
+    @staticmethod
+    def sign(private: bytes, prefix: bytes, document: bytes) -> bytes:
+        with sealed_inputs((private, prefix + document)) as descriptors:
+            return subprocess.run(
+                [
+                    "/usr/bin/openssl", "pkeyutl", "-sign", "-keyform", "DER",
+                    "-inkey", f"/proc/self/fd/{descriptors[0]}", "-rawin",
+                    "-in", f"/proc/self/fd/{descriptors[1]}",
+                ],
+                pass_fds=descriptors, capture_output=True, check=True, timeout=5,
+            ).stdout
+
+    def setUp(self):
+        self.now = 1000
+        self.values = [f"leaf-{i}".encode() for i in range(9)]
+        self.old_size = 3
+        self.anchor = TransparencyCheckpointAnchor(
+            "package-log", self.old_size, _root(self.values[: self.old_size]).hex()
+        )
+        self.log_key = TransparencyLogKey("package-log", self.log_public, 900, 1800)
+        self.witness_keys = {
+            "a-v1": TransparencyWitnessKey("witness-a", self.a_public, 900, 1600),
+            "a-v2": TransparencyWitnessKey("witness-a", self.a2_public, 900, 1700),
+            "b-v1": TransparencyWitnessKey("witness-b", self.b_public, 900, 1500),
+        }
+
+    def verifier(self, **changes):
+        values = dict(
+            checkpoint_anchor=self.anchor,
+            witness_keys=self.witness_keys,
+            witness_quorum=2,
+        )
+        values.update(changes)
+        return TransparencyVerifier(
+            {"log-v1": self.log_key}, clock=lambda: self.now, **values
+        )
+
+    def statement(self, checkpoint: bytes, *, key_id: str, witness_id: str,
+                  private: bytes, **changes) -> TransparencyWitnessProof:
+        parsed = __import__("json").loads(checkpoint)
+        value = {
+            "schema_version": 1,
+            "witness_id": witness_id,
+            "key_id": key_id,
+            "log_id": parsed["log_id"],
+            "tree_size": parsed["tree_size"],
+            "root_sha256": parsed["root_sha256"],
+            "checkpoint_sha256": sha256(checkpoint),
+            "issued_at": 1000,
+            "expires_at": 1200,
+        }
+        value.update(changes)
+        raw = canonical(value)
+        return TransparencyWitnessProof(raw, self.sign(private, WITNESS_PREFIX, raw))
+
+    def proof(self, *, values=None, old_size=None, index=5, witnesses=True,
+              checkpoint_changes=None):
+        values = list(values or self.values)
+        old_size = self.old_size if old_size is None else old_size
+        checkpoint = {
+            "schema_version": 1,
+            "log_id": "package-log",
+            "key_id": "log-v1",
+            "tree_size": len(values),
+            "root_sha256": _root(values).hex(),
+            "issued_at": 1000,
+            "expires_at": 1300,
+        }
+        if checkpoint_changes:
+            checkpoint.update(checkpoint_changes)
+        raw = canonical(checkpoint)
+        witness_values = ()
+        if witnesses:
+            witness_values = (
+                self.statement(raw, key_id="a-v1", witness_id="witness-a", private=self.a_private),
+                self.statement(raw, key_id="b-v1", witness_id="witness-b", private=self.b_private),
+            )
+        return values[index], TransparencyProof(
+            raw,
+            self.sign(self.log_private, TRANSPARENCY_PREFIX, raw),
+            index,
+            _inclusion(values, index),
+            _consistency(values, old_size),
+            witness_values,
+        )
+
+    def error(self, code, callback):
+        with self.assertRaises(SignedSkillError) as caught:
+            callback()
+        self.assertEqual(caught.exception.code, code)
+
+    def test_all_rfc6962_prefix_consistency_proofs(self):
+        for new_size in range(2, 24):
+            values = [f"item-{i}".encode() for i in range(new_size)]
+            for old_size in range(1, new_size + 1):
+                with self.subTest(old=old_size, new=new_size):
+                    _verify_consistency(
+                        old_size,
+                        new_size,
+                        _root(values[:old_size]),
+                        _root(values),
+                        _consistency(values, old_size),
+                    )
+
+    def test_consistency_and_unique_witness_quorum_verify(self):
+        document, proof = self.proof()
+        result = self.verifier().verify(document, proof)
+        self.assertTrue(result.consistency_verified)
+        self.assertEqual(result.witness_ids, ("witness-a", "witness-b"))
+        self.assertEqual(result.expires_at, 1200)
+
+    def test_tree_rollback_equal_fork_and_missing_consistency_are_rejected(self):
+        smaller = self.values[:2]
+        doc, proof = self.proof(values=smaller, old_size=2, index=1)
+        self.error(
+            "skill_transparency_consistency_proof_invalid",
+            lambda: self.verifier().verify(doc, proof),
+        )
+        equal = self.values[: self.old_size]
+        doc, proof = self.proof(values=equal, old_size=self.old_size, index=1)
+        bad = TransparencyProof(
+            proof.checkpoint,
+            proof.signature,
+            proof.leaf_index,
+            proof.audit_path,
+            (b"x" * 32,),
+            proof.witnesses,
+        )
+        self.error(
+            "skill_transparency_consistency_proof_invalid",
+            lambda: self.verifier().verify(doc, bad),
+        )
+        doc, proof = self.proof()
+        missing = TransparencyProof(
+            proof.checkpoint, proof.signature, proof.leaf_index, proof.audit_path,
+            (), proof.witnesses,
+        )
+        self.error(
+            "skill_transparency_consistency_proof_invalid",
+            lambda: self.verifier().verify(doc, missing),
+        )
+
+    def test_corrupted_consistency_path_is_rejected(self):
+        document, proof = self.proof()
+        bad_path = proof.consistency_path[:-1] + (b"z" * 32,)
+        bad = TransparencyProof(
+            proof.checkpoint, proof.signature, proof.leaf_index,
+            proof.audit_path, bad_path, proof.witnesses,
+        )
+        self.error(
+            "skill_transparency_consistency_proof_invalid",
+            lambda: self.verifier().verify(document, bad),
+        )
+
+    def test_same_witness_identity_never_counts_twice(self):
+        document, proof = self.proof(witnesses=False)
+        duplicate = (
+            self.statement(proof.checkpoint, key_id="a-v1", witness_id="witness-a", private=self.a_private),
+            self.statement(proof.checkpoint, key_id="a-v2", witness_id="witness-a", private=self.a2_private),
+        )
+        candidate = TransparencyProof(
+            proof.checkpoint, proof.signature, proof.leaf_index, proof.audit_path,
+            proof.consistency_path, duplicate,
+        )
+        self.error(
+            "skill_transparency_witness_duplicate_identity",
+            lambda: self.verifier().verify(document, candidate),
+        )
+
+    def test_missing_quorum_and_bad_supplied_witness_fail_closed(self):
+        document, proof = self.proof(witnesses=False)
+        one = (
+            self.statement(proof.checkpoint, key_id="a-v1", witness_id="witness-a", private=self.a_private),
+        )
+        candidate = TransparencyProof(
+            proof.checkpoint, proof.signature, proof.leaf_index, proof.audit_path,
+            proof.consistency_path, one,
+        )
+        self.error(
+            "skill_transparency_witness_quorum_missing",
+            lambda: self.verifier().verify(document, candidate),
+        )
+        bad = TransparencyWitnessProof(one[0].statement, b"x" * 64)
+        candidate = TransparencyProof(
+            proof.checkpoint, proof.signature, proof.leaf_index, proof.audit_path,
+            proof.consistency_path, (bad, proof.witnesses[0]) if proof.witnesses else (bad,),
+        )
+        self.error(
+            "skill_transparency_witness_signature_invalid",
+            lambda: self.verifier(witness_quorum=1).verify(document, candidate),
+        )
+
+    def test_witness_binding_signature_domain_and_expiry_are_strict(self):
+        document, proof = self.proof(witnesses=False)
+        cases = (
+            ({"root_sha256": "0" * 64}, "skill_transparency_witness_binding_mismatch"),
+            ({"checkpoint_sha256": "0" * 64}, "skill_transparency_witness_binding_mismatch"),
+            ({"tree_size": 8}, "skill_transparency_witness_binding_mismatch"),
+            ({"log_id": "other-log"}, "skill_transparency_witness_binding_mismatch"),
+            ({"expires_at": 1601}, "skill_transparency_witness_outlives_key"),
+        )
+        for changes, code in cases:
+            with self.subTest(changes=changes):
+                first = self.statement(
+                    proof.checkpoint,
+                    key_id="a-v1", witness_id="witness-a",
+                    private=self.a_private, **changes,
+                )
+                candidate = TransparencyProof(
+                    proof.checkpoint, proof.signature, proof.leaf_index,
+                    proof.audit_path, proof.consistency_path, (first,),
+                )
+                self.error(code, lambda c=candidate: self.verifier(witness_quorum=1).verify(document, c))
+        first = self.statement(
+            proof.checkpoint, key_id="a-v1", witness_id="witness-a",
+            private=self.other_private,
+        )
+        candidate = TransparencyProof(
+            proof.checkpoint, proof.signature, proof.leaf_index,
+            proof.audit_path, proof.consistency_path, (first,),
+        )
+        self.error(
+            "skill_transparency_witness_signature_invalid",
+            lambda: self.verifier(witness_quorum=1).verify(document, candidate),
+        )
+        parsed = __import__("json").loads(proof.checkpoint)
+        statement = canonical({
+            "schema_version": 1, "witness_id": "witness-a", "key_id": "a-v1",
+            "log_id": parsed["log_id"], "tree_size": parsed["tree_size"],
+            "root_sha256": parsed["root_sha256"],
+            "checkpoint_sha256": sha256(proof.checkpoint),
+            "issued_at": 1000, "expires_at": 1200,
+        })
+        wrong_domain = TransparencyWitnessProof(
+            statement, self.sign(self.a_private, TRANSPARENCY_PREFIX, statement)
+        )
+        candidate = TransparencyProof(
+            proof.checkpoint, proof.signature, proof.leaf_index, proof.audit_path,
+            proof.consistency_path, (wrong_domain,),
+        )
+        self.error(
+            "skill_transparency_witness_signature_invalid",
+            lambda: self.verifier(witness_quorum=1).verify(document, candidate),
+        )
+
+    def test_unconfigured_extra_evidence_is_not_ignored(self):
+        base = TransparencyVerifier({"log-v1": self.log_key}, clock=lambda: self.now)
+        document, proof = self.proof()
+        self.error(
+            "skill_transparency_consistency_unconfigured",
+            lambda: base.verify(document, proof),
+        )
+        no_consistency = TransparencyProof(
+            proof.checkpoint, proof.signature, proof.leaf_index,
+            proof.audit_path, (), proof.witnesses,
+        )
+        self.error(
+            "skill_transparency_witness_unconfigured",
+            lambda: base.verify(document, no_consistency),
+        )
+
+    def test_legacy_four_field_proof_and_optional_absence_remain_compatible(self):
+        document, advanced = self.proof()
+        legacy_proof = TransparencyProof(
+            advanced.checkpoint, advanced.signature, advanced.leaf_index, advanced.audit_path
+        )
+        base = TransparencyVerifier({"log-v1": self.log_key}, clock=lambda: self.now)
+        result = base.verify(document, legacy_proof)
+        self.assertFalse(result.consistency_verified)
+        self.assertEqual(result.witness_ids, ())
+        optional = TransparencyVerifier(
+            {"log-v1": self.log_key}, clock=lambda: self.now, required=False,
+            checkpoint_anchor=self.anchor, witness_keys=self.witness_keys, witness_quorum=2,
+        )
+        self.assertIsNone(optional.verify(document, None))
+
+    def test_legacy_binding_is_stable_and_advanced_policy_is_distinct(self):
+        legacy = TransparencyVerifier({"log-v1": self.log_key}, clock=lambda: self.now)
+        expected = sha256(canonical({
+            "schema_version": 1,
+            "required": True,
+            "keys": [{
+                "key_id": "log-v1",
+                "log_id": "package-log",
+                "public_key_sha256": sha256(self.log_public),
+                "not_before": 900,
+                "not_after": 1800,
+            }],
+        }))
+        self.assertEqual(legacy.binding, expected)
+        self.assertNotEqual(legacy.binding, self.verifier().binding)
+
+    def test_configuration_and_quorum_shapes_are_immutable_and_bounded(self):
+        self.error(
+            "skill_transparency_configuration_invalid",
+            lambda: TransparencyVerifier(
+                {"log-v1": self.log_key}, clock=lambda: self.now, witness_keys=[]
+            ),
+        )
+        for quorum in (True, 0, 3, -1):
+            with self.subTest(quorum=quorum):
+                self.error(
+                    "skill_transparency_witness_quorum_invalid",
+                    lambda q=quorum: TransparencyVerifier(
+                        {"log-v1": self.log_key}, clock=lambda: self.now,
+                        witness_keys=self.witness_keys, witness_quorum=q,
+                    ),
+                )
+        verifier = self.verifier()
+        self.error(
+            "skill_transparency_configuration_immutable",
+            lambda: setattr(verifier, "_witness_quorum", 1),
+        )
+
+    def test_registry_persists_advanced_binding_and_rejects_drift(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "registry.db")
+            config = dict(
+                subject="user",
+                keys={"publisher-v1": PublisherKey("publisher", SPKI_PREFIX + b"p" * 32, 900, 2000)},
+                allowed_capabilities=frozenset(),
+                allowed_domains=frozenset(),
+                clock=lambda: self.now,
+            )
+            first = SignedSkillRegistry(path, transparency_verifier=self.verifier(), **config)
+            first.close()
+            same = SignedSkillRegistry(path, transparency_verifier=self.verifier(), **config)
+            same.close()
+            changed = TransparencyVerifier(
+                {"log-v1": self.log_key}, clock=lambda: self.now,
+                checkpoint_anchor=self.anchor,
+                witness_keys=self.witness_keys,
+                witness_quorum=1,
+            )
+            self.error(
+                "skill_registry_policy_migration_required",
+                lambda: SignedSkillRegistry(path, transparency_verifier=changed, **config),
+            )
 
 
 if __name__ == "__main__": unittest.main()
