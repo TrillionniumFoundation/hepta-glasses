@@ -52,3 +52,18 @@ The original Codex source test uses `--dry-run`; it does not claim Codex is
 installed, authenticated, or reachable in production. Real allocation,
 identity, egress, secrets, patch custody, compromise exercises, independent
 review, exact-head CI/artifact and release governance remain separate evidence.
+
+## Exact-domain HTTPS broker
+
+`https_egress.py` provides a separate exact-domain HTTPS primitive for an
+already isolated worker. It uses a bounded resolver helper, rejects any DNS set
+containing non-global addresses, connects to the approved numeric address while
+retaining the exact allowlisted host for TLS SNI and certificate verification,
+and sends one bounded HTTP/1.1 request without proxies, redirects, compression,
+upgrade or transfer encoding. See `HTTPS_EGRESS.md` and run
+`python3 -m unittest services.codex_worker.test_https_egress -v`.
+
+The broker is not itself an egress firewall. Arbitrary code must first be denied
+direct socket access by a reviewed OS sandbox; otherwise it can bypass this
+module. OAuth credential selection, tenant authorization, request quotas,
+provider receipts and independent network qualification also remain external.
