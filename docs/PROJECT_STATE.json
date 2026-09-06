@@ -1,5 +1,5 @@
 {
-  "claim_ceiling": "E4 only after exact-head CI; E5-E7 require external evidence",
+  "claim_ceiling": "E4 only after exact-head CI; E5-E7 require authenticated external evidence",
   "external_gates": {
     "independent_assurance": "blocked_external",
     "main_protection": "blocked_admin_setting_canonical_contract_incomplete_or_unverified",
@@ -13,13 +13,31 @@
     "vendor_firmware_ota": "blocked_upstream"
   },
   "plan_revision": "2026-09-01-g8",
-  "program_increment": "G8",
+  "program_increment": "G8+G9+G10+active-remediation",
   "repository_actionable_gate": {
+    "active_open_gap_ids": [
+      "HG-0087"
+    ],
+    "active_source_closed_gap_ids": [
+      "HG-0082",
+      "HG-0083",
+      "HG-0084",
+      "HG-0085",
+      "HG-0086",
+      "HG-0088",
+      "HG-0090",
+      "HG-0091",
+      "HG-0092"
+    ],
     "independent_latest_head_approval_required": true,
-    "module_registry": "docs/MODULES.json",
-    "module_guide": "docs/MODULE_DEVELOPMENT_GUIDE.md",
-    "gap_ledger": "docs/GAP_LEDGER.yaml",
+    "module_registry": "docs/MODULE_COVERAGE.json",
+    "module_handoff": "docs/MODULE_HANDOFF.json",
+    "module_guide": "docs/development/MODULE_HANDOFF.md",
+    "base_gap_ledger": "docs/GAP_LEDGER.yaml",
+    "active_gap_ledger": "docs/REMEDIATION_GAP_LEDGER.json",
     "metadata_validator": "tools/validate_repository_metadata.py",
+    "source_coverage_validator": "tools/validate_source_coverage.py",
+    "module_handoff_validator": "tools/validate_module_handoff.py",
     "required_checks": [
       "repository-contracts",
       "flutter",
@@ -29,16 +47,17 @@
       "secret-and-boundary-scan",
       "source-evidence"
     ],
-    "status": "derive_from_exact_head_ci_artifact_and_latest_head_review"
+    "status": "derive_from_final_unchanged_exact_head_ci_artifact_latest_head_review_and_admin_readback"
   },
-  "schema_version": 3,
+  "schema_version": 4,
   "source_authority": {
-    "branch": "codex/hepta-glasses-gap-closure-g8",
+    "branch": "work/hepta-g10-trusted-openssl-custody-20260902",
     "identity_rule": "live_pr_head_and_tree",
-    "pull_request": 23,
+    "pull_request": 101,
     "repository": "TrillionniumFoundation/hepta-glasses",
     "required_artifact": "hepta-source-evidence-<exact-head-sha>",
     "self_attested_sha_is_authoritative": false,
-    "historical_artifact_does_not_attest_later_push": true
+    "historical_artifact_does_not_attest_later_push": true,
+    "main_remains_older_until_protected_adoption": true
   }
 }
