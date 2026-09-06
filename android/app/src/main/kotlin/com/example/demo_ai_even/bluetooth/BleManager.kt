@@ -18,6 +18,8 @@ import android.widget.Toast
 import com.example.demo_ai_even.cpp.Cpp
 import com.example.demo_ai_even.model.BleDevice
 import com.example.demo_ai_even.model.BlePairDevice
+import com.example.demo_ai_even.speech.AndroidSpeechSession
+import com.example.demo_ai_even.speech.SpeechTicket
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -216,6 +218,38 @@ class BleManager private constructor() {
                 sendToSide(data, left = false)
             else -> false
         }
+    }
+
+    fun startSpeech(ticket: SpeechTicket): Boolean {
+        val pair = connectedDevice ?: return false
+        if (ticket.generation != connectionGeneration ||
+            ticket.pairIdentity != currentPairIdentity ||
+            currentPairIdentity == UNSELECTED_PAIR ||
+            !pair.isBothConnected() ||
+            readyAddresses.size != 2
+        ) {
+            return false
+        }
+        AndroidSpeechSession.start(ticket)
+        return true
+    }
+
+    fun stopSpeech(
+        generation: Int,
+        pairIdentity: String,
+        finalize: Boolean,
+    ): Boolean {
+        if (generation != connectionGeneration ||
+            pairIdentity != currentPairIdentity ||
+            currentPairIdentity == UNSELECTED_PAIR
+        ) {
+            return false
+        }
+        return AndroidSpeechSession.stop(
+            generation,
+            pairIdentity,
+            finalize,
+        )
     }
 
     private fun checkBluetoothStatus(): Boolean {
@@ -436,8 +470,18 @@ class BleManager private constructor() {
         decodeScope.launch {
             val microphoneData = frame[0] == 0xF1.toByte()
             if (microphoneData) {
-                if (frame.size != 202) return@launch
-                Cpp.decodeLC3(frame.copyOfRange(2, 202))
+                if (side != "R" || frame.size != 202) return@launch
+                val pcm = Cpp.decodeLC3(frame.copyOfRange(2, 202))
+                    ?: return@launch
+                if (generation != connectionGeneration ||
+                    pairIdentity != currentPairIdentity
+                ) return@launch
+                AndroidSpeechSession.append(
+                    pcm,
+                    generation,
+                    pairIdentity,
+                )
+                return@launch
             }
             if (generation != connectionGeneration ||
                 pairIdentity != currentPairIdentity
@@ -450,7 +494,7 @@ class BleManager private constructor() {
                     mapOf(
                         "lr" to side,
                         "data" to frame,
-                        "type" to if (microphoneData) "VoiceChunk" else "Receive",
+                        "type" to "Receive",
                         "generation" to generation,
                         "pairIdentity" to pairIdentity,
                     ),
@@ -473,6 +517,7 @@ class BleManager private constructor() {
             closeGatt(gatt)
             return
         }
+        AndroidSpeechSession.cancelCurrent()
         val pair = connectedDevice
         notificationReadyAddresses.remove(gatt.device.address)
         readyAddresses.remove(gatt.device.address)
@@ -504,6 +549,7 @@ class BleManager private constructor() {
     }
 
     private fun disconnectCurrent(notifyFlutter: Boolean) {
+        AndroidSpeechSession.cancelCurrent()
         val pair = connectedDevice
         val pairIdentity = currentPairIdentity
         if (pair == null) {
