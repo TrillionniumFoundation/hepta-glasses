@@ -8,10 +8,11 @@ import java.util.concurrent.Executors
 /**
  * Process-local custody for one Android speech session.
  *
- * The session is bound to the exact assistant generation and G1 pair identity
- * carried by the short-lived speech ticket. It never persists audio, tokens or
- * transcripts. Final provider work is serialized off the Flutter/GATT threads,
- * and a later start/cancel fences an older result before EventChannel delivery.
+ * Provider output is bound to the assistant generation, while PCM ingress is
+ * additionally bound to the exact BLE connection generation and pair identity.
+ * It never persists audio, tokens or transcripts. Final provider work is
+ * serialized off the Flutter/GATT threads, and a later start/cancel fences an
+ * older result before EventChannel delivery.
  */
 internal object AndroidSpeechSession {
     private val lock = Any()
@@ -23,7 +24,8 @@ internal object AndroidSpeechSession {
     }
 
     private var recognizer: AndroidPcmAsr? = null
-    private var generation: Int = 0
+    private var assistantGeneration: Int = 0
+    private var connectionGeneration: Int = 0
     private var pairIdentity: String = ""
     private var epoch: Long = 0
     private var finalizing: Boolean = false
@@ -34,7 +36,8 @@ internal object AndroidSpeechSession {
             recognizer?.cancel()
             epoch += 1
             recognizer = next
-            generation = ticket.generation
+            assistantGeneration = ticket.generation
+            connectionGeneration = ticket.connectionGeneration
             pairIdentity = ticket.pairIdentity
             finalizing = false
         }
@@ -42,31 +45,39 @@ internal object AndroidSpeechSession {
 
     fun append(
         pcm: ByteArray,
-        expectedGeneration: Int,
+        expectedConnectionGeneration: Int,
         expectedPairIdentity: String,
     ) {
-        val active = synchronized(lock) {
-            if (finalizing ||
-                expectedGeneration != generation ||
+        val captured = synchronized(lock) {
+            val active = recognizer
+            if (active == null ||
+                finalizing ||
+                expectedConnectionGeneration != connectionGeneration ||
                 expectedPairIdentity != pairIdentity
             ) {
                 null
             } else {
-                recognizer
+                Triple(active, assistantGeneration, epoch)
             }
         } ?: return
 
         try {
-            active.append(pcm, expectedGeneration, expectedPairIdentity)
+            captured.first.append(
+                pcm,
+                captured.second,
+                expectedPairIdentity,
+            )
         } catch (_: IllegalArgumentException) {
             abort(
-                expectedGeneration,
+                captured.third,
+                expectedConnectionGeneration,
                 expectedPairIdentity,
                 "SpeechPcmInvalid",
             )
         } catch (_: IllegalStateException) {
             abort(
-                expectedGeneration,
+                captured.third,
+                expectedConnectionGeneration,
                 expectedPairIdentity,
                 "SpeechSessionInvalid",
             )
@@ -74,19 +85,25 @@ internal object AndroidSpeechSession {
     }
 
     fun stop(
-        expectedGeneration: Int,
+        expectedAssistantGeneration: Int,
+        expectedConnectionGeneration: Int,
         expectedPairIdentity: String,
         finalize: Boolean,
     ): Boolean {
         if (!finalize) {
-            return cancel(expectedGeneration, expectedPairIdentity)
+            return cancel(
+                expectedAssistantGeneration,
+                expectedConnectionGeneration,
+                expectedPairIdentity,
+            )
         }
 
         val captured: Pair<AndroidPcmAsr, Long> = synchronized(lock) {
             val active = recognizer
             if (active == null ||
                 finalizing ||
-                expectedGeneration != generation ||
+                expectedAssistantGeneration != assistantGeneration ||
+                expectedConnectionGeneration != connectionGeneration ||
                 expectedPairIdentity != pairIdentity
             ) {
                 return false
@@ -98,12 +115,13 @@ internal object AndroidSpeechSession {
         finalizer.execute {
             try {
                 val transcript = captured.first.finalizeTranscript(
-                    expectedGeneration,
+                    expectedAssistantGeneration,
                     expectedPairIdentity,
                 )
                 completeIfCurrent(
                     captured.second,
-                    expectedGeneration,
+                    expectedAssistantGeneration,
+                    expectedConnectionGeneration,
                     expectedPairIdentity,
                     transcript,
                     null,
@@ -111,7 +129,8 @@ internal object AndroidSpeechSession {
             } catch (error: Exception) {
                 completeIfCurrent(
                     captured.second,
-                    expectedGeneration,
+                    expectedAssistantGeneration,
+                    expectedConnectionGeneration,
                     expectedPairIdentity,
                     "",
                     when (error) {
@@ -128,12 +147,14 @@ internal object AndroidSpeechSession {
     }
 
     fun cancel(
-        expectedGeneration: Int,
+        expectedAssistantGeneration: Int,
+        expectedConnectionGeneration: Int,
         expectedPairIdentity: String,
     ): Boolean = synchronized(lock) {
         val active = recognizer
         if (active == null ||
-            expectedGeneration != generation ||
+            expectedAssistantGeneration != assistantGeneration ||
+            expectedConnectionGeneration != connectionGeneration ||
             expectedPairIdentity != pairIdentity
         ) {
             return false
@@ -153,37 +174,42 @@ internal object AndroidSpeechSession {
     }
 
     private fun abort(
-        expectedGeneration: Int,
+        capturedEpoch: Long,
+        expectedConnectionGeneration: Int,
         expectedPairIdentity: String,
         code: String,
     ) {
-        val shouldEmit = synchronized(lock) {
-            if (expectedGeneration != generation ||
+        val completedAssistantGeneration: Int? = synchronized(lock) {
+            if (capturedEpoch != epoch ||
+                expectedConnectionGeneration != connectionGeneration ||
                 expectedPairIdentity != pairIdentity
             ) {
-                false
+                null
             } else {
+                val value = assistantGeneration
                 epoch += 1
                 recognizer?.cancel()
                 clearLocked()
-                true
+                value
             }
         }
-        if (shouldEmit) {
-            emitFinal(expectedGeneration, "", code)
+        if (completedAssistantGeneration != null) {
+            emitFinal(completedAssistantGeneration, "", code)
         }
     }
 
     private fun completeIfCurrent(
         capturedEpoch: Long,
-        expectedGeneration: Int,
+        expectedAssistantGeneration: Int,
+        expectedConnectionGeneration: Int,
         expectedPairIdentity: String,
         transcript: String,
         errorCode: String?,
     ) {
         val shouldEmit = synchronized(lock) {
             if (capturedEpoch != epoch ||
-                expectedGeneration != generation ||
+                expectedAssistantGeneration != assistantGeneration ||
+                expectedConnectionGeneration != connectionGeneration ||
                 expectedPairIdentity != pairIdentity ||
                 !finalizing
             ) {
@@ -194,19 +220,24 @@ internal object AndroidSpeechSession {
             }
         }
         if (shouldEmit) {
-            emitFinal(expectedGeneration, transcript.trim(), errorCode)
+            emitFinal(
+                expectedAssistantGeneration,
+                transcript.trim(),
+                errorCode,
+            )
         }
     }
 
     private fun clearLocked() {
         recognizer = null
-        generation = 0
+        assistantGeneration = 0
+        connectionGeneration = 0
         pairIdentity = ""
         finalizing = false
     }
 
     private fun emitFinal(
-        completedGeneration: Int,
+        completedAssistantGeneration: Int,
         transcript: String,
         errorCode: String?,
     ) {
@@ -214,10 +245,10 @@ internal object AndroidSpeechSession {
             BleChannelHelper.bleSpeechRecognize(
                 mapOf(
                     "script" to transcript,
-                    "generation" to completedGeneration,
+                    "generation" to completedAssistantGeneration,
                     "is_final" to true,
                     "is_framework_final" to (errorCode == null),
-                    "partial_discarded" to false,
+                    "partial_discarded" to (errorCode != null),
                     "finality" to if (errorCode == null) {
                         "provider_final"
                     } else {
