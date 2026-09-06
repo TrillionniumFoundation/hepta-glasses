@@ -6,18 +6,19 @@ document for every one of its 26 modules. The machine mapping is
 `docs/MODULE_HANDOFF.json`, and `tools/validate_module_handoff.py` verifies exact
 identity/order, lifecycle, declared dimension profiles, source/test/contract
 references, anchors, minimum document length and exact index/status agreement.
-These are structural checks, not a proof that every engineering dimension is
-semantically complete or current with all code. Module-owner review is required.
+These are structural checks, not proof that every engineering dimension remains
+semantically complete or current with every code change. Module-owner review is
+required.
 
 The primary documents remain authoritative; this file deliberately does not
 duplicate their protocol, state-machine or security text. Source documentation
 never promotes a reference implementation, simulator or CI result into physical,
 deployed, independent-review or release evidence.
 
-For identity, realtime and capability persistence, the primary documents below
-supersede the corresponding reference-only descriptions in the base guide.
-The reference modules still exist; a persistent subcomponent does not upgrade
-its entire module or close HG-0087. Current remaining work is tracked in
+For identity, realtime, capability persistence, durable Memory and Codex worker
+custody, the primary documents below supersede the older reference-only portions
+of the base guide. A persistent or bounded component does not upgrade its entire
+module or close HG-0087. Current remaining work is tracked in
 `docs/HG0087_IMPLEMENTATION_STATUS.json`.
 
 <!-- handoff:mobile-shell -->
@@ -53,12 +54,12 @@ Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#g1-protocol-feature
 <!-- handoff:assistant-speech -->
 ## assistant-speech
 
-Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#assistant-speech`. Platform status: iOS speech is conditional on permission/locale/device support; Android LC3 exists but PCM-to-ASR remains unavailable. Evidence ceiling: Provider tenancy, retention, abuse controls and physical latency/accuracy/privacy qualification remain external.
+Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#assistant-speech`. Platform status: iOS uses system speech when permission, locale and device support are present. Android contains a bounded ticket-bound PCM-to-ASR transport component, but the consumer start route remains fail-closed until authenticated bootstrap and stream integration are composed. Evidence ceiling: Source components do not establish live speech tenancy, authenticated ticket delivery, retention controls or physical latency/accuracy/privacy qualification.
 
 <!-- handoff:android-native -->
 ## android-native
 
-Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#android-native`. Platform status: Android device target; PCM-to-ASR is explicitly unavailable in the current source candidate. Evidence ceiling: Builds and tests are E3 at most; Play Integrity, signing, OEM/device matrix and physical G1 evidence remain external.
+Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#android-native`. Platform status: Android device target with LC3 decoding and a bounded HTTPS PCM-to-ASR component; production speech activation remains disabled until authenticated ticket and decoded-stream integration are active. Evidence ceiling: Builds and tests are E3 at most; Play Integrity, signing, live speech-provider use, OEM/device matrices and physical G1 evidence remain external.
 
 <!-- handoff:ios-native -->
 ## ios-native
@@ -93,17 +94,17 @@ Primary detailed document: `docs/development/DURABLE_CAPABILITIES.md`. Platform 
 <!-- handoff:skills-registry -->
 ## skills-registry
 
-Primary detailed document: `docs/development/SIGNED_SKILLS.md`. Platform status: Python legacy reference plus Linux Ed25519 package verification, exact inventory checks and a SQLite consent/version/revocation registry; no executor is installed. Evidence ceiling: Source checks establish signed-byte admission and local persistence only; actual sandbox/egress, external publisher trust/transparency, authenticated consent and independent package qualification remain open.
+Primary detailed document: `docs/development/SIGNED_SKILLS.md`. Platform status: Python legacy reference plus Linux Ed25519 package verification, exact inventory checks, SQLite consent/version/revocation, a restricted zero-egress R0 data VM and signed-log inclusion verification; arbitrary-code execution is not enabled. Evidence ceiling: Source checks establish signed-byte admission and restricted data execution only; arbitrary-code sandboxing, enforced nonempty egress, external publisher/log governance, authenticated consent and independent qualification remain open.
 
 <!-- handoff:memory -->
 ## memory
 
-Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#memory`. Platform status: Python in-memory reference plus Flutter process-memory answer history. Evidence ceiling: Does not provide encrypted durable storage, multi-device sync, regional retention, backup/deletion drills or independent privacy assurance.
+Primary detailed document: `docs/development/DURABLE_MEMORY.md`. Platform status: Python includes a SQLite ciphertext-only durable Memory store with an external per-subject cipher/key-provider interface; Flutter answer history remains a separate default-off process-memory feature. Evidence ceiling: The repository fixture cipher is not a production key service; authenticated ingress, KMS/HSM-backed subject keys, backup anti-rollback, downstream deletion evidence and independent privacy qualification remain open.
 
 <!-- handoff:codex-worker -->
 ## codex-worker
 
-Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#codex-worker`. Platform status: Python launcher for an external Codex installation. Evidence ceiling: Dry-run source tests do not prove installed/authenticated Codex, container/seccomp, per-task identity, egress, quotas or compromise isolation.
+Primary detailed document: `services/codex_worker/README.md`. Platform status: Linux source includes a fixed-executable task supervisor, bounded process/output/resource custody and an exact-domain HTTPS broker; it still requires an external OS isolation boundary for arbitrary code. Evidence ceiling: Source tests do not prove installed/authenticated Codex, namespaces/seccomp/cgroups, broker-exclusive egress, per-task identity, compromise containment or independently qualified deployment.
 
 <!-- handoff:mcp-adapter -->
 ## mcp-adapter
