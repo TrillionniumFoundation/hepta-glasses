@@ -16,14 +16,18 @@ A sealed memfd passes the child specification to an isolated Python launcher,
 which sets `PR_SET_NO_NEW_PRIVS`, umask `077`, CPU/address-space/file-size/open-
 file/process rlimits, and then replaces itself with the configured executable.
 No shell is used, inherited descriptors are closed, and the target receives only
-a bounded explicit environment plus a private temporary HOME/TMPDIR.
+a bounded explicit environment plus a private temporary HOME/TMPDIR. The working
+directory is likewise held through a no-follow directory descriptor, used through
+`/proc/self/fd`, and checked before launch, after launch, and before success is
+returned so a pathname swap cannot redirect the child into a replacement tree.
 
 The supervisor places the launcher and all descendants in one process group.
 Cancellation, wall-clock timeout, or combined output overflow sends `SIGKILL` to
-the whole group and synchronously reaps the leader. This also covers the case
-where the leader exits before a descendant that still holds stdout/stderr. A
-committed start is never represented as successful termination merely because
-the leader exited.
+the whole group and synchronously reaps the leader. Before every return—including
+a zero exit from the group leader—the supervisor also signals the original group,
+so a descendant cannot survive merely by closing stdin/stdout/stderr before the
+leader exits. A committed start is never represented as successful termination
+merely because the leader exited.
 
 Run:
 
@@ -35,7 +39,9 @@ python3 -m unittest services.codex_worker.test_task_supervisor -v
 The supervisor tests execute real local programs and cover shell-injection
 resistance, executable-object custody, insecure executable rejection, sanitized
 environment/input, rlimits, output overflow, cancellation, timeout, forked
-children and a group leader that exits before its descendant.
+children, a group leader that exits before its descendant, a descendant that
+closes every inherited pipe before the leader reports success, working-directory
+symlinks, and a deterministic directory replacement during process creation.
 
 ## Evidence and deployment boundary
 
