@@ -13,7 +13,12 @@
     "vendor_firmware_ota": "blocked_upstream"
   },
   "plan_revision": "2026-09-01-g8",
-  "program_increment": "G8+G9+G10+active-remediation",
+  "program_increment": "G8",
+  "active_layers": [
+    "G9-authenticated-evidence",
+    "G10-complete-closure",
+    "active-remediation"
+  ],
   "repository_actionable_gate": {
     "active_open_gap_ids": [
       "HG-0087"
