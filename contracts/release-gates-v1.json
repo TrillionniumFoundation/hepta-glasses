@@ -1,0 +1,100 @@
+{
+  "contract_id": "hepta-glasses-release-gates-v1",
+  "version": 4,
+  "contracts_version": "2026-09-01-g8",
+  "source_gate": {
+    "required": [
+      "exact_commit",
+      "exact_tree",
+      "repository-contracts",
+      "flutter",
+      "android-native",
+      "ios-native",
+      "native-sanitizers",
+      "secret-and-boundary-scan",
+      "zero_history_findings",
+      "zero_unscanned_history_blobs",
+      "sbom_sha256",
+      "sbom_ecosystems",
+      "provenance_sha256",
+      "audit_contract",
+      "contracts_version"
+    ]
+  },
+  "trusted_product_gate": {
+    "validator": "tools.external_evidence.validate_bundle",
+    "policy_id": "hepta-external-complete-closure-v1",
+    "policy_revision": "2026-09-02-g10-quorum-1",
+    "trust_anchor": "out_of_band_registry_sha256",
+    "required_environment": [
+      "HEPTA_EXTERNAL_TRUST_REGISTRY_SHA256"
+    ],
+    "exact_source_binding": [
+      "repository",
+      "commit",
+      "tree"
+    ],
+    "required_result": [
+      "external_pin_verified",
+      "accepted",
+      "review_set_integrity_verified",
+      "all_authority_owned_gaps_closed"
+    ],
+    "required_gap_ids": [
+      "HG-0010",
+      "HG-0011",
+      "HG-0012",
+      "HG-0013",
+      "HG-0014",
+      "HG-0015",
+      "HG-0016",
+      "HG-0017",
+      "HG-0018",
+      "HG-0021",
+      "HG-0022",
+      "HG-0044"
+    ],
+    "self_attested_product_fields_authoritative": false
+  },
+  "product_gate": {
+    "required": [
+      "authenticated_external_evidence",
+      "protected_main",
+      "independent_review",
+      "android_physical_qualification",
+      "ios_physical_qualification",
+      "production_model_provider",
+      "production_identity",
+      "production_attestation",
+      "production_speech",
+      "production_realtime_oauth",
+      "production_capabilities",
+      "vendor_firmware_authority",
+      "security_review",
+      "privacy_review",
+      "legal_review",
+      "accessibility_review",
+      "safety_review",
+      "kill_switch_drill",
+      "rollback_drill",
+      "credential_rotation_drill",
+      "android_signing_evidence",
+      "ios_signing_evidence",
+      "release_provenance",
+      "release_attestation",
+      "pilot_cohort",
+      "pilot_crash_free_rate",
+      "zero_duplicate_effects"
+    ]
+  },
+  "forbidden_substitutions": [
+    "release_json_boolean_for_authenticated_authority_evidence",
+    "bundle_local_registry_digest_for_out_of_band_trust_pin",
+    "digital_twin_for_physical_device",
+    "source_test_for_production_credentials",
+    "self_review_for_independent_review",
+    "unsigned_build_for_release_signing",
+    "synthetic_pilot_for_real_pilot",
+    "clean_worktree_for_clean_git_history"
+  ]
+}

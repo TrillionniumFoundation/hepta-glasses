@@ -1,0 +1,40 @@
+{
+  "source": {
+    "commit": "REPLACE_WITH_40_HEX_COMMIT",
+    "tree": "REPLACE_WITH_40_HEX_TREE",
+    "ci_checks": [],
+    "sbom": {
+      "sha256": "REPLACE_WITH_64_HEX"
+    },
+    "sbom_ecosystems": [
+      "android/gradle",
+      "dart/pub",
+      "ios/cocoapods",
+      "native/vendored"
+    ],
+    "history_scan": {
+      "sha256": "REPLACE_WITH_64_HEX",
+      "scope": "all-fetched-refs-and-deduplicated-blobs",
+      "commit_count": 0,
+      "scanned_blob_count": 0,
+      "finding_count": -1,
+      "unscanned_blob_count": -1
+    },
+    "native_sanitizer": {
+      "sha256": "REPLACE_WITH_64_HEX",
+      "passed": false,
+      "lc3_cross_platform_parity": false
+    },
+    "audit_contract": "authenticated-checkpoint-v3",
+    "provenance": {
+      "sha256": "REPLACE_WITH_64_HEX"
+    },
+    "provenance_type": "unsigned-source-provenance-v1",
+    "contracts_version": "2026-09-01-g8"
+  },
+  "external_evidence": {
+    "bundle": "evidence/external/REPLACE_WITH_40_HEX_COMMIT/successors/finalized.json",
+    "artifact_root": "evidence/external/REPLACE_WITH_40_HEX_COMMIT/artifacts",
+    "trust_registry": "evidence/external/REPLACE_WITH_40_HEX_COMMIT/trust-registry.json"
+  }
+}

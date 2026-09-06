@@ -1,0 +1,38 @@
+{
+  "cross_platform_invariants": [
+    "both_legs_ready_before_pair_ready",
+    "generation_fences_stale_events",
+    "native_write_rejection_is_not_success",
+    "timeout_after_write_is_indeterminate",
+    "speech_finalization_is_distinct_from_cancellation",
+    "physical_claims_require_e5_evidence"
+  ],
+  "physical_qualification": "blocked_external",
+  "platforms": {
+    "android": {
+      "bitmap_transfer": "implemented_source",
+      "ble_dual_leg": "implemented_source",
+      "display_text": "implemented_source",
+      "lc3_decode": "implemented_source",
+      "notification_transfer": "implemented_source",
+      "pcm_to_asr": "source_integrated_ticket_bound",
+      "speech_bootstrap": "authenticated_ingress_and_mobile_boundary_source_integrated",
+      "speech_authority": "assistant_generation_plus_ble_connection_generation_plus_pair_identity",
+      "speech_provider": "unconfigured_fail_closed_without_runtime_identity_and_provider_tenant",
+      "physical_g1_validation": "not_attested",
+      "voice_assistant": "source_available_but_not_product_qualified"
+    },
+    "ios": {
+      "bitmap_transfer": "implemented_source",
+      "ble_dual_leg": "implemented_source",
+      "display_text": "implemented_source",
+      "lc3_decode": "implemented_source",
+      "notification_transfer": "implemented_source",
+      "pcm_to_asr": "on_device_speech_conditional",
+      "speech_cancellation": "explicit_no_fabricated_final_transcript",
+      "physical_g1_validation": "not_attested",
+      "voice_assistant": "conditional_on_permission_locale_and_device_support"
+    }
+  },
+  "schema_version": 1
+}

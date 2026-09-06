@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "hepta-glasses": {
+      "command": "python3",
+      "args": [
+        "adapters/mcp/hepta_glasses_mcp_server.py"
+      ],
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}

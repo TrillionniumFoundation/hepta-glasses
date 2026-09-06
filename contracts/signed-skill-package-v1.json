@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "contract_id": "signed-skill-package-v1",
+  "parent_gap": "HG-0087",
+  "owner": "skills",
+  "implementations": [
+    "services/skills/signed_package.py",
+    "services/skills/signed_registry.py",
+    "services/skills/signed_registry_schema.py",
+    "services/skills/package_transparency.py"
+  ],
+  "tests": [
+    "services/skills/test_signed_registry.py",
+    "services/skills/test_signed_registry_schema.py",
+    "services/skills/test_package_transparency.py",
+    "services/qualification/test_signed_registry_runtime_policy.py",
+    "services/qualification/test_signed_registry_object_binding.py"
+  ],
+  "signature": {
+    "algorithm": "Ed25519",
+    "preimage_prefix": "HEPTA-SKILL-PACKAGE-V1\\n",
+    "public_key": "Externally pinned 44-byte SPKI DER; single publisher binding",
+    "raw_signature_bytes": 64,
+    "fallback": false
+  },
+  "manifest": {
+    "encoding": "canonical sorted compact UTF-8 JSON; exact field set",
+    "maximum_bytes": 32768,
+    "maximum_lifetime_seconds": 2592000,
+    "approval": "Authenticated host approval of exact manifest SHA-256 and expiry; not client JSON"
+  },
+  "package": {
+    "type": "single-disk ZIP, stored regular files only",
+    "maximum_bytes": 16777216,
+    "maximum_files": 128,
+    "maximum_file_bytes": 1048576,
+    "inventory": "exact path/size/SHA-256",
+    "entrypoint_must_exist": true,
+    "filesystem_extraction": false,
+    "compression": false,
+    "links": false,
+    "path_aliases": false,
+    "extra_members": false
+  },
+  "persistence": {
+    "component": "signed_skills",
+    "version": 1,
+    "engine": "SQLite WAL/FULL/BEGIN IMMEDIATE",
+    "scope": "trusted local Linux host, one subject and fixed policy",
+    "required_authority_tables": [
+      "signed_skill_policy",
+      "signed_skill_keys",
+      "signed_skill_installed",
+      "signed_skill_revocations",
+      "signed_skill_events"
+    ],
+    "fresh_initialization": "only when both component markers and every signed_skill_* table are absent",
+    "incomplete_marked_schema": "reject without recreating missing tables or policy singleton",
+    "unmarked_existing_schema": "reject without implicit adoption",
+    "policy_singleton": "exactly one id=1 row with persisted policy, valid last_time and suspension state",
+    "key_constraint": "non-partial unique publisher-key fingerprint",
+    "event_sequence": "AUTOINCREMENT retained and included in continuity digest",
+    "runtime_policy": "subject, key map, capability/domain policy, clock, capacity, transparency verifier and state anchor are read-only constructor bindings",
+    "clock_error": "ordinary host-clock exceptions and invalid values reduce to fixed skill_clock_invalid without private exception cause",
+    "package_payload_stored": false,
+    "private_keys_stored": false,
+    "encrypted_metadata": false,
+    "stale_restore_supported": false,
+    "unknown_namespaced_table": "reject in both fresh and established state",
+    "continuity_component": "signed_skills_state",
+    "continuity_version": 1,
+    "continuity_table": "signed_skill_state singleton",
+    "continuity_fields": [
+      "instance_id",
+      "revision",
+      "authority_digest"
+    ],
+    "authority_digest": "domain-separated typed SHA-256 over the five authority tables and event AUTOINCREMENT sequence",
+    "transaction_seal": "verify before authority use; compare-and-update after mutation in the same BEGIN IMMEDIATE transaction",
+    "optional_host_anchor": "exact instance/revision/digest lower bound; client JSON is not authority",
+    "object_binding": "hold O_NOFOLLOW parent-directory and regular-file descriptors from before sqlite3.connect until SQLite close",
+    "sqlite_connection": "open through /proc/self/fd/<held-file-fd>; first object/path/ctime check occurs before PRAGMA or schema write",
+    "path_identity": "held object, parent-relative entry and absolute configured path must identify the same inode before, inside and after transactions",
+    "open_interval_aba": "initial file and parent-directory ctime mismatch rejects A-to-B-to-A substitution before authority writes",
+    "filesystem_owner": "the final parent directory and primary database file must be owned by the effective service uid",
+    "filesystem_write_mode": "owner read/write is required; the final parent also requires owner search; group/world write bits are rejected and rechecked around transactions",
+    "filesystem_permission_failure": "fail with skill_registry_database_permissions_invalid before authority use or migration",
+    "filesystem_boundary": "POSIX ACLs, Linux capabilities, ancestor-directory and mount trust, hostile-kernel behavior and confidentiality/read policy are not established by these mode-bit checks",
+    "platform_fallback": "absence of O_NOFOLLOW, /proc/self/fd or effective-uid support fails closed; no pathname-only fallback",
+    "legacy_upgrade": "explicit offline object-bound migrate_signed_skills_v1 with the same owner/write checks; no automatic migration or source proof of old-process drain"
+  },
+  "dependencies": {
+    "maximum_direct": 32,
+    "maximum_depth": 16,
+    "maximum_visited_nodes": 128,
+    "binding": [
+      "skill_id",
+      "version",
+      "manifest_sha256"
+    ],
+    "transitive_revocation": true
+  },
+  "revocation": {
+    "kinds": [
+      "skill",
+      "publisher",
+      "key",
+      "package"
+    ],
+    "terminal": true,
+    "unknown_id_tombstone": true,
+    "at_capacity": "atomically suspend registry; never evict existing denials",
+    "clock_failure": "denial remains available using last observed audit time"
+  },
+  "verification": {
+    "workers": 4,
+    "subprocess_deadline_seconds": 5,
+    "caller_wait_seconds": 8,
+    "final_transaction_expiry_recheck": true,
+    "current_version_recheck_after_verify": true,
+    "local_audit_is_external_witness": false,
+    "continuity_deep_check": "startup and state_checkpoint; schema and authority digest on every registry transaction"
+  },
+  "transparency": {
+    "contract": "contracts/signed-skill-transparency-v1.json",
+    "configuration": "optional exact built-in verifier whose complete inclusion/consistency/witness policy digest is persisted",
+    "manifest_binding": "RFC6962 inclusion leaf is exact canonical manifest bytes",
+    "consistency_floor": "optional immutable log ID/tree size/root with RFC6962 consistency verification",
+    "witness_quorum": "optional immutable Ed25519 witness identity/key quorum over exact checkpoint hash and root",
+    "legacy_binding": "unchanged when advanced consistency/witness policy is absent",
+    "final_transaction_expiry_recheck": true,
+    "stored_installation_expiry": "also bounded by checkpoint, log-key, witness-statement and witness-key expiry",
+    "unconfigured_supplied_evidence": "reject rather than ignore",
+    "proof_archive": false,
+    "operated_global_transparency": false
+  },
+  "migration": {
+    "function": "migrate_signed_skills_v1(path)",
+    "mode": "explicit offline additive transaction through the same held object-bound connection",
+    "preserves": [
+      "policy",
+      "publisher-key bindings",
+      "installed manifests and signatures",
+      "consent expiry",
+      "revocations",
+      "event hash chain",
+      "timestamps and event sequence"
+    ],
+    "failure": "rollback continuity table, marker and all migration writes",
+    "path_replacement_or_aba": "reject without migrating a replacement or wrong inode",
+    "filesystem_permissions": "effective-uid ownership and exclusive mode-bit write custody are required and reported; no repair or chmod is performed",
+    "old_processes_must_be_stopped": true,
+    "old_process_stop_verified_by_source": false
+  },
+  "not_implemented": [
+    "execution sandbox",
+    "actual egress enforcement",
+    "external publisher-root administration",
+    "operated append-only log, authenticated proof retrieval, dynamic checkpoint persistence, cross-client gossip, split-view detection or proof of witness-operator independence",
+    "authenticated consent service",
+    "running-task termination",
+    "encrypted package vault",
+    "independent package/deployment qualification",
+    "remote monotonic/TPM anti-rollback anchor",
+    "proof that legacy processes were stopped before migration",
+    "POSIX ACL, Linux capability, ancestor-directory or mount-policy verification",
+    "privileged operator/kernel/storage resistance",
+    "atomicity between SQLite commit and arbitrary post-check pathname changes"
+  ],
+  "claim_ceiling": "Repository source implementation and tests only. Object-bound local continuity, Unix ownership/mode checks and optional host-anchor checks are not independent anti-rollback, E5-E7, global log honesty, general execution permission or full HG-0087/skills closure."
+}

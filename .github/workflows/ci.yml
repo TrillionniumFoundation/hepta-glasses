@@ -1,0 +1,280 @@
+name: hepta-glasses-ci
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hepta-glasses-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  repository-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - run: python3 tools/validate_repository.py
+      - run: python3 tools/validate_repository_metadata.py
+      - run: python3 tools/validate_production_authority.py
+      - run: python3 -m unittest discover -s services -p 'test_*.py'
+      - run: python3 -m unittest discover -s adapters -p 'test_*.py'
+      - run: python3 -m compileall -q services adapters tools
+      - name: Prove repository checks are read-only
+        run: git diff --exit-code
+
+  flutter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - run: flutter pub get
+      - name: Enforce committed Dart formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Treat analyzer warnings as failures
+        run: flutter analyze --no-fatal-infos
+      - run: flutter test
+      - name: Prove Flutter qualification is read-only
+        run: git diff --exit-code
+
+  android-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - run: flutter pub get
+      - run: flutter build apk --debug
+      - name: Build Android release graph
+        run: |
+          cd android
+          ./gradlew assembleRelease
+      - name: Inspect Android release binary for test-only authority
+        run: |
+          set -euo pipefail
+          APK="$(find build android/app/build -type f -name '*release*.apk' -print -quit)"
+          test -n "$APK"
+          test -s "$APK"
+          rm -rf /tmp/hepta-android-release
+          mkdir -p /tmp/hepta-android-release
+          unzip -q "$APK" -d /tmp/hepta-android-release
+          find /tmp/hepta-android-release -type f -print0 \
+            | xargs -0 strings > /tmp/hepta-android-release.strings
+          ! grep -E '(HEPTA_ALLOW_DEVELOPMENT_AUTHORITY|DevelopmentMutationAuthorityProvider|explicit-development-build-flag|development_build_flag|dev-lease-|development-user|development-g1-pair|TestMutationAuthorityProvider|test-only-authority|test-lease-)' \
+            /tmp/hepta-android-release.strings
+      - name: Run Android native unit tests
+        run: |
+          cd android
+          ./gradlew testDebugUnitTest
+      - name: Prove Android qualification is read-only
+        run: git diff --exit-code
+
+  ios-native:
+    runs-on: macos-latest
+    timeout-minutes: 75
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - run: flutter pub get
+      - name: Install locked CocoaPods dependencies
+        run: |
+          cd ios
+          pod install --deployment
+      - run: flutter build ios --simulator --debug
+      - run: flutter build ios --release --no-codesign
+      - name: Inspect iOS release binary for test-only authority
+        run: |
+          set -euo pipefail
+          APP_BINARY="$(find build/ios/iphoneos -type f -name App -path '*/App.framework/App' -print -quit)"
+          test -n "$APP_BINARY"
+          test -s "$APP_BINARY"
+          strings "$APP_BINARY" > /tmp/hepta-ios-release.strings
+          ! grep -E '(HEPTA_ALLOW_DEVELOPMENT_AUTHORITY|DevelopmentMutationAuthorityProvider|explicit-development-build-flag|development_build_flag|dev-lease-|development-user|development-g1-pair|TestMutationAuthorityProvider|test-only-authority|test-lease-)' \
+            /tmp/hepta-ios-release.strings
+      - name: Run iOS native tests
+        run: |
+          DEVICE_ID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(device["udid"] for runtime in sorted(devices, reverse=True) for device in devices[runtime] if device.get("isAvailable") and device.get("name", "").startswith("iPhone")))')"
+          xcrun simctl boot "$DEVICE_ID" || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcodebuild test \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Prove iOS qualification is read-only
+        run: git diff --exit-code
+
+  native-sanitizers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - name: Run vendored native code under ASAN and UBSAN
+        run: tools/run_native_sanitizers.sh build/evidence/source-native-sanitizer.json
+      - name: Prove native sanitizer gate is read-only
+        run: git diff --exit-code
+
+  secret-and-boundary-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - run: |
+          set -euo pipefail
+          python3 -c "from tools.validate_repository import validate_boundaries; validate_boundaries()"
+          assert_no_match() {
+            local result=0
+            grep "$@" >/dev/null || result=$?
+            if [ "$result" -ne 1 ]; then
+              echo "Boundary scan found forbidden material or could not complete" >&2
+              exit 1
+            fi
+          }
+          assert_no_match -RInE '(dangerously-bypass-approvals-and-sandbox|--yolo|danger-full-access)' services plugins adapters lib
+          assert_no_match -RInE '(HEPTA_ALLOW_DEVELOPMENT_AUTHORITY|DevelopmentMutationAuthorityProvider|explicit-development-build-flag|development_build_flag|dev-lease-|development-user|development-g1-pair|TestMutationAuthorityProvider|test-only-authority|test-lease-)' lib
+          assert_no_match -RInE --exclude-dir=.git -- '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{30,}' lib android ios services adapters plugins evidence
+      - name: Scan every fetched Git ref without emitting secret material
+        run: python3 tools/scan_git_history.py --output build/evidence/source-history-scan.json
+
+  source-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - repository-contracts
+      - flutter
+      - android-native
+      - ios-native
+      - native-sanitizers
+      - secret-and-boundary-scan
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Regenerate exact-head native sanitizer report
+        run: tools/run_native_sanitizers.sh build/evidence/source-native-sanitizer.json
+      - name: Generate exact-head SBOM and provenance
+        env:
+          CI_REPOSITORY_CONTRACTS: ${{ needs.repository-contracts.result }}
+          CI_FLUTTER: ${{ needs.flutter.result }}
+          CI_ANDROID_NATIVE: ${{ needs.android-native.result }}
+          CI_IOS_NATIVE: ${{ needs.ios-native.result }}
+          CI_NATIVE_SANITIZERS: ${{ needs.native-sanitizers.result }}
+          CI_SECRET_SCAN: ${{ needs.secret-and-boundary-scan.result }}
+        run: |
+          python3 tools/build_source_evidence.py \
+            --output-dir build/evidence \
+            --native-sanitizer-report build/evidence/source-native-sanitizer.json
+      - name: Verify artifact is bound to source head
+        run: |
+          python3 - <<'PYCODE'
+          import json
+          import os
+          from pathlib import Path
+
+          summary = json.loads(
+              Path('build/evidence/source-evidence-summary.json').read_text()
+          )
+          expected = os.environ['SOURCE_HEAD_SHA']
+          if summary['commit'] != expected:
+              raise SystemExit(
+                  f"source evidence commit {summary['commit']} != expected head {expected}"
+              )
+          PYCODE
+      - name: Evaluate content-verified source release gate
+        run: |
+          python3 tools/evaluate_release_gate.py \
+            --bundle build/evidence/source-release-bundle.json \
+            --mode source \
+            --evidence-dir build/evidence \
+            --output build/evidence/source-gate-result.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-source-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: build/evidence
+          if-no-files-found: error
+          retention-days: 30

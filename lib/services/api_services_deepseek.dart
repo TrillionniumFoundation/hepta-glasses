@@ -1,58 +1,18 @@
-import 'package:dio/dio.dart';
+import 'package:demo_ai_even/runtime/model_gateway.dart';
 
+/// Legacy class name kept for source compatibility. The implementation now
+/// targets the Hepta model gateway and never embeds a third-party provider key.
 class ApiDeepSeekService {
-  late Dio _dio;
+  ApiDeepSeekService({ModelGateway? gateway})
+      : _gateway = gateway ?? ModelGatewayRegistry.current;
 
-  ApiDeepSeekService() {
-    const apiKey = String.fromEnvironment('DASHSCOPE_API_KEY');
-    if (apiKey.isEmpty) {
-      throw StateError(
-        'DASHSCOPE_API_KEY must be provided with --dart-define.',
-      );
-    }
-
-    _dio = Dio(
-      BaseOptions(
-        baseUrl: 'https://api.deepseek.com',
-        headers: {
-          'Authorization': 'Bearer $apiKey',
-          'Content-Type': 'application/json',
-        },
-      ),
-    );
-  }
+  final ModelGateway _gateway;
 
   Future<String> sendChatRequest(String question) async {
-    final data = {
-      "model": "deepseek-chat",
-      "messages": [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": question}
-      ],
-    };
-    print("sendChatRequest------data----------$data--------");
-
     try {
-      final response = await _dio.post('/chat/completions', data: data);
-
-      if (response.statusCode == 200) {
-          print("Response: ${response.data}");
-
-          final data = response.data;
-          final content = data['choices']?[0]?['message']?['content'] ?? "Unable to answer the question";
-          return content;
-      } else {
-        print("Request failed with status: ${response.statusCode}");
-        return "Request failed with status: ${response.statusCode}";
-      }
-    } on DioError catch (e) {
-      if (e.response != null) {
-        print("Error: ${e.response?.statusCode}, ${e.response?.data}");
-        return "AI request error: ${e.response?.statusCode}, ${e.response?.data}";
-      } else {
-        print("Error: ${e.message}");
-        return "AI request error: ${e.message}";
-      }
+      return await _gateway.answer(question: question);
+    } on ModelGatewayException catch (error) {
+      return 'AI service unavailable (${error.code}).';
     }
   }
 }

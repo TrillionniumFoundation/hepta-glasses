@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+
 import 'package:demo_ai_even/utils/utils.dart';
 
 class EvenaiProto {
@@ -9,10 +10,9 @@ class EvenaiProto {
     required int syncSeq,
     required int newScreen,
     required int pos,
-    required int current_page_num,
-    required int max_page_num,
+    required int currentPageNumber,
+    required int maxPageNumber,
   }) {
-    
     List<Uint8List> send = [];
     int maxSeq = data.length ~/ len;
     if (data.length % len > 0) {
@@ -35,8 +35,8 @@ class EvenaiProto {
         seq,
         newScreen,
         ...byteData.buffer.asUint8List(),
-        current_page_num,
-        max_page_num
+        currentPageNumber,
+        maxPageNumber,
       ], itemData);
       send.add(pack);
     }

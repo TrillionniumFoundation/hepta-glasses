@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "plan_revision": "2026-09-02-g10-quorum-1",
+  "extends_plan_revision": "2026-09-02-g9-authenticated-1",
+  "source_authority": {
+    "repository": "TrillionniumFoundation/hepta-glasses",
+    "branch": "work/hepta-g10-trusted-openssl-custody-20260902",
+    "identity_rule": "live_pull_request_head_and_tree",
+    "self_attested_sha_is_authoritative": false,
+    "exact_head_ci_required": true,
+    "independent_latest_head_review_required": true
+  },
+  "repository_actionable": {
+    "open": 0,
+    "closed_source": ["HG-0076", "HG-0077", "HG-0078", "HG-0079", "HG-0080", "HG-0081"],
+    "module_registry": "docs/G10_MODULES.json",
+    "gap_ledger": "docs/G10_GAP_LEDGER.json",
+    "validator_test": "services/qualification/test_g10_metadata.py",
+    "complete_closure_policy": {
+      "policy_id": "hepta-external-complete-closure-v1",
+      "policy_revision": "2026-09-02-g10-quorum-1",
+      "predecessor_contract_revision": "2026-09-02-g9-authenticated-1",
+      "issuer_authority_mode": "all_named_classes",
+      "issuer_claim_mode": "exact_class_scoped_claims",
+      "authority_seat_scope": "one key ID and one identity/organization pair may span gaps only under one unchanged authority class",
+      "review_manifest_schema_version": 1,
+      "validation_entrypoint_identity": "complete_closure module, acceptance alias, package API and CLI share one immutable aggregate-bounded snapshot wrapper",
+      "runtime_authority": "supported operational entrypoints use current trusted system time and root-owned non-group/world-writable /usr/bin/openssl by absolute path under a minimal deterministic environment; caller time, executable, PATH, OpenSSL configuration, module path and dynamic-loader overrides are rejected or discarded",
+      "lexical_scope_custody": "validation and high-level signing commands retain canonical lexical names; roots, parents, files and signing keys are opened no-follow; shared ancestor directory identities are pinned across each complete transaction; bundle input, detached signature and immutable successor must remain in one custody generation; visible names must retain the opened objects",
+      "contract_semantic_binding": "issuer, evidence-set and reviewer digests bind the canonical SHA-256 of the complete current contract object in addition to its revision label",
+      "committed_accepted_envelope_discovery": "recursive content identity under evidence/external through filesystem-anchor and child directory descriptors, with no-follow traversal and stable lexical/opened/post-read object identity"
+    }
+  },
+  "authority_owned": {
+    "inherited_blocked_count": 12,
+    "gap_ids": ["HG-0010", "HG-0011", "HG-0012", "HG-0013", "HG-0014", "HG-0015", "HG-0016", "HG-0017", "HG-0018", "HG-0021", "HG-0022", "HG-0044"],
+    "closure_rule": "Every authority class named for a gap signs exactly its versioned class-scoped claims. Seats are distinct inside each gap; one key ID and one identity/organization pair may span gaps only under one unchanged authority class. Validation and signing share canonical contract binding, final-review context, trusted runtime, lexical object identity and one transaction-wide custody generation. Real external evidence and independent acceptance remain required."
+  },
+  "claim_ceiling": "G10 closes repository-controlled authority quorum, role aliasing, claim and contract binding, review integrity, transaction-wide lexical validation and signing custody, absolute cryptographic-executable custody, and descriptor-anchored committed-package admission only; it cannot manufacture administrative, physical, provider, vendor, independent-assurance, production-signing, pilot, store, deployment, or release facts.",
+  "validation_controls": {
+    "schema_version": 1,
+    "can_manufacture_external_evidence": false,
+    "repository_admission": "descriptor_anchored",
+    "lexical_custody_scope": "transaction_wide",
+    "crypto_executable_policy": "absolute_verified_path",
+    "cross_authority_role_aliasing_allowed": false,
+    "runtime_clock": "trusted_system_time"
+  },
+  "remediation_tracking": "docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md"
+}

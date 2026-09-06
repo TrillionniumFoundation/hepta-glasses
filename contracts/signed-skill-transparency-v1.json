@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "contract_id": "signed-skill-transparency-v1",
+  "parent_gap": "HG-0087",
+  "owner": "skills",
+  "implementation": "services/skills/package_transparency.py",
+  "integration": "services/skills/signed_registry.py",
+  "tests": [
+    "services/skills/test_package_transparency.py",
+    "services/skills/test_signed_registry.py",
+    "services/skills/test_signed_registry_schema.py"
+  ],
+  "checkpoint": {
+    "encoding": "canonical sorted compact UTF-8 JSON; exact field set",
+    "maximum_bytes": 4096,
+    "maximum_lifetime_seconds": 86400,
+    "tree_size": "integer 1..2^63-1; booleans rejected",
+    "root": "64 lowercase hexadecimal SHA-256",
+    "signature_algorithm": "Ed25519",
+    "signature_preimage_prefix": "HEPTA-SKILL-TRANSPARENCY-V1\\n",
+    "signature_bytes": 64,
+    "key": "externally pinned 44-byte SPKI DER with exact log identity and validity",
+    "fallback": false
+  },
+  "merkle": {
+    "profile": "RFC6962 domain-separated binary Merkle tree inclusion and consistency",
+    "leaf_hash": "SHA-256(0x00 || exact canonical manifest bytes)",
+    "node_hash": "SHA-256(0x01 || left || right)",
+    "leaf_index": "integer in [0, tree_size)",
+    "maximum_path_hashes": 64,
+    "path_hash_bytes": 32,
+    "extra_or_missing_path": "reject"
+  },
+  "consistency": {
+    "configuration": "optional immutable checkpoint floor bound into verifier policy",
+    "anchor_fields": [
+      "log_id",
+      "tree_size",
+      "root_sha256"
+    ],
+    "verification": "RFC6962 consistency proof from the configured old root to every supplied newer checkpoint",
+    "tree_rollback": "reject",
+    "same_size_different_root": "reject",
+    "same_size_proof": "must be empty",
+    "unconfigured_supplied_path": "reject",
+    "dynamic_latest_checkpoint_persistence": false,
+    "cross_client_gossip": false
+  },
+  "witness": {
+    "statement_encoding": "canonical sorted compact UTF-8 JSON; exact field set",
+    "maximum_statement_bytes": 4096,
+    "maximum_proofs": 64,
+    "signature_algorithm": "Ed25519",
+    "signature_preimage_prefix": "HEPTA-SKILL-TRANSPARENCY-WITNESS-V1\\n",
+    "statement_binds": [
+      "witness_id",
+      "key_id",
+      "log_id",
+      "tree_size",
+      "root_sha256",
+      "checkpoint_sha256",
+      "issued_at",
+      "expires_at"
+    ],
+    "quorum": "immutable integer 1..number of distinct configured witness identities",
+    "duplicate_identity_vote": "reject even when multiple rotation keys are configured",
+    "invalid_supplied_proof": "reject; never ignore to satisfy quorum",
+    "effective_expiry": "minimum of checkpoint, log key, witness statement and witness key expiries",
+    "independent_operation_verified_by_source": false
+  },
+  "policy": {
+    "maximum_log_keys": 16,
+    "maximum_witness_keys": 32,
+    "duplicate_public_key_alias": "reject within each key class",
+    "required_mode": "fixed immutable configuration; missing proof rejects",
+    "optional_mode": "only wholly absent proof may pass; supplied evidence is fully checked",
+    "unconfigured_proof": "reject rather than ignore",
+    "subclass_verifier": "reject; exact built-in class required",
+    "legacy_binding": "unchanged when no consistency anchor or witness policy is configured",
+    "advanced_binding": [
+      "required flag",
+      "log key policy",
+      "checkpoint floor",
+      "witness key/identity policy",
+      "witness quorum"
+    ],
+    "configuration_mutation_after_construction": "reject"
+  },
+  "registry": {
+    "verifier_binding_persisted_in_policy": true,
+    "policy_change_on_reopen": "reject; explicit reviewed migration required",
+    "proof_expiry_in_final_transaction": true,
+    "stored_installation_expiry": "minimum of consent, manifest and all verified transparency authority expiries",
+    "proof_or_checkpoint_archived": false,
+    "local_audit_is_transparency_log": false
+  },
+  "platform": {
+    "verification_runtime": "trusted absolute system OpenSSL, sanitized environment",
+    "verification_inputs": "sealed anonymous Linux memory descriptors",
+    "network_fetch": false,
+    "private_log_or_witness_key_present": false
+  },
+  "not_provided": [
+    "operated remote append-only log",
+    "manifest submission or authenticated proof retrieval",
+    "persisted latest-checkpoint service or cross-client gossip",
+    "global split-view detection",
+    "proof that configured witness operators are independent",
+    "external log/witness/publisher-root administration",
+    "durable transparency evidence archive",
+    "whole-database anti-rollback or old-process fencing",
+    "independent package/deployment qualification"
+  ],
+  "claim_ceiling": "Admission-time validation of one signed inclusion proof, optional consistency from one pinned floor and a configured witness-signature quorum. Not operated/global log honesty, witness independence, product qualification or full HG-0087/skills closure."
+}

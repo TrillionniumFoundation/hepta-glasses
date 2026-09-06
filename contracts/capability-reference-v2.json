@@ -1,0 +1,11 @@
+{
+  "contract_id": "hepta-capability-reference-v2",
+  "version": 2,
+  "scope": "Python deterministic reference; not a production service or Dart wire-format change",
+  "request": {"arguments_snapshot_before_admission": true, "maximum_arguments_bytes": 65536, "trusted_enum_required": true},
+  "execution": {"maximum_wait_seconds_default": 30, "maximum_active_calls_default": 4, "maximum_receipts_default": 4096, "post_dispatch_exception": "indeterminate_for_mutations", "deadline_after_dispatch": "indeterminate_for_mutations", "timed_out_workers_retain_permit": true, "late_completion_overwrites_receipt": false, "duplicate_waiter_replaces_owner": false, "hard_thread_cancellation": false},
+  "lease": {"single_use_required_for_mutations": true, "biometric_requires_boolean_true_at_r3": true},
+  "receipt": {"terminal_audit_failure": "completed_sequence_null_and_disable_new_work", "uncertain_replay": "return_existing_receipt_without_execution", "reconciliation_failure": "retain_indeterminate_receipt"},
+  "compatibility": "completed_sequence is now nullable when terminal audit fails. Consumers must distinguish it from a persisted terminal sequence. Generic post-dispatch errors are no longer definitive mutation failure.",
+  "production_requirements": ["durable idempotency and prepared records", "provider socket deadlines and cooperative cancellation", "trusted identity and lease ingress", "tenant/process isolation", "authoritative provider readback", "crash recovery and deployed evidence"]
+}

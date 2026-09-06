@@ -1,92 +1,225 @@
-//
-//  BluetoothManager.swift
-//  Runner
-//
-//  Created by Hawk on 2024/10/23.
-//
-
-import UIKit
 import Flutter
+import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
-
-    private var blueInstance = BluetoothManager.shared
+    private let blueInstance = BluetoothManager.shared
 
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
- 
         GeneratedPluginRegistrant.register(with: self)
-        let controller = window?.rootViewController as! FlutterViewController
-        let messenger : FlutterBinaryMessenger = window?.rootViewController as! FlutterBinaryMessenger
-        let channel = FlutterMethodChannel(name: "method.bluetooth", binaryMessenger: controller.binaryMessenger)
-        
-        blueInstance = BluetoothManager(channel: channel)
+        guard let controller = window?.rootViewController as? FlutterViewController else {
+            return false
+        }
+        let messenger = controller.binaryMessenger
+        let channel = FlutterMethodChannel(
+            name: "method.bluetooth",
+            binaryMessenger: messenger
+        )
+        blueInstance.attach(channel: channel)
 
-        // Set method call handler for Flutter channel
-        channel.setMethodCallHandler { [weak self] (call, result) in
-            print("AppDelegate----call----\(call)----\(call.method)---------")
-            guard let self = self else { return }
-
+        channel.setMethodCallHandler { [weak self] call, result in
+            guard let self else {
+                result(
+                    FlutterError(
+                        code: "RuntimeUnavailable",
+                        message: "Native runtime is unavailable",
+                        details: nil
+                    )
+                )
+                return
+            }
             switch call.method {
             case "startScan":
                 self.blueInstance.startScan(result: result)
             case "stopScan":
                 self.blueInstance.stopScan(result: result)
             case "connectToGlasses":
-                if let args = call.arguments as? [String: Any], let deviceName = args["deviceName"] as? String {
-                    self.blueInstance.connectToDevice(deviceName: deviceName, result: result)
-                } else {
-                    result(FlutterError(code: "InvalidArguments", message: "Invalid arguments", details: nil))
+                guard
+                    let arguments = call.arguments as? [String: Any],
+                    let deviceName = arguments["deviceName"] as? String,
+                    !deviceName.isEmpty
+                else {
+                    result(
+                        FlutterError(
+                            code: "InvalidArguments",
+                            message: "deviceName is required",
+                            details: nil
+                        )
+                    )
+                    return
                 }
+                self.blueInstance.connectToDevice(
+                    deviceName: deviceName,
+                    result: result
+                )
             case "disconnectFromGlasses":
                 self.blueInstance.disconnectFromGlasses(result: result)
             case "send":
-                let params = call.arguments as? [String : Any]
-                self.blueInstance.sendData(params: params!)
-                result(nil)
+                guard let parameters = call.arguments as? [String: Any] else {
+                    result(
+                        FlutterError(
+                            code: "InvalidArguments",
+                            message: "send arguments are required",
+                            details: nil
+                        )
+                    )
+                    return
+                }
+                result(self.blueInstance.sendData(params: parameters))
             case "startEvenAI":
-                // todo dynamic language
-                SpeechStreamRecognizer.shared.startRecognition(identifier: "EN")
-                result(nil)
+                guard
+                    let arguments = call.arguments as? [String: Any],
+                    let generation = arguments["generation"] as? Int,
+                    generation > 0
+                else {
+                    result(
+                        FlutterError(
+                            code: "InvalidArguments",
+                            message: "assistant generation is required",
+                            details: nil
+                        )
+                    )
+                    return
+                }
+                self.blueInstance.beginAudioSession()
+                guard SpeechStreamRecognizer.shared.startRecognition(
+                    identifier: "EN",
+                    generation: generation
+                ) else {
+                    result(
+                        FlutterError(
+                            code: "SpeechRecognitionUnavailable",
+                            message: "On-device speech recognition is unavailable",
+                            details: nil
+                        )
+                    )
+                    return
+                }
+                result(true)
             case "stopEvenAI":
-                SpeechStreamRecognizer.shared.stopRecognition()
-                result(nil)
+                guard
+                    let arguments = call.arguments as? [String: Any],
+                    let generation = arguments["generation"] as? Int,
+                    generation > 0
+                else {
+                    result(
+                        FlutterError(
+                            code: "InvalidArguments",
+                            message: "assistant generation is required",
+                            details: nil
+                        )
+                    )
+                    return
+                }
+                let finalize = arguments["finalize"] as? Bool ?? true
+                let stopped = finalize
+                    ? SpeechStreamRecognizer.shared.stopRecognition(
+                        generation: generation
+                    )
+                    : SpeechStreamRecognizer.shared.cancelRecognition(
+                        generation: generation
+                    )
+                result(stopped)
+            case "getApplicationSupportPath":
+                do {
+                    let root = try FileManager.default.url(
+                        for: .applicationSupportDirectory,
+                        in: .userDomainMask,
+                        appropriateFor: nil,
+                        create: true
+                    )
+                    result(root.path)
+                } catch {
+                    result(
+                        FlutterError(
+                            code: "ApplicationSupportUnavailable",
+                            message: error.localizedDescription,
+                            details: nil
+                        )
+                    )
+                }
+            case "auditCheckpointMac":
+                guard
+                    let arguments = call.arguments as? [String: Any],
+                    let typedData = arguments["payload"] as? FlutterStandardTypedData,
+                    !typedData.data.isEmpty
+                else {
+                    result(
+                        FlutterError(
+                            code: "InvalidArguments",
+                            message: "audit checkpoint payload is required",
+                            details: nil
+                        )
+                    )
+                    return
+                }
+                do {
+                    let mac = try AuditCheckpointSigner.shared.authenticate(
+                        typedData.data
+                    )
+                    result(FlutterStandardTypedData(bytes: mac))
+                } catch {
+                    result(
+                        FlutterError(
+                            code: "AuditCheckpointAuthenticationFailed",
+                            message: "Local checkpoint authentication failed",
+                            details: nil
+                        )
+                    )
+                }
             default:
                 result(FlutterMethodNotImplemented)
             }
         }
-     
-        let scheduleEvent = FlutterEventChannel(name: "eventBleReceive", binaryMessenger: messenger)
-        scheduleEvent.setStreamHandler(self)
-        
-        let eventSpeechRecognizeEvent = FlutterEventChannel(name: "eventSpeechRecognize", binaryMessenger: messenger)
-        eventSpeechRecognizeEvent.setStreamHandler(self)
 
-        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+        FlutterEventChannel(
+            name: "eventBleReceive",
+            binaryMessenger: messenger
+        ).setStreamHandler(self)
+        FlutterEventChannel(
+            name: "eventSpeechRecognize",
+            binaryMessenger: messenger
+        ).setStreamHandler(self)
+
+        return super.application(
+            application,
+            didFinishLaunchingWithOptions: launchOptions
+        )
     }
 }
 
-// MARK: - FlutterStreamHandler
-extension AppDelegate : FlutterStreamHandler {
-    func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
-    
-       if (arguments as? String == "eventBleStatus"){
-            //self.blueInstance.blueStatusSink = events
-        } else if (arguments as? String == "eventBleReceive") {
-            self.blueInstance.blueInfoSink = events
-        } else if (arguments as? String == "eventSpeechRecognize") {
-            BluetoothManager.shared.blueSpeechSink = events
-        } else {
-            // TODO
+extension AppDelegate: FlutterStreamHandler {
+    func onListen(
+        withArguments arguments: Any?,
+        eventSink events: @escaping FlutterEventSink
+    ) -> FlutterError? {
+        switch arguments as? String {
+        case "eventBleReceive":
+            blueInstance.blueInfoSink = events
+        case "eventSpeechRecognize":
+            blueInstance.blueSpeechSink = events
+        default:
+            return FlutterError(
+                code: "UnknownEventChannel",
+                message: "Unsupported event channel",
+                details: nil
+            )
         }
         return nil
     }
 
     func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        switch arguments as? String {
+        case "eventBleReceive":
+            blueInstance.blueInfoSink = nil
+        case "eventSpeechRecognize":
+            blueInstance.blueSpeechSink = nil
+        default:
+            break
+        }
         return nil
     }
 }
-

@@ -1,30 +1,39 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+import 'package:demo_ai_even/main.dart' as application;
+import 'package:demo_ai_even/runtime/contracts.dart';
+import 'package:demo_ai_even/runtime/display_composer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:demo_ai_even/main.dart';
-
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(MyApp());
+  test('AI-native display contract smoke test', () {
+    final card = DisplayCard(
+      cardId: 'smoke-card',
+      taskId: 'smoke-task',
+      kind: DisplayCardKind.status,
+      title: 'Hepta Glasses',
+      body: 'Runtime ready',
+    );
+    const composer = DisplayComposer();
+    final pages = composer.compose(card);
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    expect(pages, hasLength(1));
+    expect(pages.single.text, contains('Runtime ready'));
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  testWidgets('durable-startup failure exposes no action authority', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const application.FailClosedStartupApp());
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(
+      find.textContaining('Device and assistant actions remain disabled'),
+      findsOneWidget,
+    );
+    expect(find.byType(ElevatedButton), findsNothing);
+    expect(find.byType(FilledButton), findsNothing);
+    expect(find.byType(OutlinedButton), findsNothing);
+    expect(find.byType(TextButton), findsNothing);
+    expect(find.byType(IconButton), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }

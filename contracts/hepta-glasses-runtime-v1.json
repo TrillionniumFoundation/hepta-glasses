@@ -1,0 +1,34 @@
+{
+  "contract_id": "hepta-glasses-runtime-v1",
+  "version": 1,
+  "product_profile": "consumer",
+  "semantic_authority": "model-output-is-proposal",
+  "execution_authority": "edge-tool-gateway",
+  "mutation_invariants": [
+    "journal-before-effect",
+    "idempotency-fingerprint",
+    "deadline",
+    "receipt",
+    "reconciliation-on-uncertainty"
+  ],
+  "allowed_codex_sandboxes": [
+    "read-only",
+    "workspace-write"
+  ],
+  "forbidden_capabilities": [
+    "unrestricted-shell",
+    "credential-read",
+    "firmware-flash",
+    "payment",
+    "account-mutation",
+    "danger-full-access",
+    "sandbox-bypass"
+  ],
+  "risk_tiers": {
+    "R0": "read-only",
+    "R1": "local-reversible",
+    "R2": "explicit-user-presence",
+    "R3": "biometric-and-exact-lease",
+    "R4": "consumer-deny"
+  }
+}

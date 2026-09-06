@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "components": [
+    {
+      "id": "google-liblc3",
+      "name": "liblc3",
+      "version": "NOASSERTION",
+      "supplier": "Organization: Google LLC",
+      "license": "Apache-2.0",
+      "purl": "pkg:github/google/liblc3",
+      "upstream_url": "https://github.com/google/liblc3",
+      "revision": "NOASSERTION",
+      "source_paths": [
+        "android/app/src/main/cpp/include",
+        "android/app/src/main/cpp/liblc3",
+        "ios/Runner/lc3"
+      ],
+      "provenance_note": "Imported with the upstream demo; an exact native upstream revision was not preserved, so the source tree digest is authoritative."
+    },
+    {
+      "id": "xiph-rnnoise",
+      "name": "rnnoise",
+      "version": "NOASSERTION",
+      "supplier": "Organization: Xiph.Org Foundation and contributors",
+      "license": "BSD-3-Clause",
+      "purl": "pkg:github/xiph/rnnoise",
+      "upstream_url": "https://github.com/xiph/rnnoise",
+      "revision": "NOASSERTION",
+      "source_paths": [
+        "android/app/src/main/cpp/rnnoise"
+      ],
+      "provenance_note": "Imported with the upstream demo; an exact native upstream revision was not preserved, so the source tree digest is authoritative."
+    }
+  ]
+}
