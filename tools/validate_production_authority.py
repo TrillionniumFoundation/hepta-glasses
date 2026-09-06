@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed when test mutation authority enters the product build graph."""
+"""Fail closed when forgeable mutation authority enters the product graph."""
 
 from __future__ import annotations
 
@@ -47,29 +47,92 @@ def validate_production_entrypoint() -> None:
     bootstrap = (ROOT / "lib/bootstrap/hepta_bootstrap.dart").read_text(
         encoding="utf-8"
     )
-    runtime_authority = (ROOT / "lib/runtime/mutation_authority.dart").read_text(
+    authority = (ROOT / "lib/runtime/mutation_authority.dart").read_text(
         encoding="utf-8"
     )
 
     required_main = (
-        "mutationAuthority: const FailClosedMutationAuthorityProvider(),",
+        "MutationAuthorityBootstrap.configureFromEnvironment();",
+        "mutationAuthority: MutationAuthorityRegistry.current,",
         "checkpointAuthenticator: const PlatformAuditCheckpointAuthenticator(),",
     )
     if any(fragment not in main for fragment in required_main):
-        fail("production main does not explicitly bind fail-closed authority")
+        fail("production main does not bind the authenticated authority registry")
     if "required MutationAuthorityProvider mutationAuthority" not in bootstrap:
         fail("composition root does not require explicit mutation authority injection")
-    if "FailClosedMutationAuthorityProvider" not in runtime_authority:
-        fail("production fail-closed authority implementation is missing")
-    if "Clock" in runtime_authority or "DecisionLease(" in runtime_authority:
-        fail("production authority module can still synthesize a lease")
+
+    required_authority = (
+        "class FailClosedMutationAuthorityProvider",
+        "class HttpMutationAuthorityProvider",
+        "class MutationAccessTokenRegistry",
+        "class RegistryMutationAccessTokenProvider",
+        "HEPTA_MUTATION_AUTHORITY_URL",
+        "HEPTA_MUTATION_AUTHORITY_DEV_TOKEN",
+        "product && developmentToken.isNotEmpty",
+        "compiled_mutation_token_forbidden_in_product",
+        "mutation_authority_unauthenticated",
+        "mutation_authority_response_invalid",
+        "source: 'identity_https'",
+        "followRedirects: false",
+        "maxRedirects: 0",
+        "expectedArgumentDigest",
+        "expiresAt.isAfter(request.deadline)",
+        "request.riskTier == RiskTier.r4",
+    )
+    if any(fragment not in authority for fragment in required_authority):
+        fail("production mutation authority lost an authenticated fail-closed invariant")
+
+    constructors = authority.count("DecisionLease(")
+    if constructors != 1:
+        fail("production authority must have exactly one response-bound lease constructor")
+    decode_index = authority.find("static MutationAuthorization decodeAuthorization(")
+    constructor_index = authority.find("DecisionLease(")
+    if decode_index < 0 or constructor_index < decode_index:
+        fail("production lease can be constructed outside strict HTTPS response decoding")
+    if "Deterministic" in authority or "Clock" in authority:
+        fail("production authority contains a deterministic local lease source")
+
+
+def validate_server_authority() -> None:
+    source = (ROOT / "services/control_plane/mutation_authority.py").read_text(
+        encoding="utf-8"
+    )
+    required = (
+        "class MutationLeaseAuthority",
+        "BEGIN IMMEDIATE",
+        "mutation_authority_policy",
+        "mutation_revocations",
+        "argument_digest",
+        "DEFAULT_ACTION_POLICY",
+        "mutation_authority_user_presence_required",
+        "mutation_authority_biometric_required",
+        "mutation_authority_policy_migration_required",
+        '"state TEXT NOT NULL CHECK(state IN (\'issued\',\'revoked\'))"',
+    )
+    if any(fragment not in source for fragment in required):
+        fail("server mutation authority lost durable policy/revocation custody")
+    prohibited = (
+        "client_verified",
+        "development-user",
+        "test-lease-",
+        "INSERT INTO mutation_leases VALUES",
+    )
+    if any(fragment in source for fragment in prohibited):
+        fail("server mutation authority contains a forgeable or positional path")
 
 
 def validate_test_separation() -> None:
     test_authority = ROOT / "test/support/test_mutation_authority.dart"
     boundary_test = ROOT / "test/runtime/production_authority_boundary_test.dart"
-    if not test_authority.is_file() or not boundary_test.is_file():
-        fail("test-only authority or product-boundary regression is missing")
+    mobile_test = ROOT / "test/runtime/mutation_authority_test.dart"
+    server_test = ROOT / "services/control_plane/test_mutation_authority.py"
+    if not all(path.is_file() for path in (
+        test_authority,
+        boundary_test,
+        mobile_test,
+        server_test,
+    )):
+        fail("mutation authority boundary or source integration regression is missing")
     source = test_authority.read_text(encoding="utf-8")
     if "TestMutationAuthorityProvider" not in source or "DecisionLease(" not in source:
         fail("test-only authority does not provide deterministic lease coverage")
@@ -110,6 +173,7 @@ def validate_ci_release_proof() -> None:
 def main() -> int:
     validate_product_graph()
     validate_production_entrypoint()
+    validate_server_authority()
     validate_test_separation()
     validate_ci_release_proof()
     print(
@@ -117,7 +181,9 @@ def main() -> int:
             {
                 "ok": True,
                 "product_dart_files": len(product_dart_sources()),
-                "production_authority": "fail_closed_only",
+                "production_authority": "authenticated_https_or_fail_closed",
+                "runtime_token_source": "dynamic_registry_no_compiled_product_token",
+                "server_lease_custody": "durable_exact_argument_policy_and_revocation",
                 "test_authority_location": "test/support/test_mutation_authority.dart",
                 "release_binary_absence_checks": ["android", "ios"],
                 "ci_pr_trigger": "pull_request_only",
