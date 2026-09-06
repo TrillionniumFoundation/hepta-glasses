@@ -79,8 +79,8 @@
       "profile": "engineering-handoff-v1",
       "index_anchor": "docs/development/MODULE_HANDOFF.md#assistant-speech",
       "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#assistant-speech",
-      "platform_status": "iOS speech is conditional on permission/locale/device support; Android LC3 exists but PCM-to-ASR remains unavailable.",
-      "evidence_ceiling": "Provider tenancy, retention, abuse controls and physical latency/accuracy/privacy qualification remain external."
+      "platform_status": "iOS uses system speech when permission, locale and device support are present. Android contains a bounded ticket-bound PCM-to-ASR transport component, but the consumer start route remains fail-closed until authenticated bootstrap and stream integration are composed.",
+      "evidence_ceiling": "Source components do not establish live speech tenancy, authenticated ticket delivery, retention controls or physical latency/accuracy/privacy qualification."
     },
     {
       "id": "android-native",
@@ -88,8 +88,8 @@
       "profile": "engineering-handoff-v1",
       "index_anchor": "docs/development/MODULE_HANDOFF.md#android-native",
       "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#android-native",
-      "platform_status": "Android device target; PCM-to-ASR is explicitly unavailable in the current source candidate.",
-      "evidence_ceiling": "Builds and tests are E3 at most; Play Integrity, signing, OEM/device matrix and physical G1 evidence remain external."
+      "platform_status": "Android device target with LC3 decoding and a bounded HTTPS PCM-to-ASR component; production speech activation remains disabled until authenticated ticket and decoded-stream integration are active.",
+      "evidence_ceiling": "Builds and tests are E3 at most; Play Integrity, signing, live speech-provider use, OEM/device matrices and physical G1 evidence remain external."
     },
     {
       "id": "ios-native",
@@ -151,26 +151,26 @@
       "profile": "engineering-handoff-v1",
       "index_anchor": "docs/development/MODULE_HANDOFF.md#skills-registry",
       "primary_document": "docs/development/SIGNED_SKILLS.md",
-      "platform_status": "Python legacy reference plus Linux Ed25519 package verification, exact inventory checks and a SQLite consent/version/revocation registry; no executor is installed.",
-      "evidence_ceiling": "Source checks establish signed-byte admission and local persistence only; actual sandbox/egress, external publisher trust/transparency, authenticated consent and independent package qualification remain open."
+      "platform_status": "Python legacy reference plus Linux Ed25519 package verification, exact inventory checks, SQLite consent/version/revocation, a restricted zero-egress R0 data VM and signed-log inclusion verification; arbitrary-code execution is not enabled.",
+      "evidence_ceiling": "Source checks establish signed-byte admission and restricted data execution only; arbitrary-code sandboxing, enforced nonempty egress, external publisher/log governance, authenticated consent and independent qualification remain open."
     },
     {
       "id": "memory",
       "lifecycle": "development_reference",
       "profile": "engineering-handoff-v1",
       "index_anchor": "docs/development/MODULE_HANDOFF.md#memory",
-      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#memory",
-      "platform_status": "Python in-memory reference plus Flutter process-memory answer history.",
-      "evidence_ceiling": "Does not provide encrypted durable storage, multi-device sync, regional retention, backup/deletion drills or independent privacy assurance."
+      "primary_document": "docs/development/DURABLE_MEMORY.md",
+      "platform_status": "Python includes a SQLite ciphertext-only durable Memory store with an external per-subject cipher/key-provider interface; Flutter answer history remains a separate default-off process-memory feature.",
+      "evidence_ceiling": "The repository fixture cipher is not a production key service; authenticated ingress, KMS/HSM-backed subject keys, backup anti-rollback, downstream deletion evidence and independent privacy qualification remain open."
     },
     {
       "id": "codex-worker",
       "lifecycle": "development_reference",
       "profile": "engineering-handoff-v1",
       "index_anchor": "docs/development/MODULE_HANDOFF.md#codex-worker",
-      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#codex-worker",
-      "platform_status": "Python launcher for an external Codex installation.",
-      "evidence_ceiling": "Dry-run source tests do not prove installed/authenticated Codex, container/seccomp, per-task identity, egress, quotas or compromise isolation."
+      "primary_document": "services/codex_worker/README.md",
+      "platform_status": "Linux source includes a fixed-executable task supervisor, bounded process/output/resource custody and an exact-domain HTTPS broker; it still requires an external OS isolation boundary for arbitrary code.",
+      "evidence_ceiling": "Source tests do not prove installed/authenticated Codex, namespaces/seccomp/cgroups, broker-exclusive egress, per-task identity, compromise containment or independently qualified deployment."
     },
     {
       "id": "mcp-adapter",
