@@ -1,9 +1,10 @@
 package com.example.demo_ai_even.speech
 
-import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.URI
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 import javax.net.ssl.HttpsURLConnection
 
 internal data class SpeechTicket(
@@ -90,11 +91,7 @@ internal class HttpsSpeechTransport : SpeechTransport {
         if (raw.toByteArray(Charsets.UTF_8).size > MAX_RESPONSE_BYTES) {
             throw IllegalStateException("SpeechResponseTooLarge")
         }
-        val document = try {
-            JSONObject(raw)
-        } catch (_: Exception) {
-            throw IllegalStateException("SpeechResponseInvalid")
-        }
+        val document = StrictSpeechJson(raw).parseObject()
         val required = setOf(
             "session_id",
             "generation",
@@ -103,19 +100,17 @@ internal class HttpsSpeechTransport : SpeechTransport {
             "is_final",
             "transcript",
         )
-        val actual = document.keys().asSequence().toSet()
-        if (actual != required || required.any { key -> keyCount(raw, key) != 1 }) {
+        if (document.keys != required) {
             throw IllegalStateException("SpeechResponseInvalid")
         }
-        val sessionId = document.optString("session_id", "")
-        val pairIdentity = document.optString("pair_identity", "")
-        val transcript = document.optString("transcript", "").trim()
-        if (sessionId != ticket.sessionId ||
-            document.optInt("generation", -1) != ticket.generation ||
-            document.optInt("connection_generation", -1) !=
-            ticket.connectionGeneration ||
-            pairIdentity != ticket.pairIdentity ||
-            !document.optBoolean("is_final", false) ||
+        val transcript = (document["transcript"] as? String)?.trim()
+            ?: throw IllegalStateException("SpeechResponseInvalid")
+        if (document["session_id"] != ticket.sessionId ||
+            document["generation"] != ticket.generation.toLong() ||
+            document["connection_generation"] !=
+            ticket.connectionGeneration.toLong() ||
+            document["pair_identity"] != ticket.pairIdentity ||
+            document["is_final"] != true ||
             transcript.isEmpty() ||
             transcript.toByteArray(Charsets.UTF_8).size > MAX_TRANSCRIPT_BYTES
         ) {
@@ -123,11 +118,6 @@ internal class HttpsSpeechTransport : SpeechTransport {
         }
         return transcript
     }
-
-    private fun keyCount(raw: String, key: String): Int =
-        Regex("(?<!\\\\)\\\"${Regex.escape(key)}\\\"\\s*:")
-            .findAll(raw)
-            .count()
 
     private fun readBounded(input: InputStream, maximum: Int): String {
         val output = ByteArrayOutputStream()
@@ -144,7 +134,11 @@ internal class HttpsSpeechTransport : SpeechTransport {
             }
         }
         return try {
-            output.toByteArray().toString(Charsets.UTF_8)
+            Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(output.toByteArray()))
+                .toString()
         } catch (_: Exception) {
             throw IllegalStateException("SpeechResponseInvalid")
         }
@@ -154,6 +148,148 @@ internal class HttpsSpeechTransport : SpeechTransport {
         const val MAX_RESPONSE_BYTES = 32_768
         const val MAX_TRANSCRIPT_BYTES = 8_192
     }
+}
+
+/** A deliberately small JSON reader for the fixed speech-final response. */
+private class StrictSpeechJson(private val source: String) {
+    private var offset = 0
+
+    fun parseObject(): Map<String, Any> {
+        skipWhitespace()
+        expect('{')
+        skipWhitespace()
+        val result = linkedMapOf<String, Any>()
+        if (take('}')) {
+            finish()
+            return result
+        }
+        while (true) {
+            val key = parseString()
+            if (result.containsKey(key)) fail()
+            skipWhitespace()
+            expect(':')
+            skipWhitespace()
+            result[key] = parseValue()
+            skipWhitespace()
+            if (take('}')) break
+            expect(',')
+            skipWhitespace()
+        }
+        finish()
+        return result
+    }
+
+    private fun parseValue(): Any = when (peek()) {
+        '"' -> parseString()
+        't' -> {
+            expectLiteral("true")
+            true
+        }
+        'f' -> {
+            expectLiteral("false")
+            false
+        }
+        in '0'..'9' -> parseInteger()
+        else -> fail()
+    }
+
+    private fun parseInteger(): Long {
+        val start = offset
+        if (peek() == '0') {
+            offset += 1
+            if (peekOrNull()?.isDigit() == true) fail()
+        } else {
+            while (peekOrNull()?.isDigit() == true) offset += 1
+        }
+        return source.substring(start, offset).toLongOrNull() ?: fail()
+    }
+
+    private fun parseString(): String {
+        expect('"')
+        val output = StringBuilder()
+        while (true) {
+            val character = peekOrNull() ?: fail()
+            offset += 1
+            when {
+                character == '"' -> return validateSurrogates(output.toString())
+                character == '\\' -> output.append(parseEscape())
+                character.code < 0x20 -> fail()
+                else -> output.append(character)
+            }
+        }
+    }
+
+    private fun parseEscape(): Char {
+        val escape = peekOrNull() ?: fail()
+        offset += 1
+        return when (escape) {
+            '"', '\\', '/' -> escape
+            'b' -> '\b'
+            'f' -> '\u000C'
+            'n' -> '\n'
+            'r' -> '\r'
+            't' -> '\t'
+            'u' -> {
+                if (offset + 4 > source.length) fail()
+                val value = source.substring(offset, offset + 4)
+                    .toIntOrNull(16) ?: fail()
+                offset += 4
+                value.toChar()
+            }
+            else -> fail()
+        }
+    }
+
+    private fun validateSurrogates(value: String): String {
+        var index = 0
+        while (index < value.length) {
+            val current = value[index]
+            when {
+                current.isHighSurrogate() -> {
+                    if (index + 1 >= value.length ||
+                        !value[index + 1].isLowSurrogate()
+                    ) {
+                        fail()
+                    }
+                    index += 2
+                }
+                current.isLowSurrogate() -> fail()
+                else -> index += 1
+            }
+        }
+        return value
+    }
+
+    private fun expectLiteral(value: String) {
+        if (!source.startsWith(value, offset)) fail()
+        offset += value.length
+    }
+
+    private fun finish() {
+        skipWhitespace()
+        if (offset != source.length) fail()
+    }
+
+    private fun skipWhitespace() {
+        while (peekOrNull() in setOf(' ', '\n', '\r', '\t')) offset += 1
+    }
+
+    private fun expect(character: Char) {
+        if (!take(character)) fail()
+    }
+
+    private fun take(character: Char): Boolean {
+        if (peekOrNull() != character) return false
+        offset += 1
+        return true
+    }
+
+    private fun peek(): Char = peekOrNull() ?: fail()
+
+    private fun peekOrNull(): Char? = source.getOrNull(offset)
+
+    private fun fail(): Nothing =
+        throw IllegalStateException("SpeechResponseInvalid")
 }
 
 internal class AndroidPcmAsr(
@@ -166,12 +302,13 @@ internal class AndroidPcmAsr(
     private var finalized = false
 
     init {
-        require(ticket.sessionId.isNotBlank()) { "SpeechSessionInvalid" }
+        val identifier = Regex("[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
+        require(identifier.matches(ticket.sessionId)) { "SpeechSessionInvalid" }
         require(ticket.generation > 0) { "SpeechGenerationInvalid" }
         require(ticket.connectionGeneration > 0) {
             "SpeechConnectionGenerationInvalid"
         }
-        require(ticket.pairIdentity.isNotBlank()) { "SpeechPairInvalid" }
+        require(identifier.matches(ticket.pairIdentity)) { "SpeechPairInvalid" }
         require(ticket.locale.matches(Regex("[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?"))) { "SpeechLocaleInvalid" }
         require(ticket.endpoint.startsWith("https://")) { "SpeechEndpointInvalid" }
         require(
