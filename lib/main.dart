@@ -13,6 +13,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   ModelGatewayBootstrap.configureFromDevelopmentEnvironment();
   SpeechBootstrapBootstrap.configureFromDevelopmentEnvironment();
+  MutationAuthorityBootstrap.configureFromEnvironment();
   BleManager.get();
 
   try {
@@ -25,7 +26,7 @@ Future<void> main() async {
     await HeptaBootstrap.initialize(
       supportPath,
       checkpointAuthenticator: const PlatformAuditCheckpointAuthenticator(),
-      mutationAuthority: const FailClosedMutationAuthorityProvider(),
+      mutationAuthority: MutationAuthorityRegistry.current,
     );
   } on Object catch (error) {
     PrivacySafeLog.event(
