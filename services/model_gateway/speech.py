@@ -9,6 +9,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Protocol
+from urllib.parse import urlsplit
 
 
 MAX_TIME = 253402300799
@@ -33,6 +34,21 @@ def _deadline(value: object) -> float:
     return float(value)
 
 
+def _https_endpoint(value: object) -> str:
+    if type(value) is not str or not 1 <= len(value) <= 2048:
+        raise SpeechGatewayError("speech_provider_ticket_invalid")
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except (TypeError, ValueError):
+        raise SpeechGatewayError("speech_provider_ticket_invalid") from None
+    if (parsed.scheme != "https" or not parsed.hostname or parsed.username is not None
+            or parsed.password is not None or parsed.fragment or parsed.query
+            or port not in (None, 443) or not parsed.path.startswith("/")):
+        raise SpeechGatewayError("speech_provider_ticket_invalid")
+    return value
+
+
 @dataclass(frozen=True)
 class ProviderSpeechTicket:
     endpoint: str
@@ -44,8 +60,9 @@ class ProviderSpeechTicket:
 
 
 class SpeechProviderBroker(Protocol):
-    def mint_ticket(self, *, subject: str, session_id: str, locale: str,
-                    audio_format: str, maximum_audio_bytes: int, expires_at: int,
+    def mint_ticket(self, *, subject: str, session_id: str, generation: int,
+                    pair_identity_digest: str, locale: str, audio_format: str,
+                    maximum_audio_bytes: int, expires_at: int,
                     timeout_seconds: float) -> ProviderSpeechTicket: ...
     def revoke_session(self, *, session_id: str, timeout_seconds: float) -> None: ...
 
@@ -131,17 +148,28 @@ class ProductionSpeechGateway:
     def _validate_ticket(self, ticket: object, *, now: int, requested_expiry: int) -> ProviderSpeechTicket:
         if type(ticket) is not ProviderSpeechTicket:
             raise SpeechGatewayError("speech_provider_ticket_invalid")
-        if (type(ticket.endpoint) is not str or not ticket.endpoint.startswith("https://")
-                or type(ticket.bearer_token) is not str or not 1 <= len(ticket.bearer_token) <= 8192
+        try:
+            endpoint = _https_endpoint(ticket.endpoint)
+            provider = _identifier(ticket.provider)
+            provider_ticket_id = _identifier(ticket.provider_ticket_id)
+        except SpeechGatewayError:
+            raise SpeechGatewayError("speech_provider_ticket_invalid") from None
+        if (type(ticket.bearer_token) is not str or not 16 <= len(ticket.bearer_token) <= 8192
                 or any(ord(c) <= 32 or ord(c) == 127 for c in ticket.bearer_token)
-                or _identifier(ticket.provider) != self.provider_binding
-                or not _identifier(ticket.provider_ticket_id)
+                or provider != self.provider_binding
                 or type(ticket.expires_at) is not int or type(ticket.expires_at) is bool
                 or not now < ticket.expires_at <= requested_expiry
                 or type(ticket.maximum_audio_bytes) is not int or type(ticket.maximum_audio_bytes) is bool
-                or not 1 <= ticket.maximum_audio_bytes <= self.maximum_session_bytes):
+                or not 3200 <= ticket.maximum_audio_bytes <= self.maximum_session_bytes):
             raise SpeechGatewayError("speech_provider_ticket_invalid")
-        return ticket
+        return ProviderSpeechTicket(
+            endpoint=endpoint,
+            bearer_token=ticket.bearer_token,
+            provider=provider,
+            provider_ticket_id=provider_ticket_id,
+            expires_at=ticket.expires_at,
+            maximum_audio_bytes=ticket.maximum_audio_bytes,
+        )
 
     def bootstrap(self, *, subject: str, session_id: str, generation: int,
                   pair_identity: str, locale: str,
@@ -158,25 +186,23 @@ class ProductionSpeechGateway:
         expiry = now + self.ticket_ttl_seconds
         if expiry > MAX_TIME:
             raise SpeechGatewayError("speech_ticket_expiry_invalid")
-        # token_urlsafe may begin with '-' or '_', while bootstrap IDs are part
-        # of the strict identifier contract. A fixed alphanumeric prefix makes
-        # every generated identifier valid without reducing token entropy.
         bootstrap_id = "b-" + secrets.token_urlsafe(24)
         digest = hashlib.sha256(bootstrap_id.encode()).hexdigest()
         pair_digest = hashlib.sha256(pair_identity.encode()).hexdigest()
         day = now // 86400
 
-        # Reserve before broker work so revocation and quota races have durable
-        # local state. Empty provider fields are never returned as authority.
         with self.lock:
             self._begin()
             try:
                 if self.db.execute("SELECT 1 FROM revoked_sessions WHERE session_id=?", (session_id,)).fetchone():
                     raise SpeechGatewayError("speech_session_revoked")
-                if self.db.execute(
-                    "SELECT 1 FROM bootstraps WHERE session_id=? AND state IN ('minting','indeterminate') LIMIT 1",
-                    (session_id,),).fetchone():
-                    raise SpeechGatewayError("speech_bootstrap_recovery_required")
+                existing = self.db.execute(
+                    "SELECT state FROM bootstraps WHERE session_id=? ORDER BY rowid DESC LIMIT 1",
+                    (session_id,),).fetchone()
+                if existing:
+                    if existing["state"] in ("minting", "indeterminate"):
+                        raise SpeechGatewayError("speech_bootstrap_recovery_required")
+                    raise SpeechGatewayError("speech_bootstrap_replayed")
                 count = self.db.execute(
                     "SELECT COUNT(*) FROM bootstraps WHERE subject=? AND day=?", (subject, day)).fetchone()[0]
                 if count >= self.daily_limit:
@@ -192,10 +218,16 @@ class ProductionSpeechGateway:
         try:
             self._broker_ok()
             ticket = self.broker.mint_ticket(
-                subject=subject, session_id=session_id, locale=locale,
+                subject=subject,
+                session_id=session_id,
+                generation=generation,
+                pair_identity_digest=pair_digest,
+                locale=locale,
                 audio_format=self.AUDIO_FORMAT,
                 maximum_audio_bytes=self.maximum_session_bytes,
-                expires_at=expiry, timeout_seconds=timeout_seconds)
+                expires_at=expiry,
+                timeout_seconds=timeout_seconds,
+            )
             fresh = self._now()
             ticket = self._validate_ticket(ticket, now=fresh, requested_expiry=expiry)
         except BaseException:
@@ -243,8 +275,6 @@ class ProductionSpeechGateway:
                 raise
 
         if revoked_after_mint:
-            # The earlier revoke may have raced ahead of mint completion. Revoke
-            # again after the late ticket is known to exist; broker must be idempotent.
             try:
                 self._broker_ok()
                 self.broker.revoke_session(session_id=session_id, timeout_seconds=timeout_seconds)
@@ -255,6 +285,31 @@ class ProductionSpeechGateway:
             bootstrap_id, session_id, generation, pair_identity, locale,
             ticket.endpoint, ticket.bearer_token, ticket.provider,
             ticket.expires_at, ticket.maximum_audio_bytes)
+
+    def bootstrap_for_delivery(self, *, subject: str, session_id: str,
+                               generation: int, pair_identity: str, locale: str,
+                               timeout_seconds: float = 8) -> SpeechBootstrap:
+        """Mint and consume once before returning a client-deliverable ticket.
+
+        Failure between the two durable transactions leaves an issued bootstrap
+        that cannot be reminted for the same session. Recovery must revoke that
+        session; a caller must not retry mint under the same session identity.
+        """
+        result = self.bootstrap(
+            subject=subject,
+            session_id=session_id,
+            generation=generation,
+            pair_identity=pair_identity,
+            locale=locale,
+            timeout_seconds=timeout_seconds,
+        )
+        self.consume(
+            result.bootstrap_id,
+            session_id=session_id,
+            generation=generation,
+            pair_identity=pair_identity,
+        )
+        return result
 
     def consume(self, bootstrap_id: str, *, session_id: str, generation: int,
                 pair_identity: str) -> None:
@@ -297,7 +352,7 @@ class ProductionSpeechGateway:
             self._begin()
             try:
                 self.db.execute("INSERT OR IGNORE INTO revoked_sessions VALUES(?,?)", (session_id, now))
-                self.db.execute("UPDATE bootstraps SET state='revoked' WHERE session_id=?", (session_id,))
+                self.db.execute("UPDATE bootstrAPS SET state='revoked' WHERE session_id=?", (session_id,))
                 self.db.execute("COMMIT")
             except BaseException:
                 self.db.execute("ROLLBACK")
@@ -310,5 +365,5 @@ class ProductionSpeechGateway:
             raise SpeechGatewayError("speech_recovery_limit_invalid")
         with self.lock:
             return tuple(row[0] for row in self.db.execute(
-                "SELECT DISTINCT session_id FROM bootstraps WHERE state IN ('minting','indeterminate') "
+                "SELECT DISTINCT session_id FROM bootstraps WHERE state IN ('minting','indeterminate','issued') "
                 "ORDER BY session_id LIMIT ?", (limit,)))
