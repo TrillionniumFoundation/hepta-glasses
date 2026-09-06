@@ -116,8 +116,9 @@ class TaskSupervisorTests(unittest.TestCase):
 
     def test_successful_leader_cannot_leave_pipe_detached_descendant(self) -> None:
         marker = self.root / "detached-late"
-        script = self.script("detach.py", f"import os,time\nif os.fork()==0:\n fd=os.open('/dev/null',os.O_RDWR); [os.dup2(fd,n) for n in (0,1,2)]; fd>2 and os.close(fd); time.sleep(.4); open({str(marker)!r},'w').write('late'); os._exit(0)\nos._exit(0)\n")
-        result = run_supervised(self.task(script))
+        interpreter = Path("/usr/bin/python3").resolve(strict=True)
+        code = f"import os,time\nif os.fork()==0:\n fd=os.open('/dev/null',os.O_RDWR); [os.dup2(fd,n) for n in (0,1,2)]; fd>2 and os.close(fd); time.sleep(.4); open({str(marker)!r},'w').write('late'); os._exit(0)\nos._exit(0)\n"
+        result = run_supervised(self.task(interpreter, "-I", "-c", code))
         self.assertEqual(result.return_code, 0)
         time.sleep(.6)
         self.assertFalse(marker.exists())
