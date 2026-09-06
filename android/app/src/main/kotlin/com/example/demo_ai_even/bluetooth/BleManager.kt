@@ -222,7 +222,7 @@ class BleManager private constructor() {
 
     fun startSpeech(ticket: SpeechTicket): Boolean {
         val pair = connectedDevice ?: return false
-        if (ticket.generation != connectionGeneration ||
+        if (ticket.connectionGeneration != connectionGeneration ||
             ticket.pairIdentity != currentPairIdentity ||
             currentPairIdentity == UNSELECTED_PAIR ||
             !pair.isBothConnected() ||
@@ -235,18 +235,20 @@ class BleManager private constructor() {
     }
 
     fun stopSpeech(
-        generation: Int,
+        assistantGeneration: Int,
+        expectedConnectionGeneration: Int,
         pairIdentity: String,
         finalize: Boolean,
     ): Boolean {
-        if (generation != connectionGeneration ||
+        if (expectedConnectionGeneration != connectionGeneration ||
             pairIdentity != currentPairIdentity ||
             currentPairIdentity == UNSELECTED_PAIR
         ) {
             return false
         }
         return AndroidSpeechSession.stop(
-            generation,
+            assistantGeneration,
+            expectedConnectionGeneration,
             pairIdentity,
             finalize,
         )
