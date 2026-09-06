@@ -3,6 +3,7 @@ package com.example.demo_ai_even.bluetooth
 import com.example.demo_ai_even.MainActivity
 import com.example.demo_ai_even.model.BlePairDevice
 import com.example.demo_ai_even.security.AuditCheckpointSigner
+import com.example.demo_ai_even.speech.SpeechTicket
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.EventChannel.EventSink
@@ -64,12 +65,8 @@ class BleMethodChannel(
             "disconnectFromGlasses" ->
                 BleManager.instance.disconnectFromGlasses(result)
             "send" -> send(call, result)
-            "startEvenAI" -> result.error(
-                "SpeechRecognitionUnavailable",
-                "Android PCM speech adapter is not configured",
-                null,
-            )
-            "stopEvenAI" -> result.success(true)
+            "startEvenAI" -> startEvenAI(call, result)
+            "stopEvenAI" -> stopEvenAI(call, result)
             "getApplicationSupportPath" ->
                 result.success(context.filesDir.absolutePath)
             "auditCheckpointMac" -> authenticateAuditCheckpoint(call, result)
@@ -100,6 +97,111 @@ class BleMethodChannel(
             return
         }
         result.success(BleManager.instance.sendData(arguments))
+    }
+
+    private fun startEvenAI(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
+        val arguments = call.arguments as? Map<*, *>
+        val sessionId = arguments?.get("sessionId") as? String
+        val generation = (arguments?.get("generation") as? Number)?.toInt()
+        val pairIdentity = arguments?.get("pairIdentity") as? String
+        val locale = arguments?.get("locale") as? String
+        val endpoint = arguments?.get("endpoint") as? String
+        val bearerToken = arguments?.get("bearerToken") as? String
+        val expiresAt =
+            (arguments?.get("expiresAtEpochSeconds") as? Number)?.toLong()
+        val maximumAudioBytes =
+            (arguments?.get("maximumAudioBytes") as? Number)?.toInt()
+
+        if (sessionId.isNullOrBlank() ||
+            generation == null || generation <= 0 ||
+            pairIdentity.isNullOrBlank() ||
+            locale.isNullOrBlank() ||
+            endpoint.isNullOrBlank() ||
+            bearerToken.isNullOrBlank() ||
+            expiresAt == null ||
+            maximumAudioBytes == null
+        ) {
+            result.error(
+                "InvalidArguments",
+                "A complete speech bootstrap is required",
+                null,
+            )
+            return
+        }
+
+        try {
+            val accepted = BleManager.instance.startSpeech(
+                SpeechTicket(
+                    sessionId = sessionId,
+                    generation = generation,
+                    pairIdentity = pairIdentity,
+                    locale = locale,
+                    endpoint = endpoint,
+                    bearerToken = bearerToken,
+                    expiresAtEpochSeconds = expiresAt,
+                    maximumAudioBytes = maximumAudioBytes,
+                ),
+            )
+            if (!accepted) {
+                result.error(
+                    "SpeechAuthorityStale",
+                    "Speech bootstrap does not match the active G1 authority",
+                    null,
+                )
+                return
+            }
+            result.success(true)
+        } catch (_: IllegalArgumentException) {
+            result.error(
+                "SpeechBootstrapInvalid",
+                "Speech bootstrap validation failed",
+                null,
+            )
+        } catch (_: IllegalStateException) {
+            result.error(
+                "SpeechBootstrapInvalid",
+                "Speech bootstrap admission failed",
+                null,
+            )
+        }
+    }
+
+    private fun stopEvenAI(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
+        val arguments = call.arguments as? Map<*, *>
+        val generation = (arguments?.get("generation") as? Number)?.toInt()
+        val pairIdentity = arguments?.get("pairIdentity") as? String
+        val finalize = arguments?.get("finalize") as? Boolean
+        if (generation == null || generation <= 0 ||
+            pairIdentity.isNullOrBlank() ||
+            finalize == null
+        ) {
+            result.error(
+                "InvalidArguments",
+                "generation, pairIdentity and finalize are required",
+                null,
+            )
+            return
+        }
+        if (!BleManager.instance.stopSpeech(
+                generation,
+                pairIdentity,
+                finalize,
+            )
+        ) {
+            result.error(
+                "SpeechSessionStale",
+                "Speech session does not match the active G1 authority",
+                null,
+            )
+            return
+        }
+        result.success(true)
     }
 
     private fun authenticateAuditCheckpoint(
