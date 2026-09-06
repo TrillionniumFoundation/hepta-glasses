@@ -175,6 +175,33 @@ final class SpeechStreamRecognizer {
         return true
     }
 
+    @discardableResult
+    func cancelRecognition(generation: Int) -> Bool {
+        stateLock.lock()
+        guard generation > 0, generation == activeGeneration else {
+            stateLock.unlock()
+            return false
+        }
+        let request = recognitionRequest
+        let task = recognitionTask
+        finalizationDeadline?.cancel()
+        finalizationDeadline = nil
+        recognitionRequest = nil
+        recognitionTask = nil
+        recognizer = nil
+        lastTranscription = nil
+        acceptedText = ""
+        pendingText = ""
+        activeGeneration = 0
+        stopRequestedGeneration = 0
+        stateLock.unlock()
+
+        request?.endAudio()
+        task?.cancel()
+        deactivateAudioSession(label: "cancellation")
+        return true
+    }
+
     func appendPCMData(_ pcmData: Data) {
         guard
             pcmData.count == 3_200,
