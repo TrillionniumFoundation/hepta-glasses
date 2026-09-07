@@ -1,0 +1,56 @@
+name: apply-main-protection-final
+
+on:
+  push:
+    branches:
+      - ops/hepta-main-protection-final-20260907
+    paths:
+      - '.github/workflows/apply-main-protection.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hepta-main-protection-final
+  cancel-in-progress: false
+
+jobs:
+  apply-and-read-back:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HEPTA_REPO_ADMIN_TOKEN: ${{ secrets.HEPTA_REPO_ADMIN_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify isolated governance input
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = 'ops/hepta-main-protection-final-20260907'
+          python3 -m json.tool contracts/main-branch-protection-v1.json >/dev/null
+      - name: Apply canonical protection and verify API readback
+        run: |
+          set -euo pipefail
+          if test -z "$HEPTA_REPO_ADMIN_TOKEN"; then
+            echo 'HEPTA_REPO_ADMIN_TOKEN is not configured for this repository' >&2
+            exit 2
+          fi
+          python3 tools/repository_governance.py \
+            --repo TrillionniumFoundation/hepta-glasses \
+            --branch main \
+            --apply | tee /tmp/protection-result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path('/tmp/protection-result.json').read_text())
+          if value.get('ok') is not True or value.get('missing') != []:
+              raise SystemExit('canonical main protection readback incomplete')
+          checks = value.get('checks')
+          if not isinstance(checks, dict) or not checks or not all(checks.values()):
+              raise SystemExit('canonical main protection checks incomplete')
+          print(json.dumps({'ok': True, 'checks': checks, 'missing': []}, separators=(',', ':')))
+          PY
