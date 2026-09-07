@@ -58,18 +58,19 @@ final class FailClosedMutationAuthorityProvider
   @override
   Future<MutationAuthorization> authorize(
     MutationAuthorizationRequest request,
-  ) async => MutationAuthorization(
-    deviceId: 'unbound-device',
-    context: const PolicyContext(
-      subject: 'unauthenticated',
-      authenticated: false,
-      userPresent: false,
-      biometricVerified: false,
-      policyHash: 'unavailable',
-    ),
-    lease: null,
-    source: reason,
-  );
+  ) async =>
+      MutationAuthorization(
+        deviceId: 'unbound-device',
+        context: const PolicyContext(
+          subject: 'unauthenticated',
+          authenticated: false,
+          userPresent: false,
+          biometricVerified: false,
+          policyHash: 'unavailable',
+        ),
+        lease: null,
+        source: reason,
+      );
 }
 
 abstract interface class MutationAccessTokenProvider {
@@ -130,10 +131,10 @@ final class HttpMutationAuthorityProvider implements MutationAuthorityProvider {
     Dio? dio,
     bool allowInsecureLoopback = false,
     DateTime Function()? clock,
-  }) : _baseUri = _validatedUri(baseUri, allowInsecureLoopback),
-       _tokenProvider = tokenProvider,
-       _dio = dio ?? Dio(),
-       _clock = clock ?? DateTime.now;
+  })  : _baseUri = _validatedUri(baseUri, allowInsecureLoopback),
+        _tokenProvider = tokenProvider,
+        _dio = dio ?? Dio(),
+        _clock = clock ?? DateTime.now;
 
   final Uri _baseUri;
   final MutationAccessTokenProvider _tokenProvider;
@@ -161,8 +162,7 @@ final class HttpMutationAuthorityProvider implements MutationAuthorityProvider {
           'action': request.action,
           'arguments': request.arguments,
           'risk_tier': request.riskTier.name,
-          'deadline_epoch_seconds':
-              request.deadline.microsecondsSinceEpoch ~/
+          'deadline_epoch_seconds': request.deadline.microsecondsSinceEpoch ~/
               Duration.microsecondsPerSecond,
         },
         options: Options(
@@ -314,17 +314,17 @@ final class HttpMutationAuthorityProvider implements MutationAuthorityProvider {
   }
 
   MutationAuthorization _denied(String reason) => MutationAuthorization(
-    deviceId: 'unbound-device',
-    context: const PolicyContext(
-      subject: 'unauthenticated',
-      authenticated: false,
-      userPresent: false,
-      biometricVerified: false,
-      policyHash: 'unavailable',
-    ),
-    lease: null,
-    source: reason,
-  );
+        deviceId: 'unbound-device',
+        context: const PolicyContext(
+          subject: 'unauthenticated',
+          authenticated: false,
+          userPresent: false,
+          biometricVerified: false,
+          policyHash: 'unavailable',
+        ),
+        lease: null,
+        source: reason,
+      );
 
   static bool _validBearer(String? value) =>
       value != null &&
