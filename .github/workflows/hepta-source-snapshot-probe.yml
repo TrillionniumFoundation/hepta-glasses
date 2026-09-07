@@ -32,10 +32,10 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
           test "$HEAD_BRANCH" = 'work/hepta-g10-trusted-openssl-custody-20260902'
-          for part in part00 part01 part02 part03; do
+          for part in part00 part01 part02 part03 fix-memory.py; do
             test -f "tools/.hg0087-closure/$part"
           done
-      - name: Materialize source closure
+      - name: Materialize source closure and repair opaque IDs
         run: |
           set -euo pipefail
           cat tools/.hg0087-closure/part00 \
@@ -43,7 +43,9 @@ jobs:
               tools/.hg0087-closure/part02 \
               tools/.hg0087-closure/part03 > /tmp/hepta-apply-hg0087.py
           echo '4e9365ce4b688fb4fc75c0065cdd397a3453a5d7657bdbad8619a0274f0e4991  /tmp/hepta-apply-hg0087.py' | sha256sum -c -
+          echo '53b79d58f3522d7308381a071b3db7237aee010ab833ef77ea9c3b185e3d9de0  tools/.hg0087-closure/fix-memory.py' | sha256sum -c -
           python3 /tmp/hepta-apply-hg0087.py
+          python3 tools/.hg0087-closure/fix-memory.py
           git rm -r tools/.hg0087-closure
       - name: Validate intended final source tree
         run: |
@@ -72,7 +74,9 @@ jobs:
             docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md \
             docs/development/MODULE_HANDOFF.md \
             docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md \
-            services/qualification/test_hg0087_source_status.py
+            services/qualification/test_hg0087_source_status.py \
+            services/skills/memory_service.py \
+            services/skills/test_memory_service.py
           git diff --cached --check
       - name: Fast-forward verified source closure
         run: |
@@ -81,5 +85,5 @@ jobs:
           test "$(git rev-parse FETCH_HEAD)" = "$SOURCE_HEAD_SHA"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'docs: close HG-0087 repository source scope'
+          git commit -m 'fix: close HG-0087 source scope and opaque Memory IDs'
           git push origin "HEAD:refs/heads/$HEAD_BRANCH"
