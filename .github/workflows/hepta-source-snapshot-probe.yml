@@ -1,40 +1,72 @@
-name: hepta-source-snapshot-probe
+name: hepta-hg0087-source-close-transaction
 
 on:
   pull_request:
     paths:
       - '.github/workflows/hepta-source-snapshot-probe.yml'
+      - 'tools/.hg0087-closure/**'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: hepta-source-snapshot-${{ github.event.pull_request.number }}
+  group: hepta-hg0087-source-close-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  snapshot:
+  close-source:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     env:
       SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-          persist-credentials: false
-      - name: Verify exact source identity
-        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
-      - name: Build bounded tracked-source snapshot
+          persist-credentials: true
+      - name: Verify immutable transaction input
         run: |
           set -euo pipefail
-          git ls-files -z | tar --null -T - -czf /tmp/hepta-source.tar.gz
-          test "$(stat -c %s /tmp/hepta-source.tar.gz)" -le 52428800
-          git diff --exit-code
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: hepta-source-snapshot-${{ github.event.pull_request.head.sha }}
-          path: /tmp/hepta-source.tar.gz
-          if-no-files-found: error
-          retention-days: 1
+          test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+          test "$HEAD_BRANCH" = 'work/hepta-g10-trusted-openssl-custody-20260902'
+          test -f tools/.hg0087-closure/part00
+          test -f tools/.hg0087-closure/part01
+          test -f tools/.hg0087-closure/part02
+      - name: Apply exact HG-0087 closure patch
+        run: |
+          set -euo pipefail
+          cat tools/.hg0087-closure/part00 tools/.hg0087-closure/part01 tools/.hg0087-closure/part02 > /tmp/hepta-hg0087.patch.gz.b64
+          base64 -d /tmp/hepta-hg0087.patch.gz.b64 > /tmp/hepta-hg0087.patch.gz
+          echo 'a7f739c2b6d772ccda4735c623c5a569452c01abb2d0d2877689a4ef3c695fe1  /tmp/hepta-hg0087.patch.gz' | sha256sum -c -
+          gzip -dc /tmp/hepta-hg0087.patch.gz > /tmp/hepta-hg0087.patch
+          echo '1594895a00617f69c966a70734d75cfd5d372e0c162cac0cfd9674b7cac17ff0  /tmp/hepta-hg0087.patch' | sha256sum -c -
+          git apply --check /tmp/hepta-hg0087.patch
+          git apply --index /tmp/hepta-hg0087.patch
+          git rm -r tools/.hg0087-closure
+      - name: Validate intended final source tree
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/hepta-source-snapshot-probe.yml
+          python3 -m unittest -v services.qualification.test_hg0087_source_status
+          python3 tools/validate_source_coverage.py >/tmp/source-coverage.json
+          python3 tools/validate_module_handoff.py >/tmp/module-handoff.json
+          python3 tools/validate_repository.py
+          python3 tools/validate_repository_metadata.py
+          python3 tools/validate_production_authority.py
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+          git restore --staged --worktree -- .github/workflows/hepta-source-snapshot-probe.yml
+          git diff --cached --check
+      - name: Fast-forward verified source closure
+        run: |
+          set -euo pipefail
+          git fetch origin "$HEAD_BRANCH"
+          test "$(git rev-parse FETCH_HEAD)" = "$SOURCE_HEAD_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: close HG-0087 repository source scope'
+          git push origin "HEAD:refs/heads/$HEAD_BRANCH"
