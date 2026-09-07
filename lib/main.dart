@@ -2,7 +2,7 @@ import 'package:demo_ai_even/ble_manager.dart';
 import 'package:demo_ai_even/bootstrap/hepta_bootstrap.dart';
 import 'package:demo_ai_even/controllers/evenai_model_controller.dart';
 import 'package:demo_ai_even/runtime/audit_checkpoint_authenticator.dart';
-import 'package:demo_ai_even/runtime/model_gateway.dart';
+import 'package:demo_ai_even/runtime/authenticated_service_tokens.dart';
 import 'package:demo_ai_even/runtime/mutation_authority.dart';
 import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
 import 'package:demo_ai_even/views/home_page.dart';
@@ -11,8 +11,7 @@ import 'package:get/get.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  ModelGatewayBootstrap.configureFromDevelopmentEnvironment();
-  SpeechBootstrapBootstrap.configureFromDevelopmentEnvironment();
+  AuthenticatedServiceBootstrap.configureFromEnvironment();
   MutationAuthorityBootstrap.configureFromEnvironment();
   BleManager.get();
 
