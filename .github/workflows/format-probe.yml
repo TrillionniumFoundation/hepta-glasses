@@ -33,13 +33,17 @@ jobs:
           channel: stable
           cache: false
       - run: flutter pub get
-      - name: Emit canonical mutation authority bytes
+      - name: Materialize canonical mutation authority bytes
         run: |
           set -euo pipefail
-          cp lib/runtime/mutation_authority.dart /tmp/mutation_authority.dart
-          dart format /tmp/mutation_authority.dart >/dev/null
-          printf 'HEPTA_FORMAT_B64='
-          base64 -w0 /tmp/mutation_authority.dart
-          printf '\n'
+          mkdir -p /tmp/hepta-format
+          cp lib/runtime/mutation_authority.dart /tmp/hepta-format/mutation_authority.dart
+          dart format /tmp/hepta-format/mutation_authority.dart >/dev/null
           test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
           git diff --exit-code
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-format-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/hepta-format/mutation_authority.dart
+          if-no-files-found: error
+          retention-days: 1
