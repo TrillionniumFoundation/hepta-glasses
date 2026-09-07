@@ -166,7 +166,8 @@ final class HttpMutationAuthorityProvider
           'arguments': request.arguments,
           'risk_tier': request.riskTier.name,
           'deadline_epoch_seconds':
-              request.deadline.microsecondsSinceEpoch ~/ Duration.microsecondsPerSecond,
+              request.deadline.microsecondsSinceEpoch ~/
+                  Duration.microsecondsPerSecond,
         },
         options: Options(
           headers: <String, Object?>{
@@ -264,7 +265,9 @@ final class HttpMutationAuthorityProvider
         issuedAtSeconds is! int ||
         expiresAtSeconds is! int ||
         singleUse != true) {
-      throw const FormatException('mutation_authority_response_binding_invalid');
+      throw const FormatException(
+        'mutation_authority_response_binding_invalid',
+      );
     }
     final issuedAt = DateTime.fromMillisecondsSinceEpoch(
       issuedAtSeconds * Duration.millisecondsPerSecond,
@@ -334,7 +337,11 @@ final class HttpMutationAuthorityProvider
       value.codeUnits.every((int unit) => unit >= 33 && unit <= 126);
 
   static Uri _validatedUri(Uri uri, bool allowInsecureLoopback) {
-    final loopback = <String>{'127.0.0.1', 'localhost', '::1'}.contains(uri.host);
+    final loopback = <String>{
+      '127.0.0.1',
+      'localhost',
+      '::1',
+    }.contains(uri.host);
     if (uri.userInfo.isNotEmpty || uri.fragment.isNotEmpty || uri.hasQuery) {
       throw ArgumentError.value(
         uri,
