@@ -1,4 +1,4 @@
-"""One identity interpretation for model, speech and mutation ingress.
+"""One identity interpretation for model, realtime, speech and mutation ingress.
 
 A deployment-specific durable token authority and active-pair registry are
 injected. This adapter never trusts client JSON for subject, device, session,
@@ -19,6 +19,11 @@ from services.model_gateway.model_ingress import (
     DEFAULT_AUDIENCE as MODEL_AUDIENCE,
     REQUIRED_SCOPE as MODEL_SCOPE,
     ModelPrincipal,
+)
+from services.model_gateway.realtime_ingress import (
+    DEFAULT_AUDIENCE as REALTIME_AUDIENCE,
+    REQUIRED_SCOPE as REALTIME_SCOPE,
+    RealtimePrincipal,
 )
 from services.model_gateway.speech_ingress import (
     DEFAULT_AUDIENCE as SPEECH_AUDIENCE,
@@ -59,20 +64,35 @@ class ActivePairBinding:
 
 
 class DurableAccessAuthority(Protocol):
-    def verify_access(self, *, bearer_token: str, audience: str,
-                      required_scope: str) -> VerifiedAccessClaims: ...
+    def verify_access(
+        self,
+        *,
+        bearer_token: str,
+        audience: str,
+        required_scope: str,
+    ) -> VerifiedAccessClaims: ...
 
 
 class ActivePairAuthority(Protocol):
-    def resolve_pair(self, *, subject: str, device_id: str,
-                     session_id: str) -> ActivePairBinding: ...
+    def resolve_pair(
+        self,
+        *,
+        subject: str,
+        device_id: str,
+        session_id: str,
+    ) -> ActivePairBinding: ...
 
 
 class AuthenticatedPrincipalAdapter:
-    """Implements the identical `verify` surface used by all three ingresses."""
+    """Implements the identical ``verify`` surface used by all ingresses."""
 
-    def __init__(self, *, access: DurableAccessAuthority,
-                 pairs: ActivePairAuthority, clock) -> None:
+    def __init__(
+        self,
+        *,
+        access: DurableAccessAuthority,
+        pairs: ActivePairAuthority,
+        clock,
+    ) -> None:
         if not callable(getattr(access, "verify_access", None)):
             raise PrincipalAdapterError("identity_access_authority_invalid")
         if not callable(getattr(pairs, "resolve_pair", None)):
@@ -83,10 +103,16 @@ class AuthenticatedPrincipalAdapter:
         self.pairs = pairs
         self.clock = clock
 
-    def verify(self, *, bearer_token: str, audience: str,
-               required_scope: str) -> object:
+    def verify(
+        self,
+        *,
+        bearer_token: str,
+        audience: str,
+        required_scope: str,
+    ) -> object:
         expected_scope = {
             MODEL_AUDIENCE: MODEL_SCOPE,
+            REALTIME_AUDIENCE: REALTIME_SCOPE,
             SPEECH_AUDIENCE: SPEECH_SCOPE,
             MUTATION_AUDIENCE: MUTATION_SCOPE,
         }.get(audience)
@@ -101,9 +127,12 @@ class AuthenticatedPrincipalAdapter:
         except Exception:
             raise PrincipalAdapterError("identity_access_denied") from None
         claims = self._claims(claims)
-        now = self._now()
-        if claims.audience != audience or required_scope not in claims.scopes \
-                or claims.expires_at <= now:
+        access_now = self._now()
+        if (
+            claims.audience != audience
+            or required_scope not in claims.scopes
+            or claims.expires_at <= access_now
+        ):
             raise PrincipalAdapterError("identity_access_denied")
 
         if audience == MODEL_AUDIENCE:
@@ -115,15 +144,33 @@ class AuthenticatedPrincipalAdapter:
                 consent_expires_at=claims.expires_at,
             )
 
-        pair = self._pair(
-            self.pairs.resolve_pair(
+        try:
+            resolved = self.pairs.resolve_pair(
                 subject=claims.subject,
                 device_id=claims.device_id,
                 session_id=claims.session_id,
-            ),
+            )
+        except Exception:
+            raise PrincipalAdapterError("identity_pair_denied") from None
+        pair_now = self._now()
+        if pair_now < access_now:
+            raise PrincipalAdapterError("identity_clock_invalid")
+        pair = self._pair(
+            resolved,
             claims=claims,
-            now=now,
+            now=pair_now,
         )
+        effective_expiry = min(claims.expires_at, pair.expires_at)
+
+        if audience == REALTIME_AUDIENCE:
+            return RealtimePrincipal(
+                subject=claims.subject,
+                device_id=pair.pair_identity,
+                session_id=claims.session_id,
+                audience=audience,
+                scopes=claims.scopes,
+                expires_at=effective_expiry,
+            )
         if audience == SPEECH_AUDIENCE:
             return SpeechPrincipal(
                 subject=claims.subject,
@@ -144,29 +191,46 @@ class AuthenticatedPrincipalAdapter:
                 policy_hash=claims.policy_hash,
                 user_present=claims.user_present,
                 biometric_verified=claims.biometric_verified,
-                expires_at=min(claims.expires_at, pair.expires_at),
+                expires_at=effective_expiry,
             )
         raise PrincipalAdapterError("identity_audience_scope_invalid")
 
     def _claims(self, value: object) -> VerifiedAccessClaims:
         if type(value) is not VerifiedAccessClaims:
             raise PrincipalAdapterError("identity_access_denied")
-        for identifier in (value.subject, value.device_id, value.session_id, value.audience):
+        for identifier in (
+            value.subject,
+            value.device_id,
+            value.session_id,
+            value.audience,
+        ):
             self._identifier(identifier)
-        if type(value.scopes) is not tuple or not value.scopes or len(value.scopes) > 32 \
-                or len(set(value.scopes)) != len(value.scopes) \
-                or any(type(scope) is not str or not 1 <= len(scope) <= 128
-                       for scope in value.scopes) \
-                or type(value.expires_at) is not int or type(value.expires_at) is bool \
-                or not 0 < value.expires_at <= MAX_TIME \
-                or re.fullmatch(r"[a-f0-9]{64}", value.policy_hash) is None \
-                or type(value.user_present) is not bool \
-                or type(value.biometric_verified) is not bool:
+        if (
+            type(value.scopes) is not tuple
+            or not value.scopes
+            or len(value.scopes) > 32
+            or len(set(value.scopes)) != len(value.scopes)
+            or any(
+                type(scope) is not str or not 1 <= len(scope) <= 128
+                for scope in value.scopes
+            )
+            or type(value.expires_at) is not int
+            or type(value.expires_at) is bool
+            or not 0 < value.expires_at <= MAX_TIME
+            or re.fullmatch(r"[a-f0-9]{64}", value.policy_hash) is None
+            or type(value.user_present) is not bool
+            or type(value.biometric_verified) is not bool
+        ):
             raise PrincipalAdapterError("identity_access_denied")
         return value
 
-    def _pair(self, value: object, *, claims: VerifiedAccessClaims,
-              now: int) -> ActivePairBinding:
+    def _pair(
+        self,
+        value: object,
+        *,
+        claims: VerifiedAccessClaims,
+        now: int,
+    ) -> ActivePairBinding:
         if type(value) is not ActivePairBinding:
             raise PrincipalAdapterError("identity_pair_denied")
         for identifier in (
@@ -175,11 +239,20 @@ class AuthenticatedPrincipalAdapter:
             value.session_id,
             value.pair_identity,
         ):
-            self._identifier(identifier)
-        if (value.subject != claims.subject or value.device_id != claims.device_id
-                or value.session_id != claims.session_id or value.active is not True
-                or type(value.expires_at) is not int or type(value.expires_at) is bool
-                or value.expires_at <= now or value.expires_at > claims.expires_at):
+            try:
+                self._identifier(identifier)
+            except PrincipalAdapterError:
+                raise PrincipalAdapterError("identity_pair_denied") from None
+        if (
+            value.subject != claims.subject
+            or value.device_id != claims.device_id
+            or value.session_id != claims.session_id
+            or value.active is not True
+            or type(value.expires_at) is not int
+            or type(value.expires_at) is bool
+            or value.expires_at <= now
+            or value.expires_at > claims.expires_at
+        ):
             raise PrincipalAdapterError("identity_pair_denied")
         return value
 
@@ -188,13 +261,20 @@ class AuthenticatedPrincipalAdapter:
             value = self.clock()
         except Exception:
             raise PrincipalAdapterError("identity_clock_invalid") from None
-        if type(value) is not int or type(value) is bool or not 0 <= value <= MAX_TIME:
+        if (
+            type(value) is not int
+            or type(value) is bool
+            or not 0 <= value <= MAX_TIME
+        ):
             raise PrincipalAdapterError("identity_clock_invalid")
         return value
 
     @staticmethod
     def _identifier(value: object) -> str:
-        if type(value) is not str or not 1 <= len(value) <= 256 \
-                or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]*", value) is None:
+        if (
+            type(value) is not str
+            or not 1 <= len(value) <= 256
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]*", value) is None
+        ):
             raise PrincipalAdapterError("identity_access_denied")
         return value
