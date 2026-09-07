@@ -107,7 +107,7 @@ def validate_server_authority() -> None:
         "mutation_authority_user_presence_required",
         "mutation_authority_biometric_required",
         "mutation_authority_policy_migration_required",
-        '"state TEXT NOT NULL CHECK(state IN (\'issued\',\'revoked\'))"',
+        "state TEXT NOT NULL CHECK(state IN ('issued','revoked'))",
     )
     if any(fragment not in source for fragment in required):
         fail("server mutation authority lost durable policy/revocation custody")
