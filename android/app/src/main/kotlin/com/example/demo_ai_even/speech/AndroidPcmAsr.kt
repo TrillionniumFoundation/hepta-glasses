@@ -7,16 +7,16 @@ import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import javax.net.ssl.HttpsURLConnection
 
-internal data class SpeechTicket(
-    val sessionId: String,
-    val generation: Int,
-    val connectionGeneration: Int,
-    val pairIdentity: String,
-    val locale: String,
-    val endpoint: String,
-    val bearerToken: String,
-    val expiresAtEpochSeconds: Long,
-    val maximumAudioBytes: Int,
+data class SpeechTicket internal constructor(
+    internal val sessionId: String,
+    internal val generation: Int,
+    internal val connectionGeneration: Int,
+    internal val pairIdentity: String,
+    internal val locale: String,
+    internal val endpoint: String,
+    internal val bearerToken: String,
+    internal val expiresAtEpochSeconds: Long,
+    internal val maximumAudioBytes: Int,
 )
 
 internal fun interface SpeechTransport {
