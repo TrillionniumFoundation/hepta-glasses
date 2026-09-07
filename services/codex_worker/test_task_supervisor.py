@@ -99,8 +99,10 @@ class TaskSupervisorTests(unittest.TestCase):
     def test_timeout_kills_entire_process_group(self) -> None:
         marker = self.root / "late"
         script = self.script("fork.py", f"import os,time\nif os.fork()==0:\n time.sleep(.4); open({str(marker)!r},'w').write('late'); os._exit(0)\ntime.sleep(5)\n")
+        # RLIMIT_NPROC is per real UID, not per supervised process tree. Shared
+        # runners may already exceed eight processes before this fixture forks.
         limits = TaskLimits(wall_seconds=.1, cpu_seconds=2, address_space_bytes=256*1024*1024,
-                            file_size_bytes=1024*1024, open_files=32, processes=8, output_bytes=1024)
+                            file_size_bytes=1024*1024, open_files=32, processes=1024, output_bytes=1024)
         self.error("task_timeout", lambda: run_supervised(self.task(script, limits=limits)))
         time.sleep(.6)
         self.assertFalse(marker.exists())
@@ -108,8 +110,10 @@ class TaskSupervisorTests(unittest.TestCase):
     def test_timeout_kills_descendant_after_group_leader_exits(self) -> None:
         marker = self.root / "orphan-late"
         script = self.script("orphan.py", f"import os,time\nif os.fork()==0:\n time.sleep(.5); open({str(marker)!r},'w').write('late'); os._exit(0)\nos._exit(0)\n")
+        # Keep the same real-UID allowance as the detached-descendant fixture so
+        # this test measures timeout cleanup rather than shared-runner UID load.
         limits = TaskLimits(wall_seconds=.1, cpu_seconds=2, address_space_bytes=256*1024*1024,
-                            file_size_bytes=1024*1024, open_files=32, processes=8, output_bytes=1024)
+                            file_size_bytes=1024*1024, open_files=32, processes=1024, output_bytes=1024)
         self.error("task_timeout", lambda: run_supervised(self.task(script, limits=limits)))
         time.sleep(.7)
         self.assertFalse(marker.exists())
