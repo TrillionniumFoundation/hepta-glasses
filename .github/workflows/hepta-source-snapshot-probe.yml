@@ -48,8 +48,7 @@ jobs:
       - name: Validate intended final source tree
         run: |
           set -euo pipefail
-          mv .github/workflows/hepta-source-snapshot-probe.yml /tmp/hepta-source-transaction.yml
-          trap 'mv /tmp/hepta-source-transaction.yml .github/workflows/hepta-source-snapshot-probe.yml' EXIT
+          git rm .github/workflows/hepta-source-snapshot-probe.yml
           python3 -m unittest -v services.qualification.test_hg0087_source_status
           python3 tools/validate_source_coverage.py >/tmp/source-coverage.json
           python3 tools/validate_module_handoff.py >/tmp/module-handoff.json
@@ -59,8 +58,7 @@ jobs:
           python3 -m unittest discover -s services -p 'test_*.py'
           python3 -m unittest discover -s adapters -p 'test_*.py'
           python3 -m compileall -q services adapters tools
-          mv /tmp/hepta-source-transaction.yml .github/workflows/hepta-source-snapshot-probe.yml
-          trap - EXIT
+          git restore --staged --worktree -- .github/workflows/hepta-source-snapshot-probe.yml
           git add \
             docs/CURRENT_STATE.md \
             docs/EVIDENCE_INDEX.yaml \
