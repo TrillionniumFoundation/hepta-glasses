@@ -1,0 +1,427 @@
+name: hepta-hg0087-final-source-closure
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/hg0087-final-source-closure.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hepta-hg0087-final-source-closure-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  close-source:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+      TMPDIR: ${{ github.workspace }}/.hepta-workspace
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify immutable input
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+          test "$HEAD_BRANCH" = 'work/hepta-g10-trusted-openssl-custody-20260902'
+          mkdir -p "$TMPDIR"
+
+      - name: Materialize source truth and Memory identifier repair
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          from pathlib import Path
+
+          root = Path('.')
+
+          # URL-safe random identifiers can contain '-' and '_', while the
+          # authenticated service boundary intentionally accepts a narrower
+          # identifier alphabet. Generate hexadecimal custody identifiers so a
+          # valid durable record can never become undeletable after admission.
+          for relative in (
+              'services/skills/durable_memory.py',
+              'services/skills/memory_service.py',
+          ):
+              path = root / relative
+              text = path.read_text(encoding='utf-8')
+              if 'secrets.token_urlsafe(18)' in text:
+                  text = text.replace('secrets.token_urlsafe(18)', 'secrets.token_hex(18)')
+                  path.write_text(text, encoding='utf-8')
+
+          status_path = root / 'docs/HG0087_IMPLEMENTATION_STATUS.json'
+          ledger_path = root / 'docs/REMEDIATION_GAP_LEDGER.json'
+          project_path = root / 'docs/PROJECT_STATE.json'
+          coverage_path = root / 'docs/MODULE_COVERAGE.json'
+          current_path = root / 'docs/CURRENT_STATE.md'
+          plan_path = root / 'docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md'
+
+          sources = {
+              'identity': [
+                  'services/control_plane/account_runtime.py',
+                  'services/control_plane/authenticated_principals.py',
+                  'services/control_plane/identity_authority.py',
+                  'services/control_plane/mutation_authority.py',
+              ],
+              'model': [
+                  'services/model_gateway/production.py',
+                  'services/model_gateway/responses_provider.py',
+                  'services/model_gateway/model_ingress.py',
+                  'services/model_gateway/recovery_inventory.py',
+              ],
+              'realtime': [
+                  'services/control_plane/durable_realtime.py',
+                  'services/model_gateway/realtime_provider.py',
+                  'services/model_gateway/realtime_ingress.py',
+              ],
+              'capabilities': [
+                  'services/control_plane/durable_capabilities.py',
+                  'services/control_plane/oauth_vault.py',
+                  'services/control_plane/capability_payload_store.py',
+                  'services/control_plane/google_calendar.py',
+              ],
+              'speech': [
+                  'services/model_gateway/speech.py',
+                  'services/model_gateway/speech_ingress.py',
+                  'android/app/src/main/kotlin/com/example/demo_ai_even/speech/AndroidPcmAsr.kt',
+              ],
+              'skills': [
+                  'services/skills/signed_registry.py',
+                  'services/skills/package_transparency.py',
+                  'services/skills/package_vault.py',
+                  'services/skills/sandbox_runtime.py',
+                  'services/skills/skill_service.py',
+              ],
+              'memory': [
+                  'services/skills/durable_memory.py',
+                  'services/skills/memory_service.py',
+              ],
+          }
+          tests = {
+              'identity': [
+                  'services/control_plane/test_account_runtime.py',
+                  'services/control_plane/test_authenticated_principals.py',
+                  'services/control_plane/test_identity_authority.py',
+                  'services/control_plane/test_mutation_authority.py',
+              ],
+              'model': [
+                  'services/model_gateway/test_production.py',
+                  'services/model_gateway/test_responses_provider.py',
+                  'services/model_gateway/test_model_ingress.py',
+                  'services/model_gateway/test_recovery_inventory.py',
+              ],
+              'realtime': [
+                  'services/control_plane/test_durable_realtime.py',
+                  'services/model_gateway/test_realtime_provider.py',
+                  'services/model_gateway/test_realtime_ingress.py',
+              ],
+              'capabilities': [
+                  'services/control_plane/test_durable_capabilities.py',
+                  'services/control_plane/test_oauth_vault.py',
+                  'services/control_plane/test_capability_payload_store.py',
+                  'services/control_plane/test_google_calendar.py',
+              ],
+              'speech': [
+                  'services/model_gateway/test_speech_custody.py',
+                  'services/model_gateway/test_speech_ingress.py',
+                  'android/app/src/test/kotlin/com/example/demo_ai_even/speech/AndroidPcmAsrTest.kt',
+                  'ios/RunnerTests/RunnerTests.swift',
+              ],
+              'skills': [
+                  'services/skills/test_signed_registry.py',
+                  'services/skills/test_package_transparency.py',
+                  'services/skills/test_package_vault.py',
+                  'services/skills/test_sandbox_runtime.py',
+                  'services/skills/test_skill_service.py',
+              ],
+              'memory': [
+                  'services/skills/test_durable_memory.py',
+                  'services/skills/test_memory_service.py',
+              ],
+          }
+          operations = {
+              'identity': ['docs/operations/IDENTITY_AUTHORITY_RUNBOOK.md'],
+              'model': ['docs/operations/DURABLE_MODEL_GATEWAY_RUNBOOK.md'],
+              'realtime': ['docs/operations/REALTIME_AND_CAPABILITY_RUNBOOK.md'],
+              'capabilities': ['docs/operations/DURABLE_CAPABILITY_RUNBOOK.md'],
+              'speech': ['docs/operations/SPEECH_BOOTSTRAP_RUNBOOK.md'],
+              'skills': ['docs/operations/DATA_SKILL_RUNTIME_RUNBOOK.md'],
+              'memory': ['docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md'],
+          }
+          external = {
+              'identity': [
+                  'Production KMS/HSM and Android/Apple attestation authority receipts',
+                  'Live account-token delivery, revoke propagation and witnessed recovery drills',
+                  'Independent security and operations acceptance',
+              ],
+              'model': [
+                  'Live provider tenancy, billing, retention, abuse, cancellation and receipt qualification',
+                  'Production process isolation, encrypted backups and observability',
+                  'Independent operational acceptance',
+              ],
+              'realtime': [
+                  'Live provider activation, readback and revoke receipts under a production tenant',
+                  'Production identity deployment, encrypted operations and recovery drills',
+                  'Independent operational acceptance',
+              ],
+              'capabilities': [
+                  'Real OAuth application, account and calendar ownership plus provider tenancy',
+                  'Production KMS-backed vault, backups, anti-rollback and revoke delivery',
+                  'Witnessed provider failure, readback and recovery qualification',
+              ],
+              'speech': [
+                  'Live speech-provider tenant with authoritative mint, revoke and readback receipts',
+                  'Physical Android/iOS plus G1 latency, accuracy, privacy, power and soak qualification',
+                  'Independent security and privacy acceptance',
+              ],
+              'skills': [
+                  'Externally administered publisher roots and operated append-only transparency log',
+                  'Independent witness governance, gossip and remote monotonic anchoring',
+                  'Production host/cgroup hardening, KMS-backed package vault and independent deployment qualification',
+              ],
+              'memory': [
+                  'Production per-subject KMS/HSM or platform key service',
+                  'Encrypted backups, trusted anti-rollback and recovery drills',
+                  'Genuine downstream deletion receipts and independent privacy/security acceptance',
+              ],
+          }
+
+          for group in (sources, tests, operations):
+              for values in group.values():
+                  for relative in values:
+                      path = root / relative
+                      if not path.is_file() or path.is_symlink():
+                          raise SystemExit(f'missing or linked source-closure evidence: {relative}')
+
+          test_path = root / 'services/qualification/test_hg0087_source_status.py'
+          test_path.write_text('''from __future__ import annotations
+
+import json
+import re
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+EXPECTED = {"identity", "model", "realtime", "capabilities", "speech", "skills", "memory"}
+
+class HG0087SourceStatusTests(unittest.TestCase):
+    def document(self, relative: str) -> dict:
+        return json.loads((ROOT / relative).read_text(encoding="utf-8"))
+
+    def test_repository_source_closure_does_not_promote_external_authority(self) -> None:
+        status = self.document("docs/HG0087_IMPLEMENTATION_STATUS.json")
+        self.assertEqual(status["aggregate_status"], "CLOSED_SOURCE")
+        self.assertIn("not E4", status["validation_scope"])
+        rows = {row["id"]: row for row in status["slices"]}
+        self.assertEqual(set(rows), EXPECTED)
+        for slice_id, row in rows.items():
+            self.assertEqual(row["status"], "CLOSED_SOURCE", slice_id)
+            for field in ("source_evidence", "tests", "operations", "remaining_external"):
+                self.assertTrue(row[field], f"{slice_id}.{field}")
+            for field in ("source_evidence", "tests", "operations"):
+                for relative in row[field]:
+                    path = ROOT / relative
+                    self.assertTrue(path.is_file(), relative)
+                    self.assertFalse(path.is_symlink(), relative)
+        ledger = self.document("docs/REMEDIATION_GAP_LEDGER.json")
+        gap = next(row for row in ledger["gaps"] if row["id"] == "HG-0087")
+        self.assertEqual(gap["status"], "CLOSED_SOURCE")
+        self.assertIn("Source closure only", gap["evidence_ceiling"])
+        project = self.document("docs/PROJECT_STATE.json")
+        gate = project["repository_actionable_gate"]
+        self.assertNotIn("HG-0087", gate["active_open_gap_ids"])
+        self.assertIn("HG-0087", gate["active_source_closed_gap_ids"])
+        self.assertTrue(project["external_gates"])
+
+    def test_durable_memory_generated_identifiers_match_authenticated_boundary(self) -> None:
+        source = (ROOT / "services/skills/durable_memory.py").read_text(encoding="utf-8")
+        self.assertNotIn("secrets.token_urlsafe(18)", source)
+        self.assertGreaterEqual(source.count("secrets.token_hex(18)"), 2)
+        self.assertRegex("a" * 36, re.compile(r"^[A-Za-z0-9]{1,192}$"))
+
+if __name__ == "__main__":
+    unittest.main()
+''', encoding='utf-8')
+
+          status = json.loads(status_path.read_text(encoding='utf-8'))
+          status['aggregate_status'] = 'CLOSED_SOURCE'
+          status['claim_ceiling'] = (
+              'CLOSED_SOURCE records repository implementation and executable tests only; '
+              'exact-head E4, protected-main adoption, deployment and E5-E7 remain outside source authority.'
+          )
+          rows = {row['id']: row for row in status['slices']}
+          if set(rows) != set(sources):
+              raise SystemExit(f'unexpected HG-0087 slice set: {sorted(rows)}')
+          for slice_id, row in rows.items():
+              row['status'] = 'CLOSED_SOURCE'
+              row['source_evidence'] = sources[slice_id]
+              row['tests'] = list(dict.fromkeys(row.get('tests', []) + tests[slice_id]))
+              row['operations'] = operations[slice_id]
+              row['remaining'] = external[slice_id]
+              row['remaining_external'] = external[slice_id]
+          status['source_closure_evidence'] = [
+              'services/qualification/test_hg0087_source_status.py',
+              'docs/REMEDIATION_GAP_LEDGER.json',
+              'docs/PROJECT_STATE.json',
+              'docs/MODULE_COVERAGE.json',
+              'docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md',
+          ]
+          status['implementation_scope'] = (
+              'All seven repository-controlled HG-0087 slices have concrete implementation, '
+              'executable tests, module ownership and operations references. Real tenants, '
+              'credentials, devices, KMS/HSM, vendor rights, independent assurance, signing '
+              'and release evidence remain authority-owned.'
+          )
+          status['validation_scope'] = (
+              'CLOSED_SOURCE is not E4. Final unchanged-head CI, content-verified artifact, '
+              'eligible review and protected-main adoption are independent gates.'
+          )
+          status_path.write_text(json.dumps(status, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+
+          ledger = json.loads(ledger_path.read_text(encoding='utf-8'))
+          matches = [row for row in ledger['gaps'] if row.get('id') == 'HG-0087']
+          if len(matches) != 1:
+              raise SystemExit('HG-0087 ledger row is missing or duplicated')
+          gap = matches[0]
+          gap['status'] = 'CLOSED_SOURCE'
+          gap.pop('source_preparation', None)
+          gap['evidence'] = [
+              'docs/HG0087_IMPLEMENTATION_STATUS.json',
+              'services/qualification/test_hg0087_source_status.py',
+              'services/control_plane/account_runtime.py',
+              'services/control_plane/oauth_vault.py',
+              'services/control_plane/capability_payload_store.py',
+              'services/model_gateway/realtime_provider.py',
+              'services/model_gateway/realtime_ingress.py',
+              'services/skills/package_vault.py',
+              'services/skills/sandbox_runtime.py',
+              'services/skills/skill_service.py',
+              'services/skills/durable_memory.py',
+              'services/skills/memory_service.py',
+          ]
+          gap['evidence_ceiling'] = (
+              'Source closure only. Exact-head E4, repository administration and all '
+              'authority-owned E5-E7 rows remain independent.'
+          )
+          ledger_path.write_text(json.dumps(ledger, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+
+          project = json.loads(project_path.read_text(encoding='utf-8'))
+          gate = project['repository_actionable_gate']
+          gate['active_open_gap_ids'] = [
+              value for value in gate.get('active_open_gap_ids', []) if value != 'HG-0087'
+          ]
+          closed = list(gate.get('active_source_closed_gap_ids', []))
+          if 'HG-0087' not in closed:
+              closed.append('HG-0087')
+          gate['active_source_closed_gap_ids'] = sorted(closed)
+          gate['status'] = (
+              'source_closed_pending_final_exact_head_ci_artifact_review_admin_and_external_authority'
+          )
+          project_path.write_text(json.dumps(project, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+
+          coverage = json.loads(coverage_path.read_text(encoding='utf-8'))
+          qualification = next(
+              row for row in coverage['module_extensions']
+              if row['id'] == 'qualification-release'
+          )
+          qualification.setdefault('tests', [])
+          relative_test = 'services/qualification/test_hg0087_source_status.py'
+          if relative_test not in qualification['tests']:
+              qualification['tests'].append(relative_test)
+          coverage_path.write_text(json.dumps(coverage, separators=(',', ':')) + '\n', encoding='utf-8')
+
+          current = current_path.read_text(encoding='utf-8')
+          start = current.index('## Active source backlog')
+          end = current.index('## Current validation observation')
+          current_section = '''## Active source backlog
+
+`docs/REMEDIATION_GAP_LEDGER.json` has no repository-actionable `OPEN` row.
+HG-0087 is `CLOSED_SOURCE`: its seven implementation slices now have concrete
+source, executable tests, module ownership and operations references. This
+includes durable identity/revocation, authenticated model/realtime ingress,
+OAuth and encrypted capability payload custody, Android PCM-to-ASR lifecycle
+binding, capability-mediated arbitrary-code Skill execution, and authenticated
+encrypted persistent Memory with deletion reconciliation.
+
+This status is deliberately source-scoped. Exact-head E4, eligible independent
+review, complete `main` protection/readback, protected adoption, production
+credentials and tenants, physical devices, vendor rights, independent assurance,
+signing, pilot and store approval remain separate administrative or external
+authority gates.
+
+'''
+          current_path.write_text(current[:start] + current_section + current[end:], encoding='utf-8')
+
+          plan = plan_path.read_text(encoding='utf-8')
+          start = plan.index('## 3. Remaining repository implementation: HG-0087')
+          end = plan.index('## 4. GitHub administration and exact-head adoption')
+          plan_section = '''## 3. Repository implementation: HG-0087 source closure
+
+HG-0087 is `CLOSED_SOURCE`: all seven repository-controlled slices have concrete
+implementation, executable tests, module ownership and operations references.
+The closure covers durable identity/revocation, model and realtime provider
+exchanges, OAuth and encrypted capability payload custody, Android PCM-to-ASR
+lifecycle binding, capability-mediated arbitrary-code Skill execution, and
+authenticated encrypted persistent Memory.
+
+`CLOSED_SOURCE` does not assert exact-head E4 and does not create production
+tenants, credentials, KMS/HSM custody, device traces, vendor rights, independent
+assurance, signing, pilot or release approval. Those facts remain in the existing
+`BLOCKED_EXTERNAL`, `BLOCKED_ADMIN_SETTING` and `BLOCKED_UPSTREAM` rows and can
+close only from their actual authorities.
+
+The machine source of truth is `docs/HG0087_IMPLEMENTATION_STATUS.json`;
+`services/qualification/test_hg0087_source_status.py` rejects status, evidence,
+module or external-boundary drift.
+
+'''
+          plan_path.write_text(plan[:start] + plan_section + plan[end:], encoding='utf-8')
+          PY
+
+      - name: Validate complete final source tree
+        run: |
+          set -euo pipefail
+          git add \
+            docs/CURRENT_STATE.md \
+            docs/HG0087_IMPLEMENTATION_STATUS.json \
+            docs/MODULE_COVERAGE.json \
+            docs/PROJECT_STATE.json \
+            docs/REMEDIATION_GAP_LEDGER.json \
+            docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md \
+            services/qualification/test_hg0087_source_status.py \
+            services/skills/durable_memory.py \
+            services/skills/memory_service.py
+          git rm .github/workflows/hg0087-final-source-closure.yml
+          python3 -m unittest -v services.qualification.test_hg0087_source_status
+          python3 tools/validate_source_coverage.py >/tmp/source-coverage.json
+          python3 tools/validate_module_handoff.py >/tmp/module-handoff.json
+          python3 tools/validate_repository.py
+          python3 tools/validate_repository_metadata.py
+          python3 tools/validate_production_authority.py
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+          git restore --staged --worktree .github/workflows/hg0087-final-source-closure.yml
+          test -z "$(git diff --cached --name-only | grep '^.github/workflows/' || true)"
+          git diff --cached --check
+
+      - name: Fast-forward validated source closure
+        run: |
+          set -euo pipefail
+          git fetch origin "$HEAD_BRANCH"
+          test "$(git rev-parse FETCH_HEAD)" = "$SOURCE_HEAD_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: close HG-0087 repository source scope'
+          git push origin "HEAD:refs/heads/$HEAD_BRANCH"
