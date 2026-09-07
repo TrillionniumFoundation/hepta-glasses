@@ -1,4 +1,4 @@
-name: hepta-governance-bootstrap-ci
+name: hepta-governance-owner-expansion-ci
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: hepta-governance-bootstrap-${{ github.event.pull_request.number || github.ref_name }}
+  group: hepta-governance-owner-expansion-${{ github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
           actual="$(git diff --name-only "$BASE_SHA" "$SOURCE_HEAD_SHA" | LC_ALL=C sort)"
           expected="$(printf '%s\n' '.github/CODEOWNERS' '.github/workflows/ci.yml' | LC_ALL=C sort)"
           test "$actual" = "$expected"
-      - name: Validate bootstrap policy and read-only workflow
+      - name: Validate owner expansion and read-only workflow
         shell: python
         run: |
           from pathlib import Path
@@ -45,7 +45,7 @@ jobs:
               line.strip() for line in owners.splitlines()
               if line.strip() and not line.lstrip().startswith('#')
           ]
-          if effective != ['* @ProfHepta']:
+          if effective != ['* @ProfHepta @Tomasrgbsf']:
               raise SystemExit(f'unexpected CODEOWNERS policy: {effective!r}')
 
           workflow = Path('.github/workflows/ci.yml').read_text(encoding='utf-8')
@@ -57,11 +57,11 @@ jobs:
               'source-evidence:',
               'persist-credentials: false',
               'claim_ceiling',
-              'governance_bootstrap_only',
+              'governance_codeowner_expansion_only',
           ]
           missing = [item for item in required if item not in workflow]
           if missing:
-              raise SystemExit(f'bootstrap workflow contract missing: {missing!r}')
+              raise SystemExit(f'governance workflow contract missing: {missing!r}')
 
           forbidden = [
               'contents:' + r'\s*' + 'write',
@@ -74,7 +74,7 @@ jobs:
           ]
           for pattern in forbidden:
               if re.search(pattern, workflow, flags=re.IGNORECASE):
-                  raise SystemExit(f'write-capable bootstrap workflow: {pattern}')
+                  raise SystemExit(f'write-capable governance workflow: {pattern}')
       - name: Prove qualification is read-only
         run: git diff --exit-code
 
@@ -92,14 +92,14 @@ jobs:
           persist-credentials: false
       - name: Verify exact source identity
         run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
-      - name: Prove governance bootstrap has no Flutter or platform impact
+      - name: Prove owner expansion has no product or platform impact
         shell: bash
         run: |
           set -euo pipefail
           changed="$(git diff --name-only "$BASE_SHA" "$SOURCE_HEAD_SHA")"
           test -n "$changed"
           if printf '%s\n' "$changed" | grep -Eq '^(lib/|test/|android/|ios/|pubspec\.yaml$|pubspec\.lock$|analysis_options\.yaml$)'; then
-            echo 'governance bootstrap unexpectedly changes product or platform source' >&2
+            echo 'owner expansion unexpectedly changes product or platform source' >&2
             exit 1
           fi
           actual="$(printf '%s\n' "$changed" | LC_ALL=C sort)"
@@ -122,7 +122,7 @@ jobs:
           persist-credentials: false
       - name: Verify exact source identity
         run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
-      - name: Scan exact governance delta for secret and authority expansion
+      - name: Scan exact governance delta
         shell: python
         run: |
           from pathlib import Path
@@ -138,20 +138,18 @@ jobs:
           if sorted(changed) != sorted(expected):
               raise SystemExit(f'unexpected changed paths: {changed!r}')
 
-          private_key = re.compile(
-              '-----' + 'BEGIN ' + '(?:RSA |EC |OPENSSH )?' + 'PRIVATE KEY' + '-----'
-          )
-          github_token = re.compile('gh' + '[pousr]_' + '[A-Za-z0-9]{30,}')
-          secret_assignment = re.compile(
-              r'(?i)(password|secret|token|api[_-]?key)\s*[:=]\s*["\'][^"\']{12,}["\']'
-          )
+          patterns = [
+              ('private-key', re.compile(
+                  '-----' + 'BEGIN ' + '(?:RSA |EC |OPENSSH )?' + 'PRIVATE KEY' + '-----'
+              )),
+              ('github-token', re.compile('gh' + '[pousr]_' + '[A-Za-z0-9]{30,}')),
+              ('secret-assignment', re.compile(
+                  r'(?i)(password|secret|token|api[_-]?key)\s*[:=]\s*["\'][^"\']{12,}["\']'
+              )),
+          ]
           for relative in changed:
               text = Path(relative).read_text(encoding='utf-8')
-              for label, pattern in [
-                  ('private-key', private_key),
-                  ('github-token', github_token),
-                  ('secret-assignment', secret_assignment),
-              ]:
+              for label, pattern in patterns:
                   if pattern.search(text):
                       raise SystemExit(f'{label} material found in {relative}')
 
@@ -189,7 +187,7 @@ jobs:
           persist-credentials: false
       - name: Verify exact source identity
         run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
-      - name: Build content-addressed governance bootstrap evidence
+      - name: Build content-addressed owner-expansion evidence
         shell: python
         run: |
           from pathlib import Path
@@ -206,7 +204,7 @@ jobs:
           ).splitlines())
           expected = sorted(['.github/CODEOWNERS', '.github/workflows/ci.yml'])
           if head != os.environ['SOURCE_HEAD_SHA'] or changed != expected:
-              raise SystemExit('governance evidence identity or scope mismatch')
+              raise SystemExit('owner-expansion evidence identity or scope mismatch')
 
           files = {}
           for relative in changed:
@@ -225,7 +223,7 @@ jobs:
 
           evidence = {
               'schema_version': 1,
-              'claim_ceiling': 'governance_bootstrap_only',
+              'claim_ceiling': 'governance_codeowner_expansion_only',
               'repository': '${{ github.repository }}',
               'pull_request': ${{ github.event.pull_request.number }},
               'base': base,
@@ -233,6 +231,8 @@ jobs:
               'tree': tree,
               'changed_files': changed,
               'files': files,
+              'effective_codeowners': ['ProfHepta', 'Tomasrgbsf'],
+              'beneficiary_must_not_self_approve': True,
               'prerequisites': prerequisites,
               'passed': True,
               'missing': [],
@@ -249,9 +249,10 @@ jobs:
           encoded = json.dumps(
               evidence, ensure_ascii=False, sort_keys=True, separators=(',', ':')
           ).encode('utf-8') + b'\n'
-          (output / 'governance-bootstrap-evidence.json').write_bytes(encoded)
-          (output / 'governance-bootstrap-evidence.sha256').write_text(
-              hashlib.sha256(encoded).hexdigest() + '  governance-bootstrap-evidence.json\n',
+          (output / 'governance-codeowner-expansion.json').write_bytes(encoded)
+          (output / 'governance-codeowner-expansion.sha256').write_text(
+              hashlib.sha256(encoded).hexdigest()
+              + '  governance-codeowner-expansion.json\n',
               encoding='utf-8',
           )
       - name: Verify evidence bytes and claim ceiling
@@ -262,18 +263,22 @@ jobs:
           import json
 
           root = Path('build/governance-evidence')
-          data = (root / 'governance-bootstrap-evidence.json').read_bytes()
+          data = (root / 'governance-codeowner-expansion.json').read_bytes()
           document = json.loads(data)
-          if document.get('claim_ceiling') != 'governance_bootstrap_only':
-              raise SystemExit('invalid governance evidence claim ceiling')
+          if document.get('claim_ceiling') != 'governance_codeowner_expansion_only':
+              raise SystemExit('invalid owner-expansion evidence claim ceiling')
           if document.get('passed') is not True or document.get('missing') != []:
-              raise SystemExit('governance bootstrap evidence did not pass')
-          recorded = (root / 'governance-bootstrap-evidence.sha256').read_text().split()[0]
+              raise SystemExit('owner-expansion evidence did not pass')
+          if document.get('effective_codeowners') != ['ProfHepta', 'Tomasrgbsf']:
+              raise SystemExit('owner-expansion evidence owner set mismatch')
+          recorded = (
+              root / 'governance-codeowner-expansion.sha256'
+          ).read_text().split()[0]
           if hashlib.sha256(data).hexdigest() != recorded:
-              raise SystemExit('governance evidence digest mismatch')
+              raise SystemExit('owner-expansion evidence digest mismatch')
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: hepta-governance-bootstrap-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          name: hepta-governance-codeowner-expansion-${{ github.event.pull_request.head.sha || github.sha }}
           path: build/governance-evidence
           if-no-files-found: error
           retention-days: 30

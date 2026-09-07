@@ -1,7 +1,8 @@
-# Base-branch CODEOWNERS bootstrap.
+# Base-branch CODEOWNERS policy.
 #
-# This initial policy deliberately names only the existing repository owner.
-# The beneficiary must not approve this bootstrap change. Expansion of the
-# owner set or delegation to a team requires a separate conflict-free review.
+# ProfHepta remains the repository-wide owner. Tomasrgbsf is added as an
+# independent code-review route for final candidates pushed by another actor.
+# Neither beneficiary may self-approve a governance change that grants or
+# expands that beneficiary's own review authority.
 
-* @ProfHepta
+* @ProfHepta @Tomasrgbsf
