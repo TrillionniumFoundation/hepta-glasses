@@ -1,0 +1,45 @@
+name: hepta-format-probe
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/format-probe.yml'
+      - 'lib/runtime/mutation_authority.dart'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hepta-format-probe-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  format-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - run: flutter pub get
+      - name: Emit canonical mutation authority bytes
+        run: |
+          set -euo pipefail
+          cp lib/runtime/mutation_authority.dart /tmp/mutation_authority.dart
+          dart format /tmp/mutation_authority.dart >/dev/null
+          printf 'HEPTA_FORMAT_B64='
+          base64 -w0 /tmp/mutation_authority.dart
+          printf '\n'
+          test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+          git diff --exit-code
