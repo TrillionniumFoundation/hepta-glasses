@@ -1,0 +1,59 @@
+name: fix-hg0087-source-close
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/fix-hg0087-source-close.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Patch source-closure transaction
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+          test "$HEAD_BRANCH" = 'work/hepta-g10-trusted-openssl-custody-20260902'
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/hg0087-source-close.yml')
+          text = path.read_text(encoding='utf-8')
+          old = "          git diff --name-only | sort > /tmp/actual\n"
+          new = (
+              "          git add -N services/qualification/test_hg0087_source_status.py\n"
+              "          git diff --name-only | sort > /tmp/actual\n"
+          )
+          if text.count(old) != 1:
+              raise SystemExit('unexpected source-closure diff preimage')
+          text = text.replace(old, new)
+          old = "          git add \\\n            docs/HG0087_IMPLEMENTATION_STATUS.json \\\n"
+          new = (
+              "          git rm .github/workflows/hg0087-source-close.yml\n"
+              "          git add \\\n"
+              "            docs/HG0087_IMPLEMENTATION_STATUS.json \\\n"
+          )
+          if text.count(old) != 1:
+              raise SystemExit('unexpected source-closure commit preimage')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+          git rm .github/workflows/fix-hg0087-source-close.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/hg0087-source-close.yml
+          git commit -m 'ci: make HG-0087 source closure atomic'
+          git fetch origin "$HEAD_BRANCH"
+          test "$(git rev-parse FETCH_HEAD)" = "$SOURCE_HEAD_SHA"
+          git push origin "HEAD:refs/heads/$HEAD_BRANCH"
