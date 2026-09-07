@@ -37,7 +37,7 @@ jobs:
           else
             echo 'present=false' >> "$GITHUB_OUTPUT"
           fi
-      - name: Materialize source-closure state
+      - name: Materialize source-closure state and identifier repairs
         if: steps.transaction.outputs.present == 'true'
         run: |
           set -euo pipefail
@@ -45,6 +45,132 @@ jobs:
           base64 -d /tmp/hg0087-transaction.b64 > /tmp/hg0087-transaction.py
           echo '6136e8a37a10438457b60c55c9d2891c294836964d27a3053599418575713a1c  /tmp/hg0087-transaction.py' | sha256sum -c -
           python3 /tmp/hg0087-transaction.py
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once_or_present(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding='utf-8')
+              if old in text:
+                  target.write_text(text.replace(old, new, 1), encoding='utf-8')
+                  return
+              if new in text:
+                  return
+              raise SystemExit(f'unexpected identifier-repair preimage: {path}')
+
+          replace_once_or_present(
+              'services/skills/durable_memory.py',
+              'memory_id = secrets.token_urlsafe(18)',
+              'memory_id = "m-" + secrets.token_urlsafe(18)',
+          )
+          replace_once_or_present(
+              'services/skills/durable_memory.py',
+              '(secrets.token_urlsafe(18), subject, memory_id, reason, now)',
+              '("d-" + secrets.token_urlsafe(18), subject, memory_id, reason, now)',
+          )
+          replace_once_or_present(
+              'services/control_plane/account_runtime.py',
+              'session_id = self._identifier(session_id or secrets.token_urlsafe(18))',
+              'session_id = self._identifier(session_id or ("s-" + secrets.token_urlsafe(18)))',
+          )
+          replace_once_or_present(
+              'services/control_plane/oauth_vault.py',
+              '''            credential_id = (
+                secrets.token_urlsafe(18)
+                if existing is None
+                else existing["credential_id"]
+            )''',
+              '''            credential_id = (
+                "oauth-" + secrets.token_urlsafe(18)
+                if existing is None
+                else existing["credential_id"]
+            )''',
+          )
+
+          path = Path('services/skills/test_durable_memory.py')
+          text = path.read_text(encoding='utf-8')
+          if 'from unittest import mock\n' not in text:
+              text = text.replace(
+                  'from pathlib import Path\n',
+                  'from pathlib import Path\nfrom unittest import mock\n',
+                  1,
+              )
+          block = '''    def test_generated_record_and_deletion_ids_always_match_binding_grammar(self):
+        with mock.patch('services.skills.durable_memory.secrets.token_urlsafe', return_value='_leading-token'):
+            record=self.s.remember(subject='u',purpose='p',data_class='personal',value='x',ttl_seconds=50)
+            self.assertEqual(record.memory_id,'m-_leading-token')
+            self.assertTrue(self.s.delete(subject='u',memory_id=record.memory_id))
+        event=self.s.pending_deletions()[0]
+        self.assertEqual(event['event_id'],'d-_leading-token')
+        self.s.acknowledge_deletion(event_id=event['event_id'])
+
+'''
+          marker = '    def test_ciphertext_persists_without_plaintext_and_survives_restart(self):\n'
+          if block not in text:
+              if marker not in text:
+                  raise SystemExit('durable-memory regression marker missing')
+              text = text.replace(marker, block + marker, 1)
+          path.write_text(text, encoding='utf-8')
+
+          path = Path('services/control_plane/test_account_runtime.py')
+          text = path.read_text(encoding='utf-8')
+          if 'from unittest import mock\n' not in text:
+              text = text.replace(
+                  'from pathlib import Path\n',
+                  'from pathlib import Path\nfrom unittest import mock\n',
+                  1,
+              )
+          block = '''    def test_generated_session_id_always_matches_identifier_grammar(self) -> None:
+        self.store.register_subject(subject="subject-b", device_id="phone-b")
+        with mock.patch(
+            "services.control_plane.account_runtime.secrets.token_urlsafe",
+            return_value="_leading-session",
+        ):
+            session = self.store.open_session(
+                subject="subject-b",
+                device_id="phone-b",
+                expires_at=1_000,
+            )
+        self.assertEqual(session.session_id, "s-_leading-session")
+
+'''
+          marker = '    def test_rotation_does_not_shorten_session_lifetime(self) -> None:\n'
+          if block not in text:
+              if marker not in text:
+                  raise SystemExit('account-runtime regression marker missing')
+              text = text.replace(marker, block + marker, 1)
+          path.write_text(text, encoding='utf-8')
+
+          path = Path('services/control_plane/test_oauth_vault.py')
+          text = path.read_text(encoding='utf-8')
+          if 'from unittest import mock\n' not in text:
+              text = text.replace(
+                  'from pathlib import Path\n',
+                  'from pathlib import Path\nfrom unittest import mock\n',
+                  1,
+              )
+          block = '''    def test_generated_credential_id_always_matches_identifier_grammar(self) -> None:
+        generated = iter(("state-value-000000000000", "_leading-credential"))
+        with mock.patch(
+            "services.control_plane.oauth_vault.secrets.token_urlsafe",
+            side_effect=lambda _: next(generated),
+        ):
+            state = self.begin()
+            credential = self.vault.complete_authorization(
+                state=state,
+                code_verifier=self.verifier,
+                authorization_code="authorization-code-000000000000",
+            )
+        self.assertEqual(credential, "oauth-_leading-credential")
+
+'''
+          marker = '    def test_state_is_single_use_and_exact_pkce_bound(self) -> None:\n'
+          if block not in text:
+              if marker not in text:
+                  raise SystemExit('oauth-vault regression marker missing')
+              text = text.replace(marker, block + marker, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
           git rm -r tools/.hg0087-txn
       - name: Validate complete source closure
         if: steps.transaction.outputs.present == 'true'
@@ -84,7 +210,13 @@ jobs:
             docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md \
             docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md \
             docs/development/MODULE_HANDOFF.md \
-            services/qualification/test_hg0087_source_status.py
+            services/control_plane/account_runtime.py \
+            services/control_plane/oauth_vault.py \
+            services/control_plane/test_account_runtime.py \
+            services/control_plane/test_oauth_vault.py \
+            services/qualification/test_hg0087_source_status.py \
+            services/skills/durable_memory.py \
+            services/skills/test_durable_memory.py
           git diff --cached --check
           git commit -m 'docs: close HG-0087 repository source scope'
           git push origin "HEAD:refs/heads/$HEAD_BRANCH"
