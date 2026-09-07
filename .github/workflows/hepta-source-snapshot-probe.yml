@@ -1,0 +1,40 @@
+name: hepta-source-snapshot-probe
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/hepta-source-snapshot-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hepta-source-snapshot-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - name: Build bounded tracked-source snapshot
+        run: |
+          set -euo pipefail
+          git ls-files -z | tar --null -T - -czf /tmp/hepta-source.tar.gz
+          test "$(stat -c %s /tmp/hepta-source.tar.gz)" -le 52428800
+          git diff --exit-code
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-source-snapshot-${{ github.event.pull_request.head.sha }}
+          path: /tmp/hepta-source.tar.gz
+          if-no-files-found: error
+          retention-days: 1
