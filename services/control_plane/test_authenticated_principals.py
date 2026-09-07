@@ -134,6 +134,16 @@ class AuthenticatedPrincipalAdapterTests(unittest.TestCase):
         self.assertTrue(principal.user_present)
         self.assertFalse(principal.biometric_verified)
 
+    def test_long_lived_pair_is_capped_by_short_lived_access(self) -> None:
+        self.pairs.binding = replace(self.pair, expires_at=1300)
+        principal = self.adapter.verify(
+            bearer_token="account-token-123456789",
+            audience=MUTATION_AUDIENCE,
+            required_scope=MUTATION_SCOPE,
+        )
+        self.assertIsInstance(principal, MutationPrincipal)
+        self.assertEqual(principal.expires_at, self.claims.expires_at)
+
     def test_unknown_or_crossed_audience_scope_is_rejected_before_access(self) -> None:
         with self.assertRaises(PrincipalAdapterError) as raised:
             self.adapter.verify(
@@ -150,7 +160,6 @@ class AuthenticatedPrincipalAdapterTests(unittest.TestCase):
             replace(self.pair, session_id="session-2"),
             replace(self.pair, active=False),
             replace(self.pair, expires_at=self.now),
-            replace(self.pair, expires_at=1300),
         ):
             self.pairs.binding = binding
             with self.assertRaises(PrincipalAdapterError) as raised:

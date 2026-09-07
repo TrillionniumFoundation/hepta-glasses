@@ -50,12 +50,13 @@ class LinuxBrokerOnlySandboxTests(unittest.TestCase):
 
     def test_direct_network_and_process_creation_are_denied_by_seccomp(self) -> None:
         result = self.execute(
-            "import errno,json,os,socket\n"
-            "codes={}\n"
-            "try: socket.socket()\n"
-            "except OSError as e: codes['socket']=e.errno\n"
-            "try: os.fork()\n"
-            "except OSError as e: codes['fork']=e.errno\n"
+            "import ctypes,json\n"
+            "libc=ctypes.CDLL(None,use_errno=True)\n"
+            "def denied(number,*args):\n"
+            " ctypes.set_errno(0)\n"
+            " value=libc.syscall(number,*args)\n"
+            " return ctypes.get_errno() if value == -1 else 0\n"
+            "codes={'socket':denied(41,2,1,0),'fork':denied(57)}\n"
             "print(json.dumps(codes,sort_keys=True,separators=(',',':')))\n"
         )
         self.assertEqual(result.output, {"fork": 1, "socket": 1})
