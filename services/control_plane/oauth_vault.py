@@ -566,7 +566,7 @@ class DurableOAuthVault:
             if existing is not None and existing["state"] == "active":
                 self._queue_revoke(existing)
             self.db.execute(
-                "INSERT INTO oauth_credentials VALUES(?,?,?,?,?,?,?,?, 'active',?,?,?) "
+                "INSERT INTO oauth_credentials VALUES(?,?,?,?,?,?,?,?,?, 'active',?,?,?) "
                 "ON CONFLICT(credential_id) DO UPDATE SET scopes=excluded.scopes,"
                 "key_id=excluded.key_id,refresh_ciphertext=excluded.refresh_ciphertext,"
                 "refresh_digest=excluded.refresh_digest,generation=excluded.generation,"

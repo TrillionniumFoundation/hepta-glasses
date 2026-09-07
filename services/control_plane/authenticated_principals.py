@@ -251,7 +251,6 @@ class AuthenticatedPrincipalAdapter:
             or type(value.expires_at) is not int
             or type(value.expires_at) is bool
             or value.expires_at <= now
-            or value.expires_at > claims.expires_at
         ):
             raise PrincipalAdapterError("identity_pair_denied")
         return value

@@ -185,6 +185,16 @@ class LinuxBrokerOnlySandboxTests(unittest.TestCase):
             ),
         )
 
+    def test_file_size_limit_is_explicit_and_validated(self) -> None:
+        self.assert_code(
+            "skill_sandbox_limits_invalid",
+            lambda: SandboxLimits(file_size_bytes=0),
+        )
+        self.assert_code(
+            "skill_sandbox_limits_invalid",
+            lambda: SandboxLimits(file_size_bytes=64 * 1024 * 1024 + 1),
+        )
+
     def test_stderr_and_runtime_exception_do_not_leak_detail(self) -> None:
         self.assert_code(
             "skill_stderr_forbidden",

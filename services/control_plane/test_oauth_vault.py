@@ -101,10 +101,10 @@ class OAuthVaultTests(unittest.TestCase):
             providers=(self.provider,),
             clock=lambda: self.now,
         )
-        self.addCleanup(self.vault.close)
+        self.addCleanup(lambda: self.vault.close())
         self.verifier = "v" * 64
         self.scopes = (
-            "https://www.googleapis.com/auth/calendar.events.owned",
+            "urn:hepta:test:calendar-owned",
         )
 
     def begin(self) -> str:

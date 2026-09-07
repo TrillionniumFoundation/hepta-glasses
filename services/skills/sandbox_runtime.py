@@ -51,6 +51,7 @@ class SandboxLimits:
     wall_seconds: float = 10.0
     cpu_seconds: int = 5
     address_space_bytes: int = 512 * 1024 * 1024
+    file_size_bytes: int = 1024 * 1024
     output_bytes: int = 1024 * 1024
     open_files: int = 32
     capability_requests: int = 16
@@ -65,6 +66,8 @@ class SandboxLimits:
             or not 1 <= self.cpu_seconds <= 300
             or type(self.address_space_bytes) is not int
             or not 64 * 1024 * 1024 <= self.address_space_bytes <= 8 * 1024**3
+            or type(self.file_size_bytes) is not int
+            or not 1 <= self.file_size_bytes <= 64 * 1024 * 1024
             or type(self.output_bytes) is not int
             or not 1 <= self.output_bytes <= 16 * 1024 * 1024
             or type(self.open_files) is not int
@@ -205,7 +208,7 @@ try:
     resource.setrlimit(resource.RLIMIT_CORE,(0,0))
     resource.setrlimit(resource.RLIMIT_CPU,(spec['cpu_seconds'],spec['cpu_seconds']))
     resource.setrlimit(resource.RLIMIT_AS,(spec['address_space_bytes'],spec['address_space_bytes']))
-    resource.setrlimit(resource.RLIMIT_FSIZE,(0,0))
+    resource.setrlimit(resource.RLIMIT_FSIZE,(spec['file_size_bytes'],spec['file_size_bytes']))
     resource.setrlimit(resource.RLIMIT_NOFILE,(spec['open_files'],spec['open_files']))
     resource.setrlimit(resource.RLIMIT_NPROC,(1,1))
     os.umask(0o077)
@@ -500,6 +503,7 @@ class LinuxBrokerOnlySandbox:
                 "workspace": str(workspace),
                 "cpu_seconds": limits.cpu_seconds,
                 "address_space_bytes": limits.address_space_bytes,
+                "file_size_bytes": limits.file_size_bytes,
                 "open_files": limits.open_files,
             }
             spec_fd = _sealed_memfd(
