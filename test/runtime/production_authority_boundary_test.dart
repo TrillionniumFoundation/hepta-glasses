@@ -35,12 +35,35 @@ void main() {
     }
 
     final mainSource = File('lib/main.dart').readAsStringSync();
-    expect(
-      mainSource,
-      contains(
-        'mutationAuthority: const FailClosedMutationAuthorityProvider(),',
-      ),
-    );
+    for (final required in <String>[
+      'AuthenticatedServiceBootstrap.configureFromEnvironment();',
+      'MutationAuthorityBootstrap.configureFromEnvironment();',
+      'mutationAuthority: MutationAuthorityRegistry.current,',
+    ]) {
+      expect(mainSource, contains(required));
+    }
+    for (final forbidden in <String>[
+      'ModelGatewayBootstrap.configureFromDevelopmentEnvironment();',
+      'SpeechBootstrapBootstrap.configureFromDevelopmentEnvironment();',
+      'mutationAuthority: const FailClosedMutationAuthorityProvider(),',
+    ]) {
+      expect(mainSource, isNot(contains(forbidden)));
+    }
+
+    final serviceTokensSource =
+        File('lib/runtime/authenticated_service_tokens.dart')
+            .readAsStringSync();
+    for (final required in <String>[
+      'class AuthenticatedServiceTokenRegistry',
+      'class RegistryRuntimeTokenProvider',
+      'class AuthenticatedServiceBootstrap',
+      "bool.fromEnvironment('dart.vm.product')",
+      'compiled_token_forbidden_in_product',
+      'compiled_speech_token_forbidden_in_product',
+      'SpeechBootstrapGatewayRegistry.configure(',
+    ]) {
+      expect(serviceTokensSource, contains(required));
+    }
 
     final bootstrapSource =
         File('lib/bootstrap/hepta_bootstrap.dart').readAsStringSync();
