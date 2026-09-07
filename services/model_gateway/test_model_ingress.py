@@ -182,7 +182,7 @@ class ModelIngressTests(unittest.TestCase):
         self.error(
             "model_ingress_context_invalid",
             400,
-            lambda: self.answer(context={"x": object()}),
+            lambda: self.answer(context=[]),
         )
         self.backend.result = Result("x" * 65_537)
         self.error("model_ingress_response_invalid", 503, self.answer)
