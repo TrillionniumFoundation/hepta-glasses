@@ -32,24 +32,24 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
           test "$HEAD_BRANCH" = 'work/hepta-g10-trusted-openssl-custody-20260902'
-          test -f tools/.hg0087-closure/part00
-          test -f tools/.hg0087-closure/part01
-          test -f tools/.hg0087-closure/part02
-      - name: Apply exact HG-0087 closure patch
+          for part in part00 part01 part02 part03; do
+            test -f "tools/.hg0087-closure/$part"
+          done
+      - name: Materialize source closure
         run: |
           set -euo pipefail
-          cat tools/.hg0087-closure/part00 tools/.hg0087-closure/part01 tools/.hg0087-closure/part02 > /tmp/hepta-hg0087.patch.gz.b64
-          base64 -d /tmp/hepta-hg0087.patch.gz.b64 > /tmp/hepta-hg0087.patch.gz
-          echo 'a7f739c2b6d772ccda4735c623c5a569452c01abb2d0d2877689a4ef3c695fe1  /tmp/hepta-hg0087.patch.gz' | sha256sum -c -
-          gzip -dc /tmp/hepta-hg0087.patch.gz > /tmp/hepta-hg0087.patch
-          echo '1594895a00617f69c966a70734d75cfd5d372e0c162cac0cfd9674b7cac17ff0  /tmp/hepta-hg0087.patch' | sha256sum -c -
-          git apply --check /tmp/hepta-hg0087.patch
-          git apply --index /tmp/hepta-hg0087.patch
+          cat tools/.hg0087-closure/part00 \
+              tools/.hg0087-closure/part01 \
+              tools/.hg0087-closure/part02 \
+              tools/.hg0087-closure/part03 > /tmp/hepta-apply-hg0087.py
+          echo '4e9365ce4b688fb4fc75c0065cdd397a3453a5d7657bdbad8619a0274f0e4991  /tmp/hepta-apply-hg0087.py' | sha256sum -c -
+          python3 /tmp/hepta-apply-hg0087.py
           git rm -r tools/.hg0087-closure
       - name: Validate intended final source tree
         run: |
           set -euo pipefail
-          git rm .github/workflows/hepta-source-snapshot-probe.yml
+          mv .github/workflows/hepta-source-snapshot-probe.yml /tmp/hepta-source-transaction.yml
+          trap 'mv /tmp/hepta-source-transaction.yml .github/workflows/hepta-source-snapshot-probe.yml' EXIT
           python3 -m unittest -v services.qualification.test_hg0087_source_status
           python3 tools/validate_source_coverage.py >/tmp/source-coverage.json
           python3 tools/validate_module_handoff.py >/tmp/module-handoff.json
@@ -59,7 +59,22 @@ jobs:
           python3 -m unittest discover -s services -p 'test_*.py'
           python3 -m unittest discover -s adapters -p 'test_*.py'
           python3 -m compileall -q services adapters tools
-          git restore --staged --worktree -- .github/workflows/hepta-source-snapshot-probe.yml
+          mv /tmp/hepta-source-transaction.yml .github/workflows/hepta-source-snapshot-probe.yml
+          trap - EXIT
+          git add \
+            docs/CURRENT_STATE.md \
+            docs/EVIDENCE_INDEX.yaml \
+            docs/HG0087_IMPLEMENTATION_STATUS.json \
+            docs/MODULE_COVERAGE.json \
+            docs/MODULE_HANDOFF.json \
+            docs/PROJECT_STATE.json \
+            docs/README.md \
+            docs/REMEDIATION_GAP_LEDGER.json \
+            docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md \
+            docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md \
+            docs/development/MODULE_HANDOFF.md \
+            docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md \
+            services/qualification/test_hg0087_source_status.py
           git diff --cached --check
       - name: Fast-forward verified source closure
         run: |
