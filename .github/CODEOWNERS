@@ -1,0 +1,7 @@
+# Base-branch CODEOWNERS bootstrap.
+#
+# This initial policy deliberately names only the existing repository owner.
+# The beneficiary must not approve this bootstrap change. Expansion of the
+# owner set or delegation to a team requires a separate conflict-free review.
+
+* @ProfHepta
