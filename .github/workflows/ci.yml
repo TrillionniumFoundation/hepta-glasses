@@ -1,0 +1,274 @@
+name: hepta-governance-bootstrap-ci
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hepta-governance-bootstrap-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  repository-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source identity and governance-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+          test -n "$BASE_SHA"
+          git cat-file -e "$BASE_SHA^{commit}"
+          actual="$(git diff --name-only "$BASE_SHA" "$SOURCE_HEAD_SHA" | LC_ALL=C sort)"
+          expected="$(printf '%s\n' '.github/CODEOWNERS' '.github/workflows/ci.yml' | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+      - name: Validate bootstrap policy and read-only workflow
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          owners = Path('.github/CODEOWNERS').read_text(encoding='utf-8')
+          effective = [
+              line.strip() for line in owners.splitlines()
+              if line.strip() and not line.lstrip().startswith('#')
+          ]
+          if effective != ['* @ProfHepta']:
+              raise SystemExit(f'unexpected CODEOWNERS policy: {effective!r}')
+
+          workflow = Path('.github/workflows/ci.yml').read_text(encoding='utf-8')
+          required = [
+              'permissions:\n  contents: read',
+              'repository-contracts:',
+              'flutter:',
+              'secret-and-boundary-scan:',
+              'source-evidence:',
+              'persist-credentials: false',
+              'claim_ceiling',
+              'governance_bootstrap_only',
+          ]
+          missing = [item for item in required if item not in workflow]
+          if missing:
+              raise SystemExit(f'bootstrap workflow contract missing: {missing!r}')
+          forbidden = [
+              r'contents:\s*write',
+              r'pull-requests:\s*write',
+              r'issues:\s*write',
+              r'git\s+push',
+              r'update-ref',
+              r'createCommitOnBranch',
+          ]
+          for pattern in forbidden:
+              if re.search(pattern, workflow, flags=re.IGNORECASE):
+                  raise SystemExit(f'write-capable bootstrap workflow: {pattern}')
+      - name: Prove qualification is read-only
+        run: git diff --exit-code
+
+  flutter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - name: Prove governance bootstrap has no Flutter or platform impact
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$BASE_SHA" "$SOURCE_HEAD_SHA")"
+          test -n "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(lib/|test/|android/|ios/|pubspec\.yaml$|pubspec\.lock$|analysis_options\.yaml$)'; then
+            echo 'governance bootstrap unexpectedly changes product or platform source' >&2
+            exit 1
+          fi
+          actual="$(printf '%s\n' "$changed" | LC_ALL=C sort)"
+          expected="$(printf '%s\n' '.github/CODEOWNERS' '.github/workflows/ci.yml' | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+      - name: Prove qualification is read-only
+        run: git diff --exit-code
+
+  secret-and-boundary-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - name: Scan exact governance delta for secret and authority expansion
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          import subprocess
+
+          base = '${{ github.event.pull_request.base.sha }}'
+          head = '${{ github.event.pull_request.head.sha }}'
+          changed = subprocess.check_output(
+              ['git', 'diff', '--name-only', base, head], text=True
+          ).splitlines()
+          if sorted(changed) != sorted([
+              '.github/CODEOWNERS',
+              '.github/workflows/ci.yml',
+          ]):
+              raise SystemExit(f'unexpected changed paths: {changed!r}')
+
+          private_key = re.compile(
+              '-----' + 'BEGIN ' + '(?:RSA |EC |OPENSSH )?' + 'PRIVATE KEY' + '-----'
+          )
+          github_token = re.compile('gh' + '[pousr]_' + '[A-Za-z0-9]{30,}')
+          secret_assignment = re.compile(
+              r'(?i)(password|secret|token|api[_-]?key)\s*[:=]\s*["\'][^"\']{12,}["\']'
+          )
+          for relative in changed:
+              text = Path(relative).read_text(encoding='utf-8')
+              for label, pattern in [
+                  ('private-key', private_key),
+                  ('github-token', github_token),
+                  ('secret-assignment', secret_assignment),
+              ]:
+                  if pattern.search(text):
+                      raise SystemExit(f'{label} material found in {relative}')
+
+          workflow = Path('.github/workflows/ci.yml').read_text(encoding='utf-8')
+          if 'contents: write' in workflow or 'persist-credentials: true' in workflow:
+              raise SystemExit('write authority detected in bootstrap workflow')
+      - name: Prove qualification is read-only
+        run: git diff --exit-code
+
+  source-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - repository-contracts
+      - flutter
+      - secret-and-boundary-scan
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      CI_REPOSITORY_CONTRACTS: ${{ needs.repository-contracts.result }}
+      CI_FLUTTER: ${{ needs.flutter.result }}
+      CI_SECRET_SCAN: ${{ needs.secret-and-boundary-scan.result }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - name: Build content-addressed governance bootstrap evidence
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib
+          import json
+          import os
+          import subprocess
+
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+          base = os.environ['BASE_SHA']
+          changed = sorted(subprocess.check_output(
+              ['git', 'diff', '--name-only', base, head], text=True
+          ).splitlines())
+          expected = sorted(['.github/CODEOWNERS', '.github/workflows/ci.yml'])
+          if head != os.environ['SOURCE_HEAD_SHA'] or changed != expected:
+              raise SystemExit('governance evidence identity or scope mismatch')
+
+          files = {}
+          for relative in changed:
+              data = Path(relative).read_bytes()
+              files[relative] = {
+                  'bytes': len(data),
+                  'sha256': hashlib.sha256(data).hexdigest(),
+              }
+          prerequisites = {
+              'repository-contracts': os.environ['CI_REPOSITORY_CONTRACTS'],
+              'flutter': os.environ['CI_FLUTTER'],
+              'secret-and-boundary-scan': os.environ['CI_SECRET_SCAN'],
+          }
+          if set(prerequisites.values()) != {'success'}:
+              raise SystemExit(f'prerequisite result mismatch: {prerequisites!r}')
+
+          evidence = {
+              'schema_version': 1,
+              'claim_ceiling': 'governance_bootstrap_only',
+              'repository': '${{ github.repository }}',
+              'pull_request': ${{ github.event.pull_request.number }},
+              'base': base,
+              'head': head,
+              'tree': tree,
+              'changed_files': changed,
+              'files': files,
+              'prerequisites': prerequisites,
+              'passed': True,
+              'missing': [],
+              'non_claims': [
+                  'product source qualification',
+                  'production deployment',
+                  'provider or device evidence',
+                  'main branch protection readback',
+                  'release authority',
+              ],
+          }
+          output = Path('build/governance-evidence')
+          output.mkdir(parents=True, exist_ok=True)
+          encoded = json.dumps(
+              evidence, ensure_ascii=False, sort_keys=True, separators=(',', ':')
+          ).encode('utf-8') + b'\n'
+          (output / 'governance-bootstrap-evidence.json').write_bytes(encoded)
+          (output / 'governance-bootstrap-evidence.sha256').write_text(
+              hashlib.sha256(encoded).hexdigest() + '  governance-bootstrap-evidence.json\n',
+              encoding='utf-8',
+          )
+      - name: Verify evidence bytes and claim ceiling
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib
+          import json
+
+          root = Path('build/governance-evidence')
+          data = (root / 'governance-bootstrap-evidence.json').read_bytes()
+          document = json.loads(data)
+          if document.get('claim_ceiling') != 'governance_bootstrap_only':
+              raise SystemExit('invalid governance evidence claim ceiling')
+          if document.get('passed') is not True or document.get('missing') != []:
+              raise SystemExit('governance bootstrap evidence did not pass')
+          recorded = (root / 'governance-bootstrap-evidence.sha256').read_text().split()[0]
+          if hashlib.sha256(data).hexdigest() != recorded:
+              raise SystemExit('governance evidence digest mismatch')
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-governance-bootstrap-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: build/governance-evidence
+          if-no-files-found: error
+          retention-days: 30
+      - name: Prove qualification is read-only
+        run: git diff --exit-code
