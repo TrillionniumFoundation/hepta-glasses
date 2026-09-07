@@ -46,9 +46,7 @@ final class MutationAuthorization {
 }
 
 abstract interface class MutationAuthorityProvider {
-  Future<MutationAuthorization> authorize(
-    MutationAuthorizationRequest request,
-  );
+  Future<MutationAuthorization> authorize(MutationAuthorizationRequest request);
 }
 
 final class FailClosedMutationAuthorityProvider
@@ -60,19 +58,18 @@ final class FailClosedMutationAuthorityProvider
   @override
   Future<MutationAuthorization> authorize(
     MutationAuthorizationRequest request,
-  ) async =>
-      MutationAuthorization(
-        deviceId: 'unbound-device',
-        context: const PolicyContext(
-          subject: 'unauthenticated',
-          authenticated: false,
-          userPresent: false,
-          biometricVerified: false,
-          policyHash: 'unavailable',
-        ),
-        lease: null,
-        source: reason,
-      );
+  ) async => MutationAuthorization(
+    deviceId: 'unbound-device',
+    context: const PolicyContext(
+      subject: 'unauthenticated',
+      authenticated: false,
+      userPresent: false,
+      biometricVerified: false,
+      policyHash: 'unavailable',
+    ),
+    lease: null,
+    source: reason,
+  );
 }
 
 abstract interface class MutationAccessTokenProvider {
@@ -126,18 +123,17 @@ final class RegistryMutationAccessTokenProvider
   Future<String?> getToken() => MutationAccessTokenRegistry.current.getToken();
 }
 
-final class HttpMutationAuthorityProvider
-    implements MutationAuthorityProvider {
+final class HttpMutationAuthorityProvider implements MutationAuthorityProvider {
   HttpMutationAuthorityProvider({
     required Uri baseUri,
     required MutationAccessTokenProvider tokenProvider,
     Dio? dio,
     bool allowInsecureLoopback = false,
     DateTime Function()? clock,
-  })  : _baseUri = _validatedUri(baseUri, allowInsecureLoopback),
-        _tokenProvider = tokenProvider,
-        _dio = dio ?? Dio(),
-        _clock = clock ?? DateTime.now;
+  }) : _baseUri = _validatedUri(baseUri, allowInsecureLoopback),
+       _tokenProvider = tokenProvider,
+       _dio = dio ?? Dio(),
+       _clock = clock ?? DateTime.now;
 
   final Uri _baseUri;
   final MutationAccessTokenProvider _tokenProvider;
@@ -167,7 +163,7 @@ final class HttpMutationAuthorityProvider
           'risk_tier': request.riskTier.name,
           'deadline_epoch_seconds':
               request.deadline.microsecondsSinceEpoch ~/
-                  Duration.microsecondsPerSecond,
+              Duration.microsecondsPerSecond,
         },
         options: Options(
           headers: <String, Object?>{
@@ -318,17 +314,17 @@ final class HttpMutationAuthorityProvider
   }
 
   MutationAuthorization _denied(String reason) => MutationAuthorization(
-        deviceId: 'unbound-device',
-        context: const PolicyContext(
-          subject: 'unauthenticated',
-          authenticated: false,
-          userPresent: false,
-          biometricVerified: false,
-          policyHash: 'unavailable',
-        ),
-        lease: null,
-        source: reason,
-      );
+    deviceId: 'unbound-device',
+    context: const PolicyContext(
+      subject: 'unauthenticated',
+      authenticated: false,
+      userPresent: false,
+      biometricVerified: false,
+      policyHash: 'unavailable',
+    ),
+    lease: null,
+    source: reason,
+  );
 
   static bool _validBearer(String? value) =>
       value != null &&
@@ -362,8 +358,9 @@ final class HttpMutationAuthorityProvider
     );
   }
 
-  static final RegExp _identifier =
-      RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,255}$');
+  static final RegExp _identifier = RegExp(
+    r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,255}$',
+  );
   static final RegExp _digest = RegExp(r'^[a-f0-9]{64}$');
 }
 
@@ -389,8 +386,9 @@ final class MutationAuthorityBootstrap {
 
   static void configureFromEnvironment() {
     const url = String.fromEnvironment('HEPTA_MUTATION_AUTHORITY_URL');
-    const developmentToken =
-        String.fromEnvironment('HEPTA_MUTATION_AUTHORITY_DEV_TOKEN');
+    const developmentToken = String.fromEnvironment(
+      'HEPTA_MUTATION_AUTHORITY_DEV_TOKEN',
+    );
     const product = bool.fromEnvironment('dart.vm.product');
 
     if (product && developmentToken.isNotEmpty) {
