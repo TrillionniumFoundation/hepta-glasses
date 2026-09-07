@@ -24,7 +24,7 @@ module or close HG-0087. Current remaining work is tracked in
 <!-- handoff:mobile-shell -->
 ## mobile-shell
 
-Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#mobile-shell`. Platform status: Flutter mobile shell targets Android and iOS. Desktop/web directories are build scaffolding, not qualified product surfaces. Evidence ceiling: Source tests establish startup and presentation behavior only; signing, accessibility/device matrices, store packaging and production rollout require external evidence.
+Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#mobile-shell`. Platform status: Flutter mobile shell targets Android and iOS and composes model, speech and mutation clients through process-local authenticated token-provider registries. Desktop/web directories are build scaffolding, not qualified product surfaces. Evidence ceiling: Source tests establish fail-closed startup, token-provider replacement and presentation behavior only; live login/revocation delivery, signing, accessibility/device matrices, store packaging and production rollout require external evidence.
 
 <!-- handoff:edge-runtime -->
 ## edge-runtime
@@ -34,7 +34,7 @@ Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#edge-runtime`. Plat
 <!-- handoff:policy-tool-gateway -->
 ## policy-tool-gateway
 
-Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#policy-tool-gateway`. Platform status: Platform-neutral Dart policy with native effects reached only through typed adapters. Evidence ceiling: The source proves admission semantics; production issuer, attestation, biometric proof and authoritative external reconcilers are not manufactured here.
+Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#policy-tool-gateway`. Platform status: Platform-neutral Dart policy obtains mutation leases only from the authenticated HTTPS authority or fails closed; native effects remain behind typed adapters. Evidence ceiling: The source proves request/lease/argument binding and dynamic token wiring; deployed issuer, attestation, user-presence/biometric facts and authoritative external reconcilers are not manufactured here.
 
 <!-- handoff:audit-journal -->
 ## audit-journal
@@ -54,12 +54,12 @@ Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#g1-protocol-feature
 <!-- handoff:assistant-speech -->
 ## assistant-speech
 
-Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#assistant-speech`. Platform status: iOS uses system speech when permission, locale and device support are present. Android contains a bounded ticket-bound PCM-to-ASR transport component, but the consumer start route remains fail-closed until authenticated bootstrap and stream integration are composed. Evidence ceiling: Source components do not establish live speech tenancy, authenticated ticket delivery, retention controls or physical latency/accuracy/privacy qualification.
+Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#assistant-speech`. Platform status: iOS uses system speech when permission, locale and device support are present. Android consumes right-leg G1 LC3 frames through a bounded, ticket-bound PCM-to-ASR session whose bootstrap and final response are bound to assistant generation, BLE generation and pair identity. Evidence ceiling: Source integration does not establish live speech tenancy, production identity/token delivery, retention/revocation operations or physical latency/accuracy/privacy qualification.
 
 <!-- handoff:android-native -->
 ## android-native
 
-Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#android-native`. Platform status: Android device target with LC3 decoding and a bounded HTTPS PCM-to-ASR component; production speech activation remains disabled until authenticated ticket and decoded-stream integration are active. Evidence ceiling: Builds and tests are E3 at most; Play Integrity, signing, live speech-provider use, OEM/device matrices and physical G1 evidence remain external.
+Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#android-native`. Platform status: Android device target with LC3 decoding and authenticated, generation/pair-bound PCM-to-ASR source integration; provider activation remains fail closed without a runtime identity token and configured speech tenant. Evidence ceiling: Builds and tests are E3 at most; Play Integrity, signing, live speech-provider tenancy, OEM/device matrices and physical G1 evidence remain external.
 
 <!-- handoff:ios-native -->
 ## ios-native
@@ -74,12 +74,12 @@ Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#digital-twin`. Plat
 <!-- handoff:model-gateway-service -->
 ## model-gateway-service
 
-Primary detailed document: `docs/development/DURABLE_MODEL_GATEWAY.md`. Platform status: Python deterministic ingress plus SQLite v2 request custody and a fixed-endpoint text-only foreground Responses adapter; authenticated production ingress is not connected. Evidence ceiling: Source tests establish local quota/idempotency/revocation and wire-contract behavior only; live tenancy, retention, remote cancellation/recovery, identity integration, encrypted metadata and independent qualification remain open.
+Primary detailed document: `docs/development/DURABLE_MODEL_GATEWAY.md`. Platform status: Python provides authenticated framework-neutral ingress, SQLite v2 request custody and a fixed-endpoint text-only foreground Responses adapter; the Flutter client composes it through a runtime token-provider registry. Evidence ceiling: Source tests establish principal/body binding, local quota/idempotency/revocation and wire-contract behavior only; live identity/provider tenancy, retention, remote cancellation/recovery, encrypted metadata and independent qualification remain open.
 
 <!-- handoff:identity-control-plane -->
 ## identity-control-plane
 
-Primary detailed document: `docs/development/DURABLE_IDENTITY.md`. Platform status: Python reference APIs plus SQLite durable identity and an authenticated signing-broker client; trusted Linux verifier host required. Evidence ceiling: Durable source state and signature verification do not establish deployed KMS/HSM, platform attestation, account recovery, mobile lease integration or independent acceptance.
+Primary detailed document: `docs/development/DURABLE_IDENTITY.md`. Platform status: Python provides SQLite durable identity, an authenticated signing-broker client, unified model/speech/mutation principals and a durable mutation-lease authority; Flutter consumes account token providers through fail-closed registries. Evidence ceiling: Source integration does not establish deployed KMS/HSM, Android/Apple attestation, lost-device recovery, durable downstream revoke delivery, active-pair service operation or independent acceptance.
 
 <!-- handoff:realtime-control-plane -->
 ## realtime-control-plane
