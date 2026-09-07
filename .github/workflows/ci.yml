@@ -62,13 +62,15 @@ jobs:
           missing = [item for item in required if item not in workflow]
           if missing:
               raise SystemExit(f'bootstrap workflow contract missing: {missing!r}')
+
           forbidden = [
-              r'contents:\s*write',
-              r'pull-requests:\s*write',
-              r'issues:\s*write',
-              r'git\s+push',
-              r'update-ref',
-              r'createCommitOnBranch',
+              'contents:' + r'\s*' + 'write',
+              'pull-requests:' + r'\s*' + 'write',
+              'issues:' + r'\s*' + 'write',
+              'git' + r'\s+' + 'push',
+              'update' + '-ref',
+              'create' + 'CommitOnBranch',
+              'persist-' + 'credentials: true',
           ]
           for pattern in forbidden:
               if re.search(pattern, workflow, flags=re.IGNORECASE):
@@ -132,10 +134,8 @@ jobs:
           changed = subprocess.check_output(
               ['git', 'diff', '--name-only', base, head], text=True
           ).splitlines()
-          if sorted(changed) != sorted([
-              '.github/CODEOWNERS',
-              '.github/workflows/ci.yml',
-          ]):
+          expected = ['.github/CODEOWNERS', '.github/workflows/ci.yml']
+          if sorted(changed) != sorted(expected):
               raise SystemExit(f'unexpected changed paths: {changed!r}')
 
           private_key = re.compile(
@@ -156,8 +156,15 @@ jobs:
                       raise SystemExit(f'{label} material found in {relative}')
 
           workflow = Path('.github/workflows/ci.yml').read_text(encoding='utf-8')
-          if 'contents: write' in workflow or 'persist-credentials: true' in workflow:
-              raise SystemExit('write authority detected in bootstrap workflow')
+          forbidden_literals = [
+              'contents: ' + 'write',
+              'persist-' + 'credentials: true',
+              'git' + ' push',
+              'update' + '-ref',
+          ]
+          for literal in forbidden_literals:
+              if literal.lower() in workflow.lower():
+                  raise SystemExit(f'write authority detected: {literal}')
       - name: Prove qualification is read-only
         run: git diff --exit-code
 
