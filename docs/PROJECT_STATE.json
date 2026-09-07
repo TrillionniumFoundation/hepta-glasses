@@ -20,15 +20,14 @@
     "active-remediation"
   ],
   "repository_actionable_gate": {
-    "active_open_gap_ids": [
-      "HG-0087"
-    ],
+    "active_open_gap_ids": [],
     "active_source_closed_gap_ids": [
       "HG-0082",
       "HG-0083",
       "HG-0084",
       "HG-0085",
       "HG-0086",
+      "HG-0087",
       "HG-0088",
       "HG-0090",
       "HG-0091",
@@ -52,7 +51,7 @@
       "secret-and-boundary-scan",
       "source-evidence"
     ],
-    "status": "derive_from_final_unchanged_exact_head_ci_artifact_latest_head_review_and_admin_readback"
+    "status": "source_closed_pending_final_exact_head_ci_artifact_review_admin_and_external_authority"
   },
   "schema_version": 4,
   "source_authority": {

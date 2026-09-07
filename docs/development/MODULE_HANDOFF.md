@@ -114,7 +114,7 @@ Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#mcp-adapter`. Platf
 <!-- handoff:qualification-release -->
 ## qualification-release
 
-Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#qualification-release`. Platform status: Python qualification plus Android/iOS/Flutter/native CI lanes. Evidence ceiling: E0–E4 never manufacture physical, deployed, independent assurance, signing, pilot or store evidence.
+Primary detailed document: `docs/MODULE_DEVELOPMENT_GUIDE.md#qualification-release`. Platform status: Python qualification validates HG-0087 source closure, module ownership, external-evidence and release contracts; the canonical workflow covers repository/services, Flutter, Android, iOS, native sanitizers, boundary/history scanning and exact-head source evidence. Evidence ceiling: E0–E4 never manufacture physical, deployed, independent assurance, signing, pilot or store evidence.
 
 <!-- handoff:contracts-compatibility -->
 ## contracts-compatibility

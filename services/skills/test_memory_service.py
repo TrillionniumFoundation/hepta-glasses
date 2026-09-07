@@ -409,6 +409,15 @@ class AuthenticatedMemoryServiceTests(unittest.TestCase):
             1,
         )
 
+    def test_urlsafe_memory_ids_may_start_with_urlsafe_punctuation(self) -> None:
+        for memory_id in ("_legacy_urlsafe_id", "-legacy_urlsafe_id"):
+            self.assertFalse(
+                self.service.delete(
+                    authorization=self.authorization,
+                    memory_id=memory_id,
+                )
+            )
+
     def test_plaintext_and_bearer_are_not_persisted(self) -> None:
         self.consent()
         self.service.remember(

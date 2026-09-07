@@ -35,26 +35,11 @@ backlog. External facts are never promoted by changing source text.
 | Trusted product gate | Product mode invokes G10 validation with an out-of-band registry pin and exact source identity; self-authored status fields have no authority | Complete signed E5–E7 package |
 | Physical-trace integrity | Raw acquisition order is preserved; timestamp/capture-sequence drift fails; production scenarios require sample floors and fault observation/recovery | Real signed Android/iOS/G1 traces |
 
-## 3. Remaining repository implementation: HG-0087
+## 3. Repository implementation: HG-0087 source closure
 
-HG-0087 remains OPEN until implementation—not merely documentation—exists for:
+HG-0087 is `CLOSED_SOURCE`. All seven repository-controlled slices have concrete implementation, executable tests, module ownership and operations references. The closure covers durable identity/revocation, model and realtime exchanges, OAuth and encrypted capability custody, Android PCM-to-ASR lifecycle binding, capability-mediated arbitrary-code Skill execution, and authenticated encrypted persistent Memory.
 
-- durable identity, device, session, token, and revocation repositories;
-- KMS/HSM signing and Android/Apple attestation verifier interfaces;
-- production model and realtime provider exchanges with cancellation, quota,
-  retention, receipt, and revoke semantics;
-- provider-specific OAuth capability adapters, durable idempotency/outbox,
-  crash recovery, and authoritative readback;
-- Android PCM-to-ASR and cross-platform speech privacy/finality integration;
-- asymmetric Skill verification, package transparency, sandbox, egress policy,
-  emergency revoke, and dependency evidence; and
-- encrypted persistent Memory with per-subject keys, migration, backup exclusion,
-  export/delete, and witnessed deletion.
-
-Reference in-memory services, mocks, interface declarations, or unconfigured
-fail-closed adapters do not close this row. Split implementation into reviewable
-vertical slices, but keep one aggregate HG-0087 status until every named source
-subtask passes its tests and operations contract.
+`CLOSED_SOURCE` does not assert exact-head E4 and does not create production tenants, credentials, KMS/HSM custody, device traces, vendor rights, independent assurance, signing, pilot or release approval. Those remain `BLOCKED_EXTERNAL`, `BLOCKED_ADMIN_SETTING` or `BLOCKED_UPSTREAM` until their actual authorities provide evidence.
 
 ## 4. GitHub administration and exact-head adoption
 

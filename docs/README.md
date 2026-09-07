@@ -98,3 +98,4 @@ A later plan or ADR must state what it supersedes and update the applicable Curr
 - `../contracts/external-evidence-envelope-v1.json` — versioned authenticated authority-owned evidence and complete-closure contract.
 - `../schemas/external-evidence-envelope.schema.json` — evidence envelope schema.
 - `../schemas/external-authority-trust-registry.schema.json` — externally pinned Ed25519 authority registry schema.
+- `HG0087_IMPLEMENTATION_STATUS.json` — seven-slice source-closure map; deployed and independently issued authority remains external.

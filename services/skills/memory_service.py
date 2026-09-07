@@ -31,6 +31,7 @@ MIGRATE_SCOPE = "memory.migrate"
 RECONCILE_SCOPE = "memory.reconcile"
 _MAX_TIME = 253_402_300_799
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,255}\Z")
+_OPAQUE_IDENTIFIER = re.compile(r"[A-Za-z0-9_-][A-Za-z0-9_.:-]{0,255}\Z")
 
 
 class MemoryServiceError(ValueError):
@@ -157,6 +158,14 @@ class AuthenticatedMemoryService:
             raise MemoryServiceError(code)
         return value
 
+    @staticmethod
+    def _opaque_identifier(
+        value: object, code: str = "memory_service_binding_invalid"
+    ) -> str:
+        if type(value) is not str or _OPAQUE_IDENTIFIER.fullmatch(value) is None:
+            raise MemoryServiceError(code)
+        return value
+
     def _principal(self, authorization: str | None, scope: str) -> MemoryPrincipal:
         token = self._bearer(authorization)
         try:
@@ -273,7 +282,7 @@ class AuthenticatedMemoryService:
         try:
             return self.store.delete(
                 subject=principal.subject,
-                memory_id=self._identifier(memory_id),
+                memory_id=self._opaque_identifier(memory_id),
             )
         except DurableMemoryError as error:
             raise self._map(error) from None

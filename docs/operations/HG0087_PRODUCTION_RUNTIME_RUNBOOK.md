@@ -1,7 +1,6 @@
 # HG-0087 realtime runtime runbook
 
-Status: source-candidate operational contract, not a deployment claim. HG-0087
-remains OPEN. This patch changes realtime custody only. Speech production repair,
+Status: source-closed operational contract, not a deployment claim. HG-0087 is `CLOSED_SOURCE`; deployed authorities and E5-E7 evidence remain external. Speech production repair,
 provider adapters and the authenticated HTTP service are not deployed by this
 runbook. Do not expose these Python methods directly to unauthenticated callers.
 

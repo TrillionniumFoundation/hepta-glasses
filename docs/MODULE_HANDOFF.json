@@ -187,7 +187,7 @@
       "profile": "engineering-handoff-v1",
       "index_anchor": "docs/development/MODULE_HANDOFF.md#qualification-release",
       "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#qualification-release",
-      "platform_status": "Python qualification plus Android/iOS/Flutter/native CI lanes.",
+      "platform_status": "Python qualification validates HG-0087 source closure, module ownership, external-evidence and release contracts; the canonical workflow covers repository/services, Flutter, Android, iOS, native sanitizers, boundary/history scanning and exact-head source evidence.",
       "evidence_ceiling": "E0–E4 never manufacture physical, deployed, independent assurance, signing, pilot or store evidence."
     },
     {

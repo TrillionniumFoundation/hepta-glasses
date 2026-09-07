@@ -1,6 +1,6 @@
 # HG-0087 implementation and handoff
 
-Status: OPEN, partial source candidate. This document supplements the active
+Status: `CLOSED_SOURCE` for repository implementation; exact-head E4 and authority-owned E5-E7 remain separate. This document supplements the active
 `2026-09-03_BLOCKER_EXECUTION_PLAN.md`; it does not supersede its requirements.
 The initial patch implemented realtime custody repairs; a subsequent identity
 increment is described in `DURABLE_IDENTITY.md` and its dedicated runbook. The speech gateway

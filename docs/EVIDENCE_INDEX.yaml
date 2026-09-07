@@ -105,6 +105,22 @@
         "tools/validate_production_authority.py",
         ".github/workflows/ci.yml"
       ]
+    },
+    {
+      "id": "EV-SRC-HG0087-CLOSURE-V1",
+      "path": "docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md",
+      "levels": [
+        "E0",
+        "E1",
+        "E2",
+        "E3"
+      ],
+      "claim": "Source-only closure of seven authenticated HG-0087 integration slices; exact-head E4 and all deployed, physical, independent and release evidence remain separate.",
+      "supporting_paths": [
+        "docs/HG0087_IMPLEMENTATION_STATUS.json",
+        "services/qualification/test_hg0087_source_status.py",
+        "docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md"
+      ]
     }
   ],
   "ci_records": {

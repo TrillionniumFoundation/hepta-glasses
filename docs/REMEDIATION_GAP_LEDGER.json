@@ -69,14 +69,28 @@
     {
       "id": "HG-0087",
       "owner": "cloud-platform",
-      "status": "OPEN",
+      "status": "CLOSED_SOURCE",
       "title": "Production implementations behind provider/infrastructure gates",
       "source_preparation": [
         "docs/development/REFERENCE_RUNTIME_HARDENING.md",
         "docs/development/MODULE_HANDOFF.md",
         "docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md"
       ],
-      "close_criteria": "Complete authenticated product integration for durable identity/revocation, model/realtime/OAuth providers, Android PCM-to-ASR, capability-mediated arbitrary-code Skill execution and encrypted persistent Memory. Deployed credentials, authorities and physical/provider evidence remain separate BLOCKED_EXTERNAL rows."
+      "close_criteria": "Complete authenticated product integration for durable identity/revocation, model/realtime/OAuth providers, Android PCM-to-ASR, capability-mediated arbitrary-code Skill execution and encrypted persistent Memory. Deployed credentials, authorities and physical/provider evidence remain separate BLOCKED_EXTERNAL rows.",
+      "evidence": [
+        "docs/HG0087_IMPLEMENTATION_STATUS.json",
+        "services/control_plane/account_runtime.py",
+        "services/control_plane/oauth_vault.py",
+        "services/control_plane/capability_payload_store.py",
+        "services/model_gateway/realtime_provider.py",
+        "services/model_gateway/realtime_ingress.py",
+        "services/skills/package_vault.py",
+        "services/skills/sandbox_runtime.py",
+        "services/skills/skill_service.py",
+        "services/skills/memory_service.py",
+        "services/qualification/test_hg0087_source_status.py"
+      ],
+      "evidence_ceiling": "Source closure only. Exact-head E4, repository administration and all authority-owned E5-E7 rows remain independent."
     },
     {
       "id": "HG-0088",

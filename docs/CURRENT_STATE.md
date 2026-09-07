@@ -60,31 +60,9 @@ Repository source currently includes:
 
 ## Active source backlog
 
-`docs/REMEDIATION_GAP_LEDGER.json` is the active remediation truth. After the
-HG-0092 custody closure, **HG-0087 is the only aggregate repository implementation
-row still OPEN**. Its machine-readable slices are in
-`docs/HG0087_IMPLEMENTATION_STATUS.json`.
+HG-0087 is `CLOSED_SOURCE`. The seven source slices and their exact source, test, operations and remaining-external mappings are in `docs/HG0087_IMPLEMENTATION_STATUS.json`, enforced by `services/qualification/test_hg0087_source_status.py`. No repository-actionable remediation row remains `OPEN`.
 
-HG-0087 remains open because implemented libraries are not yet one authenticated
-production path. Remaining source/integration work includes:
-
-- production account and device authentication feeding short-lived mobile
-  mutation authority and downstream revoke consumers;
-- live model, realtime and speech service composition with authenticated ingress,
-  provider tenancy, bounded cancellation/recovery and encrypted metadata;
-- OAuth consent/refresh-token vault integration, identity-backed capability
-  leases and encrypted recovery payload custody;
-- Android decoded PCM streaming into the ticket-bound ASR component, finality,
-  cancellation, privacy and cross-platform session integration;
-- arbitrary-code Skill execution behind namespaces/seccomp/cgroups or an
-  equivalent hard isolation boundary, capability-mediated I/O and broker-
-  exclusive egress;
-- production per-subject Memory keys, authenticated ingress, backup anti-rollback
-  and downstream deletion reconciliation.
-
-Reference objects, mocks, unconfigured fail-closed adapters and interface
-statements do not complete this row. Each source slice must retain tests,
-contracts, migration rules and an operations contract.
+This closure is deliberately source-only. Exact-head CI and artifact verification, independent review, complete `main` protection and protected adoption remain governance gates. Production tenants, KMS/HSM and attestation, physical Android/iOS/G1 qualification, vendor firmware authority, independent assurance, signing, pilot, rollout/rollback and store approval remain authority-owned external facts.
 
 ## Current validation observation
 
