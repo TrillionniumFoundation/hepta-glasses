@@ -50,16 +50,39 @@ def validate_production_entrypoint() -> None:
     authority = (ROOT / "lib/runtime/mutation_authority.dart").read_text(
         encoding="utf-8"
     )
+    service_tokens = (
+        ROOT / "lib/runtime/authenticated_service_tokens.dart"
+    ).read_text(encoding="utf-8")
 
     required_main = (
+        "AuthenticatedServiceBootstrap.configureFromEnvironment();",
         "MutationAuthorityBootstrap.configureFromEnvironment();",
         "mutationAuthority: MutationAuthorityRegistry.current,",
         "checkpointAuthenticator: const PlatformAuditCheckpointAuthenticator(),",
     )
     if any(fragment not in main for fragment in required_main):
-        fail("production main does not bind the authenticated authority registry")
+        fail("production main does not bind authenticated service registries")
+    forbidden_main = (
+        "ModelGatewayBootstrap.configureFromDevelopmentEnvironment();",
+        "SpeechBootstrapBootstrap.configureFromDevelopmentEnvironment();",
+        "mutationAuthority: const FailClosedMutationAuthorityProvider(),",
+    )
+    if any(fragment in main for fragment in forbidden_main):
+        fail("production main still selects a development or fixed local authority")
     if "required MutationAuthorityProvider mutationAuthority" not in bootstrap:
         fail("composition root does not require explicit mutation authority injection")
+
+    required_service_tokens = (
+        "class AuthenticatedServiceTokenRegistry",
+        "class RegistryRuntimeTokenProvider",
+        "class AuthenticatedServiceBootstrap",
+        "bool.fromEnvironment('dart.vm.product')",
+        "compiled_token_forbidden_in_product",
+        "compiled_speech_token_forbidden_in_product",
+        "SpeechBootstrapGatewayRegistry.configure(",
+    )
+    if any(fragment not in service_tokens for fragment in required_service_tokens):
+        fail("authenticated model/speech token composition lost a fail-closed invariant")
 
     required_authority = (
         "class FailClosedMutationAuthorityProvider",
@@ -124,11 +147,13 @@ def validate_server_authority() -> None:
 def validate_test_separation() -> None:
     test_authority = ROOT / "test/support/test_mutation_authority.dart"
     boundary_test = ROOT / "test/runtime/production_authority_boundary_test.dart"
+    token_test = ROOT / "test/runtime/authenticated_service_tokens_test.dart"
     mobile_test = ROOT / "test/runtime/mutation_authority_test.dart"
     server_test = ROOT / "services/control_plane/test_mutation_authority.py"
     if not all(path.is_file() for path in (
         test_authority,
         boundary_test,
+        token_test,
         mobile_test,
         server_test,
     )):
@@ -182,7 +207,7 @@ def main() -> int:
                 "ok": True,
                 "product_dart_files": len(product_dart_sources()),
                 "production_authority": "authenticated_https_or_fail_closed",
-                "runtime_token_source": "dynamic_registry_no_compiled_product_token",
+                "runtime_token_source": "dynamic_account_registry_no_compiled_product_token",
                 "server_lease_custody": "durable_exact_argument_policy_and_revocation",
                 "test_authority_location": "test/support/test_mutation_authority.dart",
                 "release_binary_absence_checks": ["android", "ios"],
