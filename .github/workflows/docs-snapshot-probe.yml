@@ -1,0 +1,42 @@
+name: hepta-docs-snapshot-probe
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/docs-snapshot-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hepta-docs-snapshot-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - name: Materialize exact handoff inputs
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/hepta-docs/docs/development
+          cp docs/MODULE_HANDOFF.json /tmp/hepta-docs/docs/MODULE_HANDOFF.json
+          cp docs/HG0087_IMPLEMENTATION_STATUS.json /tmp/hepta-docs/docs/HG0087_IMPLEMENTATION_STATUS.json
+          cp docs/development/MODULE_HANDOFF.md /tmp/hepta-docs/docs/development/MODULE_HANDOFF.md
+          git diff --exit-code
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-docs-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/hepta-docs
+          if-no-files-found: error
+          retention-days: 1
