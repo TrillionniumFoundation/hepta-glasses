@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
-import os
 import re
 import subprocess
 import sys
@@ -160,6 +160,24 @@ class DependencyAutomationTests(unittest.TestCase):
             },
         )
 
+    def test_complete_dependabot_object_is_bound_before_extraction(self) -> None:
+        source = POLICY_TOOL.read_text(encoding="utf-8")
+        self.assertIn("_APPROVED_DEPENDABOT_CONFIG_SHA256", source)
+        self.assertIn("complete Dependabot object differs", source)
+        self.assertLess(
+            source.index("digest != _APPROVED_DEPENDABOT_CONFIG_SHA256"),
+            source.index("_CANONICAL_ECOSYSTEM.findall(text)"),
+        )
+        expected = POLICY._APPROVED_DEPENDABOT_CONFIG_SHA256
+        self.assertEqual(
+            expected,
+            "c50632e8373a28bceeb5fcd6716172a3cecf97e46f31ad85a49787c638f227a5",
+        )
+        self.assertEqual(
+            POLICY.hashlib.sha256(DEPENDABOT.read_bytes()).hexdigest(),
+            expected,
+        )
+
     def test_official_table_parser_is_external_and_fail_closed(self) -> None:
         fixture = """Package manager | YAML value | Version updates
 GitHub Actions | `github-actions` | yes
@@ -185,9 +203,7 @@ Swift | `swift` | yes
         )
         self.assertIn("build_opener(_NoRedirect())", source)
         self.assertIn("official-source read failed closed", source)
-        self.assertNotIn(
-            "raw.githubusercontent.com/{repository}", source
-        )
+        self.assertNotIn("Authorization", source)
 
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn(
@@ -210,7 +226,7 @@ Swift | `swift` | yes
             text.count("open-pull-requests-limit: 5"), 3
         )
 
-    def test_cocoapods_boundary_is_closed_world_and_actionable(self) -> None:
+    def test_cocoapods_boundary_is_closed_world(self) -> None:
         completed = subprocess.run(
             [
                 sys.executable,
@@ -223,10 +239,11 @@ Swift | `swift` | yes
             capture_output=True,
         )
         result = json.loads(completed.stdout)
+        self.assertEqual(result["schema_version"], 4)
         self.assertEqual(
             result["mode"], "closed-world-local-flutter-pod-only"
         )
-        self.assertEqual(result["schema_version"], 3)
+        self.assertFalse(result["repository_executes_update"])
         self.assertEqual(result["lock_pods"], ["Flutter"])
         self.assertEqual(result["lock_dependencies"], ["Flutter"])
         self.assertEqual(result["lock_spec_checksums"], ["Flutter"])
@@ -251,30 +268,77 @@ Swift | `swift` | yes
         self.assertRegex(
             result["podfile_sha256"], r"^[0-9a-f]{64}$"
         )
+        self.assertRegex(
+            result["podfile_lock_sha256"], r"^[0-9a-f]{64}$"
+        )
         self.assertFalse(result["auto_commit"])
         self.assertFalse(result["auto_push"])
         self.assertFalse(result["auto_merge"])
 
-        source = POLICY_TOOL.read_text(encoding="utf-8")
-        for phrase in (
-            "HEPTA_COCOAPODS_UPDATE_APPROVED",
-            "named non-main review branch",
-            'path != "ios/Podfile.lock"',
-            "open an ordinary exact-head pull request",
-            '"--untracked-files=all"',
-            "_APPROVED_PODFILE_SHA256",
-            "_APPROVED_WORKFLOW_GIT_BLOB_SHA1",
-            "_APPROVED_COCOAPODS_VERSION",
-            "parse_cocoapods_lock",
-            "parse_canonical_ios_lock_step",
-            '"external_registry_pods": len(registry_roots)',
-            'f"_{_APPROVED_COCOAPODS_VERSION}_"',
-        ):
-            self.assertIn(phrase, source)
-        self.assertNotIn('_POD_DECLARATION = re.compile', source)
-        self.assertNotIn(
-            '"pod install --deployment" not in workflow', source
+    def test_external_update_contract_is_machine_readable_and_nonexecuting(
+        self,
+    ) -> None:
+        direct = POLICY.emit_cocoapods_update_contract()
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(POLICY_TOOL),
+                "--emit-cocoapods-update-contract",
+            ],
+            cwd=ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
         )
+        cli = json.loads(completed.stdout)
+        self.assertEqual(cli, direct)
+        self.assertEqual(
+            direct["operation"],
+            "external-hermetic-cocoapods-lock-refresh",
+        )
+        self.assertFalse(direct["repository_executes_generator"])
+        self.assertFalse(direct["repository_executes_flutter"])
+        self.assertFalse(direct["repository_executes_git"])
+        self.assertEqual(
+            direct["allowed_repository_changes"], ["ios/Podfile.lock"]
+        )
+        self.assertEqual(
+            direct["required_external_evidence"],
+            [
+                "immutable_environment_digest",
+                "ruby_interpreter_sha256",
+                "cocoapods_gem_set_digest",
+                "flutter_sdk_digest",
+                "network_dependency_provenance",
+                "generated_lock_sha256",
+                "invocation_transcript_digest",
+            ],
+        )
+        self.assertTrue(direct["passed"])
+        self.assertFalse(direct["auto_commit"])
+        self.assertFalse(direct["auto_push"])
+        self.assertFalse(direct["auto_merge"])
+
+    def test_policy_has_no_child_process_or_local_refresh_path(self) -> None:
+        source = POLICY_TOOL.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        imported = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name.split(".", 1)[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module.split(".", 1)[0])
+        self.assertFalse({"subprocess", "shutil", "os"} & imported)
+        for forbidden in (
+            "--refresh-cocoapods",
+            "HEPTA_COCOAPODS_UPDATE_APPROVED",
+            "resolve_cocoapods_generator",
+            "_run_generator_version",
+            "_verify_same_generator",
+            "shutil.which",
+            "subprocess.run",
+        ):
+            self.assertNotIn(forbidden, source)
 
     def test_podfile_closed_world_rejects_ruby_evasions(self) -> None:
         variants = {
@@ -412,7 +476,7 @@ COCOAPODS: 1.17.0
                 with self.assertRaises(POLICY.DependencyPolicyError):
                     POLICY.parse_cocoapods_lock(candidate)
 
-    def test_inspection_rejects_origin_source_checksum_and_children_drift(
+    def test_inspection_rejects_origin_source_checksum_version_and_children_drift(
         self,
     ) -> None:
         origin_drift = LOCKFILE_TEXT.replace(
@@ -426,119 +490,95 @@ COCOAPODS: 1.17.0
             "71a624a5bc0c04062bf19101d501e466baf2fb47",
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         )
+        version_drift = LOCKFILE_TEXT.replace(
+            "COCOAPODS: 1.17.0", "COCOAPODS: 99.0.0"
+        )
         child_drift = LOCKFILE_TEXT.replace(
             "  - Flutter (1.0.0)",
             "  - Flutter (1.0.0):\n    - Flutter",
-        )
-        version_drift = LOCKFILE_TEXT.replace(
-            "COCOAPODS: 1.17.0", "COCOAPODS: 99.0.0"
         )
         for name, candidate in {
             "origin": origin_drift,
             "source": source_drift,
             "checksum": checksum_drift,
+            "version": version_drift,
             "children": child_drift,
-            "generator-version": version_drift,
         }.items():
             with self.subTest(name=name):
                 with self.assertRaises(POLICY.DependencyPolicyError):
                     self._inspect_fixture(lockfile=candidate)
 
     def test_workflow_parser_rejects_textual_decoys(self) -> None:
-        decoys = {
-            "comment": """name: decoy
-jobs:
-  ios-native:
-    steps:
-      # pod install --deployment
-      - run: true
-""",
-            "echo": """name: decoy
-jobs:
-  ios-native:
-    steps:
-      - run: echo 'pod install --deployment'
-""",
-            "false-branch": """name: decoy
-jobs:
-  ios-native:
-    steps:
-      - name: Install locked CocoaPods dependencies
-        if: ${{ false }}
-        run: |
-          cd ios
-          pod install --deployment
-""",
-            "unrelated-job": """name: decoy
-jobs:
-  diagnostics:
-    steps:
-      - name: Install locked CocoaPods dependencies
-        run: |
-          cd ios
-          pod install --deployment
-""",
-        }
-        for name, candidate in decoys.items():
+        exact = WORKFLOW_TEXT
+        comment_only = exact.replace(
+            "      - name: Install locked CocoaPods dependencies\n"
+            "        run: |\n"
+            "          cd ios\n"
+            "          pod install --deployment\n",
+            "      # pod install --deployment\n",
+        )
+        echo_only = exact.replace(
+            "          cd ios\n          pod install --deployment",
+            "          echo 'cd ios && pod install --deployment'",
+        )
+        conditional = exact.replace(
+            "      - name: Install locked CocoaPods dependencies\n",
+            "      - name: Install locked CocoaPods dependencies\n"
+            "        if: ${{ false }}\n",
+        )
+        wrong_job = exact.replace(
+            "      - name: Install locked CocoaPods dependencies",
+            "  unrelated:\n"
+            "      - name: Install locked CocoaPods dependencies",
+            1,
+        )
+        duplicate = exact.replace(
+            "      - name: Install locked CocoaPods dependencies\n"
+            "        run: |\n"
+            "          cd ios\n"
+            "          pod install --deployment\n",
+            "      - name: Install locked CocoaPods dependencies\n"
+            "        run: |\n"
+            "          cd ios\n"
+            "          pod install --deployment\n"
+            "      - name: Install locked CocoaPods dependencies\n"
+            "        run: |\n"
+            "          cd ios\n"
+            "          pod install --deployment\n",
+        )
+        for name, candidate in {
+            "comment": comment_only,
+            "echo": echo_only,
+            "conditional": conditional,
+            "wrong-job": wrong_job,
+            "duplicate": duplicate,
+        }.items():
             with self.subTest(name=name):
                 with self.assertRaises(POLICY.DependencyPolicyError):
-                    POLICY.parse_canonical_ios_lock_step(candidate)
+                    self._inspect_fixture(workflow=candidate)
 
-    def test_workflow_full_object_binding_rejects_unrelated_drift(self) -> None:
-        changed = WORKFLOW_TEXT + "\n# unrelated but unreviewed change\n"
+    def test_workflow_complete_object_drift_is_rejected(self) -> None:
+        changed = WORKFLOW_TEXT.replace(
+            "name: hepta-glasses-ci",
+            "name: hepta-glasses-ci-drift",
+            1,
+        )
         with self.assertRaises(POLICY.DependencyPolicyError):
             self._inspect_fixture(
                 workflow=changed,
-                approved_workflow_sha=(
-                    "7624aaf9cafa5bfef6b55f91d714bf50bb5c92ee"
-                ),
+                approved_workflow_sha=POLICY._APPROVED_WORKFLOW_GIT_BLOB_SHA1,
             )
 
-    def test_generator_selector_rejects_mismatched_version(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            executable = Path(directory) / "pod"
-            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-            executable.chmod(0o755)
-            mismatch = subprocess.CompletedProcess(
-                args=[], returncode=0, stdout="99.0.0\n", stderr=""
-            )
-            with (
-                patch.object(POLICY.shutil, "which", return_value=str(executable)),
-                patch.object(POLICY.subprocess, "run", return_value=mismatch) as run,
-            ):
-                with self.assertRaises(POLICY.DependencyPolicyError):
-                    POLICY.resolve_cocoapods_generator()
-            self.assertEqual(
-                run.call_args.args[0],
-                [str(executable.resolve()), "_1.17.0_", "--version"],
-            )
-
-    def test_generator_identity_binds_path_digest_and_version(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            executable = Path(directory) / "pod"
-            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-            executable.chmod(0o755)
-            matched = subprocess.CompletedProcess(
-                args=[], returncode=0, stdout="1.17.0\n", stderr=""
-            )
-            with (
-                patch.object(POLICY.shutil, "which", return_value=str(executable)),
-                patch.object(POLICY.subprocess, "run", return_value=matched),
-            ):
-                identity = POLICY.resolve_cocoapods_generator()
-            self.assertEqual(identity["path"], str(executable.resolve()))
-            self.assertEqual(identity["version"], "1.17.0")
-            self.assertEqual(identity["selector"], "_1.17.0_")
-            self.assertRegex(identity["sha256"], r"^[0-9a-f]{64}$")
-
-    def test_lockfiles_and_operator_guide_exist(self) -> None:
+    def test_lockfiles_policy_and_operator_guide_exist(self) -> None:
         for relative in (
             "pubspec.lock",
             "android/gradle/wrapper/gradle-wrapper.properties",
             "ios/Podfile.lock",
             "contracts/dependabot-supported-ecosystems-v1.json",
             "docs/development/DEPENDENCY_SECURITY.md",
+            "docs/development/DEPENDABOT_CONFIG_CUSTODY.md",
             "tools/native/dependency_update_policy.py",
+            "tools/native/dependabot_config_custody.py",
         ):
             path = ROOT / relative
             self.assertTrue(path.is_file(), relative)
@@ -551,14 +591,14 @@ jobs:
             "--verify-dependabot-official",
             "Dependabot does not support CocoaPods",
             "--check-cocoapods",
-            "--refresh-cocoapods",
+            "--emit-cocoapods-update-contract",
             "closed-world",
             "PODS",
             "DEPENDENCIES",
             "EXTERNAL SOURCES",
             "SPEC CHECKSUMS",
-            "CocoaPods `1.17.0`",
-            "Git blob SHA-1",
+            "repository never executes",
+            "external hermetic",
             "No dependency pull request is auto-merged",
             "all seven canonical jobs",
             "exact-head source Artifact",
@@ -567,8 +607,12 @@ jobs:
             self.assertIn(stable_interface, guide)
 
 
-PODFILE_TEXT = (ROOT / "ios/Podfile").read_text(encoding="utf-8")
-LOCKFILE_TEXT = (ROOT / "ios/Podfile.lock").read_text(encoding="utf-8")
+PODFILE_TEXT = (
+    ROOT / "ios/Podfile"
+).read_text(encoding="utf-8")
+LOCKFILE_TEXT = (
+    ROOT / "ios/Podfile.lock"
+).read_text(encoding="utf-8")
 WORKFLOW_TEXT = WORKFLOW.read_text(encoding="utf-8")
 
 
