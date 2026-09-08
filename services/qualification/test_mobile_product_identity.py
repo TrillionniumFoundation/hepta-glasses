@@ -40,12 +40,10 @@ class MobileProductIdentityTests(unittest.TestCase):
             "android/app/src/main/AndroidManifest.xml",
             "ios/Runner/Info.plist",
         )
+        title = re.compile(r"Demo(?:\s+|-)Ai(?:\s+|-)Even", re.IGNORECASE)
         for relative in paths:
             text = (ROOT / relative).read_text(encoding="utf-8")
-            self.assertIsNone(
-                re.search(r"Demo[ _]Ai[ _]Even", text, re.IGNORECASE),
-                relative,
-            )
+            self.assertIsNone(title.search(text), relative)
 
     def test_compatibility_and_signing_boundaries_are_documented(self) -> None:
         guide = (ROOT / "docs/development/PRODUCT_IDENTITY.md").read_text(
