@@ -8,7 +8,9 @@ on:
       - main
 
 permissions:
+  actions: read
   contents: read
+  pull-requests: read
 
 concurrency:
   group: hepta-glasses-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref_name }}
@@ -34,6 +36,10 @@ jobs:
       - run: python3 tools/validate_repository.py
       - run: python3 tools/validate_repository_metadata.py
       - run: python3 tools/validate_production_authority.py
+      - name: Verify live immutable baseline evidence
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 services/qualification/documentation_truth.py --verify-github
       - run: python3 -m unittest discover -s services -p 'test_*.py'
       - run: python3 -m unittest discover -s adapters -p 'test_*.py'
       - run: python3 -m compileall -q services adapters tools
