@@ -45,7 +45,10 @@
     "code_owner_review_id": 5133811311,
     "code_owner_reviewer": "Tomasrgbsf",
     "completed": true,
-    "successor_requires_fresh_qualification": true
+    "successor_requires_fresh_qualification": true,
+    "evidence_manifest": "evidence/source-baselines/pr101-35f01329/manifest.json",
+    "evidence_manifest_sha256": "d7b1454f835e26789148e2e6f46e492f2ea85fac64e8cef10c7d2929208809d5",
+    "retained_artifact": "evidence/source-baselines/pr101-35f01329/manifest.json#artifact.archive_parts"
   },
   "repository_actionable_gate": {
     "active_open_gap_ids": [],
@@ -92,5 +95,12 @@
     "self_attested_sha_is_authoritative": false,
     "historical_artifact_does_not_attest_later_push": true,
     "main_remains_older_until_protected_adoption": true
+  },
+  "active_successor": {
+    "identity_rule": "live_pull_request_head_and_tree",
+    "embedded_maturity": "source_implemented",
+    "qualification_authority": "live_exact_head_ci_artifact_and_eligible_review_only",
+    "inherits_baseline_evidence": false,
+    "released": false
   }
 }

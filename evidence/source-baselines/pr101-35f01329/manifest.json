@@ -1,0 +1,231 @@
+{
+  "artifact": {
+    "archive_encoding": "base64-parts-v1",
+    "archive_parts": [
+      {
+        "encoded_size": 8192,
+        "path": "evidence/source-baselines/pr101-35f01329/hepta-source-evidence-35f01329262d6a137bfa3c7e95302a397ed32676.zip.b64.part01",
+        "sha256": "813614538199ef4166605ecaacbe0023150fb57ce5200b1450a17fc3761b23ad"
+      },
+      {
+        "encoded_size": 8192,
+        "path": "evidence/source-baselines/pr101-35f01329/hepta-source-evidence-35f01329262d6a137bfa3c7e95302a397ed32676.zip.b64.part02",
+        "sha256": "5c752600759c131c927402eddbbfe286aa697bda0282dde5e02bee096770b79f"
+      },
+      {
+        "encoded_size": 8192,
+        "path": "evidence/source-baselines/pr101-35f01329/hepta-source-evidence-35f01329262d6a137bfa3c7e95302a397ed32676.zip.b64.part03",
+        "sha256": "0ce241fc007844b6196726fd49e52942a0dd83d8411a54989b865ba376fefe14"
+      },
+      {
+        "encoded_size": 8192,
+        "path": "evidence/source-baselines/pr101-35f01329/hepta-source-evidence-35f01329262d6a137bfa3c7e95302a397ed32676.zip.b64.part04",
+        "sha256": "1a696afe2e52717103a19fcd3dcf3f93647d38d5ce33b0c60ce5c577a4003be2"
+      },
+      {
+        "encoded_size": 8192,
+        "path": "evidence/source-baselines/pr101-35f01329/hepta-source-evidence-35f01329262d6a137bfa3c7e95302a397ed32676.zip.b64.part05",
+        "sha256": "103fb81c8f15ca849f5e812b8ba2d14ceef14786724a07cf788512ad7247d171"
+      },
+      {
+        "encoded_size": 8192,
+        "path": "evidence/source-baselines/pr101-35f01329/hepta-source-evidence-35f01329262d6a137bfa3c7e95302a397ed32676.zip.b64.part06",
+        "sha256": "d7335f8b88ba75da765014a5849d2eef149c68da42d80142cd7e841110d5841e"
+      },
+      {
+        "encoded_size": 7184,
+        "path": "evidence/source-baselines/pr101-35f01329/hepta-source-evidence-35f01329262d6a137bfa3c7e95302a397ed32676.zip.b64.part07",
+        "sha256": "e20db83a3e69a53aea545c95dc921b5089f815fc839dee876edf94775baf8e3a"
+      }
+    ],
+    "encoded_size": 56336,
+    "head_commit": "35f01329262d6a137bfa3c7e95302a397ed32676",
+    "id": 10025745282,
+    "members": [
+      {
+        "name": "source-evidence-summary.json",
+        "sha256": "15d61930b389f517cac137bf00a691a4ef74133a7124591b67312406c48ee8be",
+        "size": 850
+      },
+      {
+        "name": "source-gate-result.json",
+        "sha256": "68645fe9b446ea707a9b2622afc2eb3b208a9c5fe18c7314707807e592ae3e83",
+        "size": 588
+      },
+      {
+        "name": "source-history-scan.json",
+        "sha256": "bc848193857e370a4f8d8e9b99ed470c2a36f8e49ca73b1cf8f570aa3cebeedf",
+        "size": 2907
+      },
+      {
+        "name": "source-native-sanitizer.json",
+        "sha256": "6aeebca75e217dc0ea7642b82a43fa80037bd234a81968fdedc511a8b6ef8efe",
+        "size": 332
+      },
+      {
+        "name": "source-provenance.json",
+        "sha256": "02aba1f6a7036d22732e2bbdea4efbb2b4a8659e02b333ef1b3b754bb3c506bb",
+        "size": 695
+      },
+      {
+        "name": "source-release-bundle.json",
+        "sha256": "c43f8083859b98036b901b0fd8c7dc8b1f4b15690b00823bfb782dbb67bd8a1a",
+        "size": 1731
+      },
+      {
+        "name": "source-sbom.spdx.json",
+        "sha256": "7ff5e31e53c5c1a7d283d0714089d28c0b8cf3784a33352cbc68826b40493b76",
+        "size": 259441
+      }
+    ],
+    "name": "hepta-source-evidence-35f01329262d6a137bfa3c7e95302a397ed32676",
+    "size_in_bytes": 42252,
+    "workflow_run_id": 34139161340,
+    "zip_sha256": "baa9c218a779adb4713e5985d4109b20db70087e93fca34f2a9ba08e157af897"
+  },
+  "base_commit": "f30d12bd593e53e0d69196d28210f449d411c30b",
+  "claim_ceiling": "This retained object records only the independently reviewed E4 repository-source baseline. It grants no Administration, provider, device, firmware, assurance, signing, pilot, store or release authority and never attests a successor.",
+  "evidence_scope": "historical_repository_source_qualification_only",
+  "independent_artifact_verification": {
+    "check_count": 39,
+    "passed": true,
+    "review_id": 5133811311
+  },
+  "independent_review": {
+    "author_association": "MEMBER",
+    "code_owner_at_reviewed_commit": true,
+    "latest_source_pusher": "ProfHepta",
+    "pull_request_author": "Franksudoman",
+    "review_id": 5133811311,
+    "reviewed_commit": "35f01329262d6a137bfa3c7e95302a397ed32676",
+    "reviewer": "Tomasrgbsf",
+    "reviewer_is_latest_source_pusher": false,
+    "reviewer_is_pull_request_author": false,
+    "state": "APPROVED",
+    "submitted_at": "2026-09-07T16:00:09Z"
+  },
+  "prospective_merge_commit": "ca05b315ef619b68574bb7e834ca0bfa49a48ab3",
+  "pull_request": 101,
+  "record_type": "independently-reviewed-source-baseline-v1",
+  "repository": "TrillionniumFoundation/hepta-glasses",
+  "schema_version": 1,
+  "source_commit": "35f01329262d6a137bfa3c7e95302a397ed32676",
+  "source_gate": {
+    "check_count": 17,
+    "missing": [],
+    "passed": true
+  },
+  "source_tree": "d585f78b8eddf4676bdee4d6f666a544f64a9f86",
+  "workflow": {
+    "attempt": 1,
+    "conclusion": "success",
+    "event": "pull_request",
+    "head_branch": "work/hepta-g10-trusted-openssl-custody-20260902",
+    "head_commit": "35f01329262d6a137bfa3c7e95302a397ed32676",
+    "head_tree": "d585f78b8eddf4676bdee4d6f666a544f64a9f86",
+    "id": 34139161340,
+    "jobs": [
+      {
+        "conclusion": "success",
+        "id": 101796977371,
+        "name": "repository-contracts",
+        "status": "completed",
+        "substantive_steps": [
+          "Verify exact source identity",
+          "Run python3 tools/validate_repository.py",
+          "Run python3 tools/validate_repository_metadata.py",
+          "Run python3 tools/validate_production_authority.py",
+          "Run python3 -m unittest discover -s services -p 'test_*.py'",
+          "Run python3 -m unittest discover -s adapters -p 'test_*.py'",
+          "Run python3 -m compileall -q services adapters tools",
+          "Prove repository checks are read-only"
+        ]
+      },
+      {
+        "conclusion": "success",
+        "id": 101796977423,
+        "name": "flutter",
+        "status": "completed",
+        "substantive_steps": [
+          "Verify exact source identity",
+          "Run flutter pub get",
+          "Enforce committed Dart formatting",
+          "Treat analyzer warnings as failures",
+          "Run flutter test",
+          "Prove Flutter qualification is read-only"
+        ]
+      },
+      {
+        "conclusion": "success",
+        "id": 101796977405,
+        "name": "android-native",
+        "status": "completed",
+        "substantive_steps": [
+          "Verify exact source identity",
+          "Run flutter pub get",
+          "Run flutter build apk --debug",
+          "Build Android release graph",
+          "Inspect Android release binary for test-only authority",
+          "Run Android native unit tests",
+          "Prove Android qualification is read-only"
+        ]
+      },
+      {
+        "conclusion": "success",
+        "id": 101796977428,
+        "name": "ios-native",
+        "status": "completed",
+        "substantive_steps": [
+          "Verify exact source identity",
+          "Run flutter pub get",
+          "Install locked CocoaPods dependencies",
+          "Run flutter build ios --simulator --debug",
+          "Run flutter build ios --release --no-codesign",
+          "Inspect iOS release binary for test-only authority",
+          "Run iOS native tests",
+          "Prove iOS qualification is read-only"
+        ]
+      },
+      {
+        "conclusion": "success",
+        "id": 101796977363,
+        "name": "native-sanitizers",
+        "status": "completed",
+        "substantive_steps": [
+          "Verify exact source identity",
+          "Run vendored native code under ASAN and UBSAN",
+          "Prove native sanitizer gate is read-only"
+        ]
+      },
+      {
+        "conclusion": "success",
+        "id": 101796977247,
+        "name": "secret-and-boundary-scan",
+        "status": "completed",
+        "substantive_steps": [
+          "Verify exact source identity",
+          "Run set -euo pipefail",
+          "Scan every fetched Git ref without emitting secret material"
+        ]
+      },
+      {
+        "conclusion": "success",
+        "id": 101801522239,
+        "name": "source-evidence",
+        "status": "completed",
+        "substantive_steps": [
+          "Verify exact source identity",
+          "Regenerate exact-head native sanitizer report",
+          "Generate exact-head SBOM and provenance",
+          "Verify artifact is bound to source head",
+          "Evaluate content-verified source release gate",
+          "Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+        ]
+      }
+    ],
+    "name": "hepta-glasses-ci",
+    "run_number": 847,
+    "status": "completed",
+    "workflow_id": 345531045
+  }
+}
