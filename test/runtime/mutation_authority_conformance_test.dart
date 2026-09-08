@@ -9,23 +9,24 @@ import 'package:flutter_test/flutter_test.dart';
 Map<String, Object?> _stringMap(Object? value) =>
     Map<String, Object?>.from(value! as Map);
 
-Map<Object?, Object?> _responseCopy(Map<String, Object?> contract) =>
-    Map<Object?, Object?>.from(
-      jsonDecode(jsonEncode(contract['expected_response'])) as Map,
-    );
+Map<Object?, Object?> _responseCopy(Map<String, Object?> contract) {
+  final encoded = jsonEncode(contract['expected_response']);
+  return Map<Object?, Object?>.from(jsonDecode(encoded) as Map);
+}
 
 void main() {
-  final contract = jsonDecode(
-    File(
-      'contracts/conformance/mutation-authority-v1.json',
-    ).readAsStringSync(),
-  ) as Map<String, Object?>;
+  const contractPath =
+      'contracts/conformance/mutation-authority-v1.json';
+  final contractText = File(contractPath).readAsStringSync();
+  final contract = jsonDecode(contractText) as Map<String, Object?>;
   final requestJson = _stringMap(contract['request']);
   final principalJson = _stringMap(contract['principal']);
   final arguments = _stringMap(requestJson['arguments']);
   final leaseComponent = contract['lease_token_component']! as String;
+  final nowSeconds = contract['now_epoch_seconds']! as int;
+  final deadlineSeconds = requestJson['deadline_epoch_seconds']! as int;
   final now = DateTime.fromMillisecondsSinceEpoch(
-    (contract['now_epoch_seconds']! as int) * Duration.millisecondsPerSecond,
+    nowSeconds * Duration.millisecondsPerSecond,
     isUtc: true,
   );
   final request = MutationAuthorizationRequest(
@@ -34,8 +35,7 @@ void main() {
     arguments: arguments,
     riskTier: riskTierFromJson(requestJson['risk_tier']! as String),
     deadline: DateTime.fromMillisecondsSinceEpoch(
-      (requestJson['deadline_epoch_seconds']! as int) *
-          Duration.millisecondsPerSecond,
+      deadlineSeconds * Duration.millisecondsPerSecond,
       isUtc: true,
     ),
   );
@@ -61,10 +61,7 @@ void main() {
     expect(authorization.deviceId, principalJson['device_id']);
     expect(authorization.context.subject, principalJson['subject']);
     expect(authorization.context.authenticated, isTrue);
-    expect(
-      authorization.context.userPresent,
-      principalJson['user_present'],
-    );
+    expect(authorization.context.userPresent, principalJson['user_present']);
     expect(
       authorization.context.biometricVerified,
       principalJson['biometric_verified'],
@@ -85,24 +82,44 @@ void main() {
 
   test('mobile decoder rejects authority-vector field drift', () {
     final expectedDigest = contract['expected_argument_digest']! as String;
+    final zeroDigest = List<String>.filled(64, '0').join();
     final mutations = <String, void Function(Map<Object?, Object?>)>{
-      'extra-field': (Map<Object?, Object?> body) => body['extra'] = true,
-      'task': (Map<Object?, Object?> body) => body['task_id'] = 'other',
-      'action': (Map<Object?, Object?> body) => body['action'] = 'other',
-      'risk': (Map<Object?, Object?> body) => body['risk_tier'] = 'r2',
-      'digest': (Map<Object?, Object?> body) => body['argument_digest'] =
-          List<String>.filled(64, '0').join(),
-      'subject': (Map<Object?, Object?> body) => body['subject'] = 'bad/value',
-      'device': (Map<Object?, Object?> body) => body['device_id'] = '',
-      'policy': (Map<Object?, Object?> body) => body['policy_hash'] = 'short',
-      'authentication': (Map<Object?, Object?> body) =>
-          body['authenticated'] = false,
-      'actions': (Map<Object?, Object?> body) =>
-          body['allowed_actions'] = <String>['different'],
-      'single-use': (Map<Object?, Object?> body) => body['single_use'] = false,
-      'expiry': (Map<Object?, Object?> body) =>
-          body['expires_at_epoch_seconds'] =
-              (requestJson['deadline_epoch_seconds']! as int) + 1,
+      'extra-field': (body) {
+        body['extra'] = true;
+      },
+      'task': (body) {
+        body['task_id'] = 'other';
+      },
+      'action': (body) {
+        body['action'] = 'other';
+      },
+      'risk': (body) {
+        body['risk_tier'] = 'r2';
+      },
+      'digest': (body) {
+        body['argument_digest'] = zeroDigest;
+      },
+      'subject': (body) {
+        body['subject'] = 'bad/value';
+      },
+      'device': (body) {
+        body['device_id'] = '';
+      },
+      'policy': (body) {
+        body['policy_hash'] = 'short';
+      },
+      'authentication': (body) {
+        body['authenticated'] = false;
+      },
+      'actions': (body) {
+        body['allowed_actions'] = <String>['different'];
+      },
+      'single-use': (body) {
+        body['single_use'] = false;
+      },
+      'expiry': (body) {
+        body['expires_at_epoch_seconds'] = deadlineSeconds + 1;
+      },
     };
 
     for (final mutation in mutations.entries) {

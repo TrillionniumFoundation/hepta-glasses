@@ -20,9 +20,10 @@ String _hex(Uint8List value) =>
     value.map((int byte) => byte.toRadixString(16).padLeft(2, '0')).join();
 
 void main() {
-  final contract = jsonDecode(
-    File('contracts/conformance/g1-packet-v1.json').readAsStringSync(),
-  ) as Map<String, Object?>;
+  final contractText = File(
+    'contracts/conformance/g1-packet-v1.json',
+  ).readAsStringSync();
+  final contract = jsonDecode(contractText) as Map<String, Object?>;
   final vectors = contract['vectors']! as List<Object?>;
 
   test('Dart consumes every G1 packet golden vector', () {
@@ -36,8 +37,8 @@ void main() {
       final identifier = vector['id']! as String;
       final metadata = _hexBytes(vector['metadata_hex']! as String);
       final payload = _hexBytes(vector['payload_hex']! as String);
-      final expectedFrames = (vector['frames_hex']! as List<Object?>)
-          .cast<String>();
+      final rawFrames = vector['frames_hex']! as List<Object?>;
+      final expectedFrames = rawFrames.cast<String>();
       final command = vector['command']! as int;
       final frames = codec.fragment(
         command: command,
@@ -45,10 +46,10 @@ void main() {
         maxPacketBytes: vector['max_packet_bytes']! as int,
         metadata: metadata,
       );
+      final encodedFrames = frames.map(_hex).toList(growable: false);
 
       expect(identifiers.add(identifier), isTrue, reason: identifier);
-      expect(frames.map(_hex).toList(growable: false), expectedFrames,
-          reason: identifier);
+      expect(encodedFrames, expectedFrames, reason: identifier);
       expect(
         codec.reassemble(
           frames.reversed.toList(growable: false),
@@ -66,7 +67,9 @@ void main() {
     const codec = PacketCodec();
     final frames = codec.fragment(
       command: 0x4e,
-      payload: Uint8List.fromList(List<int>.generate(12, (int i) => i)),
+      payload: Uint8List.fromList(
+        List<int>.generate(12, (int index) => index),
+      ),
       maxPacketBytes: 8,
       metadata: const <int>[7, 9],
     );
@@ -192,9 +195,11 @@ void main() {
           if (metadata.isNotEmpty && malformed.length > 1) {
             malformed.last[3] ^= 1;
           } else {
-            malformed[0] = Uint8List.fromList(
-              malformed.first.sublist(0, math.min(2, malformed.first.length)),
+            final shortFrame = malformed.first.sublist(
+              0,
+              math.min(2, malformed.first.length),
             );
+            malformed[0] = Uint8List.fromList(shortFrame);
           }
           break;
       }
