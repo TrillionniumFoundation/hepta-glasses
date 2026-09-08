@@ -22,7 +22,7 @@ Dependabot does not support CocoaPods. The `swift` ecosystem value is for Swift 
 
 The CocoaPods boundary is closed-world rather than based on a best-effort Ruby regular expression.
 
-`tools/native/dependency_update_policy.py --check-cocoapods` first binds the complete reviewed `ios/Podfile` through a SHA-256 constant. Any change to Ruby source, helper calls, aliases, variables, plugin-installation behavior, source declarations or targets fails closed until the Podfile and policy are changed together in an ordinary reviewed pull request. This prevents legal Ruby forms such as parenthesized `pod(...)` calls or helper-driven declarations from bypassing a line-oriented matcher.
+`tools/native/dependency_update_policy.py --check-cocoapods` first binds the complete reviewed `ios/Podfile` through SHA-256. Any change to Ruby source, helper calls, aliases, variables, plugin-installation behavior, source declarations or targets fails closed until the Podfile and policy are changed together in an ordinary reviewed pull request. This prevents legal Ruby forms such as parenthesized `pod(...)` calls or helper-driven declarations from bypassing a line-oriented matcher.
 
 The same command parses the complete dependency-bearing `Podfile.lock` surface in a fixed, unique order:
 
@@ -43,9 +43,12 @@ DEPENDENCIES: Flutter (from `Flutter`)
 EXTERNAL SOURCES: Flutter -> :path: Flutter
 SPEC CHECKSUMS: Flutter -> reviewed checksum
 registry Pod roots: none
+COCOAPODS generator: 1.17.0
 ```
 
-Canonical iOS qualification independently executes `pod install --deployment`. That command is defense in depth; it does not replace the closed-world source and complete-lock checks.
+The `COCOAPODS` field is bound to the reviewed CocoaPods `1.17.0` generator. A merely well-formed dotted version is insufficient. Changing the generator requires an explicit source-policy update and fresh qualification.
+
+Canonical iOS lock enforcement is not inferred from an arbitrary substring. The policy binds the complete reviewed `.github/workflows/ci.yml` through its Git blob SHA-1 and then structurally requires exactly one unconditional `Install locked CocoaPods dependencies` step under the `ios-native` job with the exact `cd ios` followed by `pod install --deployment` command. A comment, `echo`, false conditional, unrelated job or any other workflow drift fails closed. The full-object pin also prevents an unrelated workflow edit from retaining stale lock-enforcement credit.
 
 An authorized operator can refresh the lock on a clean named non-`main` branch with:
 
@@ -54,7 +57,9 @@ HEPTA_COCOAPODS_UPDATE_APPROVED=1 \
   python3 tools/native/dependency_update_policy.py --refresh-cocoapods
 ```
 
-The tool does not commit, push, open, approve or merge a pull request. It refuses a dirty worktree, `main`, a detached head, a missing toolchain, an unreviewed Podfile, an unapproved direct/transitive/source/checksum graph, or any tracked or untracked change outside `ios/Podfile.lock`. The resulting diff must enter the ordinary exact-head review path.
+The refresh resolves the `pod` executable to an executable regular file outside repository custody, computes its SHA-256, and requires RubyGems' exact `_1.17.0_` selector to return version `1.17.0`. The same absolute executable, selector, version and file digest are checked again after mutation. This transaction-scoped identity prevents a different ambient CocoaPods generator or executable substitution from silently producing the lock.
+
+The tool does not commit, push, open, approve or merge a pull request. It refuses a dirty worktree, `main`, a detached head, a missing toolchain, a mismatched generator, an unreviewed Podfile, an unapproved direct/transitive/source/checksum graph, or any tracked or untracked change outside `ios/Podfile.lock`. The resulting diff must enter the ordinary exact-head review path.
 
 An interrupted or rejected refresh may leave a dirty local review branch for inspection. It cannot publish that state. If a legitimate Flutter or CocoaPods refresh changes a reviewed version or checksum, the policy constants and tests must be updated in the same pull request after provenance, licensing and vulnerability review.
 

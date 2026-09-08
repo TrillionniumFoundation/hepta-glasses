@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -55,9 +56,7 @@ def _dependabot_entries(text: str) -> dict[str, dict[str, str]]:
         }
         missing = [name for name, match in fields.items() if match is None]
         if missing:
-            raise AssertionError(
-                f"{ecosystem} missing fields: {missing}"
-            )
+            raise AssertionError(f"{ecosystem} missing fields: {missing}")
         observed[ecosystem] = {
             name: match.group(1) for name, match in fields.items()
         }
@@ -71,6 +70,7 @@ class DependencyAutomationTests(unittest.TestCase):
         podfile: str | None = None,
         lockfile: str | None = None,
         workflow: str | None = None,
+        approved_workflow_sha: str | None = None,
     ):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -85,16 +85,24 @@ class DependencyAutomationTests(unittest.TestCase):
                 LOCKFILE_TEXT if lockfile is None else lockfile,
                 encoding="utf-8",
             )
-            workflow_path.write_text(
-                "run: pod install --deployment\n"
-                if workflow is None
-                else workflow,
-                encoding="utf-8",
+            workflow_text = (
+                WORKFLOW_TEXT if workflow is None else workflow
+            )
+            workflow_path.write_text(workflow_text, encoding="utf-8")
+            expected_sha = (
+                POLICY._git_blob_sha1(workflow_path.read_bytes())
+                if approved_workflow_sha is None
+                else approved_workflow_sha
             )
             with (
                 patch.object(POLICY, "PODFILE", podfile_path),
                 patch.object(POLICY, "LOCKFILE", lockfile_path),
                 patch.object(POLICY, "WORKFLOW", workflow_path),
+                patch.object(
+                    POLICY,
+                    "_APPROVED_WORKFLOW_GIT_BLOB_SHA1",
+                    expected_sha,
+                ),
             ):
                 return POLICY.inspect_cocoapods()
 
@@ -164,9 +172,7 @@ Swift | `swift` | yes
             {"github-actions", "gradle", "pub", "swift"},
         )
         with self.assertRaises(POLICY.DependencyPolicyError):
-            POLICY.parse_official_values(
-                "github-actions gradle pub"
-            )
+            POLICY.parse_official_values("github-actions gradle pub")
 
         source = POLICY_TOOL.read_text(encoding="utf-8")
         self.assertIn(
@@ -218,22 +224,29 @@ Swift | `swift` | yes
         )
         result = json.loads(completed.stdout)
         self.assertEqual(
-            result["mode"],
-            "closed-world-local-flutter-pod-only",
+            result["mode"], "closed-world-local-flutter-pod-only"
         )
+        self.assertEqual(result["schema_version"], 3)
         self.assertEqual(result["lock_pods"], ["Flutter"])
-        self.assertEqual(
-            result["lock_dependencies"], ["Flutter"]
-        )
-        self.assertEqual(
-            result["lock_spec_checksums"], ["Flutter"]
-        )
+        self.assertEqual(result["lock_dependencies"], ["Flutter"])
+        self.assertEqual(result["lock_spec_checksums"], ["Flutter"])
         self.assertEqual(result["external_registry_pods"], 0)
         self.assertEqual(result["registry_pod_roots"], [])
         self.assertEqual(result["external_sources"], ["Flutter"])
+        self.assertEqual(result["cocoapods_version"], "1.17.0")
+        self.assertEqual(
+            result["approved_cocoapods_version"], "1.17.0"
+        )
         self.assertEqual(
             result["ci_lock_enforcement"],
-            "pod install --deployment",
+            {
+                "job": "ios-native",
+                "step": "Install locked CocoaPods dependencies",
+                "command": "cd ios && pod install --deployment",
+                "git_blob_sha1": (
+                    "7624aaf9cafa5bfef6b55f91d714bf50bb5c92ee"
+                ),
+            },
         )
         self.assertRegex(
             result["podfile_sha256"], r"^[0-9a-f]{64}$"
@@ -250,23 +263,24 @@ Swift | `swift` | yes
             "open an ordinary exact-head pull request",
             '"--untracked-files=all"',
             "_APPROVED_PODFILE_SHA256",
+            "_APPROVED_WORKFLOW_GIT_BLOB_SHA1",
+            "_APPROVED_COCOAPODS_VERSION",
             "parse_cocoapods_lock",
+            "parse_canonical_ios_lock_step",
             '"external_registry_pods": len(registry_roots)',
+            'f"_{_APPROVED_COCOAPODS_VERSION}_"',
         ):
             self.assertIn(phrase, source)
+        self.assertNotIn('_POD_DECLARATION = re.compile', source)
         self.assertNotIn(
-            '_POD_DECLARATION = re.compile', source
+            '"pod install --deployment" not in workflow', source
         )
 
     def test_podfile_closed_world_rejects_ruby_evasions(self) -> None:
         variants = {
-            "parenthesized": (
-                PODFILE_TEXT
-                + '\npod("AFNetworking")\n'
-            ),
+            "parenthesized": PODFILE_TEXT + '\npod("AFNetworking")\n',
             "spaced-parenthesized": (
-                PODFILE_TEXT
-                + "\npod ('AFNetworking')\n"
+                PODFILE_TEXT + "\npod ('AFNetworking')\n"
             ),
             "alias-variable": (
                 PODFILE_TEXT
@@ -373,9 +387,7 @@ COCOAPODS: 1.17.0
             "unexpected": unexpected_section,
         }.items():
             with self.subTest(name=name):
-                with self.assertRaises(
-                    POLICY.DependencyPolicyError
-                ):
+                with self.assertRaises(POLICY.DependencyPolicyError):
                     POLICY.parse_cocoapods_lock(candidate)
 
     def test_lock_parser_rejects_cross_section_mismatches(self) -> None:
@@ -397,9 +409,7 @@ COCOAPODS: 1.17.0
             "child-not-in-pods": absent_child_pod,
         }.items():
             with self.subTest(name=name):
-                with self.assertRaises(
-                    POLICY.DependencyPolicyError
-                ):
+                with self.assertRaises(POLICY.DependencyPolicyError):
                     POLICY.parse_cocoapods_lock(candidate)
 
     def test_inspection_rejects_origin_source_checksum_and_children_drift(
@@ -420,17 +430,106 @@ COCOAPODS: 1.17.0
             "  - Flutter (1.0.0)",
             "  - Flutter (1.0.0):\n    - Flutter",
         )
+        version_drift = LOCKFILE_TEXT.replace(
+            "COCOAPODS: 1.17.0", "COCOAPODS: 99.0.0"
+        )
         for name, candidate in {
             "origin": origin_drift,
             "source": source_drift,
             "checksum": checksum_drift,
             "children": child_drift,
+            "generator-version": version_drift,
         }.items():
             with self.subTest(name=name):
-                with self.assertRaises(
-                    POLICY.DependencyPolicyError
-                ):
+                with self.assertRaises(POLICY.DependencyPolicyError):
                     self._inspect_fixture(lockfile=candidate)
+
+    def test_workflow_parser_rejects_textual_decoys(self) -> None:
+        decoys = {
+            "comment": """name: decoy
+jobs:
+  ios-native:
+    steps:
+      # pod install --deployment
+      - run: true
+""",
+            "echo": """name: decoy
+jobs:
+  ios-native:
+    steps:
+      - run: echo 'pod install --deployment'
+""",
+            "false-branch": """name: decoy
+jobs:
+  ios-native:
+    steps:
+      - name: Install locked CocoaPods dependencies
+        if: ${{ false }}
+        run: |
+          cd ios
+          pod install --deployment
+""",
+            "unrelated-job": """name: decoy
+jobs:
+  diagnostics:
+    steps:
+      - name: Install locked CocoaPods dependencies
+        run: |
+          cd ios
+          pod install --deployment
+""",
+        }
+        for name, candidate in decoys.items():
+            with self.subTest(name=name):
+                with self.assertRaises(POLICY.DependencyPolicyError):
+                    POLICY.parse_canonical_ios_lock_step(candidate)
+
+    def test_workflow_full_object_binding_rejects_unrelated_drift(self) -> None:
+        changed = WORKFLOW_TEXT + "\n# unrelated but unreviewed change\n"
+        with self.assertRaises(POLICY.DependencyPolicyError):
+            self._inspect_fixture(
+                workflow=changed,
+                approved_workflow_sha=(
+                    "7624aaf9cafa5bfef6b55f91d714bf50bb5c92ee"
+                ),
+            )
+
+    def test_generator_selector_rejects_mismatched_version(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "pod"
+            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            executable.chmod(0o755)
+            mismatch = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="99.0.0\n", stderr=""
+            )
+            with (
+                patch.object(POLICY.shutil, "which", return_value=str(executable)),
+                patch.object(POLICY.subprocess, "run", return_value=mismatch) as run,
+            ):
+                with self.assertRaises(POLICY.DependencyPolicyError):
+                    POLICY.resolve_cocoapods_generator()
+            self.assertEqual(
+                run.call_args.args[0],
+                [str(executable.resolve()), "_1.17.0_", "--version"],
+            )
+
+    def test_generator_identity_binds_path_digest_and_version(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "pod"
+            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            executable.chmod(0o755)
+            matched = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="1.17.0\n", stderr=""
+            )
+            with (
+                patch.object(POLICY.shutil, "which", return_value=str(executable)),
+                patch.object(POLICY.subprocess, "run", return_value=matched),
+            ):
+                identity = POLICY.resolve_cocoapods_generator()
+            self.assertEqual(identity["path"], str(executable.resolve()))
+            self.assertEqual(identity["version"], "1.17.0")
+            self.assertEqual(identity["selector"], "_1.17.0_")
+            self.assertRegex(identity["sha256"], r"^[0-9a-f]{64}$")
 
     def test_lockfiles_and_operator_guide_exist(self) -> None:
         for relative in (
@@ -458,6 +557,8 @@ COCOAPODS: 1.17.0
             "DEPENDENCIES",
             "EXTERNAL SOURCES",
             "SPEC CHECKSUMS",
+            "CocoaPods `1.17.0`",
+            "Git blob SHA-1",
             "No dependency pull request is auto-merged",
             "all seven canonical jobs",
             "exact-head source Artifact",
@@ -468,6 +569,7 @@ COCOAPODS: 1.17.0
 
 PODFILE_TEXT = (ROOT / "ios/Podfile").read_text(encoding="utf-8")
 LOCKFILE_TEXT = (ROOT / "ios/Podfile.lock").read_text(encoding="utf-8")
+WORKFLOW_TEXT = WORKFLOW.read_text(encoding="utf-8")
 
 
 if __name__ == "__main__":

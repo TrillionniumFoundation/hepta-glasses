@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -31,6 +32,7 @@ _OFFICIAL_PATH = "data/reusables/dependabot/supported-package-managers.md"
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 _BLOB_SHA = re.compile(r"^[0-9a-f]{40}$")
 _SHA1 = re.compile(r"^[0-9a-f]{40}$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _COCOAPODS_VERSION = re.compile(r"^[0-9]+(?:\.[0-9]+){1,3}$")
 _POD_NAME = r"[A-Za-z0-9][A-Za-z0-9_.+\-/]*"
 _POD_RECORD = re.compile(
@@ -54,12 +56,14 @@ _OFFICIAL_VALUE = re.compile(r"\|\s*`([a-z0-9][a-z0-9-]*)`\s*\|")
 _BASE64_WITH_LINE_BREAKS = re.compile(r"^[A-Za-z0-9+/=\r\n]*$")
 _MAX_RESPONSE_BYTES = 1024 * 1024
 
-# This is SHA-256 over the reviewed Podfile with LF line endings and one final LF.
-# Any Ruby, helper, alias, variable, plugin-installation or source change must update
-# this reviewed constant and its hostile tests in the same ordinary pull request.
+# Reviewed content identities. Any source movement requires a new exact-head review.
 _APPROVED_PODFILE_SHA256 = (
     "cf4f50875914e973aaed1f3627faebb458ce0550d3b59ab45a95e6410f882f80"
 )
+_APPROVED_WORKFLOW_GIT_BLOB_SHA1 = (
+    "7624aaf9cafa5bfef6b55f91d714bf50bb5c92ee"
+)
+_APPROVED_COCOAPODS_VERSION = "1.17.0"
 _APPROVED_LOCK_PODS = {"Flutter": "1.0.0"}
 _APPROVED_LOCK_DEPENDENCIES = {"Flutter": " (from `Flutter`)"}
 _APPROVED_EXTERNAL_SOURCES = {"Flutter": {":path": "Flutter"}}
@@ -110,24 +114,36 @@ def _load_json(path: Path) -> dict[str, Any]:
         )
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise DependencyPolicyError(
-            f"cannot parse {path.relative_to(ROOT)}: {exc}"
+            f"cannot parse {_display_path(path)}: {exc}"
         ) from exc
     if not isinstance(value, dict):
-        raise DependencyPolicyError(
-            f"{path.relative_to(ROOT)} must be a JSON object"
-        )
+        raise DependencyPolicyError(f"{_display_path(path)} must be a JSON object")
     return value
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
 
 
 def _read(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
-        try:
-            name = str(path.relative_to(ROOT))
-        except ValueError:
-            name = str(path)
-        raise DependencyPolicyError(f"cannot read {name}: {exc}") from exc
+        raise DependencyPolicyError(
+            f"cannot read {_display_path(path)}: {exc}"
+        ) from exc
+
+
+def _read_bytes(path: Path) -> bytes:
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        raise DependencyPolicyError(
+            f"cannot read {_display_path(path)}: {exc}"
+        ) from exc
 
 
 def _string_list(value: Any, name: str) -> list[str]:
@@ -154,9 +170,7 @@ def load_contract() -> dict[str, Any]:
             f"dependency contract fields differ: {sorted(set(contract) ^ expected)}"
         )
     if contract["schema_version"] != 2:
-        raise DependencyPolicyError(
-            "dependency contract schema_version must be 2"
-        )
+        raise DependencyPolicyError("dependency contract schema_version must be 2")
 
     source = contract["official_source"]
     if not isinstance(source, dict) or set(source) != {
@@ -197,11 +211,7 @@ def load_contract() -> dict[str, Any]:
         "unsupported_repository_managers",
     )
     minimum = contract["minimum_official_value_count"]
-    if (
-        isinstance(minimum, bool)
-        or not isinstance(minimum, int)
-        or minimum < 10
-    ):
+    if isinstance(minimum, bool) or not isinstance(minimum, int) or minimum < 10:
         raise DependencyPolicyError(
             "minimum_official_value_count must be an integer >= 10"
         )
@@ -358,9 +368,7 @@ def verify_dependabot_official() -> dict[str, Any]:
         raise DependencyPolicyError(
             "pinned GitHub table unexpectedly lacks swift"
         )
-    if (ROOT / "ios/Podfile").is_file() and not (
-        ROOT / "Package.swift"
-    ).exists():
+    if PODFILE.is_file() and not (ROOT / "Package.swift").exists():
         if "swift" in configured:
             raise DependencyPolicyError(
                 "swift cannot substitute for this repository's CocoaPods graph"
@@ -392,7 +400,9 @@ def _closed_lock_lines(lock_text: str) -> list[str]:
             "Podfile.lock contains a forbidden BOM, NUL or CR byte"
         )
     lines = lock_text.splitlines()
-    if not lines or any(line.rstrip(" ") != line or "\t" in line for line in lines):
+    if not lines or any(
+        line.rstrip(" ") != line or "\t" in line for line in lines
+    ):
         raise DependencyPolicyError(
             "Podfile.lock must be non-empty with no tabs or trailing spaces"
         )
@@ -433,7 +443,8 @@ def _split_lock_sections(lock_text: str) -> dict[str, list[str]]:
             )
             if scalar_match is None:
                 raise DependencyPolicyError(
-                    f"malformed or unexpected Podfile.lock top-level line: {line!r}"
+                    "malformed or unexpected Podfile.lock top-level line: "
+                    f"{line!r}"
                 )
             name, value = scalar_match.groups()
             if name in sections:
@@ -463,7 +474,12 @@ def _split_lock_sections(lock_text: str) -> dict[str, list[str]]:
     return sections
 
 
-def _unique_add(values: dict[str, Any], name: str, value: Any, section: str) -> None:
+def _unique_add(
+    values: dict[str, Any],
+    name: str,
+    value: Any,
+    section: str,
+) -> None:
     if name in values:
         raise DependencyPolicyError(
             f"duplicate {section} record for {name}"
@@ -524,7 +540,10 @@ def parse_cocoapods_lock(lock_text: str) -> dict[str, Any]:
         if name_match:
             current_source = name_match.group("name")
             _unique_add(
-                external_sources, current_source, {}, "EXTERNAL SOURCES"
+                external_sources,
+                current_source,
+                {},
+                "EXTERNAL SOURCES",
             )
             continue
         field_match = _EXTERNAL_SOURCE_FIELD.fullmatch(line)
@@ -630,10 +649,81 @@ def _podfile_digest(podfile: str) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _git_blob_sha1(payload: bytes) -> str:
+    header = f"blob {len(payload)}\0".encode("ascii")
+    return hashlib.sha1(header + payload).hexdigest()  # noqa: S324
+
+
+def parse_canonical_ios_lock_step(workflow_text: str) -> dict[str, str]:
+    """Locate one unconditional exact lock-install step in ios-native."""
+    if "\ufeff" in workflow_text or "\x00" in workflow_text or "\r" in workflow_text:
+        raise DependencyPolicyError(
+            "canonical workflow contains a forbidden BOM, NUL or CR byte"
+        )
+    lines = workflow_text.splitlines()
+    current_job: str | None = None
+    matches: list[int] = []
+    for index, line in enumerate(lines):
+        job_match = re.fullmatch(r"  ([a-z0-9][a-z0-9-]*):", line)
+        if job_match:
+            current_job = job_match.group(1)
+            continue
+        if line != "      - name: Install locked CocoaPods dependencies":
+            continue
+        if current_job != "ios-native":
+            raise DependencyPolicyError(
+                "CocoaPods lock-install step is outside ios-native"
+            )
+        expected = [
+            "      - name: Install locked CocoaPods dependencies",
+            "        run: |",
+            "          cd ios",
+            "          pod install --deployment",
+        ]
+        if lines[index : index + len(expected)] != expected:
+            raise DependencyPolicyError(
+                "ios-native CocoaPods lock-install step differs from reviewed structure"
+            )
+        if index > 0 and lines[index - 1].lstrip().startswith("if:"):
+            raise DependencyPolicyError(
+                "ios-native CocoaPods lock-install step must be unconditional"
+            )
+        matches.append(index)
+
+    if len(matches) != 1:
+        raise DependencyPolicyError(
+            "canonical workflow must contain exactly one reviewed "
+            f"ios-native CocoaPods lock-install step, observed={len(matches)}"
+        )
+    return {
+        "job": "ios-native",
+        "step": "Install locked CocoaPods dependencies",
+        "command": "cd ios && pod install --deployment",
+    }
+
+
+def verify_canonical_workflow() -> dict[str, str]:
+    raw = _read_bytes(WORKFLOW)
+    actual = _git_blob_sha1(raw)
+    if actual != _APPROVED_WORKFLOW_GIT_BLOB_SHA1:
+        raise DependencyPolicyError(
+            "canonical workflow Git blob identity differs from the reviewed "
+            f"object: observed={actual}, expected={_APPROVED_WORKFLOW_GIT_BLOB_SHA1}"
+        )
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeError as exc:
+        raise DependencyPolicyError(
+            f"canonical workflow is not UTF-8: {exc}"
+        ) from exc
+    result = parse_canonical_ios_lock_step(text)
+    result["git_blob_sha1"] = actual
+    return result
+
+
 def inspect_cocoapods() -> dict[str, Any]:
     podfile = _read(PODFILE)
     lock = _read(LOCKFILE)
-    workflow = _read(WORKFLOW)
 
     podfile_sha256 = _podfile_digest(podfile)
     if podfile_sha256 != _APPROVED_PODFILE_SHA256:
@@ -673,18 +763,21 @@ def inspect_cocoapods() -> dict[str, Any]:
         raise DependencyPolicyError(
             "PODFILE CHECKSUM differs from the reviewed Podfile binding"
         )
+    if graph["cocoapods_version"] != _APPROVED_COCOAPODS_VERSION:
+        raise DependencyPolicyError(
+            "COCOAPODS generator differs from the reviewed version: "
+            f"observed={graph['cocoapods_version']}, "
+            f"expected={_APPROVED_COCOAPODS_VERSION}"
+        )
     if graph["external_registry_pods"] != 0:
         raise DependencyPolicyError(
             "registry-hosted Pods are prohibited until a reviewed updater and "
             f"trust policy exist: {graph['registry_pod_roots']}"
         )
-    if "pod install --deployment" not in workflow:
-        raise DependencyPolicyError(
-            "canonical iOS qualification no longer enforces Podfile.lock"
-        )
 
+    workflow = verify_canonical_workflow()
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "mode": "closed-world-local-flutter-pod-only",
         "podfile_sha256": podfile_sha256,
         "lock_pods": graph["pods"],
@@ -694,7 +787,8 @@ def inspect_cocoapods() -> dict[str, Any]:
         "registry_pod_roots": graph["registry_pod_roots"],
         "external_sources": sorted(graph["external_sources"]),
         "cocoapods_version": graph["cocoapods_version"],
-        "ci_lock_enforcement": "pod install --deployment",
+        "approved_cocoapods_version": _APPROVED_COCOAPODS_VERSION,
+        "ci_lock_enforcement": workflow,
         "auto_commit": False,
         "auto_push": False,
         "auto_merge": False,
@@ -711,13 +805,100 @@ def _git(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _require_refresh_boundary() -> None:
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as exc:
+        raise DependencyPolicyError(
+            f"cannot hash executable {path}: {exc}"
+        ) from exc
+    return digest.hexdigest()
+
+
+def _run_generator_version(path: Path) -> str:
+    try:
+        completed = subprocess.run(
+            [str(path), f"_{_APPROVED_COCOAPODS_VERSION}_", "--version"],
+            cwd=ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+            timeout=20,
+            env={**os.environ, "COCOAPODS_DISABLE_STATS": "true"},
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        raise DependencyPolicyError(
+            "CocoaPods generator version probe failed closed: "
+            f"{type(exc).__name__}"
+        ) from exc
+    version = completed.stdout.strip()
+    if version != _APPROVED_COCOAPODS_VERSION:
+        raise DependencyPolicyError(
+            "CocoaPods executable cannot select the reviewed generator: "
+            f"observed={version!r}, expected={_APPROVED_COCOAPODS_VERSION!r}"
+        )
+    return version
+
+
+def resolve_cocoapods_generator() -> dict[str, str]:
+    discovered = shutil.which("pod")
+    if not discovered:
+        raise DependencyPolicyError("required executable is unavailable: pod")
+    try:
+        path = Path(discovered).resolve(strict=True)
+        metadata = path.stat()
+    except OSError as exc:
+        raise DependencyPolicyError(
+            f"cannot resolve CocoaPods executable: {exc}"
+        ) from exc
+    if not path.is_file() or not os.access(path, os.X_OK):
+        raise DependencyPolicyError(
+            "CocoaPods executable must be an executable regular file"
+        )
+    if stat.S_ISLNK(metadata.st_mode):
+        raise DependencyPolicyError(
+            "resolved CocoaPods executable unexpectedly remains a symlink"
+        )
+    if path == ROOT or ROOT in path.parents:
+        raise DependencyPolicyError(
+            "CocoaPods executable must not be supplied by the repository"
+        )
+    digest = _sha256_file(path)
+    if not _SHA256.fullmatch(digest):
+        raise DependencyPolicyError(
+            "CocoaPods executable SHA-256 is malformed"
+        )
+    version = _run_generator_version(path)
+    return {
+        "path": str(path),
+        "sha256": digest,
+        "version": version,
+        "selector": f"_{_APPROVED_COCOAPODS_VERSION}_",
+    }
+
+
+def _verify_same_generator(identity: dict[str, str]) -> None:
+    path = Path(identity["path"])
+    if _sha256_file(path) != identity["sha256"]:
+        raise DependencyPolicyError(
+            "CocoaPods executable changed during the refresh transaction"
+        )
+    if _run_generator_version(path) != identity["version"]:
+        raise DependencyPolicyError(
+            "CocoaPods generator version changed during the refresh transaction"
+        )
+
+
+def _require_refresh_boundary() -> dict[str, str]:
     if os.environ.get(APPROVAL_ENV) != "1":
         raise DependencyPolicyError(
             f"--refresh-cocoapods requires {APPROVAL_ENV}=1 "
             "from an authorized operator"
         )
-    for executable in ("flutter", "pod", "git"):
+    for executable in ("flutter", "git"):
         if shutil.which(executable) is None:
             raise DependencyPolicyError(
                 f"required executable is unavailable: {executable}"
@@ -735,17 +916,23 @@ def _require_refresh_boundary() -> None:
             "lock refresh requires a clean worktree so change custody "
             "is unambiguous"
         )
+    return resolve_cocoapods_generator()
 
 
 def refresh_cocoapods() -> dict[str, Any]:
-    _require_refresh_boundary()
+    generator = _require_refresh_boundary()
     subprocess.run(["flutter", "pub", "get"], cwd=ROOT, check=True)
     subprocess.run(
-        ["pod", "update"],
+        [
+            generator["path"],
+            generator["selector"],
+            "update",
+        ],
         cwd=ROOT / "ios",
         check=True,
         env={**os.environ, "COCOAPODS_DISABLE_STATS": "true"},
     )
+    _verify_same_generator(generator)
 
     changed: list[str] = []
     for line in _git(
@@ -766,6 +953,11 @@ def refresh_cocoapods() -> dict[str, Any]:
             f"committing or pushing: {changed}"
         )
     result = inspect_cocoapods()
+    if result["cocoapods_version"] != generator["version"]:
+        raise DependencyPolicyError(
+            "refreshed lock generator does not match the executing generator"
+        )
+    result["generator_identity"] = generator
     result["changed_files"] = changed
     result["operator_next_step"] = (
         "review the lockfile diff and open an ordinary exact-head pull request"
