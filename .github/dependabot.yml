@@ -33,14 +33,3 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "deps(android)"
-
-  - package-ecosystem: cocoapods
-    directory: "/ios"
-    schedule:
-      interval: weekly
-      day: monday
-      time: "03:45"
-      timezone: "Asia/Singapore"
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: "deps(ios)"
