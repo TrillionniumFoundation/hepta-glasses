@@ -20,7 +20,32 @@ Dependabot does not support CocoaPods. The `swift` ecosystem value is for Swift 
 
 ## CocoaPods boundary
 
-The current Pod graph contains no registry-hosted Pod declaration. `Podfile.lock` contains only the local Flutter source, and canonical iOS qualification executes `pod install --deployment`. `tools/native/dependency_update_policy.py --check-cocoapods` verifies that boundary without network access.
+The CocoaPods boundary is closed-world rather than based on a best-effort Ruby regular expression.
+
+`tools/native/dependency_update_policy.py --check-cocoapods` first binds the complete reviewed `ios/Podfile` through a SHA-256 constant. Any change to Ruby source, helper calls, aliases, variables, plugin-installation behavior, source declarations or targets fails closed until the Podfile and policy are changed together in an ordinary reviewed pull request. This prevents legal Ruby forms such as parenthesized `pod(...)` calls or helper-driven declarations from bypassing a line-oriented matcher.
+
+The same command parses the complete dependency-bearing `Podfile.lock` surface in a fixed, unique order:
+
+- `PODS`;
+- `DEPENDENCIES`;
+- `EXTERNAL SOURCES`;
+- `SPEC CHECKSUMS`;
+- `PODFILE CHECKSUM`;
+- `COCOAPODS`.
+
+It rejects missing, duplicate, malformed, reordered or unexpected sections; duplicate records and fields; tabs and trailing whitespace; dependencies or transitive references absent from `PODS`; checksum inventories that differ from Pod roots; sources absent from the resolved graph; unexpected direct or transitive Pods; origin, version, source-path, Podfile-checksum or spec-checksum drift. The registry-Pod count is derived from resolved Pod roots that are not represented by an approved external source; it is not a constant assertion.
+
+The only accepted graph is the current local Flutter Pod:
+
+```text
+PODS: Flutter 1.0.0
+DEPENDENCIES: Flutter (from `Flutter`)
+EXTERNAL SOURCES: Flutter -> :path: Flutter
+SPEC CHECKSUMS: Flutter -> reviewed checksum
+registry Pod roots: none
+```
+
+Canonical iOS qualification independently executes `pod install --deployment`. That command is defense in depth; it does not replace the closed-world source and complete-lock checks.
 
 An authorized operator can refresh the lock on a clean named non-`main` branch with:
 
@@ -29,16 +54,18 @@ HEPTA_COCOAPODS_UPDATE_APPROVED=1 \
   python3 tools/native/dependency_update_policy.py --refresh-cocoapods
 ```
 
-The tool does not commit, push, open, approve or merge a pull request. It refuses a dirty worktree, `main`, a detached head, missing toolchain, external Pod declarations, external sources other than local Flutter, or any tracked/untracked change outside `ios/Podfile.lock`. The resulting diff must enter the ordinary exact-head review path.
+The tool does not commit, push, open, approve or merge a pull request. It refuses a dirty worktree, `main`, a detached head, a missing toolchain, an unreviewed Podfile, an unapproved direct/transitive/source/checksum graph, or any tracked or untracked change outside `ios/Podfile.lock`. The resulting diff must enter the ordinary exact-head review path.
 
-Introducing any registry-hosted Pod is a new dependency and trust-boundary change. The fail-closed check blocks it until maintainers add an applicable supported update mechanism, provenance/licensing review, vulnerability monitoring and corresponding CI tests.
+An interrupted or rejected refresh may leave a dirty local review branch for inspection. It cannot publish that state. If a legitimate Flutter or CocoaPods refresh changes a reviewed version or checksum, the policy constants and tests must be updated in the same pull request after provenance, licensing and vulnerability review.
+
+Introducing any registry-hosted Pod is a new dependency and trust-boundary change. The fail-closed check blocks it until maintainers add an applicable supported update mechanism, provenance and licensing review, vulnerability monitoring, a deliberately expanded approved graph and corresponding hostile CI tests.
 
 ## Admission policy
 
 No dependency pull request is auto-merged. Every update is an ordinary source change and must preserve the repository’s exact-object rules:
 
 1. inspect release notes, provenance, licensing, vulnerability advisories and transitive changes;
-2. update the applicable lockfile through the ecosystem’s normal resolver rather than hand-editing resolved hashes;
+2. update the applicable lockfile through the ecosystem's normal resolver rather than hand-editing resolved hashes;
 3. run all seven canonical jobs on one unchanged head;
 4. independently verify the exact-head source Artifact and its commit/tree, history, native, provenance and SBOM bindings;
 5. obtain an eligible latest-head review with all conversations resolved;

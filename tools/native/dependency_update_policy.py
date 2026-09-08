@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import re
@@ -29,12 +30,51 @@ _OFFICIAL_REPOSITORY = "github/docs"
 _OFFICIAL_PATH = "data/reusables/dependabot/supported-package-managers.md"
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 _BLOB_SHA = re.compile(r"^[0-9a-f]{40}$")
-_POD_DECLARATION = re.compile(r"""^\s*pod\s+['\"]([^'\"]+)['\"]""")
-_COCOAPODS_VERSION = re.compile(r"(?m)^COCOAPODS:\s+([0-9]+(?:\.[0-9]+){1,3})\s*$")
+_SHA1 = re.compile(r"^[0-9a-f]{40}$")
+_COCOAPODS_VERSION = re.compile(r"^[0-9]+(?:\.[0-9]+){1,3}$")
+_POD_NAME = r"[A-Za-z0-9][A-Za-z0-9_.+\-/]*"
+_POD_RECORD = re.compile(
+    rf"^  - (?P<name>{_POD_NAME}) \((?P<version>[^()\r\n]+)\)(?P<children>:)?$"
+)
+_POD_CHILD = re.compile(
+    rf"^    - (?P<name>{_POD_NAME})(?: \((?P<constraint>[^()\r\n]+)\))?$"
+)
+_DEPENDENCY_RECORD = re.compile(
+    rf"^  - (?P<name>{_POD_NAME})(?P<metadata> \([^\r\n]+\))?$"
+)
+_EXTERNAL_SOURCE_NAME = re.compile(rf"^  (?P<name>{_POD_NAME}):$")
+_EXTERNAL_SOURCE_FIELD = re.compile(
+    r"^    (?P<key>:[a-z][a-z0-9_-]*): (?P<value>[^\r\n]+)$"
+)
+_SPEC_CHECKSUM = re.compile(
+    rf"^  (?P<name>{_POD_NAME}): (?P<digest>[0-9a-f]{{40}})$"
+)
 _ECOSYSTEM = re.compile(r"(?m)^  - package-ecosystem: ([a-z0-9][a-z0-9-]*)$")
 _OFFICIAL_VALUE = re.compile(r"\|\s*`([a-z0-9][a-z0-9-]*)`\s*\|")
 _BASE64_WITH_LINE_BREAKS = re.compile(r"^[A-Za-z0-9+/=\r\n]*$")
 _MAX_RESPONSE_BYTES = 1024 * 1024
+
+# This is SHA-256 over the reviewed Podfile with LF line endings and one final LF.
+# Any Ruby, helper, alias, variable, plugin-installation or source change must update
+# this reviewed constant and its hostile tests in the same ordinary pull request.
+_APPROVED_PODFILE_SHA256 = (
+    "cf4f50875914e973aaed1f3627faebb458ce0550d3b59ab45a95e6410f882f80"
+)
+_APPROVED_LOCK_PODS = {"Flutter": "1.0.0"}
+_APPROVED_LOCK_DEPENDENCIES = {"Flutter": " (from `Flutter`)"}
+_APPROVED_EXTERNAL_SOURCES = {"Flutter": {":path": "Flutter"}}
+_APPROVED_SPEC_CHECKSUMS = {
+    "Flutter": "71a624a5bc0c04062bf19101d501e466baf2fb47"
+}
+_APPROVED_PODFILE_LOCK_CHECKSUM = "9c46fd01abff66081b39f5fa5767b3f1d0b11d76"
+_LOCK_SECTION_ORDER = (
+    "PODS",
+    "DEPENDENCIES",
+    "EXTERNAL SOURCES",
+    "SPEC CHECKSUMS",
+    "PODFILE CHECKSUM",
+    "COCOAPODS",
+)
 
 
 class DependencyPolicyError(RuntimeError):
@@ -42,7 +82,9 @@ class DependencyPolicyError(RuntimeError):
 
 
 class _NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+    def redirect_request(  # type: ignore[no-untyped-def]
+        self, req, fp, code, msg, headers, newurl
+    ):
         return None
 
 
@@ -67,17 +109,25 @@ def _load_json(path: Path) -> dict[str, Any]:
             parse_constant=_reject_constant,
         )
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise DependencyPolicyError(f"cannot parse {path.relative_to(ROOT)}: {exc}") from exc
+        raise DependencyPolicyError(
+            f"cannot parse {path.relative_to(ROOT)}: {exc}"
+        ) from exc
     if not isinstance(value, dict):
-        raise DependencyPolicyError(f"{path.relative_to(ROOT)} must be a JSON object")
+        raise DependencyPolicyError(
+            f"{path.relative_to(ROOT)} must be a JSON object"
+        )
     return value
 
 
 def _read(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise DependencyPolicyError(f"cannot read {path.relative_to(ROOT)}: {exc}") from exc
+    except (OSError, UnicodeError) as exc:
+        try:
+            name = str(path.relative_to(ROOT))
+        except ValueError:
+            name = str(path)
+        raise DependencyPolicyError(f"cannot read {name}: {exc}") from exc
 
 
 def _string_list(value: Any, name: str) -> list[str]:
@@ -104,7 +154,9 @@ def load_contract() -> dict[str, Any]:
             f"dependency contract fields differ: {sorted(set(contract) ^ expected)}"
         )
     if contract["schema_version"] != 2:
-        raise DependencyPolicyError("dependency contract schema_version must be 2")
+        raise DependencyPolicyError(
+            "dependency contract schema_version must be 2"
+        )
 
     source = contract["official_source"]
     if not isinstance(source, dict) or set(source) != {
@@ -113,41 +165,69 @@ def load_contract() -> dict[str, Any]:
         "path",
         "retrieved_at",
     }:
-        raise DependencyPolicyError("official_source must use the closed source shape")
+        raise DependencyPolicyError(
+            "official_source must use the closed source shape"
+        )
     if source["repository"] != _OFFICIAL_REPOSITORY:
-        raise DependencyPolicyError("official source repository must be github/docs")
+        raise DependencyPolicyError(
+            "official source repository must be github/docs"
+        )
     if source["path"] != _OFFICIAL_PATH:
-        raise DependencyPolicyError("official source path is not the GitHub package-manager table")
-    if not isinstance(source["commit"], str) or not _COMMIT.fullmatch(source["commit"]):
-        raise DependencyPolicyError("official source commit must be a lowercase full Git SHA")
+        raise DependencyPolicyError(
+            "official source path is not the GitHub package-manager table"
+        )
+    if not isinstance(source["commit"], str) or not _COMMIT.fullmatch(
+        source["commit"]
+    ):
+        raise DependencyPolicyError(
+            "official source commit must be a lowercase full Git SHA"
+        )
     if not isinstance(source["retrieved_at"], str) or not re.fullmatch(
         r"20[0-9]{2}-[0-9]{2}-[0-9]{2}", source["retrieved_at"]
     ):
-        raise DependencyPolicyError("official source retrieval date must be YYYY-MM-DD")
+        raise DependencyPolicyError(
+            "official source retrieval date must be YYYY-MM-DD"
+        )
 
-    configured = _string_list(contract["configured_ecosystems"], "configured_ecosystems")
+    configured = _string_list(
+        contract["configured_ecosystems"], "configured_ecosystems"
+    )
     unsupported = _string_list(
         contract["unsupported_repository_managers"],
         "unsupported_repository_managers",
     )
     minimum = contract["minimum_official_value_count"]
-    if isinstance(minimum, bool) or not isinstance(minimum, int) or minimum < 10:
-        raise DependencyPolicyError("minimum_official_value_count must be an integer >= 10")
+    if (
+        isinstance(minimum, bool)
+        or not isinstance(minimum, int)
+        or minimum < 10
+    ):
+        raise DependencyPolicyError(
+            "minimum_official_value_count must be an integer >= 10"
+        )
     if set(configured) & set(unsupported):
-        raise DependencyPolicyError("configured and unsupported manager sets overlap")
+        raise DependencyPolicyError(
+            "configured and unsupported manager sets overlap"
+        )
     return contract
 
 
 def parse_official_values(document: str) -> set[str]:
     if "Package manager | YAML value" not in document:
-        raise DependencyPolicyError("official document is not the package-manager table")
+        raise DependencyPolicyError(
+            "official document is not the package-manager table"
+        )
     values = set(_OFFICIAL_VALUE.findall(document))
     if not values:
-        raise DependencyPolicyError("official package-manager table yielded no YAML values")
+        raise DependencyPolicyError(
+            "official package-manager table yielded no YAML values"
+        )
     return values
 
 
-def _fetch_official_document(source: dict[str, Any]) -> tuple[str, str, str]:
+def _fetch_official_document(
+    source: dict[str, Any],
+) -> tuple[str, str, str]:
     repository = source["repository"]
     commit = source["commit"]
     path = source["path"]
@@ -163,23 +243,34 @@ def _fetch_official_document(source: dict[str, Any]) -> tuple[str, str, str]:
     token = os.environ.get("GITHUB_TOKEN", "")
     if token:
         if "\n" in token or "\r" in token:
-            raise DependencyPolicyError("GITHUB_TOKEN contains a forbidden newline")
+            raise DependencyPolicyError(
+                "GITHUB_TOKEN contains a forbidden newline"
+            )
         headers["Authorization"] = f"Bearer {token}"
 
     request = Request(url, headers=headers, method="GET")
     try:
-        with build_opener(_NoRedirect()).open(request, timeout=20) as response:
+        with build_opener(_NoRedirect()).open(
+            request, timeout=20
+        ) as response:
             if response.geturl() != url:
-                raise DependencyPolicyError("official-source request redirected unexpectedly")
+                raise DependencyPolicyError(
+                    "official-source request redirected unexpectedly"
+                )
             if response.status != 200:
                 raise DependencyPolicyError(
-                    f"official-source HTTP status was {response.status}, expected 200"
+                    "official-source HTTP status was "
+                    f"{response.status}, expected 200"
                 )
             payload = response.read(_MAX_RESPONSE_BYTES + 1)
     except (HTTPError, URLError, TimeoutError, OSError) as exc:
-        raise DependencyPolicyError(f"official-source read failed closed: {exc}") from exc
+        raise DependencyPolicyError(
+            f"official-source read failed closed: {exc}"
+        ) from exc
     if len(payload) > _MAX_RESPONSE_BYTES:
-        raise DependencyPolicyError("official-source response exceeds one MiB")
+        raise DependencyPolicyError(
+            "official-source response exceeds one MiB"
+        )
 
     try:
         metadata = json.loads(
@@ -188,32 +279,48 @@ def _fetch_official_document(source: dict[str, Any]) -> tuple[str, str, str]:
             parse_constant=_reject_constant,
         )
     except (UnicodeError, json.JSONDecodeError) as exc:
-        raise DependencyPolicyError(f"official-source response is invalid JSON: {exc}") from exc
+        raise DependencyPolicyError(
+            f"official-source response is invalid JSON: {exc}"
+        ) from exc
     if not isinstance(metadata, dict):
-        raise DependencyPolicyError("official-source response must be an object")
+        raise DependencyPolicyError(
+            "official-source response must be an object"
+        )
     if metadata.get("type") != "file" or metadata.get("path") != path:
-        raise DependencyPolicyError("official-source response is not the pinned file")
+        raise DependencyPolicyError(
+            "official-source response is not the pinned file"
+        )
     blob_sha = metadata.get("sha")
     if not isinstance(blob_sha, str) or not _BLOB_SHA.fullmatch(blob_sha):
-        raise DependencyPolicyError("official-source blob SHA is missing or malformed")
+        raise DependencyPolicyError(
+            "official-source blob SHA is missing or malformed"
+        )
     encoded = metadata.get("content")
     if metadata.get("encoding") != "base64" or not isinstance(encoded, str):
-        raise DependencyPolicyError("official-source content is not base64 encoded")
+        raise DependencyPolicyError(
+            "official-source content is not base64 encoded"
+        )
     if not _BASE64_WITH_LINE_BREAKS.fullmatch(encoded):
-        raise DependencyPolicyError("official-source base64 contains non-alphabet bytes")
+        raise DependencyPolicyError(
+            "official-source base64 contains non-alphabet bytes"
+        )
     compact = encoded.replace("\r", "").replace("\n", "")
     try:
         raw = base64.b64decode(compact, validate=True)
         document = raw.decode("utf-8")
     except (ValueError, UnicodeError) as exc:
-        raise DependencyPolicyError(f"official-source content decode failed: {exc}") from exc
+        raise DependencyPolicyError(
+            f"official-source content decode failed: {exc}"
+        ) from exc
     return document, blob_sha, url
 
 
 def _configured_dependabot_values() -> list[str]:
     values = _ECOSYSTEM.findall(_read(DEPENDABOT))
     if not values or len(values) != len(set(values)):
-        raise DependencyPolicyError("Dependabot ecosystems must be present and unique")
+        raise DependencyPolicyError(
+            "Dependabot ecosystems must be present and unique"
+        )
     return sorted(values)
 
 
@@ -236,19 +343,24 @@ def verify_dependabot_official() -> dict[str, Any]:
     unsupported = sorted(set(configured) - official)
     if unsupported:
         raise DependencyPolicyError(
-            f"Dependabot uses values absent from pinned GitHub docs: {unsupported}"
+            "Dependabot uses values absent from pinned GitHub docs: "
+            f"{unsupported}"
         )
     falsely_supported = sorted(
         set(contract["unsupported_repository_managers"]) & official
     )
     if falsely_supported:
         raise DependencyPolicyError(
-            "repository unsupported-manager classification conflicts with pinned "
-            f"GitHub docs: {falsely_supported}"
+            "repository unsupported-manager classification conflicts with "
+            f"pinned GitHub docs: {falsely_supported}"
         )
     if "swift" not in official:
-        raise DependencyPolicyError("pinned GitHub table unexpectedly lacks swift")
-    if (ROOT / "ios/Podfile").is_file() and not (ROOT / "Package.swift").exists():
+        raise DependencyPolicyError(
+            "pinned GitHub table unexpectedly lacks swift"
+        )
+    if (ROOT / "ios/Podfile").is_file() and not (
+        ROOT / "Package.swift"
+    ).exists():
         if "swift" in configured:
             raise DependencyPolicyError(
                 "swift cannot substitute for this repository's CocoaPods graph"
@@ -270,20 +382,252 @@ def verify_dependabot_official() -> dict[str, Any]:
     }
 
 
-def _external_source_names(lock_text: str) -> list[str]:
-    names: list[str] = []
-    in_section = False
-    for line in lock_text.splitlines():
-        if line == "EXTERNAL SOURCES:":
-            in_section = True
+def _pod_root(name: str) -> str:
+    return name.split("/", 1)[0]
+
+
+def _closed_lock_lines(lock_text: str) -> list[str]:
+    if "\ufeff" in lock_text or "\x00" in lock_text or "\r" in lock_text:
+        raise DependencyPolicyError(
+            "Podfile.lock contains a forbidden BOM, NUL or CR byte"
+        )
+    lines = lock_text.splitlines()
+    if not lines or any(line.rstrip(" ") != line or "\t" in line for line in lines):
+        raise DependencyPolicyError(
+            "Podfile.lock must be non-empty with no tabs or trailing spaces"
+        )
+    return lines
+
+
+def _split_lock_sections(lock_text: str) -> dict[str, list[str]]:
+    lines = _closed_lock_lines(lock_text)
+    sections: dict[str, list[str]] = {}
+    current: str | None = None
+    observed: list[str] = []
+
+    for line in lines:
+        if not line:
             continue
-        if in_section and line and not line.startswith(" "):
-            break
-        if in_section:
-            match = re.match(r"^  ([^:]+):\s*$", line)
-            if match:
-                names.append(match.group(1))
-    return names
+        if not line.startswith(" "):
+            if line.endswith(":") and ": " not in line:
+                name = line[:-1]
+                if name not in _LOCK_SECTION_ORDER:
+                    raise DependencyPolicyError(
+                        f"unexpected Podfile.lock section: {name}"
+                    )
+                if name in sections:
+                    raise DependencyPolicyError(
+                        f"duplicate Podfile.lock section: {name}"
+                    )
+                if name in {"PODFILE CHECKSUM", "COCOAPODS"}:
+                    raise DependencyPolicyError(
+                        f"{name} must be a scalar line, not a block"
+                    )
+                current = name
+                sections[name] = []
+                observed.append(name)
+                continue
+
+            scalar_match = re.fullmatch(
+                r"(PODFILE CHECKSUM|COCOAPODS): (.+)", line
+            )
+            if scalar_match is None:
+                raise DependencyPolicyError(
+                    f"malformed or unexpected Podfile.lock top-level line: {line!r}"
+                )
+            name, value = scalar_match.groups()
+            if name in sections:
+                raise DependencyPolicyError(
+                    f"duplicate Podfile.lock section: {name}"
+                )
+            sections[name] = [value]
+            observed.append(name)
+            current = None
+            continue
+
+        if current is None:
+            raise DependencyPolicyError(
+                f"orphaned Podfile.lock indented line: {line!r}"
+            )
+        sections[current].append(line)
+
+    if tuple(observed) != _LOCK_SECTION_ORDER:
+        raise DependencyPolicyError(
+            "Podfile.lock section order/set differs: "
+            f"observed={observed}, expected={list(_LOCK_SECTION_ORDER)}"
+        )
+    if any(not sections[name] for name in _LOCK_SECTION_ORDER):
+        raise DependencyPolicyError(
+            "every Podfile.lock section must contain data"
+        )
+    return sections
+
+
+def _unique_add(values: dict[str, Any], name: str, value: Any, section: str) -> None:
+    if name in values:
+        raise DependencyPolicyError(
+            f"duplicate {section} record for {name}"
+        )
+    values[name] = value
+
+
+def parse_cocoapods_lock(lock_text: str) -> dict[str, Any]:
+    sections = _split_lock_sections(lock_text)
+
+    pods: dict[str, str] = {}
+    child_dependencies: dict[str, list[str]] = {}
+    current_pod: str | None = None
+    allows_children = False
+    for line in sections["PODS"]:
+        pod_match = _POD_RECORD.fullmatch(line)
+        if pod_match:
+            name = pod_match.group("name")
+            _unique_add(
+                pods, name, pod_match.group("version"), "PODS"
+            )
+            current_pod = name
+            allows_children = pod_match.group("children") is not None
+            child_dependencies[name] = []
+            continue
+
+        child_match = _POD_CHILD.fullmatch(line)
+        if (
+            child_match is None
+            or current_pod is None
+            or not allows_children
+        ):
+            raise DependencyPolicyError(
+                f"malformed PODS record: {line!r}"
+            )
+        child_dependencies[current_pod].append(
+            child_match.group("name")
+        )
+
+    dependencies: dict[str, str] = {}
+    for line in sections["DEPENDENCIES"]:
+        match = _DEPENDENCY_RECORD.fullmatch(line)
+        if match is None:
+            raise DependencyPolicyError(
+                f"malformed DEPENDENCIES record: {line!r}"
+            )
+        _unique_add(
+            dependencies,
+            match.group("name"),
+            match.group("metadata") or "",
+            "DEPENDENCIES",
+        )
+
+    external_sources: dict[str, dict[str, str]] = {}
+    current_source: str | None = None
+    for line in sections["EXTERNAL SOURCES"]:
+        name_match = _EXTERNAL_SOURCE_NAME.fullmatch(line)
+        if name_match:
+            current_source = name_match.group("name")
+            _unique_add(
+                external_sources, current_source, {}, "EXTERNAL SOURCES"
+            )
+            continue
+        field_match = _EXTERNAL_SOURCE_FIELD.fullmatch(line)
+        if field_match is None or current_source is None:
+            raise DependencyPolicyError(
+                f"malformed EXTERNAL SOURCES record: {line!r}"
+            )
+        fields = external_sources[current_source]
+        key = field_match.group("key")
+        if key in fields:
+            raise DependencyPolicyError(
+                f"duplicate EXTERNAL SOURCES field {key} for {current_source}"
+            )
+        fields[key] = field_match.group("value")
+
+    checksums: dict[str, str] = {}
+    for line in sections["SPEC CHECKSUMS"]:
+        match = _SPEC_CHECKSUM.fullmatch(line)
+        if match is None:
+            raise DependencyPolicyError(
+                f"malformed SPEC CHECKSUMS record: {line!r}"
+            )
+        _unique_add(
+            checksums,
+            match.group("name"),
+            match.group("digest"),
+            "SPEC CHECKSUMS",
+        )
+
+    podfile_checksum = sections["PODFILE CHECKSUM"][0]
+    if not _SHA1.fullmatch(podfile_checksum):
+        raise DependencyPolicyError(
+            "PODFILE CHECKSUM must be lowercase SHA-1 syntax"
+        )
+    cocoapods_version = sections["COCOAPODS"][0]
+    if not _COCOAPODS_VERSION.fullmatch(cocoapods_version):
+        raise DependencyPolicyError(
+            "COCOAPODS must bind a dotted numeric version"
+        )
+
+    pod_roots = {_pod_root(name) for name in pods}
+    dependency_roots = {_pod_root(name) for name in dependencies}
+    source_roots = {_pod_root(name) for name in external_sources}
+    checksum_roots = {_pod_root(name) for name in checksums}
+    child_roots = {
+        _pod_root(child)
+        for children in child_dependencies.values()
+        for child in children
+    }
+
+    if not dependency_roots <= pod_roots:
+        raise DependencyPolicyError(
+            "DEPENDENCIES references roots absent from PODS: "
+            f"{sorted(dependency_roots - pod_roots)}"
+        )
+    if not child_roots <= pod_roots:
+        raise DependencyPolicyError(
+            "transitive PODS references roots absent from PODS: "
+            f"{sorted(child_roots - pod_roots)}"
+        )
+    if source_roots - pod_roots:
+        raise DependencyPolicyError(
+            "EXTERNAL SOURCES references roots absent from PODS: "
+            f"{sorted(source_roots - pod_roots)}"
+        )
+    if checksum_roots != pod_roots:
+        raise DependencyPolicyError(
+            "SPEC CHECKSUMS roots differ from PODS roots: "
+            f"missing={sorted(pod_roots - checksum_roots)}, "
+            f"extra={sorted(checksum_roots - pod_roots)}"
+        )
+
+    registry_roots = sorted(pod_roots - source_roots)
+    return {
+        "pods": sorted(pods),
+        "pod_versions": dict(sorted(pods.items())),
+        "pod_roots": sorted(pod_roots),
+        "dependencies": sorted(dependencies),
+        "dependency_metadata": dict(sorted(dependencies.items())),
+        "dependency_roots": sorted(dependency_roots),
+        "child_dependencies": {
+            name: list(children)
+            for name, children in sorted(child_dependencies.items())
+        },
+        "external_sources": {
+            name: dict(sorted(fields.items()))
+            for name, fields in sorted(external_sources.items())
+        },
+        "spec_checksums": dict(sorted(checksums.items())),
+        "podfile_checksum": podfile_checksum,
+        "cocoapods_version": cocoapods_version,
+        "registry_pod_roots": registry_roots,
+        "external_registry_pods": len(registry_roots),
+    }
+
+
+def _podfile_digest(podfile: str) -> str:
+    if "\ufeff" in podfile or "\x00" in podfile or "\r" in podfile:
+        raise DependencyPolicyError(
+            "Podfile contains a forbidden BOM, NUL or CR byte"
+        )
+    canonical = "\n".join(podfile.splitlines()) + "\n"
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def inspect_cocoapods() -> dict[str, Any]:
@@ -291,39 +635,65 @@ def inspect_cocoapods() -> dict[str, Any]:
     lock = _read(LOCKFILE)
     workflow = _read(WORKFLOW)
 
-    declarations = [
-        match.group(1)
-        for line in podfile.splitlines()
-        if not line.lstrip().startswith("#")
-        for match in [_POD_DECLARATION.match(line)]
-        if match
-    ]
-    sources = _external_source_names(lock)
-    version = _COCOAPODS_VERSION.search(lock)
+    podfile_sha256 = _podfile_digest(podfile)
+    if podfile_sha256 != _APPROVED_PODFILE_SHA256:
+        raise DependencyPolicyError(
+            "Podfile differs from the reviewed closed-world source; any Ruby, "
+            "helper, alias, variable, plugin installer or source change requires "
+            "an explicit policy update"
+        )
 
-    if declarations:
+    graph = parse_cocoapods_lock(lock)
+    if graph["pod_versions"] != _APPROVED_LOCK_PODS:
         raise DependencyPolicyError(
-            "registry-hosted Pod declarations require a reviewed automation and "
-            f"trust-policy extension before use: {sorted(declarations)}"
+            "PODS inventory/version differs from the reviewed "
+            f"local-Flutter-only graph: {graph['pod_versions']}"
         )
-    if sources != ["Flutter"] or ":path: Flutter" not in lock:
+    if graph["dependency_metadata"] != _APPROVED_LOCK_DEPENDENCIES:
         raise DependencyPolicyError(
-            "Podfile.lock must contain only the local Flutter source until an "
-            f"external-Pod policy is accepted; observed sources={sources}"
+            "DEPENDENCIES inventory/origin differs from the reviewed graph: "
+            f"{graph['dependency_metadata']}"
         )
-    if version is None:
-        raise DependencyPolicyError("Podfile.lock does not bind a CocoaPods version")
+    if graph["child_dependencies"] != {"Flutter": []}:
+        raise DependencyPolicyError(
+            "unexpected transitive Pod dependencies: "
+            f"{graph['child_dependencies']}"
+        )
+    if graph["external_sources"] != _APPROVED_EXTERNAL_SOURCES:
+        raise DependencyPolicyError(
+            "EXTERNAL SOURCES differs from the reviewed local Flutter path: "
+            f"{graph['external_sources']}"
+        )
+    if graph["spec_checksums"] != _APPROVED_SPEC_CHECKSUMS:
+        raise DependencyPolicyError(
+            "SPEC CHECKSUMS differs from the reviewed graph: "
+            f"{graph['spec_checksums']}"
+        )
+    if graph["podfile_checksum"] != _APPROVED_PODFILE_LOCK_CHECKSUM:
+        raise DependencyPolicyError(
+            "PODFILE CHECKSUM differs from the reviewed Podfile binding"
+        )
+    if graph["external_registry_pods"] != 0:
+        raise DependencyPolicyError(
+            "registry-hosted Pods are prohibited until a reviewed updater and "
+            f"trust policy exist: {graph['registry_pod_roots']}"
+        )
     if "pod install --deployment" not in workflow:
         raise DependencyPolicyError(
             "canonical iOS qualification no longer enforces Podfile.lock"
         )
 
     return {
-        "schema_version": 1,
-        "mode": "local-flutter-pod-only",
-        "external_registry_pods": 0,
-        "external_sources": sources,
-        "cocoapods_version": version.group(1),
+        "schema_version": 2,
+        "mode": "closed-world-local-flutter-pod-only",
+        "podfile_sha256": podfile_sha256,
+        "lock_pods": graph["pods"],
+        "lock_dependencies": graph["dependencies"],
+        "lock_spec_checksums": sorted(graph["spec_checksums"]),
+        "external_registry_pods": graph["external_registry_pods"],
+        "registry_pod_roots": graph["registry_pod_roots"],
+        "external_sources": sorted(graph["external_sources"]),
+        "cocoapods_version": graph["cocoapods_version"],
         "ci_lock_enforcement": "pod install --deployment",
         "auto_commit": False,
         "auto_push": False,
@@ -344,20 +714,26 @@ def _git(*args: str) -> subprocess.CompletedProcess[str]:
 def _require_refresh_boundary() -> None:
     if os.environ.get(APPROVAL_ENV) != "1":
         raise DependencyPolicyError(
-            f"--refresh-cocoapods requires {APPROVAL_ENV}=1 from an authorized operator"
+            f"--refresh-cocoapods requires {APPROVAL_ENV}=1 "
+            "from an authorized operator"
         )
     for executable in ("flutter", "pod", "git"):
         if shutil.which(executable) is None:
-            raise DependencyPolicyError(f"required executable is unavailable: {executable}")
+            raise DependencyPolicyError(
+                f"required executable is unavailable: {executable}"
+            )
 
     branch = _git("branch", "--show-current").stdout.strip()
     if not branch or branch == "main":
         raise DependencyPolicyError(
             "lock refresh must run on a named non-main review branch"
         )
-    if _git("status", "--porcelain", "--untracked-files=all").stdout:
+    if _git(
+        "status", "--porcelain", "--untracked-files=all"
+    ).stdout:
         raise DependencyPolicyError(
-            "lock refresh requires a clean worktree so change custody is unambiguous"
+            "lock refresh requires a clean worktree so change custody "
+            "is unambiguous"
         )
 
 
@@ -372,9 +748,13 @@ def refresh_cocoapods() -> dict[str, Any]:
     )
 
     changed: list[str] = []
-    for line in _git("status", "--porcelain", "--untracked-files=all").stdout.splitlines():
+    for line in _git(
+        "status", "--porcelain", "--untracked-files=all"
+    ).stdout.splitlines():
         if len(line) < 4:
-            raise DependencyPolicyError(f"cannot parse git status entry: {line!r}")
+            raise DependencyPolicyError(
+                f"cannot parse git status entry: {line!r}"
+            )
         path = line[3:]
         if " -> " in path:
             path = path.split(" -> ", 1)[1]
@@ -399,7 +779,10 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument(
         "--verify-dependabot-official",
         action="store_true",
-        help="read the pinned github/docs table and reject unsupported YAML values",
+        help=(
+            "read the pinned github/docs table and reject unsupported "
+            "YAML values"
+        ),
     )
     mode.add_argument(
         "--check-cocoapods",
