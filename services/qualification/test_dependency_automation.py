@@ -181,17 +181,21 @@ Swift | `swift` | yes
             path = ROOT / relative
             self.assertTrue(path.is_file(), relative)
             self.assertGreater(path.stat().st_size, 0, relative)
+
         guide = GUIDE.read_text(encoding="utf-8")
-        for phrase in (
+        for stable_interface in (
             "three supported ecosystems",
+            "`github/docs` repository",
+            "--verify-dependabot-official",
             "Dependabot does not support CocoaPods",
-            "immutable `github/docs` commit",
+            "--check-cocoapods",
+            "--refresh-cocoapods",
             "No dependency pull request is auto-merged",
             "all seven canonical jobs",
             "exact-head source Artifact",
             "signed mobile binaries",
         ):
-            self.assertIn(phrase, guide)
+            self.assertIn(stable_interface, guide)
 
 
 if __name__ == "__main__":
