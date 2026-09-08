@@ -8,6 +8,7 @@ from pathlib import Path
 
 from services.qualification.documentation_truth import (
     DocumentationTruthError,
+    PINNED_BASELINE,
     validate,
 )
 
@@ -23,6 +24,8 @@ class DocumentationTruthRepositoryTests(unittest.TestCase):
         self.assertEqual(result["hg0089_status"], "BLOCKED_ADMIN_SETTING")
         self.assertEqual(result["maturity_stages"], 7)
         self.assertEqual(result["required_jobs"], 7)
+        self.assertEqual(result["successor_maturity"], "source_implemented")
+        self.assertEqual(result["last_qualified_commit"], PINNED_BASELINE["commit"])
 
 
 class DocumentationTruthNegativeTests(unittest.TestCase):
@@ -58,23 +61,23 @@ class DocumentationTruthNegativeTests(unittest.TestCase):
             json.dumps(value, ensure_ascii=False, indent=2) + "\n",
         )
 
+    def project(self) -> dict:
+        return self.read_json("docs/PROJECT_STATE.json")
+
+    def save_project(self, value: dict) -> None:
+        self.write_json("docs/PROJECT_STATE.json", value)
+
     def test_stale_open_claim_is_rejected(self) -> None:
         readme = (self.root / "README.md").read_text(encoding="utf-8")
         self.write_text("README.md", readme + "\nHG-0087 remains OPEN\n")
-        with self.assertRaisesRegex(
-            DocumentationTruthError,
-            "stale source-status phrase",
-        ):
+        with self.assertRaisesRegex(DocumentationTruthError, "stale source-status phrase"):
             validate(self.root)
 
     def test_machine_slice_drift_is_rejected(self) -> None:
         status = self.read_json("docs/HG0087_IMPLEMENTATION_STATUS.json")
         status["aggregate_status"] = "OPEN"
         self.write_json("docs/HG0087_IMPLEMENTATION_STATUS.json", status)
-        with self.assertRaisesRegex(
-            DocumentationTruthError,
-            "aggregate status",
-        ):
+        with self.assertRaisesRegex(DocumentationTruthError, "aggregate status"):
             validate(self.root)
 
     def test_administration_gate_promotion_is_rejected(self) -> None:
@@ -83,44 +86,148 @@ class DocumentationTruthNegativeTests(unittest.TestCase):
             if row["id"] == "HG-0089":
                 row["status"] = "CLOSED_SOURCE"
         self.write_json("docs/REMEDIATION_GAP_LEDGER.json", ledger)
-        with self.assertRaisesRegex(
-            DocumentationTruthError,
-            "administration gate",
-        ):
+        with self.assertRaisesRegex(DocumentationTruthError, "administration gate"):
             validate(self.root)
 
     def test_successor_evidence_transfer_is_rejected(self) -> None:
-        project = self.read_json("docs/PROJECT_STATE.json")
-        project["last_qualified_source"][
-            "successor_requires_fresh_qualification"
-        ] = False
-        self.write_json("docs/PROJECT_STATE.json", project)
-        with self.assertRaisesRegex(
-            DocumentationTruthError,
-            "successor evidence transfer",
-        ):
+        project = self.project()
+        project["current_successor"]["evidence_transfer_allowed"] = True
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "promoted"):
+            validate(self.root)
+
+    def test_successor_ci_promotion_is_rejected(self) -> None:
+        project = self.project()
+        project["current_successor"]["maturity"] = "ci_qualified"
+        project["current_successor"]["qualified"] = True
+        project["current_successor"]["ci_qualified"] = True
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "promoted"):
+            validate(self.root)
+
+    def test_successor_release_promotion_is_rejected(self) -> None:
+        project = self.project()
+        project["current_successor"]["maturity"] = "released"
+        project["current_successor"]["released"] = True
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "promoted"):
+            validate(self.root)
+
+    def test_prose_successor_promotion_is_rejected(self) -> None:
+        readme = (self.root / "README.md").read_text(encoding="utf-8")
+        self.write_text("README.md", readme + "\nActive successor is `ci_qualified`.\n")
+        with self.assertRaisesRegex(DocumentationTruthError, "promotes"):
             validate(self.root)
 
     def test_required_check_drift_is_rejected(self) -> None:
-        project = self.read_json("docs/PROJECT_STATE.json")
+        project = self.project()
         project["repository_actionable_gate"]["required_checks"].pop()
-        self.write_json("docs/PROJECT_STATE.json", project)
-        with self.assertRaisesRegex(
-            DocumentationTruthError,
-            "required check set drifted",
-        ):
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "required check set drifted"):
             validate(self.root)
 
-    def test_artifact_commit_binding_is_rejected(self) -> None:
-        project = self.read_json("docs/PROJECT_STATE.json")
-        project["last_qualified_source"][
-            "artifact_name"
-        ] = "hepta-source-evidence-wrong"
-        self.write_json("docs/PROJECT_STATE.json", project)
-        with self.assertRaisesRegex(
-            DocumentationTruthError,
-            "artifact name",
-        ):
+    def test_artifact_name_substitution_is_rejected(self) -> None:
+        project = self.project()
+        project["last_qualified_source"]["artifact_name"] = "hepta-source-evidence-wrong"
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "immutable tuple drifted"):
+            validate(self.root)
+
+    def test_run_substitution_is_rejected(self) -> None:
+        project = self.project()
+        project["last_qualified_source"]["workflow_run_id"] += 1
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "immutable tuple drifted"):
+            validate(self.root)
+
+    def test_artifact_substitution_is_rejected(self) -> None:
+        project = self.project()
+        project["last_qualified_source"]["artifact_id"] += 1
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "immutable tuple drifted"):
+            validate(self.root)
+
+    def test_review_substitution_is_rejected(self) -> None:
+        project = self.project()
+        project["last_qualified_source"]["code_owner_review_id"] += 1
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "immutable tuple drifted"):
+            validate(self.root)
+
+    def test_commit_tree_mismatch_is_rejected(self) -> None:
+        project = self.project()
+        project["last_qualified_source"]["tree"] = "0" * 40
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "immutable tuple drifted"):
+            validate(self.root)
+
+    def test_non_hex_commit_is_rejected(self) -> None:
+        project = self.project()
+        project["last_qualified_source"]["commit"] = "z" * 40
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "lowercase 40-hex"):
+            validate(self.root)
+
+    def test_unknown_project_field_is_rejected(self) -> None:
+        project = self.project()
+        project["repository_says_released"] = True
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "unknown keys"):
+            validate(self.root)
+
+    def test_unknown_baseline_field_is_rejected(self) -> None:
+        project = self.project()
+        project["last_qualified_source"]["self_asserted"] = True
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "unknown keys"):
+            validate(self.root)
+
+    def test_duplicate_completed_is_rejected(self) -> None:
+        path = self.root / "docs/PROJECT_STATE.json"
+        text = path.read_text(encoding="utf-8")
+        text = text.replace(
+            '"completed": true,',
+            '"completed": true,\n    "completed": true,',
+            1,
+        )
+        self.write_text("docs/PROJECT_STATE.json", text)
+        with self.assertRaisesRegex(DocumentationTruthError, "duplicate JSON object member"):
+            validate(self.root)
+
+    def test_duplicate_digest_is_rejected(self) -> None:
+        path = self.root / "docs/PROJECT_STATE.json"
+        text = path.read_text(encoding="utf-8")
+        needle = f'"artifact_zip_sha256": "{PINNED_BASELINE["artifact_zip_sha256"]}",'
+        text = text.replace(needle, needle + "\n    " + needle, 1)
+        self.write_text("docs/PROJECT_STATE.json", text)
+        with self.assertRaisesRegex(DocumentationTruthError, "duplicate JSON object member"):
+            validate(self.root)
+
+    def test_non_finite_value_is_rejected(self) -> None:
+        path = self.root / "docs/PROJECT_STATE.json"
+        text = path.read_text(encoding="utf-8")
+        text = text.replace(
+            f'"artifact_id": {PINNED_BASELINE["artifact_id"]}',
+            '"artifact_id": NaN',
+            1,
+        )
+        self.write_text("docs/PROJECT_STATE.json", text)
+        with self.assertRaisesRegex(DocumentationTruthError, "non-finite JSON number"):
+            validate(self.root)
+
+    def test_boolean_cannot_impersonate_integer(self) -> None:
+        project = self.project()
+        project["last_qualified_source"]["artifact_id"] = True
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "integer"):
+            validate(self.root)
+
+    def test_maturity_order_drift_is_rejected(self) -> None:
+        path = self.root / "docs/MATURITY_MODEL.md"
+        text = path.read_text(encoding="utf-8")
+        text = text.replace("### 1. `design_draft`", "### 2. `design_draft`", 1)
+        self.write_text("docs/MATURITY_MODEL.md", text)
+        with self.assertRaisesRegex(DocumentationTruthError, "identity/order drifted"):
             validate(self.root)
 
 
