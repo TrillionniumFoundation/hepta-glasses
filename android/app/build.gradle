@@ -6,6 +6,8 @@ plugins {
 }
 
 android {
+    // Source packages retain the inherited namespace until the atomic package migration.
+    // This is not the installed application identity.
     namespace = "com.example.demo_ai_even"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
@@ -27,10 +29,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // Canonical installed application identity. Changing it requires a migration and release-signing review.
         applicationId = "org.trillionnium.heptaglasses"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
