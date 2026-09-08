@@ -1,140 +1,92 @@
 # Hepta Glasses OS current state
 
-Last updated: 2026-09-07  
+Last updated: 2026-09-08  
 Canonical plan revision: `2026-09-01-g8`
 
 ## Source authority
 
-The canonical G8 plan remains the base contract, while G9, G10 and the active
-remediation layer add evidence authentication, complete-closure semantics,
-production-reference components and source hardening. The live head and tree of
-Draft PR #101 identify the active candidate; no hand-copied SHA in prose grants
-authority. `main` remains an older baseline until the reviewed candidate is
-intentionally adopted through the protected path.
+The canonical G8 plan remains the base contract. G9, G10, and the active remediation layer add authenticated evidence custody, complete-closure semantics, production-reference components, and source hardening.
 
-Every source push invalidates prior exact-head workflow, artifact and review
-credit. E4 exists only when one unchanged candidate completes all seven non-empty
-CI jobs and the resulting `hepta-source-evidence-<sha>` artifact passes independent
-content verification. Local runs, parent-commit artifacts, PR prose, cancelled
-jobs, skipped jobs and self-written hashes are not E4.
+The live head and tree of Draft PR #101 identify the active adoption candidate. `main` remains the older protected baseline until the complete protection policy is applied, independently read back, and the candidate is adopted through the ordinary protected route. A SHA copied into documentation is descriptive, not authority.
 
-## Current repository-side state
+Every source or base movement invalidates prior exact-head workflow, artifact, and review credit for the successor. The last independently qualified baseline is:
 
-The active flattened registry contains **26 modules**. `docs/MODULE_COVERAGE.json`
-owns tracked source paths, `docs/MODULE_HANDOFF.json` maps each module to a primary
-development document, and `docs/development/MODULE_HANDOFF.md` is the human index.
-The validators prove structural ownership, references, dimensions and status
-agreement; module-owner semantic review remains necessary.
+- source `35f01329262d6a137bfa3c7e95302a397ed32676`;
+- tree `d585f78b8eddf4676bdee4d6f666a544f64a9f86`;
+- run `34139161340` / #847;
+- seven non-empty canonical jobs with terminal success;
+- artifact `10025745282`;
+- artifact ZIP SHA-256 `baa9c218a779adb4713e5985d4109b20db70087e93fca34f2a9ba08e157af897`;
+- independent artifact checks 39/39;
+- exact-head Code Owner review `5133811311` by `Tomasrgbsf`.
 
-Repository source currently includes:
+A later commit must obtain its own complete seven-job result, artifact verification, and eligible review before becoming the qualified baseline.
 
-- a fail-closed Flutter composition root, typed edge runtime, policy/lease Tool
-  Gateway, bounded effect scheduler and durable metadata-only audit journal;
-- exact G1 pair/generation/side/payload authority, independent left/right
-  readiness, bounded native write queues, late-response quarantine and explicit
-  degraded or indeterminate outcomes instead of blind replay;
-- Android/iOS native builds, LC3/RNNoise sanitizer coverage, iOS framework-final
-  speech handling, and a bounded Android ticket-bound PCM-to-ASR transport
-  component whose consumer activation remains disabled until authenticated
-  bootstrap and decoded-stream integration are composed;
-- durable SQLite reference components for identity, model requests, realtime
-  activation, capabilities, encrypted Memory custody and speech bootstrap;
-- a concrete text-only foreground model-provider adapter and a narrow Google
-  Calendar create/get adapter, both retaining conservative timeout and readback
-  semantics;
-- publisher-bound Ed25519 Skill package verification, exact ZIP inventory,
-  durable consent/version/revocation, a restricted zero-egress R0 data VM and
-  signed-log inclusion verification;
-- a fixed-executable Codex task supervisor, bounded process/output/resource
-  custody and an exact-domain HTTPS broker, without claiming that these are a
-  complete arbitrary-code OS sandbox;
-- one read-only, commit-pinned CI workflow covering repository/service tests,
-  Flutter, Android, iOS, native sanitizers, boundary/history scanning and exact-
-  head source evidence;
-- authenticated G10 external-evidence validation with all-class quorum, exact
-  claim partition, final review-set binding, trusted current time, fixed system
-  OpenSSL and descriptor/lexical filesystem custody;
-- continuous committed-evidence discovery-to-validation custody through one
-  bounded private read-only snapshot. HG-0092 is `CLOSED_SOURCE`; E4, independent
-  review and adoption remain separate governance conditions.
+## Repository-side state
+
+The flattened registry contains **26 modules**. `docs/MODULE_COVERAGE.json` owns tracked source paths, `docs/MODULE_HANDOFF.json` maps each module to a primary development document, and `docs/development/MODULE_HANDOFF.md` is the human index. Structural validators prove ownership, references, declared dimensions, and status agreement; they do not replace module-owner semantic review.
+
+Repository source includes:
+
+- a fail-closed Flutter composition root, typed edge runtime, policy/lease Tool Gateway, bounded effect scheduler, and durable metadata-only audit journal;
+- exact G1 pair/generation/side/payload authority, independent left/right readiness, bounded native write queues, late-response quarantine, and degraded or indeterminate outcomes instead of blind replay;
+- Android/iOS native builds, LC3/RNNoise sanitizer coverage, iOS framework-final speech handling, and a bounded Android ticket-bound PCM-to-ASR source path;
+- durable SQLite reference components for identity, model requests, realtime activation, capabilities, encrypted Memory custody, and speech bootstrap;
+- a text-only foreground model-provider adapter and a narrow Google Calendar create/get adapter with conservative timeout and readback semantics;
+- publisher-bound Ed25519 Skill packages, exact ZIP inventory, durable consent/version/revocation, a restricted zero-egress R0 data VM, and signed-log inclusion verification;
+- a fixed-executable Codex task supervisor, bounded process/output/resource custody, and an exact-domain HTTPS broker, without claiming a complete arbitrary-code OS sandbox;
+- a read-only, commit-pinned CI workflow covering repository/services, Flutter, Android, iOS, native sanitizers, boundary/history scanning, and exact-head source evidence;
+- G10 external-evidence validation with all-class quorum, exact claim partition, final review-set binding, trusted time, fixed system OpenSSL, and descriptor/lexical filesystem custody;
+- continuous committed-evidence discovery-to-validation custody through one bounded private read-only snapshot.
 
 ## Active source backlog
 
-HG-0087 is `CLOSED_SOURCE`. The seven source slices and their exact source, test, operations and remaining-external mappings are in `docs/HG0087_IMPLEMENTATION_STATUS.json`, enforced by `services/qualification/test_hg0087_source_status.py`. No repository-actionable remediation row remains `OPEN`.
+HG-0087 is `CLOSED_SOURCE`. Its identity, model, realtime, capabilities, speech, Skills, and Memory slices are mapped in `docs/HG0087_IMPLEMENTATION_STATUS.json` and enforced by `services/qualification/test_hg0087_source_status.py`.
 
-This closure is deliberately source-only. Exact-head CI and artifact verification, independent review, complete `main` protection and protected adoption remain governance gates. Production tenants, KMS/HSM and attestation, physical Android/iOS/G1 qualification, vendor firmware authority, independent assurance, signing, pilot, rollout/rollback and store approval remain authority-owned external facts.
+No repository-actionable remediation row remains `OPEN`. `docs/REMEDIATION_GAP_LEDGER.json` records the remaining repository adoption row as `BLOCKED_ADMIN_SETTING`; authority-owned product rows remain blocked by real external inputs rather than missing repository-only implementation.
 
-## Current validation observation
+`CLOSED_SOURCE` means implemented source plus executable repository tests. It does not imply deployment, physical qualification, independent assurance, signing, pilot, store approval, or release.
 
-The detached-descendant supervisor regression that failed run #717 was hardened
-to prove that the child actually starts and to avoid coupling that cleanup test
-to a shared-runner real-UID process count. The subsequent repository-contracts
-lane passed the full service and adapter test suites. Later documentation/source
-commits invalidate that run as final E4 evidence; the final unchanged head still
-requires a fresh complete seven-lane result and content-verified artifact.
+## Platform truth
 
-## Product and platform truth
+The project is a distributed companion/edge/cloud platform, not vendor G1 firmware. The repository contains no vendor-authorized bootloader, secure-boot roots, firmware signing authority, OTA authority, recovery authority, or rollback authority.
 
-The project is a distributed companion/edge/cloud platform, not vendor G1
-firmware. The repository does not contain vendor-authorized bootloader, secure
-boot, firmware signing, OTA, recovery or rollback authority. Android and iOS
-source builds and simulators do not prove physical radio behavior, protocol
-compatibility, latency, power, thermal or soak performance.
+Android PCM-to-ASR source components and authenticated lifecycle bindings exist, but production activation remains fail closed without a live authenticated bootstrap, configured speech tenant, same-generation decoded PCM delivery, provider finality, cancellation/revocation propagation, and physical qualification. iOS speech likewise requires signed-device, OS, locale, interruption, latency, power, and privacy qualification.
 
-The Android PCM-to-ASR class is a bounded source component, not an enabled
-production speech path. `startEvenAI` remains fail-closed on Android until an
-authenticated one-shot bootstrap is obtained, decoded PCM is delivered under the
-same generation/pair identity, cancellation is propagated and the final result
-is emitted through the current speech event channel. iOS speech still requires
-physical device, OS and locale qualification.
+Mobile model traffic targets a Hepta-owned gateway or explicit development loopback; no permanent provider key belongs in the application bundle. Production mutations remain fail closed until identity-backed authority is composed.
 
-The mobile model path targets a Hepta-owned gateway or explicit development
-loopback and does not embed a permanent provider key. Production startup keeps
-mutation authority fail-closed until identity-backed authority is composed.
+## Audit, privacy, and recovery truth
 
-## Audit, privacy and recovery truth
+The local audit journal verifies its chain during initialization, reads, and explicit verification. Its authenticated checkpoint fast path is a bounded-tail optimization, not a remote immutable root. Production still requires retention, rotation, capacity handling, export authorization, backup exclusion, periodic full verification, and an independently governed monotonic, WORM, or remote anchor where required.
 
-The local audit journal verifies its chain on initialization, reads and explicit
-verification. Its authenticated checkpoint fast path is a bounded-tail
-optimization, not a remote immutable root. Production must define periodic full
-verification, retention, rotation, capacity handling, export authorization,
-backup exclusion and optionally a trusted monotonic, WORM or remote anchor.
+Raw audio and partial transcripts are active-session data. Assistant transcript/answer history is disabled at every start, enabled only by direct user action, process-memory only, and destructively cleared on opt-out. Durable Memory stores ciphertext and metadata but depends on an external per-subject key service; fixture ciphers are not production custody.
 
-Raw audio and partial transcripts are active-session data. Transcript/answer
-history is disabled at every application start, can be enabled only by direct
-user action, remains process-memory only and is destructively cleared on opt-out.
-The durable Memory component stores ciphertext and metadata but depends on an
-external per-subject key service; test ciphers are not production custody.
+A timeout after an effect may have started is indeterminate. Reconciliation is a read or query, never permission to replay a mutation. Revocation and cancellation prevent future admission but cannot retroactively erase bytes already accepted by a device or provider.
 
-A timeout after an effect may have started is indeterminate. Reconciliation is a
-read/query, never permission to replay a mutation. Revocation and cancellation
-prevent future admission but cannot retroactively erase bytes already sent to a
-remote provider or device.
+## Governance gate
 
-## Governance and external gates
+Public `main` readback reports protection enabled but exposes only four required contexts:
 
-The public `main` branch response reports protection enabled but exposes only
-four required contexts: `repository-contracts`, `flutter`,
-`secret-and-boundary-scan` and `source-evidence`. The canonical policy additionally
-requires `android-native`, `ios-native` and `native-sanitizers`, plus strict mode,
-administrator enforcement, CODEOWNER and last-push approval, stale-review
-dismissal, conversation resolution, linear history and disabled force-push and
-deletion. The detailed protection endpoint is not readable through the installed
-integration, so HG-0089/HG-0017 remain blocked pending administrator application
-and complete API readback.
+- `repository-contracts`
+- `flutter`
+- `secret-and-boundary-scan`
+- `source-evidence`
 
-Repository source cannot manufacture the following authority-owned facts:
+The canonical contract additionally requires `android-native`, `ios-native`, and `native-sanitizers`, plus strict status checks, administrator enforcement, Code Owner and most-recent-push approval, stale-review dismissal, conversation resolution, linear history, disabled force-push/deletion, and no bypass actor for adoption.
+
+The installed GitHub integration cannot read or write the complete protection endpoint; the detailed endpoint returns `403 Resource not accessible by integration`, and no repository ruleset is currently visible. HG-0089/HG-0017 therefore remain blocked pending an Administration-authorized apply and independent full API readback. Directly updating `main`, relaxing protection, or using administrator bypass would not close the row.
+
+## External authority gates
+
+Repository source cannot manufacture:
 
 - signed Android/iOS plus physical Even G1 qualification;
-- production KMS/HSM and Android/Apple attestation;
+- production KMS/HSM and Android/Apple attestation receipts;
 - provider-side historical credential revocation;
-- real model, realtime, speech and OAuth/capability tenants and receipts;
-- externally administered publisher/reviewer trust roots and independent review;
-- vendor firmware, secure-boot, signing, OTA, recovery and rollback authority;
-- independent security, privacy, legal, accessibility and safety assurance;
-- signed binaries, binary SBOM/attestation, pilot telemetry, kill-switch,
-  rollout/rollback execution and store approval.
+- real model, realtime, speech, OAuth, and capability tenants and receipts;
+- an independently administered publisher/reviewer trust registry;
+- vendor firmware, secure-boot, signing, OTA, recovery, and rollback authority;
+- independent security, privacy, legal, accessibility, and safety assurance;
+- signed binaries, binary SBOM/attestation, pilot telemetry, kill-switch and rollback drills, staged rollout, and store approval.
 
-These remain `BLOCKED_EXTERNAL`, `BLOCKED_ADMIN_SETTING` or `BLOCKED_UPSTREAM`
-until their real issuing authorities provide authenticated evidence. E0–E4 never
-close E5–E7, and there is no release-gate override.
+These remain `BLOCKED_EXTERNAL`, `BLOCKED_ADMIN_SETTING`, or `BLOCKED_UPSTREAM` until their real issuing authorities provide authenticated evidence. E0–E4 never close E5–E7, and there is no release-gate override.

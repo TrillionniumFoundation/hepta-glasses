@@ -2,100 +2,200 @@
 
 ## Canonical current truth
 
-1. `HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md` — normative G0–G8 source sequence, invariants, gates, and evidence levels.
-2. `CURRENT_STATE.md` — demonstrated G8 source state and explicit non-claims.
-3. `PROJECT_STATE.json` — machine-readable G8 source authority, dynamic gate, and external-blocker contract.
-4. `PRODUCT_BOUNDARY.md` — device, edge, cloud, capability, model, Codex, and release boundaries.
-5. `ARCHITECTURE.md` — data flow and authority topology.
-6. `CAPABILITY_MODEL.md` — risk tiers, exact leases, and mutation admission.
-7. `PLATFORM_CAPABILITIES.json` — source capability and physical-attestation matrix.
-8. `THREAT_MODEL.md` — trust boundaries and fail-closed controls.
-9. `PRIVACY_MODEL.md` — data classes, retention defaults, consent, export, and deletion.
-10. `GAP_LEDGER.yaml` — G8 machine-readable source gaps and inherited external gates.
-11. `EVIDENCE_INDEX.yaml` — G8 source, CI, device, governance, review, pilot, and release evidence registry.
-12. `MODULES.json` — G8 machine-readable module ownership and coverage registry.
-13. `MODULE_DEVELOPMENT_GUIDE.md` — detailed technical development guide for every G8 registered module.
+1. `CURRENT_STATE.md` — current source, governance, platform, and external-authority truth.
+2. `PROJECT_STATE.json` — machine-readable authority, last-qualified source, required checks, and remaining gates.
+3. `REMEDIATION_GAP_LEDGER.json` — active repository remediation state.
+4. `HG0087_IMPLEMENTATION_STATUS.json` — seven source-closed production-reference slices and their remaining external requirements.
+5. `MATURITY_MODEL.md` — ordered maturity vocabulary from design through released product.
+6. `development/2026-09-08_PRODUCTIZATION_ROADMAP.md` — prioritized productization and blocker-closure route.
+7. `HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md` — normative G0–G8 source sequence, invariants, gates, and evidence levels.
+8. `PRODUCT_BOUNDARY.md` — device, edge, cloud, capability, model, Codex, firmware, and release boundaries.
+9. `ARCHITECTURE.md` — data flow and authority topology.
+10. `CAPABILITY_MODEL.md` — risk tiers, exact leases, and mutation admission.
+11. `PLATFORM_CAPABILITIES.json` — source capability and physical-attestation matrix.
+12. `THREAT_MODEL.md` — trust boundaries and fail-closed controls.
+13. `PRIVACY_MODEL.md` — data classes, retention defaults, consent, export, and deletion.
+14. `GAP_LEDGER.yaml` — G8 source gaps and inherited external gates.
+15. `EVIDENCE_INDEX.yaml` — source, CI, device, governance, review, pilot, and release evidence registry.
+16. `MODULES.json` — base machine-readable module ownership and coverage registry.
+17. `MODULE_COVERAGE.json` — flattened tracked-source ownership registry.
+18. `MODULE_HANDOFF.json` and `development/MODULE_HANDOFF.md` — primary technical handoff for all 26 flattened modules.
+19. `MODULE_DEVELOPMENT_GUIDE.md` — base detailed technical development guide.
 
-## G9 layered machine truth
+The live pull-request head and Git tree identify the active source object. A copied SHA in prose is descriptive only. `CLOSED_SOURCE` does not promote source into deployed, physical, independently assured, signed, piloted, store-approved, or released status.
 
-G9 is a stacked evidence-authentication and latest-head CI-custody layer. It does not rewrite the frozen G8 candidate. Its supplements are:
+## Layered machine truth
 
-- `G9_STATE.json` — source authority, latest-head concurrency custody, claim ceiling, and inherited 12-gap set.
-- `G9_MODULES.json` — source/document/test/contract ownership for external-evidence authentication and CI custody.
-- `G9_GAP_LEDGER.json` — source closure records for `HG-0073`, `HG-0074`, and `HG-0075`.
-- `development/G9_TERMINAL_EXTERNAL_CLOSURE.md` — execution package for the authority-owned gaps; not itself external evidence.
-- `development/G9_FILESYSTEM_CUSTODY_HARDENING.md` — exact-object evidence custody implementation and reopen conditions.
+### G9 authenticated evidence and latest-head custody
 
-`services/qualification/test_g9_metadata.py` verifies these supplements, the G8 inheritance boundary, filesystem custody, and the absence of private-key material. `services/qualification/test_ci_latest_head_custody.py` verifies stale-run cancellation and exact-source identity in all seven jobs. Dedicated suites exercise directory and file replacement, URI aliases, aggregate bounds, SPKI retargeting, private-key replacement, and immutable successor creation.
+G9 adds authenticated external-evidence and exact-head CI-custody semantics without manufacturing external facts:
 
-## G10 layered machine truth
+- `G9_STATE.json`
+- `G9_MODULES.json`
+- `G9_GAP_LEDGER.json`
+- `development/G9_TERMINAL_EXTERNAL_CLOSURE.md`
+- `development/G9_FILESYSTEM_CUSTODY_HARDENING.md`
+- `adr/ADR-0004-external-evidence-authentication.md`
+- `adr/ADR-0005-latest-head-ci-concurrency.md`
+- `adr/ADR-0006-external-evidence-filesystem-custody.md`
+- `adr/ADR-0007-evidence-object-identity-and-bounded-custody.md`
 
-G10 is a versioned strict complete-closure layer over G9. It does not promote any inherited product row. Its supplements are:
+`services/qualification/test_g9_metadata.py` verifies the G9 layer, source inheritance, filesystem custody, and private-key exclusion. `services/qualification/test_ci_latest_head_custody.py` verifies stale-run cancellation and exact-source identity in all seven jobs.
 
-- `G10_STATE.json` — live source authority, zero-open repository state, complete-closure policy, global authority-role consistency, trusted clock and executable custody, lexical transaction-wide filesystem custody, canonical contract-content binding, descriptor-anchored repository admission, and the unchanged inherited 12-gap set.
-- `G10_MODULES.json` — ownership and source/document/test/contract coverage for quorum, cross-gap role scope, claim scope, review-set integrity, lexical custody, runtime authority, contract semantic binding, and committed-package admission.
-- `G10_GAP_LEDGER.json` — source closure records for:
-  - `HG-0076`: every named issuer authority class must participate; seats are distinct inside each gap, and a key or identity pair may span gaps only under one unchanged authority class;
-  - `HG-0077`: every accepted reviewer co-signs the same policy, ordered final roster, and acceptance context;
-  - `HG-0078`: complete-closure semantics use the signed G10 contract revision, exact class-scoped claim partition, and one immutable validation entrypoint;
-  - `HG-0079`: repository admission and ordinary validator scope handling preserve lexical names, reject every linked component, pin shared ancestor objects across a full transaction, and require the final visible name to retain the opened object;
-  - `HG-0080`: supported validation and signing own current time and use only verified `/usr/bin/openssl` under a sanitized environment and restricted subprocess interface; and
-  - `HG-0081`: issuer, evidence-set, and reviewer signatures bind the canonical SHA-256 of the complete current contract object.
-- `development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md` — quorum, claim partition, review roster, recursive admission, implementation sequence, hostile tests, and external boundary.
-- `development/G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md` — cross-gap authority-role invariants, descriptor-anchored recursive discovery, trusted-process boundary, hostile tests, and reopen conditions.
-- `development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md` — public/test runtime separation, absolute executable custody, sanitized cryptographic environment, contract-content signature binding, failure semantics, tests, operations, and reopen conditions.
-- `development/G10_LEXICAL_VALIDATION_CUSTODY.md` — canonical lexical URI selection, no-follow root/parent/final handling, transaction-wide directory identity pinning, post-read final-name checks, tests, and reopen conditions.
+### G10 complete-closure semantics
 
-`services/qualification/test_g10_metadata.py` verifies the G10 policy profile, class-scope partition, machine truth, public entrypoints, trusted runtime boundary, contract semantic binding, and repository gate. `services/qualification/test_external_evidence_complete_closure.py` proves missing quorum, same-gap key-seat reuse, cross-scope claims, G9 semantic downgrade, review deletion/reordering, acceptance mutation, and wrong-policy manifests fail closed. `services/qualification/test_external_evidence_authority_seat_scope.py` proves a key or identity pair cannot impersonate different authority classes across gaps while preserving legitimate same-class reuse. `services/qualification/test_external_evidence_runtime_policy.py` proves caller time, executable, PATH, environment, positional Popen, shell, cwd, pre-exec, descriptor-passing, and malformed command injection fail. `services/qualification/test_external_evidence_lexical_scope_policy.py` proves linked roots, linked parents, linked final files, direct linked reads, and ordinary root/parent replacement between reads fail. `services/qualification/test_external_evidence_contract_binding.py` proves same-revision contract mutation changes every authority preimage. `services/qualification/test_external_evidence_repository_admission.py` proves accepted immutable successors cannot evade protected-pin validation through nesting, opaque filenames, symbolic links, ordinary file replacement, or parent-directory replacement.
+G10 adds strict all-authority closure and trusted validation semantics:
 
-## Development
-
+- `G10_STATE.json`
+- `G10_MODULES.json`
+- `G10_GAP_LEDGER.json`
 - `development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md`
 - `development/G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md`
 - `development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md`
 - `development/G10_LEXICAL_VALIDATION_CUSTODY.md`
-- `development/G9_TERMINAL_EXTERNAL_CLOSURE.md`
-- `development/G9_FILESYSTEM_CUSTODY_HARDENING.md`
-- `development/G8_PRODUCTION_AUTHORITY_CLOSURE.md`
-- `development/G8_METADATA_AND_DOCUMENTATION_CLOSURE.md`
-- `development/G8_SOURCE_REMEDIATION.md`
-- `development/G7_SOURCE_CONVERGENCE.md`
-- `development/G5_AUDIT_CLOSURE.md`
-- `development/G4_SOURCE_CLOSURE.md`
-- `development/G3_G8_SOURCE_CLOSURE.md`
+- `adr/ADR-0008-authority-quorum-and-review-set-integrity.md`
+- `adr/ADR-0009-trusted-verifier-and-contract-content-binding.md`
+- `adr/ADR-0010-lexical-validation-custody.md`
+
+The layer covers all-class authority quorum, exact class-scoped claims, ordered final reviewer-set binding, canonical acceptance context, trusted current time, fixed `/usr/bin/openssl`, canonical contract-content signatures, no-follow lexical scope, transaction-wide ancestor identity pinning, and recursive committed-package admission.
+
+Tests include:
+
+- `services/qualification/test_g10_metadata.py`
+- `services/qualification/test_external_evidence_complete_closure.py`
+- `services/qualification/test_external_evidence_authority_seat_scope.py`
+- `services/qualification/test_external_evidence_runtime_policy.py`
+- `services/qualification/test_external_evidence_lexical_scope_policy.py`
+- `services/qualification/test_external_evidence_contract_binding.py`
+- `services/qualification/test_external_evidence_repository_admission.py`
+
+### Active remediation
+
+The active remediation layer closes repository-controlled source slices while preserving the external claim ceiling:
+
+- `development/2026-09-03_BLOCKER_EXECUTION_PLAN.md`
+- `development/ADMISSION_CONTINUITY.md`
+- `development/AUTHENTICATED_MODEL_INGRESS.md`
+- `development/AUTHENTICATED_PRINCIPALS.md`
+- `development/AUTHENTICATED_REALTIME_INGRESS.md`
+- `development/CAPABILITY_REVOCATION_SAFETY.md`
+- `development/DATA_SKILL_RUNTIME.md`
+- `development/DURABLE_CAPABILITIES.md`
+- `development/DURABLE_IDENTITY.md`
+- `development/DURABLE_MEMORY.md`
+- `development/DURABLE_MODEL_GATEWAY.md`
+- `development/GOOGLE_CALENDAR_CAPABILITY.md`
+- `development/HG0087_PRODUCTION_IMPLEMENTATION.md`
+- `development/IDENTITY_ENROLLMENT_FRESHNESS.md`
+- `development/MEMORY_COMPONENT_IDENTITY.md`
+- `development/MODEL_RECOVERY_INVENTORY.md`
+- `development/MUTATION_AUTHORITY.md`
+- `development/PACKAGE_TRANSPARENCY.md`
+- `development/PACKAGE_TRANSPARENCY_CONSISTENCY.md`
+- `development/REALTIME_ADMISSION.md`
+- `development/REALTIME_PROVIDER_BINDING.md`
+- `development/REFERENCE_RUNTIME_HARDENING.md`
+- `development/SERVER_PROVIDER_BOUNDARY.md`
+- `development/SIGNED_SKILLS.md`
+- `development/SIGNED_SKILL_SCHEMA_INTEGRITY.md`
+- `development/SIGNED_SKILL_STATE_CONTINUITY.md`
+- `development/SOURCE_COVERAGE_AND_STATE.md`
+- `development/SPEECH_BOOTSTRAP_CUSTODY.md`
+
+## Device and protocol documentation
+
 - `G1_BLE_CONNECTION.md`
 - `G1_BLE_CONNECTION.en.md`
+- `../contracts/g1-ble-protocol-v1.json`
+- `../schemas/glasses-event.schema.json`
+- `operations/DEVICE_QUALIFICATION_RUNBOOK.md`
+
+The source documents protocol and failure semantics. Vendor protocol authority, firmware compatibility, RF behavior, latency, power, thermal, soak, secure boot, OTA, recovery, and rollback require physical or vendor evidence.
 
 ## Operations
 
-- `operations/PRODUCTION_CONTROL_PLANE_RUNBOOK.md`
-- `operations/REALTIME_AND_CAPABILITY_RUNBOOK.md`
-- `operations/DEVICE_QUALIFICATION_RUNBOOK.md`
-- `operations/REPOSITORY_GOVERNANCE_RUNBOOK.md`
-- `operations/PRIVACY_SECURITY_REVIEW_CHECKLIST.md`
-- `operations/RELEASE_AND_ROLLBACK_RUNBOOK.md`
 - `operations/CREDENTIAL_INCIDENT_RUNBOOK.md`
-- `../evidence/external/README.md` — versioned evidence custody, immutable signing, all-class quorum, exact class-scoped claims, final review-set binding, lexical transaction custody, trusted runtime validation, canonical contract binding, recursive committed-package admission, external trust pin, and validation procedure.
+- `operations/DATA_SKILL_RUNTIME_RUNBOOK.md`
+- `operations/DEVICE_QUALIFICATION_RUNBOOK.md`
+- `operations/DURABLE_CAPABILITY_RUNBOOK.md`
+- `operations/DURABLE_MODEL_GATEWAY_RUNBOOK.md`
+- `operations/GOOGLE_CALENDAR_CAPABILITY_RUNBOOK.md`
+- `operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md`
+- `operations/IDENTITY_AUTHORITY_RUNBOOK.md`
+- `operations/PACKAGE_TRANSPARENCY_RUNBOOK.md`
+- `operations/PACKAGE_TRANSPARENCY_WITNESS_RUNBOOK.md`
+- `operations/PRIVACY_SECURITY_REVIEW_CHECKLIST.md`
+- `operations/PRODUCTION_CONTROL_PLANE_RUNBOOK.md`
+- `operations/REALTIME_ADMISSION_RUNBOOK.md`
+- `operations/REALTIME_AND_CAPABILITY_RUNBOOK.md`
+- `operations/RELEASE_AND_ROLLBACK_RUNBOOK.md`
+- `operations/REPOSITORY_GOVERNANCE_RUNBOOK.md`
+- `operations/SIGNED_SKILLS_RUNBOOK.md`
+- `operations/SIGNED_SKILL_SCHEMA_RUNBOOK.md`
+- `operations/SIGNED_SKILL_STATE_RUNBOOK.md`
+- `operations/SPEECH_BOOTSTRAP_RUNBOOK.md`
+- `../evidence/external/README.md`
+
+Runbooks define source-side procedures and evidence shapes. They are not proof that a provider, lab, reviewer, signing authority, pilot operator, vendor, or store executed the procedure.
 
 ## Architecture decisions
 
 - `adr/ADR-0001-distributed-os-boundary.md`
 - `adr/ADR-0002-codex-authority-boundary.md`
 - `adr/ADR-0003-edge-runtime-language.md`
-- `adr/ADR-0004-external-evidence-authentication.md` — out-of-band trust pin, actual Ed25519 key binding, signed evidence/reviews, strict parsing, and authority separation.
-- `adr/ADR-0005-latest-head-ci-concurrency.md` — pull-request/branch concurrency custody, stale-run cancellation, and exact-source verification.
-- `adr/ADR-0006-external-evidence-filesystem-custody.md` — lexical-path snapshots, descriptor-stable bounded reads, symlink-retarget fencing, and exclusive detached signatures.
-- `adr/ADR-0007-evidence-object-identity-and-bounded-custody.md` — ordinary-object identity, canonical URIs, aggregate snapshot bounds, pinned-key normalization, private-key custody, and immutable bundle successors.
-- `adr/ADR-0008-authority-quorum-and-review-set-integrity.md` — versioned complete-closure policy, all-class quorum, exact claim partition, final roster/context manifests, canonical entrypoint, and recursive stable accepted-envelope admission.
-- `adr/ADR-0009-trusted-verifier-and-contract-content-binding.md` — current-time runtime authority, verified absolute OpenSSL path, sanitized cryptographic environment, trusted-process/test-fixture boundary, and canonical contract digest in authority signatures.
-- `adr/ADR-0010-lexical-validation-custody.md` — no resolve-first scope handling, no-follow root/parent/final selection, transaction-wide ancestor identity pinning, and visible final-name postconditions.
+- `adr/ADR-0004-external-evidence-authentication.md`
+- `adr/ADR-0005-latest-head-ci-concurrency.md`
+- `adr/ADR-0006-external-evidence-filesystem-custody.md`
+- `adr/ADR-0007-evidence-object-identity-and-bounded-custody.md`
+- `adr/ADR-0008-authority-quorum-and-review-set-integrity.md`
+- `adr/ADR-0009-trusted-verifier-and-contract-content-binding.md`
+- `adr/ADR-0010-lexical-validation-custody.md`
 
-A later plan or ADR must state what it supersedes and update the applicable Current State, Gap Ledger, Evidence Index, module registry, validators, tests, and affected machine contracts in the same change.
+A later plan or ADR must state what it supersedes and update the applicable current state, gap ledger, evidence index, module registry, validators, tests, and machine contracts in the same change.
 
-## Machine contracts
+## Machine contracts and schemas
 
-- `../contracts/g1-ble-protocol-v1.json` — dual-BLE UUID, readiness, framing, command, and uncertainty contract.
-- `../contracts/external-evidence-envelope-v1.json` — versioned authenticated authority-owned evidence and complete-closure contract.
-- `../schemas/external-evidence-envelope.schema.json` — evidence envelope schema.
-- `../schemas/external-authority-trust-registry.schema.json` — externally pinned Ed25519 authority registry schema.
-- `HG0087_IMPLEMENTATION_STATUS.json` — seven-slice source-closure map; deployed and independently issued authority remains external.
+Key composed contracts:
+
+- `../contracts/hepta-glasses-runtime-v1.json`
+- `../contracts/control-plane-v1.json`
+- `../contracts/g1-ble-protocol-v1.json`
+- `../contracts/durable-capability-v1.json`
+- `../contracts/durable-memory-v1.json`
+- `../contracts/durable-model-gateway-v2.json`
+- `../contracts/realtime-admission-v1.json`
+- `../contracts/realtime-speech-custody-v2.json`
+- `../contracts/signed-skill-package-v1.json`
+- `../contracts/signed-skill-transparency-v1.json`
+- `../contracts/external-evidence-envelope-v1.json`
+- `../contracts/release-gates-v1.json`
+- `../contracts/qualification-slo-v1.json`
+- `../contracts/main-branch-protection-v1.json`
+- `../contracts/conformance/canonical-json-v1.json`
+
+Key schemas:
+
+- `../schemas/external-evidence-envelope.schema.json`
+- `../schemas/external-authority-trust-registry.schema.json`
+- `../schemas/release-evidence-bundle.schema.json`
+- `../schemas/device-qualification-report.schema.json`
+- `../schemas/tool-request.schema.json`
+- `../schemas/tool-receipt.schema.json`
+- `../schemas/decision-lease.schema.json`
+- `../schemas/realtime-ticket.schema.json`
+- `../schemas/skill-manifest.schema.json`
+- `../schemas/memory-record.schema.json`
+
+## Truth validation
+
+`services/qualification/documentation_truth.py` and `services/qualification/test_documentation_truth.py` reject:
+
+- disagreement over HG-0087 source closure;
+- promotion of HG-0089 without Administration evidence;
+- stale README/Current State phrases;
+- required-check drift;
+- transfer of a predecessor artifact to a successor;
+- missing maturity stages or productization index entries;
+- broken commit-to-artifact identity binding.
+
+These checks are structural and semantic consistency controls. They do not issue any external authority or replace module-owner, security, hardware, provider, legal, accessibility, safety, signing, pilot, or store review.

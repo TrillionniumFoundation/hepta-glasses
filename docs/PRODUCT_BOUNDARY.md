@@ -2,7 +2,7 @@
 
 ## Product definition
 
-Hepta Glasses OS is a distributed AI-native system, not a claim that the current repository is a standalone glasses firmware. It has four planes.
+Hepta Glasses OS is a distributed AI-native system, not a claim that the current repository is standalone glasses firmware. It has four planes.
 
 ### Glasses device plane
 
@@ -14,11 +14,11 @@ The companion phone owns device transport, task state, policy, audit, display co
 
 ### Cloud control plane
 
-The cloud plane owns user identity, device registration, short-lived session issuance, model routing, remote revocation, durable long-running task coordination, rate limiting, and provider secrets. Current Python components are deterministic reference implementations. A development loopback gateway, in-memory registry, or in-memory capability adapter is not a production substitute.
+The cloud plane owns user identity, device registration, short-lived session issuance, model routing, remote revocation, durable long-running task coordination, rate limiting, and provider secrets. Current Python components are deterministic source implementations and production-reference components. They become production services only after their named deployment, identity, KMS, provider, recovery, and independent-acceptance evidence exists.
 
 ### Codex specialist plane
 
-Codex handles coding-focused diagnosis, patch proposals, protocol work, skill candidates, tests, and other long-horizon engineering tasks inside isolated workspaces. It does not directly mutate the physical device, publish firmware, merge its own changes, read permanent user credentials, or bypass the deterministic Tool Gateway.
+Codex handles coding-focused diagnosis, patch proposals, protocol work, Skill candidates, tests, and other long-horizon engineering tasks inside isolated workspaces. It does not directly mutate the physical device, publish firmware, merge its own changes, read permanent user credentials, or bypass the deterministic Tool Gateway.
 
 ## Authority matrix
 
@@ -33,11 +33,13 @@ Codex handles coding-focused diagnosis, patch proposals, protocol work, skill ca
 | Mutation journal | no | observe | yes | no | no | aggregate |
 | Firmware publish | no | no | no | no | proposal only | separate release authority |
 
-## Supported current mobile capabilities
+## Supported current mobile source capabilities
 
-The source candidate supports bounded G1 connection and status, assistant display, manual text, bitmap transfer, notification/whitelist protocol paths, heartbeat, microphone admission, LC3 processing, deterministic local policy/audit, and a provider-neutral model-gateway boundary. Platform availability is constrained by `docs/PLATFORM_CAPABILITIES.json`; in particular, Android PCM-to-ASR is unavailable and fails closed.
+The source candidate supports bounded G1 connection and status, assistant display, manual text, bitmap transfer, notification/whitelist protocol paths, heartbeat, microphone admission, LC3 processing, deterministic local policy/audit, and provider-neutral model/speech gateway boundaries.
 
-Cloud identity, realtime, capability, Skills, Memory, qualification, release, MCP, and Codex components are contracts or deterministic reference implementations until their named deployment evidence exists.
+Android includes a bounded, authenticated, generation/pair-bound PCM-to-ASR source path. It remains unavailable in the production consumer profile until a live authenticated one-shot bootstrap, configured speech tenant, same-authority decoded PCM delivery, provider final response, cancellation/revocation propagation, and physical qualification are composed and accepted. iOS speech is similarly constrained by permission, OS/locale/device behavior, provider policy, and physical qualification.
+
+Cloud identity, realtime, capability, Skills, Memory, qualification, release, MCP, and Codex components remain source implementations or production-reference components until their named integration and external evidence exists.
 
 ## Legacy import exclusions
 
@@ -51,7 +53,7 @@ A Gap Ledger row closed as `REMOVED_FROM_PRODUCT_BOUNDARY` means the obsolete re
 
 ## Consumer profile exclusions
 
-The consumer profile does not expose unrestricted shell, arbitrary filesystem access, credential reads, payments, account mutation, automatic message sending, social posting, firmware flashing, or Codex full-access execution. New tools default to unavailable until a registered schema, risk tier, policy rule, test, and receipt contract exist.
+The consumer profile does not expose unrestricted shell, arbitrary filesystem access, credential reads, payments, account mutation, automatic message sending, social posting, firmware flashing, or Codex full-access execution. New tools default to unavailable until a registered schema, risk tier, policy rule, test, receipt, reconciliation behavior, and deployment evidence exist.
 
 ## Firmware and release ceiling
 
