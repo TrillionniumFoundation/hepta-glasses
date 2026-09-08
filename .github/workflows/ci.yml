@@ -73,7 +73,17 @@ jobs:
         run: dart format --output=none --set-exit-if-changed lib test
       - name: Treat analyzer warnings as failures
         run: flutter analyze --no-fatal-infos
-      - run: flutter test
+      - name: Run Flutter tests with line coverage
+        run: flutter test --coverage
+      - name: Enforce critical Dart line coverage
+        run: |
+          python3 services/qualification/critical_quality_gate.py coverage \
+            --lcov coverage/lcov.info \
+            --contract contracts/conformance/critical-coverage-v1.json
+      - name: Kill reviewed semantic mutants
+        run: |
+          python3 services/qualification/critical_quality_gate.py mutations \
+            --flutter-command flutter
       - name: Prove Flutter qualification is read-only
         run: git diff --exit-code
 

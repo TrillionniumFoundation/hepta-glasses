@@ -1,0 +1,58 @@
+{
+  "contract_id": "hepta-g1-packet-conformance-v1",
+  "schema_version": 1,
+  "header": {
+    "command_offset": 0,
+    "frame_count_offset": 1,
+    "sequence_offset": 2,
+    "fixed_bytes": 3
+  },
+  "vectors": [
+    {
+      "id": "empty-payload",
+      "command": 0,
+      "max_packet_bytes": 4,
+      "metadata_hex": "",
+      "payload_hex": "",
+      "frames_hex": [
+        "000100"
+      ]
+    },
+    {
+      "id": "single-frame-with-metadata",
+      "command": 78,
+      "max_packet_bytes": 8,
+      "metadata_hex": "07",
+      "payload_hex": "00010203",
+      "frames_hex": [
+        "4e01000700010203"
+      ]
+    },
+    {
+      "id": "five-binary-frames",
+      "command": 165,
+      "max_packet_bytes": 7,
+      "metadata_hex": "f00d",
+      "payload_hex": "00010203040506070809",
+      "frames_hex": [
+        "a50500f00d0001",
+        "a50501f00d0203",
+        "a50502f00d0405",
+        "a50503f00d0607",
+        "a50504f00d0809"
+      ]
+    },
+    {
+      "id": "utf8-is-opaque-bytes",
+      "command": 255,
+      "max_packet_bytes": 9,
+      "metadata_hex": "010203",
+      "payload_hex": "6865707461ceb2",
+      "frames_hex": [
+        "ff0300010203686570",
+        "ff03010102037461ce",
+        "ff0302010203b2"
+      ]
+    }
+  ]
+}

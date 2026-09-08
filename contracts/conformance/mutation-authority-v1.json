@@ -1,0 +1,58 @@
+{
+  "contract_id": "hepta-mutation-authority-conformance-v1",
+  "schema_version": 1,
+  "now_epoch_seconds": 1700000000,
+  "lease_token_component": "vector-authority-0001",
+  "request": {
+    "task_id": "task.vector-1",
+    "action": "device.display_text",
+    "arguments": {
+      "text": "hepta vector",
+      "repeat": 2,
+      "options": {
+        "brightness": 7,
+        "left": true
+      },
+      "tags": [
+        "alpha",
+        "β"
+      ]
+    },
+    "risk_tier": "r1",
+    "deadline_epoch_seconds": 1700000045
+  },
+  "principal": {
+    "subject": "user.vector",
+    "device_id": "device.vector",
+    "session_id": "session.vector",
+    "audience": "hepta-mutation-authority",
+    "scopes": [
+      "mutation.authorize"
+    ],
+    "policy_hash": "cf3e30bc171b1a64654af81c90991074071cdf705133cfbbfdb62cf6863f25e0",
+    "user_present": true,
+    "biometric_verified": false,
+    "expires_at_epoch_seconds": 1700000060
+  },
+  "expected_argument_digest": "6ea59738e063fc2620ae8eee8011888b557d5a8b1e6f48ebd673e6f645e852a9",
+  "expected_fingerprint": "08718fd4280611d30aa18ee652d57f829a342e9363aed57795e6fe7042135a2f",
+  "expected_response": {
+    "task_id": "task.vector-1",
+    "action": "device.display_text",
+    "risk_tier": "r1",
+    "argument_digest": "6ea59738e063fc2620ae8eee8011888b557d5a8b1e6f48ebd673e6f645e852a9",
+    "subject": "user.vector",
+    "device_id": "device.vector",
+    "policy_hash": "cf3e30bc171b1a64654af81c90991074071cdf705133cfbbfdb62cf6863f25e0",
+    "authenticated": true,
+    "user_present": true,
+    "biometric_verified": false,
+    "lease_id": "l-vector-authority-0001",
+    "allowed_actions": [
+      "device.display_text"
+    ],
+    "issued_at_epoch_seconds": 1700000000,
+    "expires_at_epoch_seconds": 1700000045,
+    "single_use": true
+  }
+}

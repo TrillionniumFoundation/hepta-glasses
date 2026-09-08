@@ -81,6 +81,9 @@ final class PacketCodec {
           frame[1] != total) {
         throw const FormatException('Inconsistent frame header.');
       }
+      if (!_metadataMatches(frame, first, metadataLength)) {
+        throw const FormatException('Inconsistent frame metadata.');
+      }
       final sequence = frame[2];
       if (sequence >= total || ordered[sequence] != null) {
         throw const FormatException('Duplicate or invalid frame sequence.');
@@ -96,6 +99,19 @@ final class PacketCodec {
       builder.add(frame!.sublist(headerBytes));
     }
     return builder.takeBytes();
+  }
+
+  static bool _metadataMatches(
+    Uint8List frame,
+    Uint8List first,
+    int metadataLength,
+  ) {
+    for (var index = 0; index < metadataLength; index++) {
+      if (frame[3 + index] != first[3 + index]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   static void _validateByte(int value, String name) {
