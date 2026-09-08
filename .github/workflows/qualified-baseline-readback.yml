@@ -1,0 +1,38 @@
+name: qualified-baseline-readback
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: hepta-qualified-baseline-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  qualified-baseline-readback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_HEAD_SHA"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Verify local truth and live immutable baseline evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 services/qualification/documentation_truth.py --verify-github
+      - name: Prove verification is read-only
+        run: git diff --exit-code
