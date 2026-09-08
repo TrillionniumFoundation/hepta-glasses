@@ -10,22 +10,26 @@ Dependabot monitors the exact manifests used by the canonical build for three su
 - Dart and Flutter packages in the repository root;
 - Gradle dependencies under `android/`.
 
-The three supported ecosystems run weekly in staggered Asia/Singapore windows with at most five open version-update pull requests per ecosystem. The accepted YAML values are checked against the dated official-value snapshot in `contracts/dependabot-supported-ecosystems-v1.json`.
+The three supported ecosystems run weekly in staggered Asia/Singapore windows with at most five open version-update pull requests per ecosystem.
+
+The YAML identifiers are not accepted from a repository-authored allowlist alone. `contracts/dependabot-supported-ecosystems-v1.json` pins the `github/docs` repository, a full immutable Git commit, and GitHub's official package-manager table path. The canonical `repository-contracts` job calls `tools/native/dependency_update_policy.py --verify-dependabot-official`, retrieves that exact public GitHub object through a no-redirect API request, decodes the returned blob, parses the table's YAML values, and rejects any configured identifier absent from the external document. HTTP, redirect, JSON, base64, path, SHA, table-shape, count, or parsing failure is closed rather than skipped.
+
+The pin is intentionally reviewable and immutable. Moving it is a new source change that requires review of the upstream diff, fresh seven-job qualification and a new exact-head Artifact; the workflow never trusts a mutable documentation branch.
 
 Dependabot does not support CocoaPods. The `swift` ecosystem value is for Swift Package Manager and is not a substitute for a repository that uses `Podfile` and `Podfile.lock`. The repository therefore makes no false CocoaPods automation claim.
 
 ## CocoaPods boundary
 
-The current Pod graph contains no registry-hosted Pod declaration. `Podfile.lock` contains only the local Flutter source, and canonical iOS qualification executes `pod install --deployment`. `tools/native/refresh_cocoapods_lock.py --check` verifies that boundary without network access.
+The current Pod graph contains no registry-hosted Pod declaration. `Podfile.lock` contains only the local Flutter source, and canonical iOS qualification executes `pod install --deployment`. `tools/native/dependency_update_policy.py --check-cocoapods` verifies that boundary without network access.
 
 An authorized operator can refresh the lock on a clean named non-`main` branch with:
 
 ```bash
 HEPTA_COCOAPODS_UPDATE_APPROVED=1 \
-  python3 tools/native/refresh_cocoapods_lock.py --apply
+  python3 tools/native/dependency_update_policy.py --refresh-cocoapods
 ```
 
-The tool does not commit, push, open, approve or merge a pull request. It refuses a dirty worktree, `main`, a detached head, missing toolchain, external Pod declarations, external sources other than local Flutter, or changes outside `ios/Podfile.lock`. The resulting diff must enter the ordinary exact-head review path.
+The tool does not commit, push, open, approve or merge a pull request. It refuses a dirty worktree, `main`, a detached head, missing toolchain, external Pod declarations, external sources other than local Flutter, or any tracked/untracked change outside `ios/Podfile.lock`. The resulting diff must enter the ordinary exact-head review path.
 
 Introducing any registry-hosted Pod is a new dependency and trust-boundary change. The fail-closed check blocks it until maintainers add an applicable supported update mechanism, provenance/licensing review, vulnerability monitoring and corresponding CI tests.
 
@@ -48,7 +52,7 @@ High or critical advisories are evaluated immediately rather than waiting for th
 
 Updates to GitHub Actions remain pinned by immutable commit SHA in the canonical workflow. A Dependabot proposal may move that SHA, but the review must verify the new action owner, source tag and release provenance before acceptance.
 
-The official ecosystem-value snapshot is evidence about configuration syntax, not permanent authority. When GitHub changes the supported table, update the snapshot and its retrieval date in a separately reviewed source change before using a new YAML value.
+The official ecosystem pin is syntax evidence, not permanent authority. When GitHub changes support, update the pinned commit after reviewing the upstream object and confirming the chosen manager applies to this repository. Do not merely add a local string until the live immutable-source check accepts it.
 
 ## Platform and release requalification
 

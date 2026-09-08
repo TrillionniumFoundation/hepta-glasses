@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import subprocess
@@ -11,7 +12,20 @@ ROOT = Path(__file__).resolve().parents[2]
 DEPENDABOT = ROOT / ".github/dependabot.yml"
 ECOSYSTEM_CONTRACT = ROOT / "contracts/dependabot-supported-ecosystems-v1.json"
 GUIDE = ROOT / "docs/development/DEPENDENCY_SECURITY.md"
-COCOAPODS_TOOL = ROOT / "tools/native/refresh_cocoapods_lock.py"
+POLICY_TOOL = ROOT / "tools/native/dependency_update_policy.py"
+WORKFLOW = ROOT / ".github/workflows/ci.yml"
+
+
+def _load_policy_module():
+    spec = importlib.util.spec_from_file_location("dependency_update_policy", POLICY_TOOL)
+    if spec is None or spec.loader is None:
+        raise AssertionError("cannot load dependency update policy module")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+POLICY = _load_policy_module()
 
 
 def _dependabot_entries(text: str) -> dict[str, dict[str, str]]:
@@ -39,25 +53,29 @@ def _dependabot_entries(text: str) -> dict[str, dict[str, str]]:
 
 
 class DependencyAutomationTests(unittest.TestCase):
-    def test_dependabot_uses_only_officially_supported_values(self) -> None:
+    def test_dependabot_uses_exact_repository_applicable_values(self) -> None:
         contract = json.loads(ECOSYSTEM_CONTRACT.read_text(encoding="utf-8"))
-        self.assertEqual(contract["schema_version"], 1)
-        self.assertEqual(contract["retrieved_at"], "2026-09-08")
+        self.assertEqual(contract["schema_version"], 2)
         self.assertEqual(
-            contract["source"],
-            "https://docs.github.com/en/code-security/reference/"
-            "supply-chain-security/supported-ecosystems-and-repositories",
+            contract["official_source"],
+            {
+                "repository": "github/docs",
+                "commit": "062800c32b5d12ccae18d1a4a542e94069d827f8",
+                "path": "data/reusables/dependabot/supported-package-managers.md",
+                "retrieved_at": "2026-09-08",
+            },
         )
-        supported = contract["yaml_values"]
-        self.assertEqual(supported, sorted(set(supported)))
-        self.assertNotIn("cocoapods", supported)
+        self.assertEqual(
+            contract["configured_ecosystems"],
+            ["github-actions", "gradle", "pub"],
+        )
+        self.assertEqual(contract["unsupported_repository_managers"], ["cocoapods"])
+        self.assertGreaterEqual(contract["minimum_official_value_count"], 20)
 
         text = DEPENDABOT.read_text(encoding="utf-8")
         self.assertTrue(text.startswith("version: 2\n"))
-        observed = _dependabot_entries(text)
-        self.assertTrue(set(observed).issubset(set(supported)))
         self.assertEqual(
-            observed,
+            _dependabot_entries(text),
             {
                 "github-actions": {
                     "directory": "/",
@@ -80,6 +98,38 @@ class DependencyAutomationTests(unittest.TestCase):
             },
         )
 
+    def test_official_table_parser_is_external_and_fail_closed(self) -> None:
+        fixture = """Package manager | YAML value | Version updates
+GitHub Actions | `github-actions` | yes
+Gradle | `gradle` | yes
+Pub | `pub` | yes
+Swift | `swift` | yes
+"""
+        self.assertEqual(
+            POLICY.parse_official_values(fixture),
+            {"github-actions", "gradle", "pub", "swift"},
+        )
+        with self.assertRaises(POLICY.DependencyPolicyError):
+            POLICY.parse_official_values("github-actions gradle pub")
+
+        source = POLICY_TOOL.read_text(encoding="utf-8")
+        self.assertIn('_OFFICIAL_REPOSITORY = "github/docs"', source)
+        self.assertIn(
+            '_OFFICIAL_PATH = "data/reusables/dependabot/'
+            'supported-package-managers.md"',
+            source,
+        )
+        self.assertIn("build_opener(_NoRedirect())", source)
+        self.assertIn("official-source read failed closed", source)
+        self.assertNotIn("raw.githubusercontent.com/{repository}", source)
+
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn(
+            "python3 tools/native/dependency_update_policy.py "
+            "--verify-dependabot-official",
+            workflow,
+        )
+
     def test_dependency_updates_cannot_self_promote(self) -> None:
         text = DEPENDABOT.read_text(encoding="utf-8").casefold()
         for prohibited in (
@@ -94,7 +144,7 @@ class DependencyAutomationTests(unittest.TestCase):
 
     def test_cocoapods_boundary_is_actionable_and_fail_closed(self) -> None:
         completed = subprocess.run(
-            [sys.executable, str(COCOAPODS_TOOL), "--check"],
+            [sys.executable, str(POLICY_TOOL), "--check-cocoapods"],
             cwd=ROOT,
             check=True,
             text=True,
@@ -109,12 +159,13 @@ class DependencyAutomationTests(unittest.TestCase):
         self.assertFalse(result["auto_push"])
         self.assertFalse(result["auto_merge"])
 
-        source = COCOAPODS_TOOL.read_text(encoding="utf-8")
+        source = POLICY_TOOL.read_text(encoding="utf-8")
         for phrase in (
             "HEPTA_COCOAPODS_UPDATE_APPROVED",
             "named non-main review branch",
             'path != "ios/Podfile.lock"',
             "open an ordinary exact-head pull request",
+            '"--untracked-files=all"',
         ):
             self.assertIn(phrase, source)
 
@@ -125,7 +176,7 @@ class DependencyAutomationTests(unittest.TestCase):
             "ios/Podfile.lock",
             "contracts/dependabot-supported-ecosystems-v1.json",
             "docs/development/DEPENDENCY_SECURITY.md",
-            "tools/native/refresh_cocoapods_lock.py",
+            "tools/native/dependency_update_policy.py",
         ):
             path = ROOT / relative
             self.assertTrue(path.is_file(), relative)
@@ -134,6 +185,7 @@ class DependencyAutomationTests(unittest.TestCase):
         for phrase in (
             "three supported ecosystems",
             "Dependabot does not support CocoaPods",
+            "immutable `github/docs` commit",
             "No dependency pull request is auto-merged",
             "all seven canonical jobs",
             "exact-head source Artifact",
