@@ -33,6 +33,7 @@ _POD_DECLARATION = re.compile(r"""^\s*pod\s+['\"]([^'\"]+)['\"]""")
 _COCOAPODS_VERSION = re.compile(r"(?m)^COCOAPODS:\s+([0-9]+(?:\.[0-9]+){1,3})\s*$")
 _ECOSYSTEM = re.compile(r"(?m)^  - package-ecosystem: ([a-z0-9][a-z0-9-]*)$")
 _OFFICIAL_VALUE = re.compile(r"\|\s*`([a-z0-9][a-z0-9-]*)`\s*\|")
+_BASE64_WITH_LINE_BREAKS = re.compile(r"^[A-Za-z0-9+/=\r\n]*$")
 _MAX_RESPONSE_BYTES = 1024 * 1024
 
 
@@ -195,10 +196,14 @@ def _fetch_official_document(source: dict[str, Any]) -> tuple[str, str, str]:
     blob_sha = metadata.get("sha")
     if not isinstance(blob_sha, str) or not _BLOB_SHA.fullmatch(blob_sha):
         raise DependencyPolicyError("official-source blob SHA is missing or malformed")
-    if metadata.get("encoding") != "base64" or not isinstance(metadata.get("content"), str):
+    encoded = metadata.get("content")
+    if metadata.get("encoding") != "base64" or not isinstance(encoded, str):
         raise DependencyPolicyError("official-source content is not base64 encoded")
+    if not _BASE64_WITH_LINE_BREAKS.fullmatch(encoded):
+        raise DependencyPolicyError("official-source base64 contains non-alphabet bytes")
+    compact = encoded.replace("\r", "").replace("\n", "")
     try:
-        raw = base64.b64decode(metadata["content"], validate=True)
+        raw = base64.b64decode(compact, validate=True)
         document = raw.decode("utf-8")
     except (ValueError, UnicodeError) as exc:
         raise DependencyPolicyError(f"official-source content decode failed: {exc}") from exc
