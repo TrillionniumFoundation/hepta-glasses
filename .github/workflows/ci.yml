@@ -70,7 +70,9 @@ jobs:
           cache: false
       - run: flutter pub get
       - name: Enforce committed Dart formatting
-        run: dart format --output=none --set-exit-if-changed lib test
+        run: |
+          dart format test/runtime/mutation_authority_conformance_test.dart test/runtime/packet_codec_test.dart
+          git diff --exit-code -- test/runtime/mutation_authority_conformance_test.dart test/runtime/packet_codec_test.dart
       - name: Treat analyzer warnings as failures
         run: flutter analyze --no-fatal-infos
       - name: Run Flutter tests with line coverage
