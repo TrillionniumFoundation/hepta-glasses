@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Demo Ai Even</string>
+	<string>Hepta Glasses</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>demo_ai_even</string>
+	<string>hepta_glasses</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -27,11 +27,11 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>This app needs Bluetooth access to connect to your smart glasses.</string>
+	<string>Hepta Glasses uses Bluetooth to connect to and control the paired smart glasses.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Permission to pick image from photo library</string>
+	<string>Hepta Glasses can select an image you choose for transfer to the paired smart glasses.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>The speech inquiry feature requires converting voice content to text and then returning the result to the device.</string>
+	<string>Hepta Glasses uses speech recognition only when you start a voice interaction.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
