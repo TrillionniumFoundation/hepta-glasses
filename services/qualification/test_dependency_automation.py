@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DEPENDABOT = ROOT / ".github/dependabot.yml"
 ECOSYSTEM_CONTRACT = ROOT / "contracts/dependabot-supported-ecosystems-v1.json"
 GUIDE = ROOT / "docs/development/DEPENDENCY_SECURITY.md"
-COCOAPODS_TOOL = ROOT / "tools/refresh_cocoapods_lock.py"
+COCOAPODS_TOOL = ROOT / "tools/native/refresh_cocoapods_lock.py"
 
 
 def _dependabot_entries(text: str) -> dict[str, dict[str, str]]:
@@ -125,7 +125,7 @@ class DependencyAutomationTests(unittest.TestCase):
             "ios/Podfile.lock",
             "contracts/dependabot-supported-ecosystems-v1.json",
             "docs/development/DEPENDENCY_SECURITY.md",
-            "tools/refresh_cocoapods_lock.py",
+            "tools/native/refresh_cocoapods_lock.py",
         ):
             path = ROOT / relative
             self.assertTrue(path.is_file(), relative)

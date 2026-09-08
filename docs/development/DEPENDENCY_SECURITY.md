@@ -16,13 +16,13 @@ Dependabot does not support CocoaPods. The `swift` ecosystem value is for Swift 
 
 ## CocoaPods boundary
 
-The current Pod graph contains no registry-hosted Pod declaration. `Podfile.lock` contains only the local Flutter source, and canonical iOS qualification executes `pod install --deployment`. `tools/refresh_cocoapods_lock.py --check` verifies that boundary without network access.
+The current Pod graph contains no registry-hosted Pod declaration. `Podfile.lock` contains only the local Flutter source, and canonical iOS qualification executes `pod install --deployment`. `tools/native/refresh_cocoapods_lock.py --check` verifies that boundary without network access.
 
 An authorized operator can refresh the lock on a clean named non-`main` branch with:
 
 ```bash
 HEPTA_COCOAPODS_UPDATE_APPROVED=1 \
-  python3 tools/refresh_cocoapods_lock.py --apply
+  python3 tools/native/refresh_cocoapods_lock.py --apply
 ```
 
 The tool does not commit, push, open, approve or merge a pull request. It refuses a dirty worktree, `main`, a detached head, missing toolchain, external Pod declarations, external sources other than local Flutter, or changes outside `ios/Podfile.lock`. The resulting diff must enter the ordinary exact-head review path.
