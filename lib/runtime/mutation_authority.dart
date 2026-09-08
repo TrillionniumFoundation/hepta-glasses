@@ -219,7 +219,8 @@ final class HttpMutationAuthorityProvider implements MutationAuthorityProvider {
       'single_use',
     };
     if (body.keys.any((Object? key) => key is! String) ||
-        body.keys.cast<String>().toSet() != fields) {
+        body.length != fields.length ||
+        !body.keys.cast<String>().every(fields.contains)) {
       throw const FormatException('mutation_authority_response_shape_invalid');
     }
     final taskId = body['task_id'];
