@@ -15,8 +15,7 @@ Map<Object?, Object?> _responseCopy(Map<String, Object?> contract) {
 }
 
 void main() {
-  const contractPath =
-      'contracts/conformance/mutation-authority-v1.json';
+  const contractPath = 'contracts/conformance/mutation-authority-v1.json';
   final contractText = File(contractPath).readAsStringSync();
   final contract = jsonDecode(contractText) as Map<String, Object?>;
   final requestJson = _stringMap(contract['request']);

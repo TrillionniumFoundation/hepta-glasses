@@ -120,19 +120,25 @@ void main() {
     );
     expect(() => codec.reassemble(<Uint8List>[]), throwsFormatException);
     expect(
-      () => codec.reassemble(<Uint8List>[Uint8List.fromList(<int>[1, 1])]),
+      () => codec.reassemble(<Uint8List>[
+        Uint8List.fromList(<int>[1, 1])
+      ]),
       throwsFormatException,
     );
     expect(
       () => codec.reassemble(
-        <Uint8List>[Uint8List.fromList(<int>[1, 1, 0])],
+        <Uint8List>[
+          Uint8List.fromList(<int>[1, 1, 0])
+        ],
         expectedCommand: 2,
       ),
       throwsFormatException,
     );
     expect(
       () => codec.reassemble(
-        <Uint8List>[Uint8List.fromList(<int>[1, 1, 0])],
+        <Uint8List>[
+          Uint8List.fromList(<int>[1, 1, 0])
+        ],
         metadataLength: -1,
       ),
       throwsArgumentError,
