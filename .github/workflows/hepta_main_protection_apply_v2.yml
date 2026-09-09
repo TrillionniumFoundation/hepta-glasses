@@ -1,0 +1,158 @@
+name: hepta-main-protection-reconcile-v2
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-main-protection-20260909-v1'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: hepta-main-protection-reconcile-v2
+  cancel-in-progress: true
+
+jobs:
+  protect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Reconcile one exact protection object
+        env:
+          ADMIN_TOKEN: ${{ secrets.HEPTA_REPO_ADMIN_TOKEN }}
+          CONTROL_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          repo = os.environ['GH_REPOSITORY']
+          admin = os.environ.get('ADMIN_TOKEN', '')
+          control = os.environ['CONTROL_TOKEN']
+          api = 'https://api.github.com'
+          contexts = [
+              'repository-contracts', 'flutter', 'android-native',
+              'ios-native', 'native-sanitizers',
+              'secret-and-boundary-scan', 'source-evidence',
+          ]
+
+          def call(token, path, method='GET', body=None):
+              raw = None if body is None else json.dumps(body, separators=(',', ':')).encode()
+              request = urllib.request.Request(
+                  api + path,
+                  data=raw,
+                  method=method,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'User-Agent': 'hepta-main-protection-reconcile/2',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      **({'Content-Type': 'application/json'} if raw is not None else {}),
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=45) as response:
+                  payload = response.read()
+                  return response.status, json.loads(payload) if payload else None
+
+          def note(text):
+              call(control, f'/repos/{repo}/issues/82/comments', 'POST', {'body': text})
+
+          if not admin:
+              note('## Main protection reconciliation v2 — BLOCKED\n\n`HEPTA_REPO_ADMIN_TOKEN` is absent. No write was attempted and no weaker token was substituted.')
+              raise SystemExit('administrator secret absent')
+
+          _, repository = call(admin, f'/repos/{repo}')
+          _, actor = call(admin, '/user')
+          if (repository.get('permissions') or {}).get('admin') is not True:
+              note('## Main protection reconciliation v2 — BLOCKED\n\nThe configured credential does not read back repository administrator permission. No protection write was attempted.')
+              raise SystemExit('administrator permission absent')
+
+          _, summaries = call(admin, f'/repos/{repo}/rulesets?includes_parents=true')
+          conflicts = []
+          for summary in summaries:
+              if summary.get('enforcement') == 'disabled':
+                  continue
+              _, detail = call(admin, f"/repos/{repo}/rulesets/{summary['id']}?includes_parents=true")
+              bypass = detail.get('bypass_actors') or []
+              if bypass:
+                  conflicts.append({
+                      'id': detail.get('id'),
+                      'name': detail.get('name'),
+                      'source_type': detail.get('source_type'),
+                      'bypass_actors': bypass,
+                  })
+          if conflicts:
+              note('## Main protection reconciliation v2 — BLOCKED\n\nActive rulesets contain bypass actors; a second authority was not installed. Conflicts: `' + json.dumps(conflicts, separators=(',', ':')) + '`.')
+              raise SystemExit('active ruleset bypass conflict')
+
+          empty_allowances = {'users': [], 'teams': [], 'apps': []}
+          desired = {
+              'required_status_checks': {
+                  'strict': True,
+                  'checks': [{'context': value} for value in contexts],
+              },
+              'enforce_admins': True,
+              'required_pull_request_reviews': {
+                  'dismissal_restrictions': empty_allowances,
+                  'dismiss_stale_reviews': True,
+                  'require_code_owner_reviews': True,
+                  'required_approving_review_count': 1,
+                  'require_last_push_approval': True,
+                  'bypass_pull_request_allowances': empty_allowances,
+              },
+              'restrictions': None,
+              'required_linear_history': True,
+              'allow_force_pushes': False,
+              'allow_deletions': False,
+              'block_creations': False,
+              'required_conversation_resolution': True,
+              'lock_branch': False,
+              'allow_fork_syncing': False,
+          }
+          call(admin, f'/repos/{repo}/branches/main/protection', 'PUT', desired)
+          _, observed = call(admin, f'/repos/{repo}/branches/main/protection')
+          statuses = observed.get('required_status_checks') or {}
+          observed_contexts = {item['context'] for item in statuses.get('checks', [])}
+          if not observed_contexts:
+              observed_contexts = set(statuses.get('contexts', []))
+          reviews = observed.get('required_pull_request_reviews') or {}
+          bypass = reviews.get('bypass_pull_request_allowances') or {}
+          dismissal = reviews.get('dismissal_restrictions') or {}
+          checks = {
+              'strict': statuses.get('strict') is True,
+              'contexts': observed_contexts == set(contexts),
+              'admins': (observed.get('enforce_admins') or {}).get('enabled') is True,
+              'stale': reviews.get('dismiss_stale_reviews') is True,
+              'codeowners': reviews.get('require_code_owner_reviews') is True,
+              'approvals': reviews.get('required_approving_review_count') == 1,
+              'last_push': reviews.get('require_last_push_approval') is True,
+              'bypass_empty': all(not bypass.get(key) for key in ('users', 'teams', 'apps')),
+              'dismissal_empty': all(not dismissal.get(key) for key in ('users', 'teams', 'apps')),
+              'push_restrictions_none': observed.get('restrictions') is None,
+              'linear': (observed.get('required_linear_history') or {}).get('enabled') is True,
+              'no_force': (observed.get('allow_force_pushes') or {}).get('enabled') is False,
+              'no_delete': (observed.get('allow_deletions') or {}).get('enabled') is False,
+              'conversations': (observed.get('required_conversation_resolution') or {}).get('enabled') is True,
+              'not_locked': (observed.get('lock_branch') or {}).get('enabled') is False,
+              'no_fork_sync': (observed.get('allow_fork_syncing') or {}).get('enabled') is False,
+          }
+          failed = sorted(key for key, value in checks.items() if not value)
+          if failed:
+              note('## Main protection reconciliation v2 — READBACK FAILED\n\nExact readback failed for `' + json.dumps(failed) + '`. The Administration gate remains open.')
+              raise SystemExit(f'readback failed: {failed}')
+
+          note(
+              '## Main protection reconciliation v2 — PASSED\n\n'
+              f"Administrator `{actor.get('login', 'unknown')}` applied and read back the exact `main` protection object. "
+              f"Required contexts: `{contexts}`. Strict status checks, administrator enforcement, Code Owner review, stale dismissal, "
+              'latest-push approval, one approval, empty dismissal/bypass allowances, conversation resolution, linear history, and force-push/deletion prohibitions all passed. '
+              'Every active ruleset was individually read and no bypass actor was present. This closes only the repository Administration setting gate.'
+          )
+          print(json.dumps({'passed': True, 'actor': actor.get('login'), 'checks': checks, 'ruleset_count': len(summaries)}, sort_keys=True))
+          PY
