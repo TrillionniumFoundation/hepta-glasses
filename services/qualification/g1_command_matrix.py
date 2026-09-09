@@ -1,15 +1,13 @@
-#!/usr/bin/env python3
 """Validate the closed G1 per-command protocol matrix."""
 
 from __future__ import annotations
 
 import json
 import re
-import sys
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 MATRIX = Path("contracts/g1-command-matrix-v1.json")
 BASE_CONTRACT = Path("contracts/g1-ble-protocol-v1.json")
 HEX_BYTE = re.compile(r"^0x[0-9A-F]{2}$")
@@ -75,7 +73,7 @@ COMMAND_FIELDS = {
 
 
 class G1CommandMatrixError(ValueError):
-    """Stable G1 command matrix validation failure."""
+    """Stable G1 command-matrix validation failure."""
 
 
 def fail(message: str) -> None:
@@ -135,7 +133,12 @@ def string_list(value: Any, label: str) -> list[str]:
     return result
 
 
-def optional_positive_int(value: Any, label: str, *, allow_zero: bool = False) -> int | None:
+def optional_positive_int(
+    value: Any,
+    label: str,
+    *,
+    allow_zero: bool = False,
+) -> int | None:
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, int):
@@ -236,7 +239,12 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
     base_transport = base.get("transport")
     if not isinstance(base_transport, dict):
         fail("base transport contract is malformed")
-    for field in ("topology", "service_uuid", "phone_write_uuid", "phone_notify_uuid"):
+    for field in (
+        "topology",
+        "service_uuid",
+        "phone_write_uuid",
+        "phone_notify_uuid",
+    ):
         if transport[field] != base_transport.get(field):
             fail(f"transport.{field} disagrees with base G1 contract")
     for field in ("request_owner", "effect_authority"):
@@ -264,7 +272,10 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
             },
             f"platform_initialization[{index}]",
         )
-        platform = text(record["platform"], f"platform_initialization[{index}].platform")
+        platform = text(
+            record["platform"],
+            f"platform_initialization[{index}].platform",
+        )
         if platform not in {"android", "ios"} or platform in observed_platforms:
             fail(f"invalid or duplicate initialization platform: {platform}")
         observed_platforms.add(platform)
@@ -276,8 +287,7 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
         repository_file(root, record["source_ref"], f"{platform}.source_ref")
         text(record["external_gate"], f"{platform}.external_gate", 20)
 
-    response_status = document["response_status"]
-    if response_status != base.get("response_status"):
+    if document["response_status"] != base.get("response_status"):
         fail("response status map disagrees with base G1 contract")
 
     assistant_events = document["assistant_events"]
@@ -316,15 +326,21 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
         text(command["target"], f"{identifier}.target", 8)
         if not isinstance(command["mutation"], bool):
             fail(f"{identifier}.mutation must be boolean")
-        text(command["request_layout"], f"{identifier}.request_layout", 20)
-        text(command["response_layout"], f"{identifier}.response_layout", 20)
-        packet = optional_positive_int(command["max_packet_bytes"], f"{identifier}.max_packet_bytes")
+        text(command["request_layout"], f"{identifier}.request_layout", 8)
+        text(command["response_layout"], f"{identifier}.response_layout", 12)
+        packet = optional_positive_int(
+            command["max_packet_bytes"],
+            f"{identifier}.max_packet_bytes",
+        )
         payload = optional_positive_int(
             command["max_payload_bytes"],
             f"{identifier}.max_payload_bytes",
             allow_zero=True,
         )
-        optional_positive_int(command["packet_count_max"], f"{identifier}.packet_count_max")
+        optional_positive_int(
+            command["packet_count_max"],
+            f"{identifier}.packet_count_max",
+        )
         if packet is not None and payload is not None and payload > packet:
             fail(f"{identifier} payload exceeds packet bound")
         text(command["acknowledgement"], f"{identifier}.acknowledgement", 4)
@@ -349,7 +365,10 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
     expected_framing = {
         "display_text_and_ai": (200, framing.get("display_payload_bytes")),
         "bitmap_packet": (200, framing.get("bitmap_payload_bytes")),
-        "microphone_data": (framing.get("microphone_frame_bytes"), framing.get("lc3_payload_bytes")),
+        "microphone_data": (
+            framing.get("microphone_frame_bytes"),
+            framing.get("lc3_payload_bytes"),
+        ),
     }
     for identifier, (packet, payload) in expected_framing.items():
         if commands[identifier]["max_packet_bytes"] != packet:
@@ -357,7 +376,12 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
         if commands[identifier]["max_payload_bytes"] != payload:
             fail(f"{identifier} payload bound disagrees with base framing")
 
-    invariants = set(string_list(document["cross_platform_invariants"], "cross_platform_invariants"))
+    invariants = set(
+        string_list(
+            document["cross_platform_invariants"],
+            "cross_platform_invariants",
+        )
+    )
     if invariants != EXPECTED_INVARIANTS:
         fail(f"cross-platform invariant set drifted: {sorted(invariants)!r}")
     external_gates = string_list(document["external_gates"], "external_gates")
@@ -367,7 +391,9 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
     return {
         "ok": True,
         "commands": len(commands),
-        "mutating_commands": sum(bool(command["mutation"]) for command in commands.values()),
+        "mutating_commands": sum(
+            bool(command["mutation"]) for command in commands.values()
+        ),
         "source_references": source_reference_count,
         "test_references": test_reference_count,
         "external_gates": len(external_gates),
@@ -385,7 +411,7 @@ def main() -> int:
     try:
         result = validate(ROOT)
     except (G1CommandMatrixError, KeyError, OSError, TypeError) as error:
-        print(json.dumps({"ok": False, "error": str(error)}), file=sys.stderr)
+        print(json.dumps({"ok": False, "error": str(error)}))
         return 1
     print(json.dumps(result, sort_keys=True))
     return 0

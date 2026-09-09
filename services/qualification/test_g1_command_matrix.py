@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import tools.validate_g1_command_matrix as matrix
+from services.qualification import g1_command_matrix as matrix
 
 ROOT = Path(__file__).resolve().parents[2]
 

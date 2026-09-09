@@ -2,7 +2,7 @@
 
 Status: source contract supplement for `g1-transport` and `g1-protocol-features`.  
 Machine contract: `contracts/g1-command-matrix-v1.json`.  
-Validator: `tools/validate_g1_command_matrix.py`.  
+Validator: `services/qualification/g1_command_matrix.py`.  
 Claim ceiling: source semantics only; vendor and physical confirmation remain required.
 
 ## 1. Purpose and authority boundary
@@ -188,7 +188,7 @@ A field meaning, command byte, status meaning, packet bound, target leg, retry c
 Run:
 
 ```bash
-python3 tools/validate_g1_command_matrix.py
+python3 -m services.qualification.g1_command_matrix
 python3 -m unittest services.qualification.test_g1_command_matrix -v
 flutter test test/runtime/packet_codec_test.dart
 flutter test test/runtime/ble_manager_authority_test.dart
