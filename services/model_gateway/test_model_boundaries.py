@@ -386,11 +386,67 @@ class ModelBoundaryTests(unittest.TestCase):
         self.assertIsNone(self.status().answer_digest)
 
     def test_actual_hung_workers_exhaust_fixed_pool(self):
+        condition = threading.Condition()
         release = threading.Event()
         self.addCleanup(release.set)
-        self.provider.before = lambda kw: release.wait(2)
-        for i in range(5):
-            self.error("model_effect_indeterminate", lambda: self.execute(idempotency_key=f"key{i}", timeout_seconds=0.03))
+        entered = 0
+        outcomes = {}
+        failures = []
+
+        def block(_kw):
+            nonlocal entered
+            with condition:
+                entered += 1
+                condition.notify_all()
+            if not release.wait(2):
+                raise AssertionError(
+                    "test did not release blocked provider workers"
+                )
+
+        self.provider.before = block
+
+        def execute(index):
+            try:
+                self.execute(
+                    idempotency_key=f"key{index}",
+                    timeout_seconds=0.5,
+                )
+            except ModelExecutionError as error:
+                outcomes[index] = error.code
+            except BaseException as error:
+                failures.append(error)
+            else:
+                outcomes[index] = "unexpected_success"
+
+        callers = [
+            threading.Thread(target=execute, args=(index,))
+            for index in range(4)
+        ]
+        for caller in callers:
+            caller.start()
+        with condition:
+            self.assertTrue(
+                condition.wait_for(lambda: entered == 4, timeout=2),
+                f"entered={entered}; expected 4",
+            )
+        for caller in callers:
+            caller.join(2)
+            self.assertFalse(caller.is_alive())
+        self.assertEqual(failures, [])
+        self.assertEqual(
+            outcomes,
+            {
+                index: "model_effect_indeterminate"
+                for index in range(4)
+            },
+        )
+        self.error(
+            "model_effect_indeterminate",
+            lambda: self.execute(
+                idempotency_key="key4",
+                timeout_seconds=0.5,
+            ),
+        )
         self.assertEqual(self.provider.calls, 4)
         release.set()
         time.sleep(0.03)
