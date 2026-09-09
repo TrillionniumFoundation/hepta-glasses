@@ -16,22 +16,21 @@ jobs:
     env:
       CANDIDATE_HEAD: 317ee1141ceac6df7d711aeaaca27b22d735e48d
       CANDIDATE_TREE: 51e673238d30b81ef8eb64b93eef14fc7bf850cb
-      RECEIPT_DIR: ${{ runner.temp }}/hepta-admin-closure-v12
     steps:
-      - name: Check out one-shot operator commit without credentials
+      - name: Check out one-shot operator branch without credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Bind operator commit to the qualified immutable candidate
+      - name: Bind operator branch to the qualified immutable candidate
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$CANDIDATE_HEAD"
-          test "$(git rev-parse HEAD^^{tree})" = "$CANDIDATE_TREE"
-          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/hepta-admin-closure-v12.yml"
-          git diff --check HEAD^ HEAD
+          git merge-base --is-ancestor "$CANDIDATE_HEAD" HEAD
+          test "$(git rev-parse "$CANDIDATE_HEAD^{tree}")" = "$CANDIDATE_TREE"
+          test "$(git diff --name-only "$CANDIDATE_HEAD" HEAD)" = ".github/workflows/hepta-admin-closure-v12.yml"
+          git diff --check "$CANDIDATE_HEAD" HEAD
 
       - name: Apply canonical protection and capture complete sanitized readback
         id: apply
@@ -41,11 +40,13 @@ jobs:
           HEPTA_REPO_ADMIN_TOKEN: ${{ secrets.HEPTA_REPO_ADMIN_TOKEN }}
         run: |
           set -uo pipefail
-          mkdir -p "$RECEIPT_DIR"
-          chmod 700 "$RECEIPT_DIR"
+          receipt_dir="${RUNNER_TEMP}/hepta-admin-closure-v12"
+          mkdir -p "$receipt_dir"
+          chmod 700 "$receipt_dir"
+          export RECEIPT_DIR="$receipt_dir"
 
           python3 - <<'PY'
-          import json, os, pathlib, subprocess
+          import json, os, pathlib
           root = pathlib.Path(os.environ["RECEIPT_DIR"])
           metadata = {
               "schema_version": 1,
@@ -65,18 +66,18 @@ jobs:
           PY
 
           if [ -z "${HEPTA_REPO_ADMIN_TOKEN:-}" ]; then
-            printf '%s\n' '{"ok":false,"error":"admin_token_required"}' > "$RECEIPT_DIR/apply-result.json"
-            printf '%s\n' '2' > "$RECEIPT_DIR/return-code.txt"
+            printf '%s\n' '{"ok":false,"error":"admin_token_required"}' > "$receipt_dir/apply-result.json"
+            printf '%s\n' '2' > "$receipt_dir/return-code.txt"
             exit 2
           fi
 
           set +e
           python3 tools/repository_governance.py --apply \
-            > "$RECEIPT_DIR/apply-result.json" \
-            2> "$RECEIPT_DIR/apply-stderr.log"
+            > "$receipt_dir/apply-result.json" \
+            2> "$receipt_dir/apply-stderr.log"
           rc=$?
           set -e
-          printf '%s\n' "$rc" > "$RECEIPT_DIR/return-code.txt"
+          printf '%s\n' "$rc" > "$receipt_dir/return-code.txt"
 
           if [ "$rc" -eq 0 ]; then
             python3 - <<'PY'
@@ -110,7 +111,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: hepta-admin-closure-v12-${{ github.sha }}
-          path: ${{ env.RECEIPT_DIR }}
+          path: ${{ runner.temp }}/hepta-admin-closure-v12
           if-no-files-found: error
           retention-days: 30
 
@@ -119,6 +120,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f "$RECEIPT_DIR/return-code.txt"
-          rc="$(cat "$RECEIPT_DIR/return-code.txt")"
+          receipt_dir="${RUNNER_TEMP}/hepta-admin-closure-v12"
+          test -f "$receipt_dir/return-code.txt"
+          rc="$(cat "$receipt_dir/return-code.txt")"
           test "$rc" = "0"
