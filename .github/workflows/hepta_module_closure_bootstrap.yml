@@ -1,0 +1,103 @@
+name: hepta-module-closure-bootstrap
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-module-closure-bootstrap-20260909-v1'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hepta-module-closure-bootstrap
+  cancel-in-progress: true
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: '576e51d22e767c15834ebdef856865c26be027b6'
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify immutable source and target
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE='576e51d22e767c15834ebdef856865c26be027b6'
+          TARGET='codex/hepta-main-convergence-20260909-v2'
+          test "$(git rev-parse HEAD)" = "$SOURCE"
+          remote_head="$(git ls-remote --heads origin "refs/heads/$TARGET" | awk '{print $1}')"
+          test "$remote_head" = "$SOURCE"
+
+      - name: Bootstrap the single active module registry
+        run: python3 tools/generate_module_docs.py --bootstrap
+
+      - name: Verify generated and semantic module handoff
+        run: |
+          python3 tools/generate_module_docs.py --check
+          python3 tools/validate_module_semantics.py
+          python3 tools/validate_source_coverage.py
+          python3 tools/validate_module_handoff.py
+
+      - name: Verify version, archive and external closure contracts
+        run: |
+          python3 tools/validate_release_version.py
+          python3 tools/validate_external_closure_program.py
+          python3 tools/validate_repository.py
+          python3 tools/validate_repository_metadata.py
+          python3 tools/validate_production_authority.py
+
+      - name: Run focused hostile tests
+        run: |
+          python3 -m unittest -v \
+            services.qualification.test_module_semantic_docs \
+            services.qualification.test_external_closure_program \
+            services.qualification.test_release_version \
+            services.qualification.test_source_artifact_archive_receipt
+
+      - name: Run complete Python repository suites
+        run: |
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+
+      - name: Admit only generated module and index paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          mapfile -t changed < <(
+            {
+              git diff --name-only --diff-filter=ACMRT
+              git ls-files --others --exclude-standard
+            } | sort -u
+          )
+          test "${#changed[@]}" -gt 0
+          for path in "${changed[@]}"; do
+            case "$path" in
+              README.md|docs/README.md|docs/MODULE_COVERAGE.json|docs/modules/modules.json|docs/modules/README.md|docs/modules/*/README.md)
+                ;;
+              *)
+                echo "unexpected bootstrap path: $path" >&2
+                exit 1
+                ;;
+            esac
+          done
+          test -f docs/modules/modules.json
+          test "$(find docs/modules -mindepth 2 -maxdepth 2 -name README.md -type f | wc -l)" -eq 26
+
+      - name: Commit and fast-forward the convergence branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET='codex/hepta-main-convergence-20260909-v2'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- README.md docs/README.md docs/MODULE_COVERAGE.json docs/modules
+          git diff --cached --check
+          git commit -m 'docs: generate canonical 26-module engineering handoff'
+          git push origin "HEAD:refs/heads/$TARGET"
