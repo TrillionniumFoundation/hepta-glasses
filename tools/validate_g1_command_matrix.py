@@ -283,9 +283,14 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
     assistant_events = document["assistant_events"]
     if not isinstance(assistant_events, dict):
         fail("assistant_events must be an object")
+    base_events = base.get("assistant_events")
+    if not isinstance(base_events, dict):
+        fail("base assistant event contract is malformed")
     expected_events = {
-        str(value): key if key != "manual_page" else "manual_page_left_previous_right_next"
-        for key, value in base.get("assistant_events", {}).items()
+        str(base_events["exit"]): "exit",
+        str(base_events["manual_page"]): "manual_page_left_previous_right_next",
+        str(base_events["start"]): "assistant_start",
+        str(base_events["recording_complete"]): "recording_complete",
     }
     if assistant_events != expected_events:
         fail("assistant event map disagrees with base G1 contract")
