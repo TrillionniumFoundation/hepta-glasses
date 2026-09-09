@@ -1,0 +1,77 @@
+name: hepta-archive-verifier-apply-v2
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-archive-verifier-materialize-20260909-v1'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hepta-archive-verifier-apply-v2
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Extract reviewed payload then return to immutable source
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE='7126fba941f339e8f123db8ffb5a937a5bb86500'
+          TARGET='codex/hepta-terminal-convergence-20260909'
+          remote_head="$(git ls-remote --heads origin "refs/heads/$TARGET" | awk '{print $1}')"
+          test "$remote_head" = "$SOURCE"
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import re
+          import zlib
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/hepta_archive_verifier_materialize_v1.yml').read_text(encoding='utf-8')
+          match = re.search(r"(?m)^\s*PAYLOAD: '([^']+)'\s*$", workflow)
+          if match is None:
+              raise SystemExit('payload_line_missing')
+          data = zlib.decompress(base64.b64decode(match.group(1), validate=True))
+          if len(data) != 40952:
+              raise SystemExit(f'payload_size_mismatch:{len(data)}')
+          digest = hashlib.sha256(data).hexdigest()
+          if digest != '154407030d0349b378a64688c84b7770f3f4a5567ea42af513b0cd5ca75551c6':
+              raise SystemExit(f'payload_digest_mismatch:{digest}')
+          Path('/tmp/verify_source_archive_receipt.py').write_bytes(data)
+          PY
+          git checkout --detach "$SOURCE"
+          test "$(git rev-parse HEAD)" = "$SOURCE"
+          test -z "$(git status --porcelain)"
+      - name: Materialize and validate exact verifier bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 0644 /tmp/verify_source_archive_receipt.py tools/verify_source_archive_receipt.py
+          test "$(git status --porcelain)" = '?? tools/verify_source_archive_receipt.py'
+          test "$(wc -c < tools/verify_source_archive_receipt.py)" = '40952'
+          test "$(sha256sum tools/verify_source_archive_receipt.py | awk '{print $1}')" = '154407030d0349b378a64688c84b7770f3f4a5567ea42af513b0cd5ca75551c6'
+          python3 -m py_compile tools/verify_source_archive_receipt.py
+          python3 tools/verify_source_archive_receipt.py --help >/dev/null
+          git diff --check --no-index /dev/null tools/verify_source_archive_receipt.py || test "$?" = '1'
+      - name: Commit and lease-protected push
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE='7126fba941f339e8f123db8ffb5a937a5bb86500'
+          TARGET='codex/hepta-terminal-convergence-20260909'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- tools/verify_source_archive_receipt.py
+          git commit -m 'release: verify durable exact-head source Artifact archives'
+          git push origin \
+            --force-with-lease="refs/heads/$TARGET:$SOURCE" \
+            "HEAD:refs/heads/$TARGET"
