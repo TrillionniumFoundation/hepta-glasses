@@ -37,17 +37,19 @@ This board is a coordination surface. It never replaces GitHub API state, provid
 | 14 | #95 | HG-0012 | `BLOCKED_EXTERNAL` | signing, release, pilot, rollback and store authorities | Produce production-signed binaries; execute pilot, kill switch, rollback, staged rollout and distribution approval | binary SBOM/provenance/attestation, pilot and store evidence |
 | 15 | #82 | aggregate | blocked by children | closure controller plus final independent reviewers | Assemble the exact complete package and run all validators without override | accepted complete bundle and passing product release gate |
 
-## 3. Current connection capability
+## 3. Connection and reviewer eligibility
 
-The authenticated GitHub identity may coordinate issues, create source branches and pull requests, request reviews, and perform ordinary repository writes allowed by the installation. The managed GitHub App does not have Repository Administration permission and therefore cannot read or apply the complete branch-protection contract. Repository-role `admin` and a conversational “highest permission” instruction do not change the installation token's granted scopes.
+Every repository operation must first re-read the live authenticated actor, current PR author, current most recent source pusher, requested reviewers and submitted review state. Capabilities and eligibility are facts of that exact transaction; they are not inferred from this document or from a previous operator session.
 
-The authenticated identity is also the author of PR #114. It must not manufacture the independent Code Owner approval required by #85.
+The managed GitHub App connection used by an operator may coordinate issues, create source branches and pull requests, request reviews, and perform ordinary repository writes allowed by its installation. The managed App class does not provide Repository Administration permission and therefore cannot read or apply the complete branch-protection contract. Repository-role `admin` and a conversational “highest permission” instruction do not change the installation token's granted scopes.
+
+For every required independent approval, compare the live reviewer identity against the live PR author and most recent source pusher. Any actor matching a prohibited role is ineligible for that approval, regardless of repository role or conversational instruction. A later actor or source push requires a fresh eligibility readback. No operator may manufacture, submit on behalf of another person, dismiss or reinterpret an independent review to satisfy #85.
 
 ## 4. Daily closure transaction
 
 Run this sequence for every active candidate day:
 
-1. Re-read PR head/base, review requests, submitted reviews and unresolved threads.
+1. Re-read authenticated actor, PR head/base, author, most recent source pusher, review requests, submitted reviews and unresolved threads.
 2. Re-read all seven workflow jobs and source artifact identity for the exact head.
 3. Re-read public `main` protection and attempt the complete protected endpoint through the authorized observer channel.
 4. Check the active out-of-band registry digest and key status.
