@@ -71,6 +71,7 @@ jobs:
                       )
               bundle.extractall(Path.cwd())
           PYCODE
+          sed -i 's/[[:space:]]\+$//' docs/operations/EXTERNAL_GAP_EXECUTION.md
       - name: Import reviewed source Artifact archival slice without stray files
         shell: bash
         run: |
