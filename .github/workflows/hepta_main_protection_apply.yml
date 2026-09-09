@@ -1,0 +1,204 @@
+name: hepta-main-protection-apply-and-readback
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-main-protection-20260909-v1'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: hepta-main-protection-apply-and-readback
+  cancel-in-progress: true
+
+jobs:
+  protect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Apply one atomic protection object and verify exact readback
+        env:
+          ADMIN_TOKEN: ${{ secrets.HEPTA_REPO_ADMIN_TOKEN }}
+          CONTROL_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          repository = os.environ['GH_REPOSITORY']
+          admin_token = os.environ.get('ADMIN_TOKEN', '')
+          control_token = os.environ['CONTROL_TOKEN']
+          api = 'https://api.github.com'
+          issue = 82
+          required_checks = [
+              'repository-contracts',
+              'flutter',
+              'android-native',
+              'ios-native',
+              'native-sanitizers',
+              'secret-and-boundary-scan',
+              'source-evidence',
+          ]
+
+          def request(token, path, *, method='GET', body=None):
+              payload = None if body is None else json.dumps(body, separators=(',', ':')).encode()
+              req = urllib.request.Request(
+                  api + path,
+                  data=payload,
+                  method=method,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'User-Agent': 'hepta-main-protection-controller/1',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      **({'Content-Type': 'application/json'} if payload is not None else {}),
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=45) as response:
+                  raw = response.read()
+                  return response.status, (json.loads(raw) if raw else None)
+
+          def comment(message):
+              request(
+                  control_token,
+                  f'/repos/{repository}/issues/{issue}/comments',
+                  method='POST',
+                  body={'body': message},
+              )
+
+          if not admin_token:
+              comment(
+                  '## Main protection application — BLOCKED\n\n'
+                  '`HEPTA_REPO_ADMIN_TOKEN` is not available to the isolated administration workflow. '
+                  'No partial protection was written and `GITHUB_TOKEN` was not substituted. The Administration gate remains open.'
+              )
+              raise SystemExit('HEPTA_REPO_ADMIN_TOKEN is absent')
+
+          _, repository_document = request(admin_token, f'/repos/{repository}')
+          permissions = repository_document.get('permissions') or {}
+          actor_status, actor = request(admin_token, '/user')
+          if actor_status != 200 or permissions.get('admin') is not True:
+              comment(
+                  '## Main protection application — BLOCKED\n\n'
+                  'The configured administration credential does not read back `permissions.admin=true`. '
+                  'No branch-protection write was attempted and no weaker object was installed.'
+              )
+              raise SystemExit('administration credential lacks repository admin permission')
+
+          _, rulesets = request(admin_token, f'/repos/{repository}/rulesets?includes_parents=true')
+          active_conflicts = []
+          for ruleset in rulesets:
+              if ruleset.get('enforcement') == 'disabled':
+                  continue
+              bypass = ruleset.get('bypass_actors') or []
+              if bypass:
+                  active_conflicts.append({
+                      'id': ruleset.get('id'),
+                      'name': ruleset.get('name'),
+                      'bypass_actor_count': len(bypass),
+                  })
+          if active_conflicts:
+              comment(
+                  '## Main protection application — BLOCKED\n\n'
+                  'Active repository rulesets contain bypass actors, so installing a second partially ordered authority would be unsafe. '
+                  f'Conflicts: `{json.dumps(active_conflicts, separators=(",", ":"))}`.'
+              )
+              raise SystemExit('active ruleset bypass conflict')
+
+          desired = {
+              'required_status_checks': {
+                  'strict': True,
+                  'checks': [{'context': context} for context in required_checks],
+              },
+              'enforce_admins': True,
+              'required_pull_request_reviews': {
+                  'dismissal_restrictions': {},
+                  'dismiss_stale_reviews': True,
+                  'require_code_owner_reviews': True,
+                  'required_approving_review_count': 1,
+                  'require_last_push_approval': True,
+                  'bypass_pull_request_allowances': {},
+              },
+              'restrictions': None,
+              'required_linear_history': True,
+              'allow_force_pushes': False,
+              'allow_deletions': False,
+              'block_creations': False,
+              'required_conversation_resolution': True,
+              'lock_branch': False,
+              'allow_fork_syncing': False,
+          }
+          status, _ = request(
+              admin_token,
+              f'/repos/{repository}/branches/main/protection',
+              method='PUT',
+              body=desired,
+          )
+          if status not in {200, 201}:
+              raise SystemExit(f'unexpected protection write status: {status}')
+
+          _, observed = request(
+              admin_token,
+              f'/repos/{repository}/branches/main/protection',
+          )
+          status_object = observed.get('required_status_checks') or {}
+          observed_contexts = {
+              item['context'] for item in status_object.get('checks', [])
+          } or set(status_object.get('contexts', []))
+          reviews = observed.get('required_pull_request_reviews') or {}
+          bypass = reviews.get('bypass_pull_request_allowances') or {}
+          checks = {
+              'strict': status_object.get('strict') is True,
+              'required_checks_exact': observed_contexts == set(required_checks),
+              'enforce_admins': (observed.get('enforce_admins') or {}).get('enabled') is True,
+              'dismiss_stale_reviews': reviews.get('dismiss_stale_reviews') is True,
+              'code_owner_reviews': reviews.get('require_code_owner_reviews') is True,
+              'approval_count': reviews.get('required_approving_review_count') == 1,
+              'last_push_approval': reviews.get('require_last_push_approval') is True,
+              'review_bypass_empty': all(not bypass.get(kind) for kind in ('users', 'teams', 'apps')),
+              'push_restrictions_absent': observed.get('restrictions') is None,
+              'linear_history': (observed.get('required_linear_history') or {}).get('enabled') is True,
+              'force_pushes_forbidden': (observed.get('allow_force_pushes') or {}).get('enabled') is False,
+              'deletions_forbidden': (observed.get('allow_deletions') or {}).get('enabled') is False,
+              'conversation_resolution': (observed.get('required_conversation_resolution') or {}).get('enabled') is True,
+              'branch_creation_not_blocked': (observed.get('block_creations') or {}).get('enabled') is False,
+              'branch_not_locked': (observed.get('lock_branch') or {}).get('enabled') is False,
+              'fork_sync_not_allowed': (observed.get('allow_fork_syncing') or {}).get('enabled') is False,
+          }
+          failed = sorted(name for name, value in checks.items() if not value)
+          if failed:
+              comment(
+                  '## Main protection application — READBACK FAILED\n\n'
+                  f'The atomic write returned success, but exact readback failed: `{failed}`. '
+                  'The Administration gate remains open pending reconciliation; no success claim is made.'
+              )
+              raise SystemExit(f'protection readback failed: {failed}')
+
+          actor_login = actor.get('login', 'unknown')
+          comment(
+              '## Main protection application — PASSED\n\n'
+              f'Administrator `{actor_login}` atomically applied and read back the complete `main` protection object. '
+              f'Required checks: `{required_checks}`. '
+              'Strict up-to-date checks, administrator enforcement, stale-review dismissal, Code Owner review, latest-push approval, '
+              'one approval, zero review bypass allowances, conversation resolution, linear history, and force-push/deletion prohibitions '
+              'all read back exactly. No active ruleset bypass conflict was observed.\n\n'
+              'This closes only the repository Administration configuration gate. It does not adopt any candidate into `main` and does not create provider, device, signing, store or release evidence.'
+          )
+          print(json.dumps({
+              'passed': True,
+              'actor': actor_login,
+              'required_checks': required_checks,
+              'checks': checks,
+              'ruleset_count': len(rulesets),
+          }, sort_keys=True))
+          PY
