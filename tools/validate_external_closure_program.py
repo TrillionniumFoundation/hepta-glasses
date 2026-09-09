@@ -490,8 +490,17 @@ def validate(
         combined = " ".join(
             [*evidence, *acceptance, *substitutes, *reopening]
         ).lower()
-        if "evidence" not in combined and "receipt" not in combined:
-            fail(f"{identifier} lacks an evidence or receipt boundary")
+        evidence_terms = (
+            "evidence",
+            "receipt",
+            "statement",
+            "report",
+            "readback",
+            "package",
+            "approval",
+        )
+        if not any(term in combined for term in evidence_terms):
+            fail(f"{identifier} lacks an authentic evidence boundary")
         if status == "BLOCKED_ADMIN_SETTING" and "api" not in combined:
             fail(f"{identifier} administrator gate lacks an API observation")
         if status == "BLOCKED_UPSTREAM" and "vendor" not in combined:

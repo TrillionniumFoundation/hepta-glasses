@@ -355,7 +355,7 @@
         "Reviewers are not source pushers or evidence issuers for the approved area"
       ],
       "prohibited_substitutes": [
-        "self-review",
+        "implementation-team self-review",
         "internal sign-off represented as independent",
         "unexecuted checklist",
         "generic compliance certificate or approval of different digests"

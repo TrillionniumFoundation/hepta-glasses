@@ -164,11 +164,60 @@ class TaskSupervisorTests(unittest.TestCase):
         self.assertFalse(marker.exists())
 
     def test_cancellation_kills_entire_process_group(self) -> None:
+        started = self.root / "cancel-started"
         marker = self.root / "late-cancel"
-        script = self.script("cancel.py", f"import os,time\nif os.fork()==0:\n time.sleep(.5); open({str(marker)!r},'w').write('late'); os._exit(0)\ntime.sleep(5)\n")
+        script = self.script(
+            "cancel.py",
+            (
+                "import os,time\n"
+                "if os.fork()==0:\n"
+                f" time.sleep(.5); open({str(marker)!r},'w').write('late'); os._exit(0)\n"
+                f"open({str(started)!r},'w').write('started')\n"
+                "time.sleep(5)\n"
+            ),
+        )
+        # RLIMIT_NPROC is per real UID. Shared hosted runners can already
+        # exceed the default fixture allowance before this test forks.
+        limits = TaskLimits(
+            wall_seconds=2,
+            cpu_seconds=2,
+            address_space_bytes=256 * 1024 * 1024,
+            file_size_bytes=1024 * 1024,
+            open_files=32,
+            processes=1024,
+            output_bytes=1024,
+        )
         cancel = threading.Event()
-        timer = threading.Timer(.1, cancel.set); timer.start(); self.addCleanup(timer.cancel)
-        self.error("task_cancelled", lambda: run_supervised(self.task(script), cancel=cancel))
+        watcher_failures: list[str] = []
+
+        def cancel_after_process_group_started() -> None:
+            deadline = time.monotonic() + 1.5
+            while not started.exists() and time.monotonic() < deadline:
+                time.sleep(0.005)
+            if not started.exists():
+                watcher_failures.append("supervised process group never started")
+            cancel.set()
+
+        watcher = threading.Thread(
+            target=cancel_after_process_group_started,
+            daemon=True,
+        )
+        self.addCleanup(cancel.set)
+        watcher.start()
+        try:
+            self.error(
+                "task_cancelled",
+                lambda: run_supervised(
+                    self.task(script, limits=limits),
+                    cancel=cancel,
+                ),
+            )
+        finally:
+            cancel.set()
+            watcher.join(2)
+        self.assertFalse(watcher.is_alive())
+        self.assertEqual(watcher_failures, [])
+        self.assertTrue(started.exists())
         time.sleep(.7)
         self.assertFalse(marker.exists())
 
