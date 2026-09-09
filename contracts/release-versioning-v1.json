@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "version_authority": "pubspec.yaml",
+  "version_pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\+([1-9][0-9]*)$",
+  "changelog": "CHANGELOG.md",
+  "tag_pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\+([1-9][0-9]*)$",
+  "android_projection": {
+    "version_name": "flutter.versionName",
+    "version_code": "flutter.versionCode"
+  },
+  "ios_projection": {
+    "short_version": "$(FLUTTER_BUILD_NAME)",
+    "bundle_version": "$(FLUTTER_BUILD_NUMBER)",
+    "project_version": "$(FLUTTER_BUILD_NUMBER)"
+  },
+  "promotion": {
+    "automatic": false,
+    "evidence_transfer": false,
+    "required_checks": [
+      "repository-contracts",
+      "flutter",
+      "android-native",
+      "ios-native",
+      "native-sanitizers",
+      "secret-and-boundary-scan",
+      "source-evidence"
+    ],
+    "requires_exact_head_artifact": true,
+    "requires_eligible_latest_head_review": true,
+    "requires_protected_adoption": true,
+    "signed_binary_is_separate_authority": true
+  }
+}
