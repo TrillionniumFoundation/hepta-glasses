@@ -4,6 +4,8 @@ Assessment basis: `docs/development/MODULE_DOCUMENTATION_COMPLETENESS_STANDARD.m
 Scope: source documentation on the PR #114 successor line.  
 Claim ceiling: documentation quality only; this audit is not source approval, deployment evidence, physical qualification, independent assurance or release authorization.
 
+This audit does not replace accountable module-owner review or independent comparison of the documents against the exact implementation, contracts and tests.
+
 All 26 modules have structural registry records and generated handoff pages. The question evaluated here is whether an owner-authored primary document is sufficiently module-specific to guide implementation, failure analysis, migration, operations and independent review.
 
 ## Audit result
