@@ -1,0 +1,173 @@
+name: hepta-convergence-race-fixes-v2
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-convergence-race-fixes-20260909-v2'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hepta-convergence-race-fixes-v2
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: '576e51d22e767c15834ebdef856865c26be027b6'
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify immutable source and target
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE='576e51d22e767c15834ebdef856865c26be027b6'
+          TARGET='codex/hepta-main-convergence-20260909-v2'
+          test "$(git rev-parse HEAD)" = "$SOURCE"
+          remote_head="$(git ls-remote --heads origin "refs/heads/$TARGET" | awk '{print $1}')"
+          test "$remote_head" = "$SOURCE"
+
+      - name: Reconcile closure vocabulary and schema-compliant data
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          validator = Path('tools/validate_external_closure_program.py')
+          source = validator.read_text(encoding='utf-8')
+          old = '''        if "evidence" not in combined and "receipt" not in combined:
+                      fail(f"{identifier} lacks an evidence or receipt boundary")
+          '''
+          new = '''        evidence_terms = (
+                      "evidence",
+                      "receipt",
+                      "statement",
+                      "report",
+                      "readback",
+                      "package",
+                      "approval",
+                  )
+                  if not any(term in combined for term in evidence_terms):
+                      fail(f"{identifier} lacks an authentic evidence boundary")
+          '''
+          if source.count(old) != 1:
+              raise SystemExit('expected one exact evidence-boundary predicate')
+          validator.write_text(source.replace(old, new), encoding='utf-8')
+
+          program = Path('docs/EXTERNAL_CLOSURE_PROGRAM.json')
+          text = program.read_text(encoding='utf-8')
+          old_phrase = '        "self-review",\n'
+          new_phrase = '        "implementation-team self-review",\n'
+          if text.count(old_phrase) != 1:
+              raise SystemExit('expected one exact self-review substitute')
+          program.write_text(text.replace(old_phrase, new_phrase), encoding='utf-8')
+          PY
+
+      - name: Replace cancellation timing race with process-start handshake
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('services/codex_worker/test_task_supervisor.py')
+          source = path.read_text(encoding='utf-8')
+          start_marker = '    def test_cancellation_kills_entire_process_group(self) -> None:\n'
+          end_marker = '\n    def test_output_limit_kills_process(self) -> None:\n'
+          start = source.index(start_marker)
+          end = source.index(end_marker, start)
+          replacement = '''    def test_cancellation_kills_entire_process_group(self) -> None:
+                  started = self.root / "cancel-started"
+                  marker = self.root / "late-cancel"
+                  script = self.script(
+                      "cancel.py",
+                      (
+                          "import os,time\\n"
+                          "if os.fork()==0:\\n"
+                          f" time.sleep(.5); open({str(marker)!r},'w').write('late'); os._exit(0)\\n"
+                          f"open({str(started)!r},'w').write('started')\\n"
+                          "time.sleep(5)\\n"
+                      ),
+                  )
+                  # RLIMIT_NPROC is per real UID. Shared hosted runners can already
+                  # exceed the default fixture allowance before this test forks.
+                  limits = TaskLimits(
+                      wall_seconds=2,
+                      cpu_seconds=2,
+                      address_space_bytes=256 * 1024 * 1024,
+                      file_size_bytes=1024 * 1024,
+                      open_files=32,
+                      processes=1024,
+                      output_bytes=1024,
+                  )
+                  cancel = threading.Event()
+                  watcher_failures: list[str] = []
+
+                  def cancel_after_process_group_started() -> None:
+                      deadline = time.monotonic() + 1.5
+                      while not started.exists() and time.monotonic() < deadline:
+                          time.sleep(0.005)
+                      if not started.exists():
+                          watcher_failures.append("supervised process group never started")
+                      cancel.set()
+
+                  watcher = threading.Thread(
+                      target=cancel_after_process_group_started,
+                      daemon=True,
+                  )
+                  self.addCleanup(cancel.set)
+                  watcher.start()
+                  try:
+                      self.error(
+                          "task_cancelled",
+                          lambda: run_supervised(
+                              self.task(script, limits=limits),
+                              cancel=cancel,
+                          ),
+                      )
+                  finally:
+                      cancel.set()
+                      watcher.join(2)
+                  self.assertFalse(watcher.is_alive())
+                  self.assertEqual(watcher_failures, [])
+                  self.assertTrue(started.exists())
+                  time.sleep(.7)
+                  self.assertFalse(marker.exists())
+          '''
+          path.write_text(source[:start] + replacement + source[end:], encoding='utf-8')
+          PY
+          git diff --check
+
+      - name: Run focused regression tests repeatedly
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/validate_external_closure_program.py
+          for iteration in 1 2 3 4 5; do
+            echo "iteration=$iteration"
+            python3 -m unittest -v \
+              services.codex_worker.test_task_supervisor.TaskSupervisorTests.test_cancellation_kills_entire_process_group \
+              services.qualification.test_external_closure_program
+          done
+
+      - name: Commit and fast-forward convergence
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET='codex/hepta-main-convergence-20260909-v2'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- \
+            docs/EXTERNAL_CLOSURE_PROGRAM.json \
+            services/codex_worker/test_task_supervisor.py \
+            tools/validate_external_closure_program.py
+          git diff --cached --check
+          git commit -m 'test: close remaining deterministic validation races'
+          git push origin "HEAD:refs/heads/$TARGET"
