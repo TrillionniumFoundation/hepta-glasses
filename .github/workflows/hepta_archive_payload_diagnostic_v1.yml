@@ -1,0 +1,66 @@
+name: hepta-archive-payload-diagnostic-v1
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-archive-verifier-materialize-20260909-v1'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Decode embedded verifier payload with explicit diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import re
+          import subprocess
+          import sys
+          import tempfile
+          import zlib
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/hepta_archive_verifier_materialize_v1.yml').read_text(encoding='utf-8')
+          match = re.search(r"(?m)^\s*PAYLOAD: '([^']+)'\s*$", workflow)
+          if match is None:
+              raise SystemExit('payload_line_missing')
+          encoded = match.group(1)
+          print(f'encoded_length={len(encoded)}')
+          try:
+              compressed = base64.b64decode(encoded, validate=True)
+          except Exception as error:
+              raise SystemExit(f'base64_invalid:{error}') from error
+          print(f'compressed_length={len(compressed)}')
+          print(f'compressed_sha256={hashlib.sha256(compressed).hexdigest()}')
+          try:
+              data = zlib.decompress(compressed)
+          except Exception as error:
+              raise SystemExit(f'zlib_invalid:{error}') from error
+          digest = hashlib.sha256(data).hexdigest()
+          print(f'decoded_length={len(data)}')
+          print(f'decoded_sha256={digest}')
+          with tempfile.TemporaryDirectory(prefix='hepta-archive-payload-') as directory:
+              path = Path(directory) / 'verify_source_archive_receipt.py'
+              path.write_bytes(data)
+              result = subprocess.run(
+                  [sys.executable, '-m', 'py_compile', str(path)],
+                  capture_output=True,
+                  text=True,
+              )
+              print(f'py_compile_returncode={result.returncode}')
+              if result.stdout:
+                  print(result.stdout)
+              if result.stderr:
+                  print(result.stderr, file=sys.stderr)
+          PY
