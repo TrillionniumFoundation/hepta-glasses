@@ -1,0 +1,114 @@
+name: repair-g1-vector-once
+
+on:
+  push:
+    branches:
+      - ops/hepta-repair-g1-vector-20260910
+    paths:
+      - .github/workflows/repair-g1-vector-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the exact repair branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ops/hepta-repair-g1-vector-20260910
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Repair the exact LC3 event vector and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import re
+          from pathlib import Path
+
+          matrix_path = Path("contracts/g1-command-matrix-v1.json")
+          wrapper_path = Path("services/qualification/g1_command_matrix.py")
+          document = json.loads(matrix_path.read_text(encoding="utf-8"))
+
+          commands = document.get("commands")
+          if not isinstance(commands, list):
+              raise SystemExit("typed command list is missing")
+          microphone = next(
+              (item for item in commands if isinstance(item, dict) and item.get("id") == "microphone_data"),
+              None,
+          )
+          if not isinstance(microphone, dict):
+              raise SystemExit("microphone_data profile is missing")
+          consumers = microphone.get("consumer_examples")
+          if not isinstance(consumers, list) or len(consumers) != 1:
+              raise SystemExit("microphone_data must have one event vector")
+          example = consumers[0]
+          if not isinstance(example, dict) or example.get("name") != "lc3_frame":
+              raise SystemExit("unexpected microphone_data event vector")
+
+          example["bytes"] = [0xF1, 0x00, *([0x00] * 200)]
+          if len(example["bytes"]) != 202:
+              raise SystemExit("LC3 event vector repair did not produce 202 bytes")
+
+          def digest(value: object) -> str:
+              encoded = json.dumps(
+                  value,
+                  ensure_ascii=False,
+                  separators=(",", ":"),
+                  sort_keys=True,
+              ).encode("utf-8")
+              return hashlib.sha256(encoded).hexdigest()
+
+          matrix_digest = digest(document)
+          profile_digests = {
+              str(command["id"]): digest(command)
+              for command in commands
+              if isinstance(command, dict) and isinstance(command.get("id"), str)
+          }
+          if len(profile_digests) != 12:
+              raise SystemExit("typed profile inventory is not exactly 12")
+
+          text = wrapper_path.read_text(encoding="utf-8")
+          text, count = re.subn(
+              r'EXPECTED_MATRIX_SHA256 = "[0-9a-f]{64}"',
+              f'EXPECTED_MATRIX_SHA256 = "{matrix_digest}"',
+              text,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("matrix digest binding was not unique")
+          for identifier, value in sorted(profile_digests.items()):
+              pattern = rf'("{re.escape(identifier)}": ")[0-9a-f]{{64}}(")'
+              text, count = re.subn(pattern, rf'\g<1>{value}\g<2>', text, count=1)
+              if count != 1:
+                  raise SystemExit(f"profile digest binding was not unique: {identifier}")
+
+          matrix_path.write_text(
+              json.dumps(document, ensure_ascii=False, indent=2, sort_keys=False) + "\n",
+              encoding="utf-8",
+          )
+          wrapper_path.write_text(text, encoding="utf-8")
+          print(json.dumps({
+              "matrix_sha256": matrix_digest,
+              "microphone_data_sha256": profile_digests["microphone_data"],
+              "event_bytes": len(example["bytes"]),
+          }, sort_keys=True))
+          PY
+
+          rm .github/workflows/repair-g1-vector-once.yml
+          python3 services/qualification/g1_command_matrix.py
+          python3 -m unittest services.qualification.test_g1_command_matrix
+          python3 tools/validate_source_coverage.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add contracts/g1-command-matrix-v1.json services/qualification/g1_command_matrix.py .github/workflows/repair-g1-vector-once.yml
+          git commit -m "protocol: repair exact 202-byte LC3 event vector"
+          git push origin HEAD:ops/hepta-repair-g1-vector-20260910
