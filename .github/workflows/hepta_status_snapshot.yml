@@ -1,0 +1,512 @@
+name: hepta-final-status-snapshot
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-status-snapshot-20260909-v1'
+
+permissions:
+  actions: read
+  contents: write
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: hepta-final-status-snapshot
+  cancel-in-progress: true
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Capture current repository state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ADMIN_TOKEN: ${{ secrets.HEPTA_REPO_ADMIN_TOKEN }}
+          GH_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import datetime as dt
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from typing import Any
+
+          repo = os.environ['GH_REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          admin = os.environ.get('ADMIN_TOKEN', '')
+          api = 'https://api.github.com'
+          pr_numbers = [101, 107, 108, 109, 110, 111, 112, 113]
+          expected_jobs = {
+              'repository-contracts',
+              'flutter',
+              'android-native',
+              'ios-native',
+              'native-sanitizers',
+              'secret-and-boundary-scan',
+              'source-evidence',
+          }
+
+          def request(path: str, *, auth: str | None = None, method='GET', body=None):
+              credential = token if auth is None else auth
+              url = path if path.startswith('https://') else api + path
+              payload = None if body is None else json.dumps(body, separators=(',', ':')).encode()
+              req = urllib.request.Request(
+                  url,
+                  data=payload,
+                  method=method,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {credential}',
+                      'User-Agent': 'hepta-status-snapshot/1',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      **({'Content-Type': 'application/json'} if payload is not None else {}),
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=45) as response:
+                      raw = response.read()
+                      return response.status, json.loads(raw) if raw else None
+              except urllib.error.HTTPError as exc:
+                  raw = exc.read()
+                  try:
+                      document = json.loads(raw) if raw else None
+                  except json.JSONDecodeError:
+                      document = {'raw': raw.decode('utf-8', errors='replace')[:1000]}
+                  return exc.code, document
+
+          def get(path: str):
+              status, document = request(path)
+              if status < 200 or status >= 300:
+                  raise RuntimeError(f'{path} returned HTTP {status}: {document}')
+              return document
+
+          def unresolved_threads(number: int) -> dict[str, Any]:
+              owner, name = repo.split('/', 1)
+              query = '''
+              query($owner:String!,$name:String!,$number:Int!,$cursor:String){
+                repository(owner:$owner,name:$name){
+                  pullRequest(number:$number){
+                    reviewThreads(first:100,after:$cursor){
+                      nodes{isResolved}
+                      pageInfo{hasNextPage endCursor}
+                    }
+                  }
+                }
+              }
+              '''
+              cursor = None
+              unresolved = 0
+              total = 0
+              while True:
+                  status, document = request(
+                      'https://api.github.com/graphql',
+                      method='POST',
+                      body={
+                          'query': query,
+                          'variables': {
+                              'owner': owner,
+                              'name': name,
+                              'number': number,
+                              'cursor': cursor,
+                          },
+                      },
+                  )
+                  if status != 200 or document.get('errors'):
+                      return {
+                          'ok': False,
+                          'http_status': status,
+                          'errors': document.get('errors') if isinstance(document, dict) else document,
+                      }
+                  page = document['data']['repository']['pullRequest']['reviewThreads']
+                  total += len(page['nodes'])
+                  unresolved += sum(1 for node in page['nodes'] if not node['isResolved'])
+                  if not page['pageInfo']['hasNextPage']:
+                      return {'ok': True, 'total': total, 'unresolved': unresolved}
+                  cursor = page['pageInfo']['endCursor']
+
+          def exact_pr_run(head_ref: str, head_sha: str) -> dict[str, Any] | None:
+              encoded = urllib.parse.quote(head_ref, safe='')
+              runs = get(
+                  f'/repos/{repo}/actions/workflows/ci.yml/runs?branch={encoded}&per_page=100'
+              )['workflow_runs']
+              matches = [
+                  run for run in runs
+                  if run.get('head_sha') == head_sha and run.get('event') == 'pull_request'
+              ]
+              if not matches:
+                  return None
+              return max(matches, key=lambda run: (run['run_number'], run['run_attempt']))
+
+          def run_packet(run: dict[str, Any] | None, head_sha: str) -> dict[str, Any] | None:
+              if run is None:
+                  return None
+              result = {
+                  'id': run['id'],
+                  'run_number': run['run_number'],
+                  'run_attempt': run['run_attempt'],
+                  'event': run['event'],
+                  'head_sha': run['head_sha'],
+                  'status': run['status'],
+                  'conclusion': run['conclusion'],
+                  'created_at': run['created_at'],
+                  'updated_at': run['updated_at'],
+                  'html_url': run['html_url'],
+                  'jobs': [],
+                  'job_set_exact': False,
+                  'all_jobs_success': False,
+                  'artifacts': [],
+                  'exact_artifact': None,
+              }
+              jobs = get(f"/repos/{repo}/actions/runs/{run['id']}/jobs?per_page=100")['jobs']
+              result['jobs'] = [
+                  {
+                      'id': job['id'],
+                      'name': job['name'],
+                      'status': job['status'],
+                      'conclusion': job['conclusion'],
+                      'started_at': job['started_at'],
+                      'completed_at': job['completed_at'],
+                      'step_count': len(job.get('steps') or []),
+                  }
+                  for job in jobs
+              ]
+              result['job_set_exact'] = len(jobs) == 7 and {job['name'] for job in jobs} == expected_jobs
+              result['all_jobs_success'] = result['job_set_exact'] and all(
+                  job['status'] == 'completed'
+                  and job['conclusion'] == 'success'
+                  and bool(job.get('steps'))
+                  for job in jobs
+              )
+              artifacts = get(
+                  f"/repos/{repo}/actions/runs/{run['id']}/artifacts?per_page=100"
+              )['artifacts']
+              result['artifacts'] = [
+                  {
+                      'id': item['id'],
+                      'name': item['name'],
+                      'size_in_bytes': item['size_in_bytes'],
+                      'expired': item['expired'],
+                      'digest': item.get('digest'),
+                      'created_at': item['created_at'],
+                      'expires_at': item.get('expires_at'),
+                  }
+                  for item in artifacts
+              ]
+              expected_name = f'hepta-source-evidence-{head_sha}'
+              exact = [
+                  item for item in result['artifacts']
+                  if item['name'] == expected_name and not item['expired']
+              ]
+              if len(exact) == 1:
+                  result['exact_artifact'] = exact[0]
+              return result
+
+          pull_requests: dict[str, Any] = {}
+          for number in pr_numbers:
+              pr = get(f'/repos/{repo}/pulls/{number}')
+              reviews = get(f'/repos/{repo}/pulls/{number}/reviews?per_page=100')
+              run = exact_pr_run(pr['head']['ref'], pr['head']['sha']) if pr['state'] == 'open' else None
+              packet = run_packet(run, pr['head']['sha'])
+              comparison = get(
+                  f"/repos/{repo}/compare/{pr['base']['sha']}...{pr['head']['sha']}"
+              )
+              pull_requests[str(number)] = {
+                  'number': number,
+                  'title': pr['title'],
+                  'state': pr['state'],
+                  'draft': pr['draft'],
+                  'merged': pr.get('merged'),
+                  'mergeable': pr.get('mergeable'),
+                  'mergeable_state': pr.get('mergeable_state'),
+                  'author': (pr.get('user') or {}).get('login'),
+                  'base_ref': pr['base']['ref'],
+                  'base_sha': pr['base']['sha'],
+                  'head_ref': pr['head']['ref'],
+                  'head_sha': pr['head']['sha'],
+                  'merge_commit_sha': pr.get('merge_commit_sha'),
+                  'html_url': pr['html_url'],
+                  'requested_reviewers': [user['login'] for user in pr.get('requested_reviewers', [])],
+                  'comparison_status': comparison['status'],
+                  'ahead_by': comparison['ahead_by'],
+                  'behind_by': comparison['behind_by'],
+                  'total_commits': comparison['total_commits'],
+                  'reviews': [
+                      {
+                          'id': review['id'],
+                          'state': review['state'],
+                          'user': (review.get('user') or {}).get('login'),
+                          'commit_id': review.get('commit_id'),
+                          'submitted_at': review.get('submitted_at'),
+                          'body_first_line': (review.get('body') or '').splitlines()[0:1],
+                      }
+                      for review in reviews
+                  ],
+                  'review_threads': unresolved_threads(number),
+                  'exact_run': packet,
+              }
+
+          main_head = get(f'/repos/{repo}/git/ref/heads/main')['object']['sha']
+          main_runs = get(
+              f'/repos/{repo}/actions/workflows/ci.yml/runs?branch=main&per_page=100'
+          )['workflow_runs']
+          main_matches = [
+              run for run in main_runs
+              if run.get('head_sha') == main_head and run.get('event') == 'push'
+          ]
+          main_run = max(main_matches, key=lambda run: (run['run_number'], run['run_attempt'])) if main_matches else None
+          main_packet = run_packet(main_run, main_head)
+
+          protection_credential = admin or token
+          protection_status, protection_document = request(
+              f'/repos/{repo}/branches/main/protection',
+              auth=protection_credential,
+          )
+          protection = {
+              'admin_token_available': bool(admin),
+              'http_status': protection_status,
+              'exact': False,
+              'checks': {},
+              'failed': [],
+          }
+          if protection_status == 200:
+              statuses = protection_document.get('required_status_checks') or {}
+              observed_contexts = {
+                  item['context'] for item in statuses.get('checks', [])
+              } or set(statuses.get('contexts', []))
+              reviews = protection_document.get('required_pull_request_reviews') or {}
+              bypass = reviews.get('bypass_pull_request_allowances') or {}
+              dismissal = reviews.get('dismissal_restrictions') or {}
+              checks = {
+                  'strict': statuses.get('strict') is True,
+                  'contexts_exact': observed_contexts == expected_jobs,
+                  'enforce_admins': (protection_document.get('enforce_admins') or {}).get('enabled') is True,
+                  'dismiss_stale_reviews': reviews.get('dismiss_stale_reviews') is True,
+                  'code_owner_reviews': reviews.get('require_code_owner_reviews') is True,
+                  'approving_review_count': reviews.get('required_approving_review_count') == 1,
+                  'last_push_approval': reviews.get('require_last_push_approval') is True,
+                  'bypass_empty': all(not bypass.get(key) for key in ('users', 'teams', 'apps')),
+                  'dismissal_empty': all(not dismissal.get(key) for key in ('users', 'teams', 'apps')),
+                  'push_restrictions_none': protection_document.get('restrictions') is None,
+                  'linear_history': (protection_document.get('required_linear_history') or {}).get('enabled') is True,
+                  'force_pushes_forbidden': (protection_document.get('allow_force_pushes') or {}).get('enabled') is False,
+                  'deletions_forbidden': (protection_document.get('allow_deletions') or {}).get('enabled') is False,
+                  'conversation_resolution': (protection_document.get('required_conversation_resolution') or {}).get('enabled') is True,
+              }
+              protection['checks'] = checks
+              protection['failed'] = sorted(key for key, value in checks.items() if not value)
+              protection['exact'] = not protection['failed']
+          else:
+              protection['error'] = protection_document
+
+          external_by_ref = {}
+          refs = {
+              'main': main_head,
+              'pr101': pull_requests['101']['head_sha'],
+              'pr113': pull_requests['113']['head_sha'],
+          }
+          for label, ref in refs.items():
+              status, document = request(
+                  f'/repos/{repo}/contents/evidence/external?ref={ref}'
+              )
+              files = []
+              if status == 200 and isinstance(document, list):
+                  files = sorted(
+                      item['name'] for item in document
+                      if item.get('type') == 'file'
+                      and item['name'] not in {'README.md', '.gitkeep'}
+                  )
+              external_by_ref[label] = {
+                  'ref': ref,
+                  'http_status': status,
+                  'files_beyond_readme': files,
+                  'accepted_global_closure_present': 'accepted-global-closure.json' in files,
+              }
+
+          comments = get(f'/repos/{repo}/issues/82/comments?per_page=100')
+          relevant_comments = []
+          for item in comments[-40:]:
+              body = item.get('body') or ''
+              first = body.splitlines()[0] if body.splitlines() else ''
+              if any(
+                  marker in body
+                  for marker in (
+                      'Final closure readback',
+                      'Final source adoption gate',
+                      'Main protection',
+                      'Exact `main` source audit',
+                      'PR #101 main adoption gate',
+                      'Consolidated repository-source stack adopted',
+                  )
+              ):
+                  relevant_comments.append({
+                      'id': item['id'],
+                      'created_at': item['created_at'],
+                      'updated_at': item['updated_at'],
+                      'author': (item.get('user') or {}).get('login'),
+                      'first_line': first,
+                      'body': body,
+                  })
+
+          snapshot = {
+              'schema_version': 1,
+              'captured_at_utc': dt.datetime.now(dt.timezone.utc).isoformat(),
+              'repository': repo,
+              'main': {
+                  'head_sha': main_head,
+                  'exact_run': main_packet,
+                  'protection': protection,
+              },
+              'pull_requests': pull_requests,
+              'external_evidence': external_by_ref,
+              'issue_82_relevant_comments': relevant_comments,
+          }
+
+          # Derived fail-closed summary.
+          staged = ['107', '108', '109', '110', '111', '113']
+          expected_bases = {
+              '107': pull_requests['101']['head_ref'],
+              '108': pull_requests['107']['head_ref'],
+              '109': pull_requests['108']['head_ref'],
+              '110': pull_requests['109']['head_ref'],
+              '111': pull_requests['110']['head_ref'],
+          }
+          if pull_requests['113']['base_ref'] == pull_requests['111']['head_ref']:
+              expected_bases['113'] = pull_requests['111']['head_ref']
+          else:
+              expected_bases['113'] = pull_requests['101']['head_ref']
+
+          derived = {
+              'staged': {},
+              'pr112_closed': pull_requests['112']['state'] == 'closed',
+              'pr101_merged': pull_requests['101']['state'] == 'closed' and pull_requests['101']['merged'] is True,
+              'main_protection_exact': protection['exact'],
+              'main_exact_source_qualified': bool(
+                  main_packet
+                  and main_packet['status'] == 'completed'
+                  and main_packet['conclusion'] == 'success'
+                  and main_packet['all_jobs_success']
+                  and main_packet['exact_artifact']
+              ),
+              'external_global_closure_present_on_main': external_by_ref['main']['accepted_global_closure_present'],
+          }
+          for number in staged:
+              pr = pull_requests[number]
+              run = pr['exact_run']
+              exact_approvals = sorted({
+                  review['user']
+                  for review in pr['reviews']
+                  if review['state'] == 'APPROVED'
+                  and review['commit_id'] == pr['head_sha']
+                  and review['user']
+                  and review['user'] != pr['author']
+              })
+              checks = {
+                  'open_or_merged': pr['state'] == 'open' or pr['merged'] is True,
+                  'base_expected': pr['base_ref'] == expected_bases[number],
+                  'ahead_of_base': pr['comparison_status'] == 'ahead' and pr['ahead_by'] > 0,
+                  'exact_run_success': bool(
+                      run
+                      and run['status'] == 'completed'
+                      and run['conclusion'] == 'success'
+                  ),
+                  'seven_jobs_success': bool(run and run['all_jobs_success']),
+                  'exact_artifact_present': bool(run and run['exact_artifact']),
+                  'zero_unresolved_threads': pr['review_threads'].get('ok') is True and pr['review_threads'].get('unresolved') == 0,
+                  'exact_non_author_approval': bool(exact_approvals),
+              }
+              derived['staged'][number] = {
+                  'checks': checks,
+                  'failed': sorted(key for key, value in checks.items() if not value),
+                  'exact_approvers': exact_approvals,
+              }
+          derived['staged_all_ready'] = all(
+              not row['failed'] for row in derived['staged'].values()
+          )
+          derived['repository_source_adopted_to_main'] = (
+              derived['pr101_merged'] and derived['main_exact_source_qualified']
+          )
+          derived['global_closed'] = all((
+              derived['staged_all_ready'],
+              derived['pr112_closed'],
+              derived['repository_source_adopted_to_main'],
+              derived['main_protection_exact'],
+              derived['external_global_closure_present_on_main'],
+          ))
+          snapshot['derived'] = derived
+
+          with open('ops/final-status.json', 'w', encoding='utf-8') as handle:
+              json.dump(snapshot, handle, ensure_ascii=False, indent=2, sort_keys=True)
+              handle.write('\n')
+
+          lines = [
+              '# hepta-glasses final status snapshot',
+              '',
+              f"Captured: `{snapshot['captured_at_utc']}`",
+              '',
+              f"Global closed: **{derived['global_closed']}**",
+              '',
+              '| PR | state | draft | base | head | CI | 7 jobs | Artifact | unresolved | exact non-author approval |',
+              '|---:|---|---|---|---|---|---|---|---:|---|',
+          ]
+          for number in [str(value) for value in pr_numbers]:
+              pr = pull_requests[number]
+              run = pr['exact_run']
+              approvers = derived['staged'].get(number, {}).get('exact_approvers', [])
+              lines.append(
+                  f"| #{number} | {pr['state']} | {pr['draft']} | `{pr['base_ref']}` | `{pr['head_sha'][:12]}` | "
+                  f"{run['conclusion'] if run else 'missing'} | {run['all_jobs_success'] if run else False} | "
+                  f"{(run or {}).get('exact_artifact', {}).get('id') if run and run.get('exact_artifact') else 'missing'} | "
+                  f"{pr['review_threads'].get('unresolved', 'unknown')} | {', '.join(approvers) or 'missing'} |"
+              )
+          lines += [
+              '',
+              f"- `main`: `{main_head}`",
+              f"- exact main source qualified: **{derived['main_exact_source_qualified']}**",
+              f"- main protection exact: **{derived['main_protection_exact']}** (HTTP {protection_status})",
+              f"- PR #101 merged: **{derived['pr101_merged']}**",
+              f"- source adopted to main: **{derived['repository_source_adopted_to_main']}**",
+              f"- external files on main: `{external_by_ref['main']['files_beyond_readme']}`",
+              f"- accepted global closure receipt on main: **{derived['external_global_closure_present_on_main']}**",
+              '',
+              '## Staged failures',
+              '',
+          ]
+          for number, row in derived['staged'].items():
+              lines.append(f"- PR #{number}: `{row['failed']}`")
+          with open('ops/final-status.md', 'w', encoding='utf-8') as handle:
+              handle.write('\n'.join(lines) + '\n')
+
+          print(json.dumps({
+              'captured_at_utc': snapshot['captured_at_utc'],
+              'global_closed': derived['global_closed'],
+              'staged_all_ready': derived['staged_all_ready'],
+              'pr101_merged': derived['pr101_merged'],
+              'main_protection_exact': derived['main_protection_exact'],
+              'main_exact_source_qualified': derived['main_exact_source_qualified'],
+              'external_global_closure_present_on_main': derived['external_global_closure_present_on_main'],
+          }, sort_keys=True))
+          PY
+      - name: Commit immutable snapshot and retire this workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ops/final-status.json ops/final-status.md
+          git rm .github/workflows/hepta_status_snapshot.yml
+          git commit -m 'ops: record final closure status snapshot'
+          git push origin "HEAD:$GITHUB_REF_NAME"
