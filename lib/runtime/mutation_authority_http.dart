@@ -1,7 +1,6 @@
 part of 'mutation_authority.dart';
 
-final class HttpMutationAuthorityProvider
-    implements MutationAuthorityProvider {
+final class HttpMutationAuthorityProvider implements MutationAuthorityProvider {
   HttpMutationAuthorityProvider({
     required Uri baseUri,
     required MutationAccessTokenProvider tokenProvider,
@@ -41,9 +40,8 @@ final class HttpMutationAuthorityProvider
           'action': request.action,
           'arguments': request.arguments,
           'risk_tier': request.riskTier.name,
-          'deadline_epoch_seconds':
-              request.deadline.microsecondsSinceEpoch ~/
-                  Duration.microsecondsPerSecond,
+          'deadline_epoch_seconds': request.deadline.microsecondsSinceEpoch ~/
+              Duration.microsecondsPerSecond,
         },
         options: Options(
           headers: <String, Object?>{
@@ -136,9 +134,7 @@ final class HttpMutationAuthorityProvider
       }
       final name = parameter.substring(0, equals).trim().toLowerCase();
       var value = parameter.substring(equals + 1).trim().toLowerCase();
-      if (value.length >= 2 &&
-          value.startsWith('"') &&
-          value.endsWith('"')) {
+      if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
         value = value.substring(1, value.length - 1);
       }
       if (name != 'charset' || sawCharset || value != 'utf-8') {
@@ -345,9 +341,7 @@ final class HttpMutationAuthorityProvider
       'localhost',
       '::1',
     }.contains(uri.host);
-    if (uri.userInfo.isNotEmpty ||
-        uri.fragment.isNotEmpty ||
-        uri.hasQuery) {
+    if (uri.userInfo.isNotEmpty || uri.fragment.isNotEmpty || uri.hasQuery) {
       throw ArgumentError.value(
         uri,
         'baseUri',
@@ -357,9 +351,7 @@ final class HttpMutationAuthorityProvider
     if (uri.scheme == 'https') {
       return uri;
     }
-    if (allowInsecureLoopback &&
-        uri.scheme == 'http' &&
-        loopback) {
+    if (allowInsecureLoopback && uri.scheme == 'http' && loopback) {
       return uri;
     }
     throw ArgumentError.value(

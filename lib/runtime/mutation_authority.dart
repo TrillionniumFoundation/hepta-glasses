@@ -126,10 +126,8 @@ final class RegistryMutationAccessTokenProvider
   const RegistryMutationAccessTokenProvider();
 
   @override
-  Future<String?> getToken() =>
-      MutationAccessTokenRegistry.current.getToken();
+  Future<String?> getToken() => MutationAccessTokenRegistry.current.getToken();
 }
-
 
 final class MutationAuthorityRegistry {
   MutationAuthorityRegistry._();

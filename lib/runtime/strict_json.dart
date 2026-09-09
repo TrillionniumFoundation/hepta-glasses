@@ -316,8 +316,7 @@ final class _StrictJsonParser {
 
   void _consumeDigits({required bool requireOne}) {
     final start = _index;
-    while (_index < source.length &&
-        _isDigit(source.codeUnitAt(_index))) {
+    while (_index < source.length && _isDigit(source.codeUnitAt(_index))) {
       _index += 1;
     }
     if (requireOne && start == _index) {
@@ -378,8 +377,7 @@ final class _StrictJsonParser {
   FormatException _error(String message) =>
       FormatException(message, source, _index);
 
-  static bool _isDigit(int codeUnit) =>
-      codeUnit >= 0x30 && codeUnit <= 0x39;
+  static bool _isDigit(int codeUnit) => codeUnit >= 0x30 && codeUnit <= 0x39;
 
   static bool _isHighSurrogate(int codeUnit) =>
       codeUnit >= 0xd800 && codeUnit <= 0xdbff;

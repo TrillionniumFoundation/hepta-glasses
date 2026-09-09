@@ -64,8 +64,8 @@ void main() {
         'biometric_verified': true,
         'lease_id': 'lease-1',
         'allowed_actions': <String>['device.display_text'],
-        'issued_at_epoch_seconds': now.millisecondsSinceEpoch ~/
-            Duration.millisecondsPerSecond,
+        'issued_at_epoch_seconds':
+            now.millisecondsSinceEpoch ~/ Duration.millisecondsPerSecond,
         'expires_at_epoch_seconds':
             now.add(const Duration(minutes: 1)).millisecondsSinceEpoch ~/
                 Duration.millisecondsPerSecond,
@@ -76,8 +76,7 @@ void main() {
     final body = validBody();
     final entries = body.entries
         .map(
-          (entry) =>
-              '${jsonEncode(entry.key)}:${jsonEncode(entry.value)}',
+          (entry) => '${jsonEncode(entry.key)}:${jsonEncode(entry.value)}',
         )
         .toList();
     entries.add('${jsonEncode(name)}:${jsonEncode(body[name])}');
@@ -90,8 +89,7 @@ void main() {
     Map<String, List<String>>? headers,
     List<Uint8List>? chunks,
   }) {
-    final responseChunks =
-        chunks ?? <Uint8List>[Uint8List.fromList(bytes)];
+    final responseChunks = chunks ?? <Uint8List>[Uint8List.fromList(bytes)];
     return ResponseBody(
       Stream<Uint8List>.fromIterable(responseChunks),
       statusCode,
