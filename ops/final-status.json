@@ -1,0 +1,2323 @@
+{
+  "captured_at_utc": "2026-09-09T04:03:10.840749+00:00",
+  "derived": {
+    "external_global_closure_present_on_main": false,
+    "global_closed": false,
+    "main_exact_source_qualified": false,
+    "main_protection_exact": false,
+    "pr101_merged": false,
+    "pr112_closed": true,
+    "repository_source_adopted_to_main": false,
+    "staged": {
+      "107": {
+        "checks": {
+          "ahead_of_base": true,
+          "base_expected": true,
+          "exact_artifact_present": true,
+          "exact_non_author_approval": true,
+          "exact_run_success": true,
+          "open_or_merged": true,
+          "seven_jobs_success": true,
+          "zero_unresolved_threads": true
+        },
+        "exact_approvers": [
+          "Franksudoman",
+          "Tomasrgbsf"
+        ],
+        "failed": []
+      },
+      "108": {
+        "checks": {
+          "ahead_of_base": true,
+          "base_expected": true,
+          "exact_artifact_present": true,
+          "exact_non_author_approval": true,
+          "exact_run_success": true,
+          "open_or_merged": true,
+          "seven_jobs_success": true,
+          "zero_unresolved_threads": true
+        },
+        "exact_approvers": [
+          "Franksudoman",
+          "Tomasrgbsf"
+        ],
+        "failed": []
+      },
+      "109": {
+        "checks": {
+          "ahead_of_base": true,
+          "base_expected": true,
+          "exact_artifact_present": true,
+          "exact_non_author_approval": true,
+          "exact_run_success": true,
+          "open_or_merged": true,
+          "seven_jobs_success": true,
+          "zero_unresolved_threads": true
+        },
+        "exact_approvers": [
+          "Franksudoman",
+          "Tomasrgbsf"
+        ],
+        "failed": []
+      },
+      "110": {
+        "checks": {
+          "ahead_of_base": true,
+          "base_expected": true,
+          "exact_artifact_present": false,
+          "exact_non_author_approval": false,
+          "exact_run_success": false,
+          "open_or_merged": true,
+          "seven_jobs_success": false,
+          "zero_unresolved_threads": true
+        },
+        "exact_approvers": [],
+        "failed": [
+          "exact_artifact_present",
+          "exact_non_author_approval",
+          "exact_run_success",
+          "seven_jobs_success"
+        ]
+      },
+      "111": {
+        "checks": {
+          "ahead_of_base": false,
+          "base_expected": false,
+          "exact_artifact_present": false,
+          "exact_non_author_approval": false,
+          "exact_run_success": false,
+          "open_or_merged": true,
+          "seven_jobs_success": false,
+          "zero_unresolved_threads": true
+        },
+        "exact_approvers": [],
+        "failed": [
+          "ahead_of_base",
+          "base_expected",
+          "exact_artifact_present",
+          "exact_non_author_approval",
+          "exact_run_success",
+          "seven_jobs_success"
+        ]
+      },
+      "113": {
+        "checks": {
+          "ahead_of_base": false,
+          "base_expected": false,
+          "exact_artifact_present": false,
+          "exact_non_author_approval": false,
+          "exact_run_success": false,
+          "open_or_merged": true,
+          "seven_jobs_success": false,
+          "zero_unresolved_threads": true
+        },
+        "exact_approvers": [],
+        "failed": [
+          "ahead_of_base",
+          "base_expected",
+          "exact_artifact_present",
+          "exact_non_author_approval",
+          "exact_run_success",
+          "seven_jobs_success"
+        ]
+      }
+    },
+    "staged_all_ready": false
+  },
+  "external_evidence": {
+    "main": {
+      "accepted_global_closure_present": false,
+      "files_beyond_readme": [],
+      "http_status": 404,
+      "ref": "f30d12bd593e53e0d69196d28210f449d411c30b"
+    },
+    "pr101": {
+      "accepted_global_closure_present": false,
+      "files_beyond_readme": [],
+      "http_status": 200,
+      "ref": "35f01329262d6a137bfa3c7e95302a397ed32676"
+    },
+    "pr113": {
+      "accepted_global_closure_present": false,
+      "files_beyond_readme": [],
+      "http_status": 200,
+      "ref": "95915336c3c6ffe34823ed402bced94b6fb6b15c"
+    }
+  },
+  "issue_82_relevant_comments": [
+    {
+      "author": "Franksudoman",
+      "body": "## G9 campaign progress — current source gate complete; authority gates remain open\n\nThe authenticated G9 implementation is now frozen at head `533da131b4575955744b0e04b6c491b9f028bc05`, tree `563111e9b18a795557fe41aec1a3a2c0f6c511b3`.\n\nExact-head run `33582906250` completed all seven canonical jobs successfully. Artifact `9829398746` was downloaded and independently re-read; ZIP SHA-256 `e6552549a9f007f27083ffb1b5153de3fafb528af220606838e71f6c6e179098` matches GitHub, inventory is exactly seven files, and the source gate has all 17 checks true with no missing item.\n\nOperational cleanup completed in this campaign pass:\n\n- duplicate campaign issue #97 was closed as duplicate of this canonical controller;\n- #84 through #96 remain open and have accountable maintainers assigned;\n- G9 PR #83 has an exact-head evidence verification comment and a pending request for an eligible non-pusher/CODEOWNER review;\n- the stale G13 write-capable convergence workflow was inspected and deliberately not executed: it targets an obsolete gap set, can promote/delete refs, and cannot produce the external authority evidence required by the current authenticated G9 contract.\n\nTruth boundary: source-side G9 admission is now E4-qualified, but none of the twelve authority-owned rows may move to `CLOSED_VERIFIED` until the corresponding externally pinned issuer and reviewer signatures, physical/provider/vendor/admin receipts, and product-gate evidence actually exist. Main protection still exposes only a partial observable check set and its detailed endpoint is not readable through the current integration; the out-of-band trust registry is also not provisioned. Keep #84–#96 open.",
+      "created_at": "2026-09-02T02:41:44Z",
+      "first_line": "## G9 campaign progress — current source gate complete; authority gates remain open",
+      "id": 5503527184,
+      "updated_at": "2026-09-02T02:41:44Z"
+    },
+    {
+      "author": "ProfHepta",
+      "body": "## 2026-09-08 additional repository-controlled productization increments\n\nTwo independent stacked Draft PRs now continue the roadmap without moving the frozen PR #107 head:\n\n- PR #108, head `6816c9b09532750f7d7fbccf532dc2297e35177a`: weekly bounded Dependabot coverage for GitHub Actions, Dart/pub, Android/Gradle and iOS/CocoaPods, with no auto-merge path; tests and an operations guide preserve exact-head CI, Artifact, review, signing, provider and device requalification.\n- PR #109, current head `67e7db9704785d82de97cb043a7da479606b8c08`: canonical Android/iOS user-visible `Hepta Glasses` identity, corrected permission copy and fail-closed identity tests, while explicitly retaining internal legacy namespaces until an atomic migration.\n\nPR #108 run #853 has repository-contracts, Flutter, Android, native sanitizers and secret/boundary scan successful; iOS native tests and dependent source-evidence remain non-terminal. PR #109 run #855 has repository-contracts, Flutter, native sanitizers and secret/boundary scan successful; Android/iOS and source-evidence remain non-terminal. No predecessor evidence transfers and neither PR is mergeable on those incomplete packets.\n\nThese close no Administration or E5–E7 fact. Main protection, external trust registry, providers, KMS/HSM/attestation, physical G1, vendor, assurance, signing, pilot, rollback and store gates remain unchanged.",
+      "created_at": "2026-09-08T13:20:16Z",
+      "first_line": "## 2026-09-08 additional repository-controlled productization increments",
+      "id": 5585792477,
+      "updated_at": "2026-09-08T13:20:16Z"
+    },
+    {
+      "author": "github-actions[bot]",
+      "body": "## Main protection application — BLOCKED\n\n`HEPTA_REPO_ADMIN_TOKEN` is not available to the isolated administration workflow. No partial protection was written and `GITHUB_TOKEN` was not substituted. The Administration gate remains open.",
+      "created_at": "2026-09-09T03:41:37Z",
+      "first_line": "## Main protection application — BLOCKED",
+      "id": 5595434387,
+      "updated_at": "2026-09-09T03:41:37Z"
+    },
+    {
+      "author": "github-actions[bot]",
+      "body": "## Main protection application — BLOCKED\n\n`HEPTA_REPO_ADMIN_TOKEN` is not available to the isolated administration workflow. No partial protection was written and `GITHUB_TOKEN` was not substituted. The Administration gate remains open.",
+      "created_at": "2026-09-09T03:44:29Z",
+      "first_line": "## Main protection application — BLOCKED",
+      "id": 5595455474,
+      "updated_at": "2026-09-09T03:44:29Z"
+    },
+    {
+      "author": "github-actions[bot]",
+      "body": "## Main protection reconciliation v2 — BLOCKED\n\n`HEPTA_REPO_ADMIN_TOKEN` is absent. No write was attempted and no weaker token was substituted.",
+      "created_at": "2026-09-09T03:44:30Z",
+      "first_line": "## Main protection reconciliation v2 — BLOCKED",
+      "id": 5595455527,
+      "updated_at": "2026-09-09T03:44:30Z"
+    },
+    {
+      "author": "github-actions[bot]",
+      "body": "## Final closure readback — OPEN GATES REMAIN\n\n| PR | exact head | base | CI | Artifact | threads | exact approval | qualified | admission |\n|---:|---|---|---|---|---:|---|---|---|\n| #107 | `a4e03dcb3072` | OK | success | missing/invalid | 0 | Franksudoman, Tomasrgbsf | no | blocked |\n| #108 | `8709a7e3fcb0` | OK | success | missing/invalid | 0 | Franksudoman, Tomasrgbsf | no | blocked |\n| #109 | `d4efdc4be321` | OK | success | missing/invalid | 0 | Franksudoman, Tomasrgbsf | no | blocked |\n| #110 | `158ed2e688e1` | OK | failure | missing/invalid | 0 | missing | no | blocked |\n| #111 | `67e7db970478` | DRIFT | failure | missing/invalid | 0 | missing | no | blocked |\n| #113 | `95915336c3c6` | DRIFT | failure | missing/invalid | 0 | missing | no | blocked |\n\n- PR #112 duplicate slice closed: **True**\n- Complete `main` protection exact readback: **False** (HTTP 403; failed=[])\n- Top source stack adopted into PR #101 candidate: **False**\n- PR #101 merged: **False**\n- Candidate adopted into `main`: **False**\n- External evidence files beyond README: `[]`\n- Independently accepted global closure receipt present: **False**\n- `global_closed`: **false**\n\nNo Draft flag, issue label, comment, synthetic trace, repository-generated key or administrator bypass is counted as provider/device/vendor/signing/release evidence.",
+      "created_at": "2026-09-09T03:48:22Z",
+      "first_line": "## Final closure readback — OPEN GATES REMAIN",
+      "id": 5595485133,
+      "updated_at": "2026-09-09T03:48:22Z"
+    },
+    {
+      "author": "github-actions[bot]",
+      "body": "## Final source adoption gate — BLOCKED\n\nThe top source stack was not retargeted and no PR was merged. Exact missing conditions:\n\n- PR #110: `['approval', 'artifact', 'ci', 'jobs']`\n- PR #111: `['ancestry', 'approval', 'artifact', 'base', 'ci', 'jobs']`\n- PR #113: `['ancestry', 'approval', 'artifact', 'base', 'ci', 'jobs']`\n\nNo staged CI, Artifact or review evidence is transferred. The gate may be retried only after the listed exact-head facts exist.",
+      "created_at": "2026-09-09T03:51:16Z",
+      "first_line": "## Final source adoption gate — BLOCKED",
+      "id": 5595507529,
+      "updated_at": "2026-09-09T03:51:16Z"
+    }
+  ],
+  "main": {
+    "exact_run": null,
+    "head_sha": "f30d12bd593e53e0d69196d28210f449d411c30b",
+    "protection": {
+      "admin_token_available": false,
+      "checks": {},
+      "error": {
+        "documentation_url": "https://docs.github.com/rest/branches/branch-protection#get-branch-protection",
+        "message": "Resource not accessible by integration",
+        "status": "403"
+      },
+      "exact": false,
+      "failed": [],
+      "http_status": 403
+    }
+  },
+  "pull_requests": {
+    "101": {
+      "ahead_by": 772,
+      "author": "Franksudoman",
+      "base_ref": "main",
+      "base_sha": "f30d12bd593e53e0d69196d28210f449d411c30b",
+      "behind_by": 0,
+      "comparison_status": "ahead",
+      "draft": true,
+      "exact_run": {
+        "all_jobs_success": true,
+        "artifacts": [
+          {
+            "created_at": "2026-09-07T15:54:22Z",
+            "digest": "sha256:baa9c218a779adb4713e5985d4109b20db70087e93fca34f2a9ba08e157af897",
+            "expired": false,
+            "expires_at": "2026-10-07T15:54:21Z",
+            "id": 10025745282,
+            "name": "hepta-source-evidence-35f01329262d6a137bfa3c7e95302a397ed32676",
+            "size_in_bytes": 42252
+          }
+        ],
+        "conclusion": "success",
+        "created_at": "2026-09-07T15:36:20Z",
+        "event": "pull_request",
+        "exact_artifact": {
+          "created_at": "2026-09-07T15:54:22Z",
+          "digest": "sha256:baa9c218a779adb4713e5985d4109b20db70087e93fca34f2a9ba08e157af897",
+          "expired": false,
+          "expires_at": "2026-10-07T15:54:21Z",
+          "id": 10025745282,
+          "name": "hepta-source-evidence-35f01329262d6a137bfa3c7e95302a397ed32676",
+          "size_in_bytes": 42252
+        },
+        "head_sha": "35f01329262d6a137bfa3c7e95302a397ed32676",
+        "html_url": "https://github.com/TrillionniumFoundation/hepta-glasses/actions/runs/34139161340",
+        "id": 34139161340,
+        "job_set_exact": true,
+        "jobs": [
+          {
+            "completed_at": "2026-09-07T15:36:42Z",
+            "conclusion": "success",
+            "id": 101796977247,
+            "name": "secret-and-boundary-scan",
+            "started_at": "2026-09-07T15:36:22Z",
+            "status": "completed",
+            "step_count": 7
+          },
+          {
+            "completed_at": "2026-09-07T15:36:42Z",
+            "conclusion": "success",
+            "id": 101796977363,
+            "name": "native-sanitizers",
+            "started_at": "2026-09-07T15:36:23Z",
+            "status": "completed",
+            "step_count": 7
+          },
+          {
+            "completed_at": "2026-09-07T15:37:10Z",
+            "conclusion": "success",
+            "id": 101796977371,
+            "name": "repository-contracts",
+            "started_at": "2026-09-07T15:36:23Z",
+            "status": "completed",
+            "step_count": 14
+          },
+          {
+            "completed_at": "2026-09-07T15:41:10Z",
+            "conclusion": "success",
+            "id": 101796977405,
+            "name": "android-native",
+            "started_at": "2026-09-07T15:36:22Z",
+            "status": "completed",
+            "step_count": 15
+          },
+          {
+            "completed_at": "2026-09-07T15:38:00Z",
+            "conclusion": "success",
+            "id": 101796977423,
+            "name": "flutter",
+            "started_at": "2026-09-07T15:36:22Z",
+            "status": "completed",
+            "step_count": 12
+          },
+          {
+            "completed_at": "2026-09-07T15:53:49Z",
+            "conclusion": "success",
+            "id": 101796977428,
+            "name": "ios-native",
+            "started_at": "2026-09-07T15:36:30Z",
+            "status": "completed",
+            "step_count": 14
+          },
+          {
+            "completed_at": "2026-09-07T15:54:23Z",
+            "conclusion": "success",
+            "id": 101801522239,
+            "name": "source-evidence",
+            "started_at": "2026-09-07T15:53:51Z",
+            "status": "completed",
+            "step_count": 12
+          }
+        ],
+        "run_attempt": 1,
+        "run_number": 847,
+        "status": "completed",
+        "updated_at": "2026-09-07T15:54:24Z"
+      },
+      "head_ref": "work/hepta-g10-trusted-openssl-custody-20260902",
+      "head_sha": "35f01329262d6a137bfa3c7e95302a397ed32676",
+      "html_url": "https://github.com/TrillionniumFoundation/hepta-glasses/pull/101",
+      "merge_commit_sha": "ca05b315ef619b68574bb7e834ca0bfa49a48ab3",
+      "mergeable": true,
+      "mergeable_state": "blocked",
+      "merged": false,
+      "number": 101,
+      "requested_reviewers": [],
+      "review_threads": {
+        "ok": true,
+        "total": 3,
+        "unresolved": 0
+      },
+      "reviews": [
+        {
+          "body_first_line": [
+            "\"## External exact-head review — REQUEST_CHANGES / KEEP DRAFT\\n\\nThis review is bound by GitHub to the current head supplied as commit_id. The PR explicitly says DRAFT / DO NOT MERGE and its packet still names an older OpenSSL repair head and artifact identity; neither can qualify the current source.\\n\\nAt review time all six visible checks on the current head are non-terminal, so the claimed seven-job exact-head matrix is not established. The candidate also requires an eligible non-pusher/CODEOWNER decision, intentional source-stack adoption, regenerated E4 evidence, complete main protection, and external trust-root/provider/device authority. Repository tests and an unsigned source artifact cannot create those facts.\\n\\nREQUEST_CHANGES / KEEP DRAFT / DO NOT MERGE. Rebind the source and artifact packet, let every required lane finish successfully on one unchanged head, and obtain the required independent review and authority evidence. Do not merge, release, or use administrator bypass.\""
+          ],
+          "commit_id": "80f852c112db0c5c002e41c3180f49dc21164063",
+          "id": 5096414816,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-02T23:55:12Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "\"## External exact-head review — REQUEST_CHANGES / KEEP DRAFT\\n\\nThis review is bound by GitHub to the current head supplied as commit_id. The PR explicitly remains DRAFT / DO NOT MERGE; its earlier c91dae source and artifact records were superseded by subsequent lexical-custody and subprocess-injection commits.\\n\\nAt review time all six visible checks on the current head are non-terminal, so there is no complete terminal-success exact-head matrix. The candidate still requires an eligible non-pusher/CODEOWNER decision, intentional stack adoption with regenerated E4 evidence, complete protected-main governance, and independently owned provider/device/trust-root authority. Repository tests and unsigned artifacts cannot create those facts.\\n\\nREQUEST_CHANGES / KEEP DRAFT / DO NOT MERGE. Finish and rebind the full source/artifact matrix on one unchanged head, obtain the required independent review and external authority evidence, and preserve the fail-closed boundary. Do not merge, release, or administrator-bypass.\""
+          ],
+          "commit_id": "58cf7a4e1499adda0bed16f4f5e1c4f5c3ec44cb",
+          "id": 5096454621,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-03T00:03:09Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "\"## External exact-head review — REQUEST_CHANGES / KEEP DRAFT\\n\\nThis review is bound by GitHub to the current head supplied as commit_id. The PR explicitly remains DRAFT / DO NOT MERGE; its prior source, artifact, and exact-head receipts were superseded by subsequent lexical-custody commits.\\n\\nThe current candidate is still subject to source movement and does not have a stable complete terminal-success exact-head matrix. It also requires an eligible non-pusher/CODEOWNER decision, intentional stack adoption with regenerated E4 evidence, complete protected-main governance, and independently owned provider/device/trust-root authority. Repository tests and unsigned artifacts cannot create those facts.\\n\\nREQUEST_CHANGES / KEEP DRAFT / DO NOT MERGE. Freeze and rebind the source and artifact packet, let every required lane finish successfully on one unchanged head, and obtain the required independent review and external authority evidence. Do not merge, release, or administrator-bypass.\""
+          ],
+          "commit_id": "15ead45df483cb80c0862e22df8d65c4e536ca7b",
+          "id": 5096542403,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-03T00:20:39Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "34ff1c0cbe419010058026ad8cfe5c8336174525",
+          "id": 5096571933,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-03T00:26:59Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "\"## External exact-head review — REQUEST_CHANGES / KEEP DRAFT\\n\\nThis review is bound by GitHub to the current head supplied as commit_id. The PR is explicitly DRAFT / DO NOT MERGE and has continued to receive source commits during this audit; all older source, artifact, and review identities are invalid after each push.\\n\\nThe current candidate still lacks a stable complete terminal-success exact-head matrix at the time of this decision, and it requires an eligible non-pusher/CODEOWNER decision, intentional stack adoption with regenerated E4 evidence, complete protected-main governance, and independently controlled provider/device/trust-root authority. Repository tests and unsigned artifacts cannot create those facts.\\n\\nREQUEST_CHANGES / KEEP DRAFT / DO NOT MERGE. Freeze the branch, rebind the source and artifact packet after the final push, let every required lane finish successfully on that unchanged head, and obtain the required independent review and external authority evidence. Do not merge, release, or administrator-bypass.\""
+          ],
+          "commit_id": "e8593d6a23405ad0f83f63faf171a96b92ac3626",
+          "id": 5096575826,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-03T00:27:48Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head security review — new g10 head remains non-admissible"
+          ],
+          "commit_id": "be8f7e31014866f3c42fa6920793c0449943d394",
+          "id": 5097522832,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-03T03:43:42Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## Exact-head identity drift — keep Draft / do not merge"
+          ],
+          "commit_id": "be8f7e31014866f3c42fa6920793c0449943d394",
+          "id": 5097569808,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-03T03:52:44Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "External exact-head security review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "85c393f5e2578ed19c6b55e9c9248ea451bb93a0",
+          "id": 5097640878,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-03T04:07:16Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "External review — exact current head only"
+          ],
+          "commit_id": "85c393f5e2578ed19c6b55e9c9248ea451bb93a0",
+          "id": 5097643523,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-03T04:07:44Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "External exact-head security review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "03bf6e045c1dc8860102094236f321464f772732",
+          "id": 5097651557,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-03T04:09:25Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "External review — exact current head only"
+          ],
+          "commit_id": "03bf6e045c1dc8860102094236f321464f772732",
+          "id": 5097679446,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-03T04:14:47Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## 外部 exact-head 源码/安全审查 — APPROVE（仅限仓库源码范围）"
+          ],
+          "commit_id": "03bf6e045c1dc8860102094236f321464f772732",
+          "id": 5109713026,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-04T06:04:30Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "External gate review on exact head `43bc2a1d724102c809310d300cc782252ccb40db`:"
+          ],
+          "commit_id": "43bc2a1d724102c809310d300cc782252ccb40db",
+          "id": 5109996943,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-04T06:42:52Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## 外部 exact-head 审查 — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "df938ae9d4eee8e0d694f9ba78fc3c8708a4f314",
+          "id": 5111261886,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-04T09:24:52Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "424846e84a95381efb6630907fef92ea60438237",
+          "id": 5114989623,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-04T15:34:12Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "外部 current-head 审查，绑定 `424846e84a95381efb6630907fef92ea60438237`：**REQUEST_CHANGES / KEEP DRAFT / DO NOT MERGE**。"
+          ],
+          "commit_id": "424846e84a95381efb6630907fef92ea60438237",
+          "id": 5116199763,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-04T17:47:06Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "外部 current-head 审查：`REQUEST_CHANGES / KEEP DRAFT / DO NOT MERGE`。"
+          ],
+          "commit_id": "a35a312dd0e43d23d01dbc6c699e5c62e05cb00d",
+          "id": 5117388429,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-04T20:10:44Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## 当前 head 的增量 CI 故障定位（不批准；保留已有 REQUEST_CHANGES）"
+          ],
+          "commit_id": "a35a312dd0e43d23d01dbc6c699e5c62e05cb00d",
+          "id": 5117597737,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-04T20:38:10Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## 定向身份审查 — REQUEST_CHANGES"
+          ],
+          "commit_id": "3d6e2a9a7866dab539b7496466b830c3a76ff857",
+          "id": 5119083428,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-05T00:57:03Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## 身份 enrollment 修复的定向源码复核：已看到修复，不等同整 PR 批准"
+          ],
+          "commit_id": "4a1e08672980edee55484236a336544e90419e54",
+          "id": 5120808865,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-05T10:10:43Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "External speech/Memory custody review, bound to head `9b302bb8a4aa23193df8d14bc316d916ffeeeec4`: **NOT APPROVED; KEEP DRAFT / DO NOT MERGE**."
+          ],
+          "commit_id": "9b302bb8a4aa23193df8d14bc316d916ffeeeec4",
+          "id": 5121296571,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-05T12:34:34Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "Author-conflicted technical review on exact head `9ce4384030a80dffe2217d980c1a3957009dbb74`; this is not an independent approval or acceptance decision."
+          ],
+          "commit_id": "9ce4384030a80dffe2217d980c1a3957009dbb74",
+          "id": 5121472951,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-05T13:51:20Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## 独立 current-head 源码审查 — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "9ce4384030a80dffe2217d980c1a3957009dbb74",
+          "id": 5121558157,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-05T14:20:53Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## 外部 current-head 复审 — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "5965791c7eee9b68166db9a89c231dc0268a6b08",
+          "id": 5122183795,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-05T17:13:41Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "外部管理员门禁审查，绑定 exact head `e9c59763fb9bb30849102fe3a48df50948abef12`：**REQUEST_CHANGES / KEEP DRAFT / DO NOT MERGE**。"
+          ],
+          "commit_id": "e9c59763fb9bb30849102fe3a48df50948abef12",
+          "id": 5122463064,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-05T18:23:53Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## Current-head package-transparency review — author conflict; no approval"
+          ],
+          "commit_id": "95b2e2afb001bf588243b7f9e29da72e36605509",
+          "id": 5123658494,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-06T01:19:42Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "外部阶段审查：保持 Draft / DO NOT MERGE，不批准。R0 VM 对 caller-owned 容器的一次性捕获、原始 deadline/pre-cancel 的前置检查，以及 Signed Skill registry 对 fresh-init 与 established-reopen 的严格区分，均是必要的 fail-closed 修复；但当前六个 prerequisite job 全部 queued、无执行步骤，source-evidence 与精确 artifact 尚未产生，父 head 的评审/CI 不转移。请在同一未变 head 上完成七个 canonical jobs、下载并内容核验 exact-head artifact，再取得 eligible non-pusher/CODEOWNER review。schema 完整性仍不等于任意代码隔离、外部 transparency/anti-rollback、HSM/attestation、真实 provider/device 或发布资格；不得重跑已排队对象制造活动，也不得管理员绕过。"
+          ],
+          "commit_id": "e9c59763fb9bb30849102fe3a48df50948abef12",
+          "id": 5123673021,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-06T01:23:20Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [],
+          "commit_id": "026756f28e3ee5d49280cbeaeacd354f9982b2a4",
+          "id": 5124061846,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-06T04:01:00Z",
+          "user": "github-advanced-security[bot]"
+        },
+        {
+          "body_first_line": [
+            "## 外部 exact-head Signed Skill continuity 复审 — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "026756f28e3ee5d49280cbeaeacd354f9982b2a4",
+          "id": 5124070588,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-06T04:06:29Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## 作者冲突下的 current-head 复审 — exact-head CI 通过，但继承阻断未解除"
+          ],
+          "commit_id": "ed426cadd30a0c21104a27d466cf469170ff8d65",
+          "id": 5124133407,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-06T04:43:42Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## 外部 exact-head 安全复审 — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "9b90ca46a592213686cb0605124482330cf3fe1c",
+          "id": 5124334764,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-06T05:41:45Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## Author-conflicted current-head re-review — CURRENT CI GREEN / INHERITED SQLITE BINDING BLOCKER REMAINS"
+          ],
+          "commit_id": "4a00a169ce189c14dc1ff2aaba686e9b91edb764",
+          "id": 5124677104,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-06T07:52:51Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head security review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "4a00a169ce189c14dc1ff2aaba686e9b91edb764",
+          "id": 5124728872,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-06T08:19:44Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "外部 current-head 增量复审（base `main@32178d3cb4ae38c2ef91db05bde836838c274259`，live head `d70e1cd4e98df5d7863865789a138d9d9be8639b`）：SQLite constructor/migration 的旧对象错绑反例已在源码层关闭；整 PR 仍不批准并保持 Draft。"
+          ],
+          "commit_id": "d70e1cd4e98df5d7863865789a138d9d9be8639b",
+          "id": 5125241594,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-06T12:01:54Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## 外部 exact-head 定向复审 — COMMENT / KEEP DRAFT"
+          ],
+          "commit_id": "e2d2fbc7a663c3b5a9593c2c9d88e33e873924bb",
+          "id": 5125761002,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-06T15:12:25Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## 外部 exact-head 两提交复审 — COMMENT / KEEP DRAFT"
+          ],
+          "commit_id": "49c5ba8678df2ef134530b416cb99782aa9c4718",
+          "id": 5125777999,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-06T15:20:03Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [],
+          "commit_id": "49c5ba8678df2ef134530b416cb99782aa9c4718",
+          "id": 5126254330,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-06T18:40:53Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## 外部 exact-head 源码/安全审查 — APPROVE（仅限仓库源码边界）"
+          ],
+          "commit_id": "49c5ba8678df2ef134530b416cb99782aa9c4718",
+          "id": 5126254923,
+          "state": "DISMISSED",
+          "submitted_at": "2026-09-06T18:41:12Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head process-custody review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "2b4218383ebd58da1ccf65d321633ebf8f15b54b",
+          "id": 5126374320,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-06T19:31:27Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head process-custody review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "9893f4a8650bdb61901a459444fc08c55c63a038",
+          "id": 5126490262,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-06T20:10:44Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External current-head review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "43f724a47851e0480a8bb3825dfda790022264b4",
+          "id": 5126565744,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-06T20:43:36Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External current-head admission review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "4a43da2ac24948bd8aaa06b3c3c08dfe90c23dbf",
+          "id": 5126590694,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-06T20:55:29Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head admission review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "2a78b2d439e24049464c58907cc452f1f026a2a0",
+          "id": 5127716841,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-07T03:04:13Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## 外部 exact-head 接纳审查 — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "0cbde1a6c0ed98206f4433ef217a4b50d1c33f19",
+          "id": 5128043563,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-07T04:23:45Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head admission review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "cf28eed8f337a6b9f980b762a1cb100c795860f7",
+          "id": 5128846161,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-07T06:50:01Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External current-head admission review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "b08d9ddc759f08a75ca0f207fe61f09e4728317b",
+          "id": 5129316449,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-07T07:43:13Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "External review on the live cumulative candidate: changes are required because the immutable review packet no longer identifies this PR object."
+          ],
+          "commit_id": "3617196d2d7a5287b2b361e89e2e48e5e3db9856",
+          "id": 5130301104,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-07T09:25:53Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head security/admission review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "5a5f774c79ea54f9f172d07b60bb75eaf2a0231b",
+          "id": 5130761940,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-07T10:16:20Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## 外部 current-head 接纳审查 — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "4fb58be4afdf90d49328036c17faad76b59be0f8",
+          "id": 5131333613,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-07T11:15:26Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## 外部 exact-head 治理审查 — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "e19d746861a2f5c6de35e66d7d04cafb0db79946",
+          "id": 5132093965,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-07T12:40:20Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head Code Owner/source review — APPROVE bounded repository source / KEEP DRAFT"
+          ],
+          "commit_id": "35f01329262d6a137bfa3c7e95302a397ed32676",
+          "id": 5133811311,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-07T16:00:09Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## Author-identity final-candidate review — COMMENT / SOURCE QUALIFIED, ADMIN+EXTERNAL BLOCKED"
+          ],
+          "commit_id": "35f01329262d6a137bfa3c7e95302a397ed32676",
+          "id": 5142244568,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T13:20:08Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "External source/admission review on exact tuple `main@f30d12bd593e53e0d69196d28210f449d411c30b` + head `35f01329262d6a137bfa3c7e95302a397ed32676` -> prospective merge `ca05b315ef619b68574bb7e834ca0bfa49a48ab3`."
+          ],
+          "commit_id": "35f01329262d6a137bfa3c7e95302a397ed32676",
+          "id": 5143254356,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T14:48:26Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "External admission review — **REQUEST CHANGES / KEEP DRAFT** on exact head `35f0132`."
+          ],
+          "commit_id": "35f01329262d6a137bfa3c7e95302a397ed32676",
+          "id": 5148601759,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-09T01:03:32Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "External final-candidate governance review — HARD HOLD / source approval does not authorize merge."
+          ],
+          "commit_id": "35f01329262d6a137bfa3c7e95302a397ed32676",
+          "id": 5148860602,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-09T01:45:06Z",
+          "user": "Franksudoman"
+        }
+      ],
+      "state": "open",
+      "title": "[DRAFT / ADMIN+EXTERNAL AUTHORITY BLOCKED] approved final candidate @35f01329 · CI #847 · Artifact 39/39",
+      "total_commits": 772
+    },
+    "107": {
+      "ahead_by": 7,
+      "author": "ProfHepta",
+      "base_ref": "work/hepta-g10-trusted-openssl-custody-20260902",
+      "base_sha": "35f01329262d6a137bfa3c7e95302a397ed32676",
+      "behind_by": 0,
+      "comparison_status": "ahead",
+      "draft": true,
+      "exact_run": {
+        "all_jobs_success": true,
+        "artifacts": [
+          {
+            "created_at": "2026-09-08T12:43:13Z",
+            "digest": "sha256:43f5400a93a43525be2e59af4bbc9d3ecf0bbbb608974eb40a5a8e54901cef5c",
+            "expired": false,
+            "expires_at": "2026-10-08T12:43:12Z",
+            "id": 10056395643,
+            "name": "hepta-source-evidence-a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026",
+            "size_in_bytes": 42568
+          }
+        ],
+        "conclusion": "success",
+        "created_at": "2026-09-08T12:25:24Z",
+        "event": "pull_request",
+        "exact_artifact": {
+          "created_at": "2026-09-08T12:43:13Z",
+          "digest": "sha256:43f5400a93a43525be2e59af4bbc9d3ecf0bbbb608974eb40a5a8e54901cef5c",
+          "expired": false,
+          "expires_at": "2026-10-08T12:43:12Z",
+          "id": 10056395643,
+          "name": "hepta-source-evidence-a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026",
+          "size_in_bytes": 42568
+        },
+        "head_sha": "a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026",
+        "html_url": "https://github.com/TrillionniumFoundation/hepta-glasses/actions/runs/34225984963",
+        "id": 34225984963,
+        "job_set_exact": true,
+        "jobs": [
+          {
+            "completed_at": "2026-09-08T12:42:36Z",
+            "conclusion": "success",
+            "id": 102060106222,
+            "name": "ios-native",
+            "started_at": "2026-09-08T12:25:32Z",
+            "status": "completed",
+            "step_count": 14
+          },
+          {
+            "completed_at": "2026-09-08T12:26:17Z",
+            "conclusion": "success",
+            "id": 102060106387,
+            "name": "repository-contracts",
+            "started_at": "2026-09-08T12:25:27Z",
+            "status": "completed",
+            "step_count": 15
+          },
+          {
+            "completed_at": "2026-09-08T12:29:35Z",
+            "conclusion": "success",
+            "id": 102060106393,
+            "name": "android-native",
+            "started_at": "2026-09-08T12:25:27Z",
+            "status": "completed",
+            "step_count": 15
+          },
+          {
+            "completed_at": "2026-09-08T12:25:49Z",
+            "conclusion": "success",
+            "id": 102060106448,
+            "name": "secret-and-boundary-scan",
+            "started_at": "2026-09-08T12:25:27Z",
+            "status": "completed",
+            "step_count": 7
+          },
+          {
+            "completed_at": "2026-09-08T12:27:04Z",
+            "conclusion": "success",
+            "id": 102060106558,
+            "name": "flutter",
+            "started_at": "2026-09-08T12:25:28Z",
+            "status": "completed",
+            "step_count": 12
+          },
+          {
+            "completed_at": "2026-09-08T12:25:46Z",
+            "conclusion": "success",
+            "id": 102060106700,
+            "name": "native-sanitizers",
+            "started_at": "2026-09-08T12:25:27Z",
+            "status": "completed",
+            "step_count": 7
+          },
+          {
+            "completed_at": "2026-09-08T12:43:16Z",
+            "conclusion": "success",
+            "id": 102065482296,
+            "name": "source-evidence",
+            "started_at": "2026-09-08T12:42:39Z",
+            "status": "completed",
+            "step_count": 12
+          }
+        ],
+        "run_attempt": 1,
+        "run_number": 852,
+        "status": "completed",
+        "updated_at": "2026-09-08T12:43:17Z"
+      },
+      "head_ref": "codex/hepta-truth-quality-remediation-v2-20260908",
+      "head_sha": "a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026",
+      "html_url": "https://github.com/TrillionniumFoundation/hepta-glasses/pull/107",
+      "merge_commit_sha": "9b14640a42244903f8e9acd24e87ef7633112804",
+      "mergeable": true,
+      "mergeable_state": "clean",
+      "merged": false,
+      "number": 107,
+      "requested_reviewers": [
+        "Franksudoman",
+        "Tomasrgbsf"
+      ],
+      "review_threads": {
+        "ok": true,
+        "total": 0,
+        "unresolved": 0
+      },
+      "reviews": [
+        {
+          "body_first_line": [
+            "## External exact-head project-truth review — SOURCE REVIEW COMPLETE / FINAL EVIDENCE PENDING"
+          ],
+          "commit_id": "a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026",
+          "id": 5141799604,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T12:43:11Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head source/evidence review — APPROVED"
+          ],
+          "commit_id": "a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026",
+          "id": 5141829572,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-08T12:45:56Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## Author-identity exact-head review — COMMENT / SOURCE CI ACCEPTED, INDEPENDENT ADMISSION PENDING"
+          ],
+          "commit_id": "a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026",
+          "id": 5142242787,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T13:20:01Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "External review bound only to base `35f01329262d6a137bfa3c7e95302a397ed32676`, exact head `a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026`, Git tree `7c7b8a3f7a05345477b95081c0da9edee0a55780`, and the currently observed prospective merge `9b14640a42244903f8e9acd24e87ef7633112804`. Any source, base, or merge-object movement invalidates this decision."
+          ],
+          "commit_id": "a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026",
+          "id": 5142675023,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-08T13:58:47Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "External review on exact head `a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026`: approved for the bounded repository-truth and immutable-baseline validation increment."
+          ],
+          "commit_id": "a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026",
+          "id": 5143256235,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-08T14:48:36Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## Re-requested exact-head stacked-source review — APPROVED"
+          ],
+          "commit_id": "a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026",
+          "id": 5144149191,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-08T16:07:36Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "External immutable-truth slice review — HOLD / not approved for merge."
+          ],
+          "commit_id": "a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026",
+          "id": 5148861880,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-09T01:45:15Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## Re-requested exact-object external review — APPROVED / KEEP DRAFT"
+          ],
+          "commit_id": "a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026",
+          "id": 5149286686,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-09T03:03:54Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## Re-requested exact-object review — APPROVED / KEEP DRAFT"
+          ],
+          "commit_id": "a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026",
+          "id": 5149316736,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-09T03:09:44Z",
+          "user": "Franksudoman"
+        }
+      ],
+      "state": "open",
+      "title": "[DRAFT / EXACT-HEAD EVIDENCE COMPLETE] immutable project truth @a4e03dcb",
+      "total_commits": 7
+    },
+    "108": {
+      "ahead_by": 12,
+      "author": "ProfHepta",
+      "base_ref": "codex/hepta-truth-quality-remediation-v2-20260908",
+      "base_sha": "a4e03dcb3072013e8a1a9b3db78e0cb0fdedd026",
+      "behind_by": 0,
+      "comparison_status": "ahead",
+      "draft": true,
+      "exact_run": {
+        "all_jobs_success": true,
+        "artifacts": [
+          {
+            "created_at": "2026-09-09T00:17:05Z",
+            "digest": "sha256:a198eecfdef0412f293a991f9cae627abfe12cd4a78ff1c3dc795e3f98d28e65",
+            "expired": false,
+            "expires_at": "2026-10-09T00:17:03Z",
+            "id": 10082535554,
+            "name": "hepta-source-evidence-8709a7e3fcb0fbd164d3f60e3250c799f0d60be9",
+            "size_in_bytes": 43182
+          }
+        ],
+        "conclusion": "success",
+        "created_at": "2026-09-09T00:00:20Z",
+        "event": "pull_request",
+        "exact_artifact": {
+          "created_at": "2026-09-09T00:17:05Z",
+          "digest": "sha256:a198eecfdef0412f293a991f9cae627abfe12cd4a78ff1c3dc795e3f98d28e65",
+          "expired": false,
+          "expires_at": "2026-10-09T00:17:03Z",
+          "id": 10082535554,
+          "name": "hepta-source-evidence-8709a7e3fcb0fbd164d3f60e3250c799f0d60be9",
+          "size_in_bytes": 43182
+        },
+        "head_sha": "8709a7e3fcb0fbd164d3f60e3250c799f0d60be9",
+        "html_url": "https://github.com/TrillionniumFoundation/hepta-glasses/actions/runs/34293107352",
+        "id": 34293107352,
+        "job_set_exact": true,
+        "jobs": [
+          {
+            "completed_at": "2026-09-09T00:01:31Z",
+            "conclusion": "success",
+            "id": 102283761866,
+            "name": "repository-contracts",
+            "started_at": "2026-09-09T00:00:24Z",
+            "status": "completed",
+            "step_count": 16
+          },
+          {
+            "completed_at": "2026-09-09T00:05:03Z",
+            "conclusion": "success",
+            "id": 102283762020,
+            "name": "android-native",
+            "started_at": "2026-09-09T00:00:23Z",
+            "status": "completed",
+            "step_count": 15
+          },
+          {
+            "completed_at": "2026-09-09T00:02:11Z",
+            "conclusion": "success",
+            "id": 102283762031,
+            "name": "flutter",
+            "started_at": "2026-09-09T00:00:23Z",
+            "status": "completed",
+            "step_count": 12
+          },
+          {
+            "completed_at": "2026-09-09T00:00:44Z",
+            "conclusion": "success",
+            "id": 102283762036,
+            "name": "secret-and-boundary-scan",
+            "started_at": "2026-09-09T00:00:22Z",
+            "status": "completed",
+            "step_count": 7
+          },
+          {
+            "completed_at": "2026-09-09T00:00:49Z",
+            "conclusion": "success",
+            "id": 102283762133,
+            "name": "native-sanitizers",
+            "started_at": "2026-09-09T00:00:23Z",
+            "status": "completed",
+            "step_count": 7
+          },
+          {
+            "completed_at": "2026-09-09T00:16:25Z",
+            "conclusion": "success",
+            "id": 102283762177,
+            "name": "ios-native",
+            "started_at": "2026-09-09T00:00:27Z",
+            "status": "completed",
+            "step_count": 14
+          },
+          {
+            "completed_at": "2026-09-09T00:17:08Z",
+            "conclusion": "success",
+            "id": 102287421902,
+            "name": "source-evidence",
+            "started_at": "2026-09-09T00:16:28Z",
+            "status": "completed",
+            "step_count": 12
+          }
+        ],
+        "run_attempt": 1,
+        "run_number": 884,
+        "status": "completed",
+        "updated_at": "2026-09-09T00:17:09Z"
+      },
+      "head_ref": "codex/hepta-dependency-security-20260908",
+      "head_sha": "8709a7e3fcb0fbd164d3f60e3250c799f0d60be9",
+      "html_url": "https://github.com/TrillionniumFoundation/hepta-glasses/pull/108",
+      "merge_commit_sha": "58321ce161a17a7170086a1d76f5c468edc1c6c8",
+      "mergeable": true,
+      "mergeable_state": "clean",
+      "merged": false,
+      "number": 108,
+      "requested_reviewers": [
+        "Franksudoman",
+        "Tomasrgbsf"
+      ],
+      "review_threads": {
+        "ok": true,
+        "total": 0,
+        "unresolved": 0
+      },
+      "reviews": [
+        {
+          "body_first_line": [
+            "## Author-identity staged review — COMMENT / NOT YET APPROVED"
+          ],
+          "commit_id": "6816c9b09532750f7d7fbccf532dc2297e35177a",
+          "id": 5142241222,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T13:19:53Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## Draft external dependency-automation review — blocking source issue"
+          ],
+          "commit_id": "6816c9b09532750f7d7fbccf532dc2297e35177a",
+          "id": 5142312295,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T13:26:06Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head review — REQUEST_CHANGES"
+          ],
+          "commit_id": "6816c9b09532750f7d7fbccf532dc2297e35177a",
+          "id": 5142419827,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T13:36:03Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head dependency-maintenance review — REQUEST_CHANGES"
+          ],
+          "commit_id": "6be01d385c08ff3a231238b0bfd7e8e68e9e8706",
+          "id": 5142939767,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T14:21:59Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "External review on exact head `2ae6a966df21c5013549280f4d136c3006ef98f2`: approved for the bounded dependency-proposal and CocoaPods-maintenance source scope."
+          ],
+          "commit_id": "2ae6a966df21c5013549280f4d136c3006ef98f2",
+          "id": 5143257681,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-08T14:48:44Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head review — REQUEST_CHANGES"
+          ],
+          "commit_id": "2ae6a966df21c5013549280f4d136c3006ef98f2",
+          "id": 5143747725,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T15:32:07Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## Re-requested exact-head dependency-boundary review — REQUEST_CHANGES"
+          ],
+          "commit_id": "2ae6a966df21c5013549280f4d136c3006ef98f2",
+          "id": 5144161992,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T16:08:54Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head bounded-source review — APPROVE / KEEP DRAFT"
+          ],
+          "commit_id": "8d4eeeed3361cbff90688eb1d6a7c88a0a76cc7e",
+          "id": 5144506182,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-08T16:40:29Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head dependency-boundary review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "8d4eeeed3361cbff90688eb1d6a7c88a0a76cc7e",
+          "id": 5144509474,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T16:40:45Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## Exact-head independent re-review requested"
+          ],
+          "commit_id": "31f3c0a8fb1ef022df648484269673d666d732ad",
+          "id": 5147358495,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T21:48:16Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head dependency-maintenance review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "31f3c0a8fb1ef022df648484269673d666d732ad",
+          "id": 5147399628,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T21:54:20Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## Exact-head independent review requested"
+          ],
+          "commit_id": "844734db26107a79ea7b2c4faf7d2ba60c386548",
+          "id": 5147568493,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T22:18:14Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## Exact-head independent-evidence packet — REQUEST EXTERNAL DECISION"
+          ],
+          "commit_id": "88494a36132e13e87ff9fa5a04bca00e60ee40e2",
+          "id": 5147845624,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T22:55:16Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## 外部精确头依赖边界审查 — REQUEST_CHANGES / 保持 Draft"
+          ],
+          "commit_id": "88494a36132e13e87ff9fa5a04bca00e60ee40e2",
+          "id": 5147940011,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T23:11:46Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## Current exact-head checkpoint — HOLD / evidence incomplete"
+          ],
+          "commit_id": "8709a7e3fcb0fbd164d3f60e3250c799f0d60be9",
+          "id": 5148298786,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-09T00:06:27Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## Exact-head independent decision requested"
+          ],
+          "commit_id": "8709a7e3fcb0fbd164d3f60e3250c799f0d60be9",
+          "id": 5148399591,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-09T00:23:23Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## Independent exact-head dependency-boundary re-review — APPROVE / KEEP DRAFT"
+          ],
+          "commit_id": "8709a7e3fcb0fbd164d3f60e3250c799f0d60be9",
+          "id": 5148456132,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-09T00:34:04Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "External dependency-admission review — HOLD / not approved."
+          ],
+          "commit_id": "8709a7e3fcb0fbd164d3f60e3250c799f0d60be9",
+          "id": 5148863060,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-09T01:45:22Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## Re-requested exact-head dependency-boundary review — APPROVED / KEEP DRAFT"
+          ],
+          "commit_id": "8709a7e3fcb0fbd164d3f60e3250c799f0d60be9",
+          "id": 5149287650,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-09T03:04:03Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## Re-requested exact-head dependency-boundary review — APPROVED / KEEP DRAFT"
+          ],
+          "commit_id": "8709a7e3fcb0fbd164d3f60e3250c799f0d60be9",
+          "id": 5149317773,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-09T03:09:53Z",
+          "user": "Franksudoman"
+        }
+      ],
+      "state": "open",
+      "title": "[DRAFT / RAW-OBJECT FIX] exact-byte dependency admission and external hermetic refresh contract",
+      "total_commits": 12
+    },
+    "109": {
+      "ahead_by": 1,
+      "author": "ProfHepta",
+      "base_ref": "codex/hepta-dependency-security-20260908",
+      "base_sha": "8709a7e3fcb0fbd164d3f60e3250c799f0d60be9",
+      "behind_by": 0,
+      "comparison_status": "ahead",
+      "draft": true,
+      "exact_run": {
+        "all_jobs_success": true,
+        "artifacts": [
+          {
+            "created_at": "2026-09-09T00:17:56Z",
+            "digest": "sha256:cc04679cb045981b9627f28a2094e9e80bf55f7c7bc016ab21b4a51c49fc7e9b",
+            "expired": false,
+            "expires_at": "2026-10-09T00:17:55Z",
+            "id": 10082557937,
+            "name": "hepta-source-evidence-d4efdc4be3213cc2170ddd99334d508b7c5d2ccb",
+            "size_in_bytes": 43310
+          }
+        ],
+        "conclusion": "success",
+        "created_at": "2026-09-09T00:02:58Z",
+        "event": "pull_request",
+        "exact_artifact": {
+          "created_at": "2026-09-09T00:17:56Z",
+          "digest": "sha256:cc04679cb045981b9627f28a2094e9e80bf55f7c7bc016ab21b4a51c49fc7e9b",
+          "expired": false,
+          "expires_at": "2026-10-09T00:17:55Z",
+          "id": 10082557937,
+          "name": "hepta-source-evidence-d4efdc4be3213cc2170ddd99334d508b7c5d2ccb",
+          "size_in_bytes": 43310
+        },
+        "head_sha": "d4efdc4be3213cc2170ddd99334d508b7c5d2ccb",
+        "html_url": "https://github.com/TrillionniumFoundation/hepta-glasses/actions/runs/34293304010",
+        "id": 34293304010,
+        "job_set_exact": true,
+        "jobs": [
+          {
+            "completed_at": "2026-09-09T00:03:28Z",
+            "conclusion": "success",
+            "id": 102284367472,
+            "name": "native-sanitizers",
+            "started_at": "2026-09-09T00:03:01Z",
+            "status": "completed",
+            "step_count": 7
+          },
+          {
+            "completed_at": "2026-09-09T00:17:16Z",
+            "conclusion": "success",
+            "id": 102284367755,
+            "name": "ios-native",
+            "started_at": "2026-09-09T00:03:07Z",
+            "status": "completed",
+            "step_count": 14
+          },
+          {
+            "completed_at": "2026-09-09T00:03:53Z",
+            "conclusion": "success",
+            "id": 102284367768,
+            "name": "repository-contracts",
+            "started_at": "2026-09-09T00:03:01Z",
+            "status": "completed",
+            "step_count": 16
+          },
+          {
+            "completed_at": "2026-09-09T00:07:12Z",
+            "conclusion": "success",
+            "id": 102284367801,
+            "name": "android-native",
+            "started_at": "2026-09-09T00:03:01Z",
+            "status": "completed",
+            "step_count": 15
+          },
+          {
+            "completed_at": "2026-09-09T00:03:22Z",
+            "conclusion": "success",
+            "id": 102284367851,
+            "name": "secret-and-boundary-scan",
+            "started_at": "2026-09-09T00:03:01Z",
+            "status": "completed",
+            "step_count": 7
+          },
+          {
+            "completed_at": "2026-09-09T00:04:44Z",
+            "conclusion": "success",
+            "id": 102284367857,
+            "name": "flutter",
+            "started_at": "2026-09-09T00:03:01Z",
+            "status": "completed",
+            "step_count": 12
+          },
+          {
+            "completed_at": "2026-09-09T00:17:59Z",
+            "conclusion": "success",
+            "id": 102287614528,
+            "name": "source-evidence",
+            "started_at": "2026-09-09T00:17:19Z",
+            "status": "completed",
+            "step_count": 12
+          }
+        ],
+        "run_attempt": 1,
+        "run_number": 885,
+        "status": "completed",
+        "updated_at": "2026-09-09T00:17:59Z"
+      },
+      "head_ref": "codex/hepta-mobile-product-identity-20260908",
+      "head_sha": "d4efdc4be3213cc2170ddd99334d508b7c5d2ccb",
+      "html_url": "https://github.com/TrillionniumFoundation/hepta-glasses/pull/109",
+      "merge_commit_sha": "e977eead3ac38d3706ea201fa7ab1da3801d864e",
+      "mergeable": true,
+      "mergeable_state": "clean",
+      "merged": false,
+      "number": 109,
+      "requested_reviewers": [
+        "Franksudoman",
+        "Tomasrgbsf"
+      ],
+      "review_threads": {
+        "ok": true,
+        "total": 0,
+        "unresolved": 0
+      },
+      "reviews": [
+        {
+          "body_first_line": [
+            "## Author-identity staged review — COMMENT / NOT YET APPROVED"
+          ],
+          "commit_id": "67e7db9704785d82de97cb043a7da479606b8c08",
+          "id": 5142239729,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T13:19:46Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## Draft external mobile-identity review — stack admission blocked"
+          ],
+          "commit_id": "67e7db9704785d82de97cb043a7da479606b8c08",
+          "id": 5142321920,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T13:27:01Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head review — REQUEST_CHANGES"
+          ],
+          "commit_id": "67e7db9704785d82de97cb043a7da479606b8c08",
+          "id": 5142435098,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T13:37:25Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head mobile-identity review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "fe9bb33bd663ae0372d495f61e6cbd18190ca10e",
+          "id": 5142941826,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T14:22:10Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "External review on exact head `9f3f67b9c4d13ce85768be39b3127974ef9174e3`: approved for the bounded mobile release-facing identity increment."
+          ],
+          "commit_id": "d4efdc4be3213cc2170ddd99334d508b7c5d2ccb",
+          "id": 5143259742,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-08T14:48:56Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head stacked review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "9f3f67b9c4d13ce85768be39b3127974ef9174e3",
+          "id": 5143762759,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T15:33:24Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## Re-requested exact-head stacked mobile-identity review — REQUEST_CHANGES"
+          ],
+          "commit_id": "9f3f67b9c4d13ce85768be39b3127974ef9174e3",
+          "id": 5144170319,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T16:09:47Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head stacked mobile-identity review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "7922fb5f2a77e1fb9b9d3071f8495f22bbf711c6",
+          "id": 5144514569,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T16:41:12Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External current-head stacked review — COMMENT / KEEP DRAFT / MATRIX NONTERMINAL"
+          ],
+          "commit_id": "7922fb5f2a77e1fb9b9d3071f8495f22bbf711c6",
+          "id": 5144517176,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T16:41:27Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## Exact-head independent re-review requested"
+          ],
+          "commit_id": "caf38ec9dd1f70426d99aec25066f9a60e332e9a",
+          "id": 5147360137,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T21:48:31Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head stacked mobile-identity review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "caf38ec9dd1f70426d99aec25066f9a60e332e9a",
+          "id": 5147405629,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T21:55:11Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## Exact-head independent review requested"
+          ],
+          "commit_id": "6354ac3324f6ac1ae3c83d3b1c29c7d5b215ebc1",
+          "id": 5147569503,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T22:18:25Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## Exact-head independent-evidence packet — REQUEST EXTERNAL DECISION"
+          ],
+          "commit_id": "756c2999f0434e1cfb1ab1b9383dc6ffb77a8107",
+          "id": 5147874633,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T23:00:14Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## 外部精确头 stacked mobile-identity 审查 — REQUEST_CHANGES / 保持 Draft"
+          ],
+          "commit_id": "756c2999f0434e1cfb1ab1b9383dc6ffb77a8107",
+          "id": 5147944289,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T23:12:20Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## Exact-head independent decision requested"
+          ],
+          "commit_id": "d4efdc4be3213cc2170ddd99334d508b7c5d2ccb",
+          "id": 5148400691,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-09T00:23:36Z",
+          "user": "ProfHepta"
+        },
+        {
+          "body_first_line": [
+            "## Independent exact-head stacked mobile-identity review — APPROVE / KEEP DRAFT"
+          ],
+          "commit_id": "d4efdc4be3213cc2170ddd99334d508b7c5d2ccb",
+          "id": 5148470849,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-09T00:37:08Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "External mobile-identity review — HOLD / not approved."
+          ],
+          "commit_id": "d4efdc4be3213cc2170ddd99334d508b7c5d2ccb",
+          "id": 5148864230,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-09T01:45:30Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## Re-requested exact-head stacked mobile-identity review — APPROVED / KEEP DRAFT"
+          ],
+          "commit_id": "d4efdc4be3213cc2170ddd99334d508b7c5d2ccb",
+          "id": 5149288309,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-09T03:04:12Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## Re-requested exact-head stacked mobile-identity review — APPROVED / KEEP DRAFT"
+          ],
+          "commit_id": "d4efdc4be3213cc2170ddd99334d508b7c5d2ccb",
+          "id": 5149319120,
+          "state": "APPROVED",
+          "submitted_at": "2026-09-09T03:10:03Z",
+          "user": "Franksudoman"
+        }
+      ],
+      "state": "open",
+      "title": "[DRAFT / REQUALIFYING] canonical mobile identity on exact-byte dependency parent",
+      "total_commits": 1
+    },
+    "110": {
+      "ahead_by": 3,
+      "author": "ProfHepta",
+      "base_ref": "codex/hepta-mobile-product-identity-20260908",
+      "base_sha": "d4efdc4be3213cc2170ddd99334d508b7c5d2ccb",
+      "behind_by": 0,
+      "comparison_status": "ahead",
+      "draft": true,
+      "exact_run": {
+        "all_jobs_success": false,
+        "artifacts": [],
+        "conclusion": "failure",
+        "created_at": "2026-09-09T03:26:17Z",
+        "event": "pull_request",
+        "exact_artifact": null,
+        "head_sha": "158ed2e688e1492173f72b5beaa806b1403be019",
+        "html_url": "https://github.com/TrillionniumFoundation/hepta-glasses/actions/runs/34307115062",
+        "id": 34307115062,
+        "job_set_exact": true,
+        "jobs": [
+          {
+            "completed_at": "2026-09-09T03:28:06Z",
+            "conclusion": "failure",
+            "id": 102326047556,
+            "name": "flutter",
+            "started_at": "2026-09-09T03:26:37Z",
+            "status": "completed",
+            "step_count": 12
+          },
+          {
+            "completed_at": "2026-09-09T03:26:57Z",
+            "conclusion": "success",
+            "id": 102326047706,
+            "name": "native-sanitizers",
+            "started_at": "2026-09-09T03:26:36Z",
+            "status": "completed",
+            "step_count": 7
+          },
+          {
+            "completed_at": "2026-09-09T03:41:10Z",
+            "conclusion": "success",
+            "id": 102326047758,
+            "name": "ios-native",
+            "started_at": "2026-09-09T03:26:41Z",
+            "status": "completed",
+            "step_count": 14
+          },
+          {
+            "completed_at": "2026-09-09T03:31:16Z",
+            "conclusion": "success",
+            "id": 102326047776,
+            "name": "android-native",
+            "started_at": "2026-09-09T03:26:36Z",
+            "status": "completed",
+            "step_count": 15
+          },
+          {
+            "completed_at": "2026-09-09T03:26:57Z",
+            "conclusion": "success",
+            "id": 102326047875,
+            "name": "secret-and-boundary-scan",
+            "started_at": "2026-09-09T03:26:36Z",
+            "status": "completed",
+            "step_count": 7
+          },
+          {
+            "completed_at": "2026-09-09T03:27:23Z",
+            "conclusion": "success",
+            "id": 102326047894,
+            "name": "repository-contracts",
+            "started_at": "2026-09-09T03:26:36Z",
+            "status": "completed",
+            "step_count": 16
+          },
+          {
+            "completed_at": "2026-09-09T03:41:10Z",
+            "conclusion": "skipped",
+            "id": 102328825354,
+            "name": "source-evidence",
+            "started_at": "2026-09-09T03:41:11Z",
+            "status": "completed",
+            "step_count": 0
+          }
+        ],
+        "run_attempt": 1,
+        "run_number": 894,
+        "status": "completed",
+        "updated_at": "2026-09-09T03:41:11Z"
+      },
+      "head_ref": "codex/hepta-critical-test-depth-20260908",
+      "head_sha": "158ed2e688e1492173f72b5beaa806b1403be019",
+      "html_url": "https://github.com/TrillionniumFoundation/hepta-glasses/pull/110",
+      "merge_commit_sha": "8d42eb59c71bbe70b3b313433cb8e31f00cbb276",
+      "mergeable": true,
+      "mergeable_state": "unstable",
+      "merged": false,
+      "number": 110,
+      "requested_reviewers": [
+        "Franksudoman",
+        "Tomasrgbsf"
+      ],
+      "review_threads": {
+        "ok": true,
+        "total": 0,
+        "unresolved": 0
+      },
+      "reviews": [
+        {
+          "body_first_line": [
+            "## External exact-head stacked review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "688fa26c19fbe1bf8c8d6c9048f19eefb2e53cdb",
+          "id": 5143812753,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T15:37:31Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## Exact-head execution update — prior REQUEST_CHANGES remains"
+          ],
+          "commit_id": "688fa26c19fbe1bf8c8d6c9048f19eefb2e53cdb",
+          "id": 5144252667,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T16:17:00Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External review on the live stacked subject — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "688fa26c19fbe1bf8c8d6c9048f19eefb2e53cdb",
+          "id": 5144520005,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T16:41:41Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External live-subject review — REQUEST_CHANGES / scope identity broken"
+          ],
+          "commit_id": "688fa26c19fbe1bf8c8d6c9048f19eefb2e53cdb",
+          "id": 5148302172,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-09T00:07:07Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "External raw-wire/G1 conformance review — HOLD / not approved."
+          ],
+          "commit_id": "7f8611ed1934789c7ca8211308ec4908be0acc8e",
+          "id": 5148865312,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-09T01:45:37Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## External current-head review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "7f8611ed1934789c7ca8211308ec4908be0acc8e",
+          "id": 5148985395,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-09T02:05:38Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "158ed2e688e1492173f72b5beaa806b1403be019",
+          "id": 5149438450,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-09T03:29:34Z",
+          "user": "Franksudoman"
+        }
+      ],
+      "state": "open",
+      "title": "[DRAFT / REQUALIFYING] raw-wire mutation authority and closed G1 v2 conformance",
+      "total_commits": 3
+    },
+    "111": {
+      "ahead_by": 2,
+      "author": "ProfHepta",
+      "base_ref": "codex/hepta-mobile-product-identity-20260908",
+      "base_sha": "d4efdc4be3213cc2170ddd99334d508b7c5d2ccb",
+      "behind_by": 12,
+      "comparison_status": "diverged",
+      "draft": true,
+      "exact_run": {
+        "all_jobs_success": false,
+        "artifacts": [],
+        "conclusion": "failure",
+        "created_at": "2026-09-08T16:07:48Z",
+        "event": "pull_request",
+        "exact_artifact": null,
+        "head_sha": "67e7db9704785d82de97cb043a7da479606b8c08",
+        "html_url": "https://github.com/TrillionniumFoundation/hepta-glasses/actions/runs/34249152567",
+        "id": 34249152567,
+        "job_set_exact": true,
+        "jobs": [
+          {
+            "completed_at": "2026-09-08T16:08:15Z",
+            "conclusion": "success",
+            "id": 102138801650,
+            "name": "native-sanitizers",
+            "started_at": "2026-09-08T16:07:52Z",
+            "status": "completed",
+            "step_count": 7
+          },
+          {
+            "completed_at": "2026-09-08T16:14:54Z",
+            "conclusion": "success",
+            "id": 102138801798,
+            "name": "android-native",
+            "started_at": "2026-09-08T16:07:52Z",
+            "status": "completed",
+            "step_count": 15
+          },
+          {
+            "completed_at": "2026-09-08T16:20:23Z",
+            "conclusion": "success",
+            "id": 102138801894,
+            "name": "ios-native",
+            "started_at": "2026-09-08T16:07:56Z",
+            "status": "completed",
+            "step_count": 14
+          },
+          {
+            "completed_at": "2026-09-08T16:08:04Z",
+            "conclusion": "failure",
+            "id": 102138801957,
+            "name": "repository-contracts",
+            "started_at": "2026-09-08T16:07:51Z",
+            "status": "completed",
+            "step_count": 16
+          },
+          {
+            "completed_at": "2026-09-08T16:08:14Z",
+            "conclusion": "success",
+            "id": 102138801961,
+            "name": "secret-and-boundary-scan",
+            "started_at": "2026-09-08T16:07:52Z",
+            "status": "completed",
+            "step_count": 7
+          },
+          {
+            "completed_at": "2026-09-08T16:09:53Z",
+            "conclusion": "success",
+            "id": 102138801992,
+            "name": "flutter",
+            "started_at": "2026-09-08T16:07:52Z",
+            "status": "completed",
+            "step_count": 12
+          },
+          {
+            "completed_at": "2026-09-08T16:20:23Z",
+            "conclusion": "skipped",
+            "id": 102143202001,
+            "name": "source-evidence",
+            "started_at": "2026-09-08T16:20:23Z",
+            "status": "completed",
+            "step_count": 0
+          }
+        ],
+        "run_attempt": 1,
+        "run_number": 873,
+        "status": "completed",
+        "updated_at": "2026-09-08T16:20:24Z"
+      },
+      "head_ref": "codex/hepta-release-versioning-20260909",
+      "head_sha": "67e7db9704785d82de97cb043a7da479606b8c08",
+      "html_url": "https://github.com/TrillionniumFoundation/hepta-glasses/pull/111",
+      "merge_commit_sha": "900e07a0562e2273c7ca209ac163a8270bf50433",
+      "mergeable": true,
+      "mergeable_state": "unstable",
+      "merged": false,
+      "number": 111,
+      "requested_reviewers": [
+        "Franksudoman",
+        "Tomasrgbsf"
+      ],
+      "review_threads": {
+        "ok": true,
+        "total": 0,
+        "unresolved": 0
+      },
+      "reviews": [
+        {
+          "body_first_line": [
+            "<!-- external-review:gpt-5.6-sol-pro:67e7db9704785d82de97cb043a7da479606b8c08:2026-09-08 -->"
+          ],
+          "commit_id": "67e7db9704785d82de97cb043a7da479606b8c08",
+          "id": 5144194544,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T16:11:50Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## External review on the live PR object — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "67e7db9704785d82de97cb043a7da479606b8c08",
+          "id": 5144528743,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T16:42:25Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "## External live-object review — REQUEST_CHANGES / KEEP DRAFT"
+          ],
+          "commit_id": "67e7db9704785d82de97cb043a7da479606b8c08",
+          "id": 5148305475,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-09T00:07:36Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "External staged versioning review — HOLD / not approved."
+          ],
+          "commit_id": "67e7db9704785d82de97cb043a7da479606b8c08",
+          "id": 5148866406,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-09T01:45:47Z",
+          "user": "Franksudoman"
+        }
+      ],
+      "state": "open",
+      "title": "[STAGED P2.2] monotonic release version and promotion contract",
+      "total_commits": 2
+    },
+    "112": {
+      "ahead_by": 2,
+      "author": "ProfHepta",
+      "base_ref": "codex/hepta-mobile-product-identity-20260908",
+      "base_sha": "d4efdc4be3213cc2170ddd99334d508b7c5d2ccb",
+      "behind_by": 4,
+      "comparison_status": "diverged",
+      "draft": true,
+      "exact_run": null,
+      "head_ref": "codex/hepta-g1-conformance-fuzz-20260909",
+      "head_sha": "163b6798c690163d2fc1412307ab16e0c6849c6c",
+      "html_url": "https://github.com/TrillionniumFoundation/hepta-glasses/pull/112",
+      "merge_commit_sha": "2f23a3a71e2a1370aef4cd7298d9f7ebe7baca0e",
+      "mergeable": true,
+      "mergeable_state": "unstable",
+      "merged": false,
+      "number": 112,
+      "requested_reviewers": [],
+      "review_threads": {
+        "ok": true,
+        "total": 0,
+        "unresolved": 0
+      },
+      "reviews": [
+        {
+          "body_first_line": [
+            "## External review — changes required on exact head `163b6798c690163d2fc1412307ab16e0c6849c6c`"
+          ],
+          "commit_id": "163b6798c690163d2fc1412307ab16e0c6849c6c",
+          "id": 5147383886,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T21:51:59Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## 外部精确头审查 — REQUEST_CHANGES / 保持 Draft"
+          ],
+          "commit_id": "163b6798c690163d2fc1412307ab16e0c6849c6c",
+          "id": 5147879103,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T23:01:07Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "External staged G1 conformance/fuzz review — HOLD / not approved."
+          ],
+          "commit_id": "163b6798c690163d2fc1412307ab16e0c6849c6c",
+          "id": 5148867078,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-09T01:45:52Z",
+          "user": "Franksudoman"
+        }
+      ],
+      "state": "closed",
+      "title": "[STAGED P1.4] shared G1 packet conformance, fuzz and mutation gate",
+      "total_commits": 2
+    },
+    "113": {
+      "ahead_by": 8,
+      "author": "ProfHepta",
+      "base_ref": "codex/hepta-mobile-product-identity-20260908",
+      "base_sha": "d4efdc4be3213cc2170ddd99334d508b7c5d2ccb",
+      "behind_by": 12,
+      "comparison_status": "diverged",
+      "draft": true,
+      "exact_run": {
+        "all_jobs_success": false,
+        "artifacts": [],
+        "conclusion": "failure",
+        "created_at": "2026-09-08T23:33:22Z",
+        "event": "pull_request",
+        "exact_artifact": null,
+        "head_sha": "95915336c3c6ffe34823ed402bced94b6fb6b15c",
+        "html_url": "https://github.com/TrillionniumFoundation/hepta-glasses/actions/runs/34291170902",
+        "id": 34291170902,
+        "job_set_exact": true,
+        "jobs": [
+          {
+            "completed_at": "2026-09-08T23:34:55Z",
+            "conclusion": "success",
+            "id": 102277815529,
+            "name": "flutter",
+            "started_at": "2026-09-08T23:33:26Z",
+            "status": "completed",
+            "step_count": 12
+          },
+          {
+            "completed_at": "2026-09-08T23:33:40Z",
+            "conclusion": "failure",
+            "id": 102277815701,
+            "name": "repository-contracts",
+            "started_at": "2026-09-08T23:33:25Z",
+            "status": "completed",
+            "step_count": 16
+          },
+          {
+            "completed_at": "2026-09-08T23:33:52Z",
+            "conclusion": "success",
+            "id": 102277815719,
+            "name": "native-sanitizers",
+            "started_at": "2026-09-08T23:33:25Z",
+            "status": "completed",
+            "step_count": 7
+          },
+          {
+            "completed_at": "2026-09-08T23:46:14Z",
+            "conclusion": "success",
+            "id": 102277815726,
+            "name": "ios-native",
+            "started_at": "2026-09-08T23:33:29Z",
+            "status": "completed",
+            "step_count": 14
+          },
+          {
+            "completed_at": "2026-09-08T23:33:48Z",
+            "conclusion": "success",
+            "id": 102277815842,
+            "name": "secret-and-boundary-scan",
+            "started_at": "2026-09-08T23:33:25Z",
+            "status": "completed",
+            "step_count": 7
+          },
+          {
+            "completed_at": "2026-09-08T23:39:40Z",
+            "conclusion": "success",
+            "id": 102277815848,
+            "name": "android-native",
+            "started_at": "2026-09-08T23:33:25Z",
+            "status": "completed",
+            "step_count": 15
+          },
+          {
+            "completed_at": "2026-09-08T23:46:14Z",
+            "conclusion": "skipped",
+            "id": 102280682398,
+            "name": "source-evidence",
+            "started_at": "2026-09-08T23:46:14Z",
+            "status": "completed",
+            "step_count": 0
+          }
+        ],
+        "run_attempt": 1,
+        "run_number": 883,
+        "status": "completed",
+        "updated_at": "2026-09-08T23:46:14Z"
+      },
+      "head_ref": "codex/hepta-source-artifact-durability-20260909",
+      "head_sha": "95915336c3c6ffe34823ed402bced94b6fb6b15c",
+      "html_url": "https://github.com/TrillionniumFoundation/hepta-glasses/pull/113",
+      "merge_commit_sha": "e0fea6346317d235ad410eb7c296f57db2228d44",
+      "mergeable": true,
+      "mergeable_state": "unstable",
+      "merged": false,
+      "number": 113,
+      "requested_reviewers": [
+        "Franksudoman",
+        "Tomasrgbsf"
+      ],
+      "review_threads": {
+        "ok": true,
+        "total": 0,
+        "unresolved": 0
+      },
+      "reviews": [
+        {
+          "body_first_line": [
+            "## External current-head archival-trust review — HOLD / KEEP DRAFT"
+          ],
+          "commit_id": "95915336c3c6ffe34823ed402bced94b6fb6b15c",
+          "id": 5148153730,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-08T23:42:15Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head CI/admission review — REQUEST_CHANGES"
+          ],
+          "commit_id": "95915336c3c6ffe34823ed402bced94b6fb6b15c",
+          "id": 5148162456,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T23:43:13Z",
+          "user": "Franksudoman"
+        },
+        {
+          "body_first_line": [
+            "## External exact-head review — REQUEST_CHANGES"
+          ],
+          "commit_id": "95915336c3c6ffe34823ed402bced94b6fb6b15c",
+          "id": 5148228570,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-08T23:52:31Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "External admission review — **REQUEST CHANGES / KEEP DRAFT** on exact head `9591533`."
+          ],
+          "commit_id": "95915336c3c6ffe34823ed402bced94b6fb6b15c",
+          "id": 5148602608,
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-09-09T01:03:40Z",
+          "user": "Tomasrgbsf"
+        },
+        {
+          "body_first_line": [
+            "External staged durable-archive review — HOLD / not approved."
+          ],
+          "commit_id": "95915336c3c6ffe34823ed402bced94b6fb6b15c",
+          "id": 5148867902,
+          "state": "COMMENTED",
+          "submitted_at": "2026-09-09T01:45:58Z",
+          "user": "Franksudoman"
+        }
+      ],
+      "state": "open",
+      "title": "[STAGED P2.2] durable externally signed source Artifact archival",
+      "total_commits": 8
+    }
+  },
+  "repository": "TrillionniumFoundation/hepta-glasses",
+  "schema_version": 1
+}
