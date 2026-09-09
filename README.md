@@ -6,7 +6,11 @@ The product boundary is explicit: this repository is **not** vendor-authorized G
 
 ## Authoritative status
 
-The live pull-request head and Git tree—not a SHA copied into prose—identify the current source candidate. The last independently qualified baseline is Draft PR #101 at:
+The live head and Git tree of open PR #114 identify the active successor source object. PR #114 targets `main` from `codex/hepta-main-convergence-20260909-v2`; it is out of Draft but still requires an eligible non-author/non-latest-pusher Code Owner `APPROVED` review, complete canonical `main` protection readback, and ordinary protected adoption. The active successor therefore remains `source_implemented`, not `ci_qualified`, `released`, or production-authorized.
+
+The immediately preceding PR #114 object at commit `317ee1141ceac6df7d711aeaaca27b22d735e48d`, tree `51e673238d30b81ef8eb64b93eef14fc7bf850cb`, completed all seven jobs and produced source artifact `10098668276` with ZIP SHA-256 `6eac5358c5b0f1555043ac99250e583d5baeb7a89a2133365d72ad5bead7037c`. It received artifact-integrity comments but no eligible `APPROVED` review. Any later source commit—including the closure-control refinement described below—supersedes that exact-head evidence and must generate fresh CI, artifact and review evidence.
+
+The last independently qualified historical baseline remains PR #101 at:
 
 - commit `35f01329262d6a137bfa3c7e95302a397ed32676`;
 - tree `d585f78b8eddf4676bdee4d6f666a544f64a9f86`;
@@ -17,7 +21,18 @@ The live pull-request head and Git tree—not a SHA copied into prose—identify
 
 HG-0087 is `CLOSED_SOURCE`: all seven repository-controlled implementation slices are present with executable repository tests. That status does **not** mean deployment or product release is complete. `HG-0089` remains `BLOCKED_ADMIN_SETTING` until the complete canonical `main` protection contract is applied and independently read back, followed by ordinary protected adoption and new exact-`main` evidence.
 
-Any successor commit—including documentation-only changes—must run all seven canonical jobs, produce its own content-verified artifact, and receive a fresh eligible review before it replaces the qualified baseline.
+## Current closure campaign
+
+The dependency-ordered path for every remaining blocker is:
+
+- `docs/development/2026-09-09_FULL_GAP_CLOSURE_PLAN.md` — exact execution DAG for issues #82, #84–#96 and #102;
+- `docs/operations/FULL_GAP_CLOSURE_CONTROL_BOARD.md` — accountable role, next non-substitutable action and required acceptance object for every open gap;
+- `docs/development/2026-09-09_SOURCE_DEEPENING_WORK_PACKAGES.md` — product identity, G1 protocol, mobile architecture, behavioral testing, observability, native provenance and product UX work packages;
+- `docs/development/MODULE_DOCUMENTATION_COMPLETENESS_STANDARD.md` — semantic standard distinguishing generated handoffs from complete owner-authored technical specifications;
+- `docs/development/MODULE_DOCUMENTATION_DEPTH_AUDIT_2026-09-09.md` — 26-module depth assessment and P0/P1/P2 documentation backlog;
+- `.github/SECURITY.md` and `.github/CONTRIBUTING.md` — private-reporting, containment, review, merge and evidence-boundary rules.
+
+The campaign preserves the no-bypass rule. Repository changes can close source preparation only; Administration, independent approval, external trust roots, provider facts, physical measurements, vendor authority, signing, assurance, pilot and store decisions must come from their real owners.
 
 ## Start here
 
@@ -27,7 +42,12 @@ Any successor commit—including documentation-only changes—must run all seven
 - `docs/HG0087_IMPLEMENTATION_STATUS.json` — seven source-closed implementation slices and their remaining external requirements.
 - `docs/MATURITY_MODEL.md` — separate design, source, CI, integration, physical, pilot, and release maturity.
 - `docs/development/2026-09-08_PRODUCTIZATION_ROADMAP.md` — prioritized path from source candidate to product qualification.
-- `docs/MODULE_COVERAGE.json` — flattened tracked-source ownership.
+- `docs/development/2026-09-09_FULL_GAP_CLOSURE_PLAN.md` — operational dependency graph for full closure.
+- `docs/operations/FULL_GAP_CLOSURE_CONTROL_BOARD.md` — live authority and evidence handoff board.
+- `docs/development/2026-09-09_SOURCE_DEEPENING_WORK_PACKAGES.md` — source-level deepening packages from product identity through UX.
+- `docs/development/MODULE_DOCUMENTATION_COMPLETENESS_STANDARD.md` — required dimensions for detailed module documentation.
+- `docs/development/MODULE_DOCUMENTATION_DEPTH_AUDIT_2026-09-09.md` — current module documentation-depth result.
+- `docs/MODULE_COVERAGE.json` — compatibility pointer to tracked-source ownership.
 - `docs/MODULE_HANDOFF.json` and `docs/development/MODULE_HANDOFF.md` — primary technical handoff for all registered modules.
 - `contracts/conformance/canonical-json-v1.json` — shared Dart/Python canonical JSON vectors.
 
