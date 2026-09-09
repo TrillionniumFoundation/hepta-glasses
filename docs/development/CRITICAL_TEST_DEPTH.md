@@ -46,6 +46,10 @@ The proof uses the already qualified Dart SDK, writes only under the system temp
 
 `services/model_gateway/test_bounded_worker_determinism.py` fills all four configured model workers with controlled blocking calls, waits for each worker to enter, proves the callers become indeterminate, verifies a fifth request is fenced before entering the provider, releases late workers and confirms no late result is committed. The test is deterministic and fixture-only; it does not claim live provider capacity or production timeout behavior.
 
+## Formatter custody
+
+Dart formatting is source normalization, not authority evidence. A formatter transport may run only from an isolated operations branch against an exact source commit and an exact changed-path set. It must use a lease-protected push and must not add a workflow to the pull-request tree. The formatting run receives no CI, Artifact or review credit. The final candidate must contain only the canonical `.github/workflows/ci.yml`, and its unchanged exact head must independently pass the canonical formatting check and all six remaining jobs. No diagnostic run or bot-authored intermediate commit transfers qualification evidence.
+
 ## Admission and claim ceiling
 
 This source slice is admissible only after all seven canonical jobs succeed on one unchanged head, the exact-head source Artifact is downloaded twice and content-verified, all conversations are resolved, and an eligible non-pusher approves the exact object.
