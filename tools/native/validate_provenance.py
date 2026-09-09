@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Validate exact Git-object custody for vendored native audio source.
 
-The manifest intentionally binds an exact EvenDemoApp import snapshot and the
-current repository objects. It does not infer the unavailable direct
-``google/liblc3`` or ``xiph/rnnoise`` revision from source similarity.
+The manifest binds imported subtrees/blobs that are present in this repository.
+The external EvenDemoApp commit/root-tree observation is recorded separately and
+must be revalidated through an authorized live source; it is not fabricated as a
+locally available Git commit object.
 """
 
 from __future__ import annotations
@@ -176,10 +177,6 @@ def exact_tree_deltas(
         fields = metadata.split()
         if len(fields) != 5 or not fields[0].startswith(":"):
             fail("unexpected git diff-tree raw metadata")
-        old_mode = fields[0][1:]
-        new_mode = fields[1]
-        old_object = fields[2]
-        new_object = fields[3]
         status = fields[4]
         if status not in {"A", "D", "M", "T"}:
             fail(f"unsupported native source delta status: {status}")
@@ -187,10 +184,10 @@ def exact_tree_deltas(
             {
                 "path": relative,
                 "status": status,
-                "old_mode": old_mode,
-                "new_mode": new_mode,
-                "imported_blob": old_object,
-                "current_blob": new_object,
+                "old_mode": fields[0][1:],
+                "new_mode": fields[1],
+                "imported_blob": fields[2],
+                "current_blob": fields[3],
             }
         )
     return sorted(result, key=lambda item: item["path"])
@@ -269,7 +266,7 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
         fail("native provenance manifest kind drifted")
     if document["repository"] != "TrillionniumFoundation/hepta-glasses":
         fail("native provenance repository identity drifted")
-    require_string(document["claim_ceiling"], "claim_ceiling", 120)
+    require_string(document["claim_ceiling"], "claim_ceiling", 160)
 
     snapshot = document["import_snapshot"]
     if not isinstance(snapshot, dict):
@@ -282,6 +279,10 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
             "tree",
             "committed_at",
             "commit_signature_verified",
+            "observation_source",
+            "commit_object_present_in_repository",
+            "root_tree_object_present_in_repository",
+            "external_observation_requires_live_revalidation",
             "source_record",
         },
         "import_snapshot",
@@ -293,15 +294,29 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
     if snapshot["committed_at"] != "2026-06-09T08:27:17Z":
         fail("native import snapshot timestamp drifted")
     if snapshot["commit_signature_verified"] is not False:
-        fail("unsigned import snapshot must remain truthfully unverified")
-    repository_path(root, snapshot["source_record"], "import_snapshot.source_record", directory=False)
-    if object_type(root, snapshot["commit"]) != "commit":
-        fail("native import snapshot commit object is unavailable")
-    if object_type(root, snapshot["tree"]) != "tree":
-        fail("native import snapshot tree object is unavailable")
-    commit_tree = git(root, "show", "-s", "--format=%T", snapshot["commit"])
-    if commit_tree != snapshot["tree"]:
-        fail("native import snapshot commit/tree binding is invalid")
+        fail("unsigned external import snapshot must remain truthfully unverified")
+    if snapshot["observation_source"] != "GitHub Git Data API":
+        fail("native external observation source drifted")
+    if snapshot["commit_object_present_in_repository"] is not False:
+        fail("external import commit must not be represented as a local object")
+    if snapshot["root_tree_object_present_in_repository"] is not False:
+        fail("external import root tree must not be represented as a local object")
+    if snapshot["external_observation_requires_live_revalidation"] is not True:
+        fail("external import observation must require live revalidation")
+    source_record = repository_path(
+        root,
+        snapshot["source_record"],
+        "import_snapshot.source_record",
+        directory=False,
+    )
+    source_text = source_record.read_text(encoding="utf-8")
+    for expected in (
+        snapshot["repository"],
+        snapshot["commit"],
+        snapshot["tree"],
+    ):
+        if source_text.count(expected) != 1:
+            fail(f"source record does not uniquely bind external observation {expected}")
 
     upstream = document["direct_upstream_components"]
     if not isinstance(upstream, list):
@@ -377,7 +392,7 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
             unit["current_object"], f"{identifier}.current_object"
         )
         if object_type(root, imported_object) != "tree" or object_type(root, current_object) != "tree":
-            fail(f"{identifier} must bind tree objects")
+            fail(f"{identifier} must bind locally available tree objects")
         if head_object(root, path) != current_object:
             fail(f"{identifier} current tree does not match HEAD:{path}")
         observed = exact_tree_deltas(root, imported_object, current_object)
@@ -472,7 +487,7 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
             record["current_blob"], f"integration_files[{index}].current_blob"
         )
         if object_type(root, imported_blob) != "blob" or object_type(root, current_blob) != "blob":
-            fail(f"{path} must bind blob objects")
+            fail(f"{path} must bind locally available blob objects")
         if head_object(root, path) != current_blob:
             fail(f"integration file current blob does not match HEAD:{path}")
         changed = imported_blob != current_blob
@@ -488,8 +503,9 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
     validate_inventory(root, snapshot)
     return {
         "ok": True,
-        "import_commit": snapshot["commit"],
-        "import_tree": snapshot["tree"],
+        "external_import_commit": snapshot["commit"],
+        "external_import_tree": snapshot["tree"],
+        "external_observation_requires_live_revalidation": True,
         "tree_units": len(units),
         "tree_deltas": tree_delta_count,
         "integration_files": len(files),

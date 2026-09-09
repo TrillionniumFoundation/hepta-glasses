@@ -8,6 +8,10 @@
     "tree": "bc593f9b23ce9a49ead8b5652181639157032572",
     "committed_at": "2026-06-09T08:27:17Z",
     "commit_signature_verified": false,
+    "observation_source": "GitHub Git Data API",
+    "commit_object_present_in_repository": false,
+    "root_tree_object_present_in_repository": false,
+    "external_observation_requires_live_revalidation": true,
     "source_record": "UPSTREAM.md"
   },
   "direct_upstream_components": [
@@ -163,5 +167,5 @@
       "status": "unchanged_from_import_snapshot"
     }
   ],
-  "claim_ceiling": "This manifest proves repository Git-object custody from one exact EvenDemoApp import snapshot and enumerates current local deltas. It does not identify the exact direct google/liblc3 or xiph/rnnoise revision, establish legal approval, prove absence of vulnerabilities, establish binary reproducibility, or qualify physical audio behavior."
+  "claim_ceiling": "This manifest proves repository Git-object custody for imported native subtrees and integration files, while recording a separately observed exact EvenDemoApp commit/tree anchor that is not present in this repository object database. It does not identify the exact direct google/liblc3 or xiph/rnnoise revision, independently revalidate the external commit offline, establish legal approval, prove absence of vulnerabilities, establish binary reproducibility, or qualify physical audio behavior."
 }

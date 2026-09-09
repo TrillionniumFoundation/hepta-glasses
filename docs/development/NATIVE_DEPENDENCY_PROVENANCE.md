@@ -11,17 +11,21 @@ The repository inherited its native LC3 and RNNoise source through the recorded 
 
 - repository: `even-realities/EvenDemoApp`;
 - commit: `3899aac2b39ce969582cf6eb96ecb36be3e0e9e6`;
-- tree: `bc593f9b23ce9a49ead8b5652181639157032572`;
+- root tree: `bc593f9b23ce9a49ead8b5652181639157032572`;
 - commit time: `2026-06-09T08:27:17Z`;
 - GitHub signature state: unsigned/unverified.
 
-This is an exact import-custody anchor, not a claim that Even Realities authored the underlying codecs. The direct projects remain `google/liblc3` and `xiph/rnnoise`, with their declared licenses and suppliers recorded in `third_party/native-components.json`.
+The commit/root-tree pair was observed through the upstream GitHub Git Data API and is also recorded in `UPSTREAM.md`. Those two external objects are **not present** in the current repository object database, so an offline local validator cannot honestly re-derive their commit-to-tree binding. The manifest records that limitation explicitly and requires live external revalidation during an independent supply-chain review.
+
+The imported component subtrees and blobs listed below are present in the current repository object database. Those are recomputed locally and form the enforceable repository-custody boundary.
+
+The exact snapshot is an import anchor, not a claim that Even Realities authored the underlying codecs. The direct projects remain `google/liblc3` and `xiph/rnnoise`, with declared licenses and suppliers recorded in `third_party/native-components.json`.
 
 The exact direct-upstream commit/tag used by the demo import was not preserved. The repository therefore retains `version=NOASSERTION` and `revision=NOASSERTION` for those direct components. Similarity to a current or historical upstream file is not sufficient to invent a revision. A direct revision may be added only after a separately reviewed forensic match proves every imported object, or after a controlled upgrade replaces the custody baseline with a known direct-upstream release.
 
 ## 2. Exact repository object map
 
-The machine manifest verifies the following directory objects against Git rather than trusting prose:
+The machine manifest verifies the following locally available directory objects against Git rather than trusting prose:
 
 | Unit | Import object | Current object | Exact local delta |
 |---|---|---|---|
@@ -50,15 +54,16 @@ These blob identities establish exactly which integration files moved after impo
 
 1. strict UTF-8 JSON with duplicate-key and non-finite-number rejection;
 2. a closed manifest shape and fixed repository/import identity;
-3. the import commit object, its tree binding and truthful unverified signature state;
-4. exact direct-component IDs without invented versions or revisions;
-5. canonical repository paths with no symlink traversal;
-6. availability and type of every Git commit/tree/blob object;
-7. equality between each declared current object and `HEAD:<path>`;
-8. complete recomputation of every tree delta, including mode and blob IDs;
-9. exact current/import identity for every integration file;
-10. consistency between the component inventory and provenance manifest;
-11. an explicit evidence ceiling that preserves supplier, legal, vulnerability, binary and physical qualification as separate work.
+3. truthful separation between the externally observed commit/root tree and the locally available imported subtrees/blobs;
+4. a unique `UPSTREAM.md` binding for the external repository, commit and root tree;
+5. exact direct-component IDs without invented versions or revisions;
+6. canonical repository paths with no symlink traversal;
+7. availability and type of every locally claimed Git tree/blob object;
+8. equality between each declared current object and `HEAD:<path>`;
+9. complete recomputation of every tree delta, including mode and blob IDs;
+10. exact current/import identity for every integration file;
+11. consistency between the component inventory and provenance manifest;
+12. an explicit evidence ceiling that preserves external revalidation, supplier, legal, vulnerability, binary and physical qualification as separate work.
 
 Run:
 
@@ -97,6 +102,7 @@ A direct-upstream upgrade additionally requires:
 
 This source increment does **not** close the external `native-dependencies` gates. Remaining work includes:
 
+- independent live revalidation of the external EvenDemoApp commit/root-tree anchor;
 - recovering or replacing the unknown direct-upstream revisions;
 - independent license/legal review;
 - operated vulnerability monitoring and response timelines;
@@ -105,4 +111,4 @@ This source increment does **not** close the external `native-dependencies` gate
 - physical G1 speech/audio quality, latency, power, thermal and soak evidence;
 - independent security, privacy and safety assurance.
 
-The truthful improvement is narrower: the project now has exact repository custody from a fixed import snapshot and a mechanically complete local-delta inventory, instead of a prose-only statement that an unknown revision was imported.
+The truthful improvement is narrower: the project now has exact local Git-object custody for imported component subtrees and a mechanically complete local-delta inventory, while keeping the unavailable external and direct-upstream facts visibly unproven.
