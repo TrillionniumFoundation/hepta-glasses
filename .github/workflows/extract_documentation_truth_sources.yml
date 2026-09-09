@@ -1,0 +1,70 @@
+name: extract-exact-documentation-truth-sources
+
+on:
+  push:
+    branches:
+      - ops/main-protection-apply-20260909-v2
+
+permissions:
+  contents: read
+
+concurrency:
+  group: extract-documentation-truth-sources-0f34ddb7
+  cancel-in-progress: true
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EXPECTED_HEAD: 0f34ddb7a825c19d3b4fe17c1d319c8415d1cc8b
+      EXPECTED_TREE: 00851863c7a3da81a09a6e2ce4193181bd8dc4e6
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 0f34ddb7a825c19d3b4fe17c1d319c8415d1cc8b
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify exact source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_TREE"
+      - name: Stage bounded source packet
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 0755 packet/services/qualification
+          install -m 0644 services/qualification/documentation_truth.py packet/services/qualification/documentation_truth.py
+          install -m 0644 services/qualification/test_documentation_truth_live.py packet/services/qualification/test_documentation_truth_live.py
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path('packet')
+          files = []
+          for path in sorted(root.rglob('*.py')):
+              raw = path.read_bytes()
+              files.append({
+                  'path': path.relative_to(root).as_posix(),
+                  'sha256': hashlib.sha256(raw).hexdigest(),
+                  'size': len(raw),
+              })
+          (root / 'source-identity.json').write_text(
+              json.dumps({
+                  'repository': 'TrillionniumFoundation/hepta-glasses',
+                  'head': '0f34ddb7a825c19d3b4fe17c1d319c8415d1cc8b',
+                  'tree': '00851863c7a3da81a09a6e2ce4193181bd8dc4e6',
+                  'files': files,
+              }, sort_keys=True, separators=(',', ':')) + '\n',
+              encoding='utf-8',
+          )
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: documentation-truth-sources-0f34ddb7
+          path: packet
+          if-no-files-found: error
+          retention-days: 1
