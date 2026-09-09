@@ -1,0 +1,277 @@
+name: hepta-main-exact-source-audit
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-pr111-audit-20260909-v1'
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: hepta-main-exact-source-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Wait for protected PR 101 adoption and audit exact main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import io
+          import json
+          import os
+          import stat
+          import time
+          import urllib.parse
+          import urllib.request
+          import zipfile
+          from pathlib import PurePosixPath
+
+          repo = os.environ['GH_REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          api = 'https://api.github.com'
+          jobs_expected = {
+              'repository-contracts', 'flutter', 'android-native', 'ios-native',
+              'native-sanitizers', 'secret-and-boundary-scan', 'source-evidence',
+          }
+          members_expected = {
+              'source-evidence-summary.json', 'source-gate-result.json',
+              'source-history-scan.json', 'source-native-sanitizer.json',
+              'source-provenance.json', 'source-release-bundle.json',
+              'source-sbom.spdx.json',
+          }
+
+          def call(path, method='GET', body=None):
+              raw = None if body is None else json.dumps(body, separators=(',', ':')).encode()
+              request = urllib.request.Request(
+                  api + path,
+                  data=raw,
+                  method=method,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'User-Agent': 'hepta-main-exact-source-audit/1',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      **({'Content-Type': 'application/json'} if raw is not None else {}),
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=45) as response:
+                  payload = response.read()
+                  return response.status, response.headers, payload
+
+          def get(path):
+              _, _, raw = call(path)
+              return json.loads(raw)
+
+          def pairs(items):
+              result = {}
+              for key, value in items:
+                  if key in result:
+                      raise ValueError(f'duplicate JSON member: {key}')
+                  result[key] = value
+              return result
+
+          def reject(value):
+              raise ValueError(f'non-finite JSON value: {value}')
+
+          def strict(raw):
+              return json.loads(
+                  raw.decode('utf-8'),
+                  object_pairs_hook=pairs,
+                  parse_constant=reject,
+              )
+
+          def comment(body):
+              call(f'/repos/{repo}/issues/82/comments', 'POST', {'body': body})
+
+          pr101 = None
+          deadline = time.monotonic() + 15 * 60
+          while time.monotonic() < deadline:
+              pr101 = get(f'/repos/{repo}/pulls/101')
+              if pr101['state'] == 'closed' and pr101.get('merged') is True:
+                  break
+              time.sleep(20)
+          if pr101 is None or pr101['state'] != 'closed' or pr101.get('merged') is not True:
+              comment(
+                  '## Exact `main` source audit — NOT STARTED\n\n'
+                  'PR #101 was not merged through the protected path during this admission window. '
+                  '`main` was not credited with the staged source work and no main Artifact claim is made.'
+              )
+              raise SystemExit(0)
+
+          merge_sha = pr101.get('merge_commit_sha')
+          main_head = get(f'/repos/{repo}/git/ref/heads/main')['object']['sha']
+          if not merge_sha:
+              raise SystemExit('merged PR #101 has no merge commit SHA')
+          comparison = get(f'/repos/{repo}/compare/{merge_sha}...{main_head}')
+          if comparison['status'] not in {'ahead', 'identical'}:
+              raise SystemExit('main no longer contains the PR #101 merge commit')
+
+          run = None
+          deadline = time.monotonic() + 25 * 60
+          while time.monotonic() < deadline:
+              current_main = get(f'/repos/{repo}/git/ref/heads/main')['object']['sha']
+              if current_main != main_head:
+                  raise SystemExit(f'main moved during audit: {main_head} -> {current_main}')
+              runs = get(
+                  f'/repos/{repo}/actions/workflows/ci.yml/runs?branch=main&per_page=50'
+              )['workflow_runs']
+              matches = [
+                  item for item in runs
+                  if item.get('head_sha') == main_head and item.get('event') == 'push'
+              ]
+              if matches:
+                  candidate = max(
+                      matches,
+                      key=lambda item: (item['run_number'], item['run_attempt']),
+                  )
+                  if candidate['status'] == 'completed':
+                      run = candidate
+                      break
+              time.sleep(20)
+          if run is None:
+              raise SystemExit('no completed exact-main canonical run')
+          if run['conclusion'] != 'success':
+              raise SystemExit(f"exact-main canonical run failed: {run['html_url']}")
+
+          jobs = get(
+              f"/repos/{repo}/actions/runs/{run['id']}/jobs?per_page=100"
+          )['jobs']
+          if (
+              len(jobs) != 7
+              or {job['name'] for job in jobs} != jobs_expected
+              or any(
+                  job['status'] != 'completed'
+                  or job['conclusion'] != 'success'
+                  or not job.get('steps')
+                  for job in jobs
+              )
+          ):
+              raise SystemExit(f"exact-main canonical job set failed: {[job['name'] for job in jobs]}")
+
+          tree = get(f'/repos/{repo}/commits/{main_head}')['commit']['tree']['sha']
+          artifacts = get(
+              f"/repos/{repo}/actions/runs/{run['id']}/artifacts?per_page=100"
+          )['artifacts']
+          expected_name = f'hepta-source-evidence-{main_head}'
+          matches = [
+              item for item in artifacts
+              if item['name'] == expected_name and not item['expired']
+          ]
+          if len(matches) != 1:
+              raise SystemExit(f'exact-main Artifact count differs: {len(matches)}')
+          artifact = matches[0]
+          archives = []
+          for _ in range(2):
+              _, _, raw = call(
+                  f"/repos/{repo}/actions/artifacts/{artifact['id']}/zip"
+              )
+              archives.append(raw)
+          if archives[0] != archives[1]:
+              raise SystemExit('two exact-main Artifact downloads differ')
+          archive = archives[0]
+          digest = hashlib.sha256(archive).hexdigest()
+          if artifact.get('digest') not in {None, f'sha256:{digest}'}:
+              raise SystemExit('exact-main Artifact server digest differs')
+
+          with zipfile.ZipFile(io.BytesIO(archive)) as package:
+              infos = package.infolist()
+              names = [info.filename for info in infos]
+              if (
+                  len(names) != 7
+                  or len(set(names)) != 7
+                  or set(names) != members_expected
+                  or package.testzip() is not None
+              ):
+                  raise SystemExit(f'exact-main Artifact inventory/CRC failed: {names}')
+              raw_members = {}
+              for info in infos:
+                  path = PurePosixPath(info.filename)
+                  mode = (info.external_attr >> 16) & 0xFFFF
+                  if (
+                      path.is_absolute()
+                      or '..' in path.parts
+                      or '\\' in info.filename
+                      or '\x00' in info.filename
+                      or info.is_dir()
+                      or (mode != 0 and not stat.S_ISREG(mode))
+                  ):
+                      raise SystemExit(f'unsafe exact-main member: {info.filename}')
+                  raw_members[info.filename] = package.read(info)
+
+          objects = {name: strict(raw) for name, raw in raw_members.items()}
+          digests = {
+              name: hashlib.sha256(raw).hexdigest()
+              for name, raw in raw_members.items()
+          }
+          summary = objects['source-evidence-summary.json']
+          gate = objects['source-gate-result.json']
+          history = objects['source-history-scan.json']
+          native = objects['source-native-sanitizer.json']
+          provenance = objects['source-provenance.json']
+          release_document = objects['source-release-bundle.json']
+          release = release_document.get('source', release_document)
+          sbom = objects['source-sbom.spdx.json']
+          checks = {
+              'summary_identity': summary.get('commit') == main_head and summary.get('tree') == tree,
+              'summary_crossdigests': summary.get('native_sanitizer_digest') == digests['source-native-sanitizer.json'] and summary.get('provenance_digest') == digests['source-provenance.json'] and summary.get('sbom_digest') == digests['source-sbom.spdx.json'],
+              'gate': gate.get('mode') == 'source' and gate.get('passed') is True and gate.get('missing') == [] and len(gate.get('checks', {})) == 17 and all(gate.get('checks', {}).values()),
+              'history': history.get('head') == main_head and history.get('finding_count') == 0 and history.get('findings') == [] and history.get('unscanned_blob_count') == 0 and history.get('unscanned_blobs') == [] and history.get('unused_acknowledgement_count') == 0 and history.get('unused_acknowledgements') == [] and history.get('raw_finding_count') == history.get('acknowledged_finding_count') + history.get('finding_count'),
+              'native': native.get('passed') is True and native.get('android_lc3', {}).get('passed') is True and native.get('ios_lc3', {}).get('passed') is True and native.get('rnnoise', {}).get('passed') is True and native.get('lc3_cross_platform_parity') is True and native.get('android_lc3', {}).get('pcm_digest') == native.get('ios_lc3', {}).get('pcm_digest') and native.get('sanitizers') == ['address', 'undefined'],
+              'provenance': provenance.get('repository') == repo and provenance.get('commit') == main_head and provenance.get('tree') == tree and provenance.get('history_scan_digest') == digests['source-history-scan.json'] and provenance.get('native_sanitizer_digest') == digests['source-native-sanitizer.json'] and provenance.get('sbom_digest') == digests['source-sbom.spdx.json'],
+              'release': release.get('commit') == main_head and release.get('tree') == tree and len(release.get('ci_checks', [])) == 6 and all(item.get('conclusion') == 'success' for item in release.get('ci_checks', [])) and release.get('history_scan', {}).get('sha256') == digests['source-history-scan.json'] and release.get('native_sanitizer', {}).get('sha256') == digests['source-native-sanitizer.json'] and release.get('provenance', {}).get('sha256') == digests['source-provenance.json'] and release.get('sbom', {}).get('sha256') == digests['source-sbom.spdx.json'],
+              'sbom': sbom.get('spdxVersion') == 'SPDX-2.3' and sbom.get('dataLicense') == 'CC0-1.0' and sbom.get('name') == f'{repo}@{main_head}' and main_head in sbom.get('documentNamespace', '') and all(any(checksum.get('algorithm') == 'SHA256' and len(checksum.get('checksumValue', '')) == 64 for checksum in file.get('checksums', [])) for file in sbom.get('files', [])),
+              'no_transfer': all('evidence_transfer' not in item for item in (summary, provenance, release)),
+          }
+          failed = sorted(key for key, value in checks.items() if not value)
+          if failed:
+              raise SystemExit(f'exact-main Artifact checks failed: {failed}')
+
+          status, _, raw = call(
+              f'/repos/{repo}/contents/evidence/external?ref={main_head}'
+          )
+          external_files = []
+          if status == 200:
+              external_files = sorted(
+                  item['name'] for item in json.loads(raw)
+                  if item.get('type') == 'file'
+                  and item['name'] not in {'README.md', '.gitkeep'}
+              )
+          closure_receipt = 'accepted-global-closure.json' in external_files
+          body = (
+              '## Exact `main` source audit — PASSED\n\n'
+              f'`main@{main_head}` / tree `{tree}` passed canonical run `{run["id"]}` / #{run["run_number"]} with all seven non-empty jobs. '
+              f'Artifact `{artifact["id"]}` / `{expected_name}` was downloaded twice byte-identically and verified at SHA-256 `{digest}`. '
+              f'The safe seven-member inventory, strict JSON, exact commit/tree, 17/17 source gate, complete history, native parity/sanitizers, '
+              f'provenance/release cross-digests and SPDX 2.3 SBOM ({len(sbom.get("packages", []))} packages / {len(sbom.get("files", []))} files) passed. '
+              f'External evidence files beyond README: `{external_files}`; independently accepted global closure receipt present: `{closure_receipt}`.\n\n'
+              'This closes the repository-source adoption/qualification slice only. Provider, KMS/HSM, attestation, physical-device, vendor, assurance, signing, pilot, store and release gates remain open unless separately accepted by their issuing authorities.'
+          )
+          comment(body)
+          print(json.dumps({
+              'passed': True,
+              'main_head': main_head,
+              'tree': tree,
+              'run_id': run['id'],
+              'run_number': run['run_number'],
+              'artifact_id': artifact['id'],
+              'zip_sha256': digest,
+              'package_count': len(sbom.get('packages', [])),
+              'file_count': len(sbom.get('files', [])),
+              'external_files': external_files,
+              'closure_receipt': closure_receipt,
+          }, sort_keys=True))
+          PY
