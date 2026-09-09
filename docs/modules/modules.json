@@ -1,0 +1,1076 @@
+{
+  "schema_version": 1,
+  "registry_kind": "canonical-active-module-registry",
+  "scope": "Single active module truth for ownership, implementation references, engineering handoff, platform status, and evidence ceilings. Historical G8/G9/G10 registries are retained only as lineage records.",
+  "required_module_fields": [
+    "id",
+    "owner",
+    "lifecycle",
+    "profile",
+    "primary_document",
+    "platform_status",
+    "evidence_ceiling",
+    "source_roots",
+    "documentation",
+    "tests",
+    "contracts",
+    "external_gates"
+  ],
+  "modules": [
+    {
+      "id": "mobile-shell",
+      "owner": "mobile",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#mobile-shell",
+      "platform_status": "Flutter mobile shell targets Android and iOS and composes model, speech and mutation clients through process-local authenticated token-provider registries. Desktop/web directories are build scaffolding, not qualified product surfaces.",
+      "evidence_ceiling": "Source tests establish fail-closed startup, token-provider replacement and presentation behavior only; live login/revocation delivery, signing, accessibility/device matrices, store packaging and production rollout require external evidence.",
+      "source_roots": [
+        "lib/main.dart",
+        "lib/bootstrap/hepta_bootstrap.dart",
+        "lib/app.dart",
+        "lib/views",
+        "lib/controllers",
+        "lib/models",
+        "lib/utils",
+        "lib/runtime/authenticated_service_tokens.dart"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#mobile-shell",
+        "docs/development/MODULE_HANDOFF.md#mobile-shell",
+        "docs/development/AUTHENTICATED_MODEL_INGRESS.md"
+      ],
+      "tests": [
+        "test/widget_test.dart",
+        "test/runtime/even_ai_history_page_test.dart",
+        "test/runtime/authenticated_service_tokens_test.dart"
+      ],
+      "contracts": [
+        "schemas/display-card.schema.json"
+      ],
+      "external_gates": [
+        "release signing, store packaging, accessibility and device-matrix evidence"
+      ]
+    },
+    {
+      "id": "edge-runtime",
+      "owner": "runtime",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#edge-runtime",
+      "platform_status": "Runs in the Flutter edge process on both mobile platforms; physical effects are delegated to platform adapters.",
+      "evidence_ceiling": "Deterministic E1–E3 behavior is covered; production identity, physical-effect qualification and crash recovery on signed builds remain external.",
+      "source_roots": [
+        "lib/runtime/hepta_runtime.dart",
+        "lib/runtime/task_engine.dart",
+        "lib/runtime/device_effect_scheduler.dart",
+        "lib/runtime/display_composer.dart",
+        "lib/runtime/contracts.dart",
+        "lib/runtime/canonical_json.dart",
+        "lib/runtime/clock.dart",
+        "lib/runtime/runtime.dart"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#edge-runtime",
+        "docs/development/MODULE_HANDOFF.md#edge-runtime"
+      ],
+      "tests": [
+        "test/runtime/task_engine_test.dart",
+        "test/runtime/device_effect_scheduler_test.dart",
+        "test/runtime/display_composer_test.dart"
+      ],
+      "contracts": [
+        "contracts/hepta-glasses-runtime-v1.json",
+        "schemas/display-card.schema.json"
+      ],
+      "external_gates": [
+        "production identity-backed authority and physical effect qualification"
+      ]
+    },
+    {
+      "id": "policy-tool-gateway",
+      "owner": "runtime-security",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#policy-tool-gateway",
+      "platform_status": "Platform-neutral Dart policy obtains mutation leases only from the authenticated HTTPS authority or fails closed; native effects remain behind typed adapters.",
+      "evidence_ceiling": "The source proves request/lease/argument binding and dynamic token wiring; deployed issuer, attestation, user-presence/biometric facts and authoritative external reconcilers are not manufactured here.",
+      "source_roots": [
+        "lib/runtime/policy_engine.dart",
+        "lib/runtime/tool_gateway.dart",
+        "lib/runtime/mutation_authority.dart",
+        "lib/runtime/device_effect_result.dart",
+        "lib/runtime/strict_json.dart",
+        "lib/runtime/mutation_authority_http.dart"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#policy-tool-gateway",
+        "docs/development/MODULE_HANDOFF.md#policy-tool-gateway",
+        "docs/development/CRITICAL_TEST_DEPTH.md"
+      ],
+      "tests": [
+        "test/runtime/policy_engine_test.dart",
+        "test/runtime/tool_gateway_test.dart",
+        "test/runtime/tool_effect_semantics_test.dart",
+        "test/runtime/mutation_authority_test.dart",
+        "test/runtime/strict_json_test.dart",
+        "test/runtime/mutation_authority_http_test.dart",
+        "test/runtime/mutation_authority_conformance_test.dart"
+      ],
+      "contracts": [
+        "schemas/decision-lease.schema.json",
+        "schemas/tool-request.schema.json",
+        "schemas/tool-receipt.schema.json",
+        "contracts/conformance/mutation-authority-v1.json"
+      ],
+      "external_gates": [
+        "production issuer, attestation, biometric proof and authoritative reconcilers"
+      ]
+    },
+    {
+      "id": "audit-journal",
+      "owner": "runtime-security",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#audit-journal",
+      "platform_status": "Dart journal with Android Keystore and iOS Keychain/CryptoKit checkpoint authentication.",
+      "evidence_ceiling": "Local integrity is source-qualified; retention governance, trusted monotonic or remote roots, backup and incident evidence remain deployment concerns.",
+      "source_roots": [
+        "lib/runtime/audit_journal.dart",
+        "lib/runtime/audit_checkpoint_authenticator.dart",
+        "android/app/src/main/kotlin/com/example/demo_ai_even/security/AuditCheckpointSigner.kt",
+        "ios/Runner/AuditCheckpointSigner.swift",
+        "lib/runtime/privacy_safe_log.dart"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#audit-journal",
+        "docs/development/MODULE_HANDOFF.md#audit-journal"
+      ],
+      "tests": [
+        "test/runtime/audit_journal_test.dart",
+        "test/runtime/audit_journal_v3_test.dart"
+      ],
+      "contracts": [
+        "contracts/hepta-glasses-runtime-v1.json",
+        "contracts/release-gates-v1.json"
+      ],
+      "external_gates": [
+        "production retention, export, rotation, WORM or remote-root anchoring policy"
+      ]
+    },
+    {
+      "id": "g1-transport",
+      "owner": "device",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#g1-transport",
+      "platform_status": "Android and iOS implementations retain separate callback models but the same public authority identity.",
+      "evidence_ceiling": "Hostile source tests do not prove RF behavior, physical protocol compatibility, latency, power, thermal, soak or vendor authority.",
+      "source_roots": [
+        "lib/ble_manager.dart",
+        "lib/adapters/even_g1",
+        "lib/runtime/ble_request_slot.dart",
+        "lib/runtime/device_hal.dart",
+        "lib/runtime/dual_leg_coordinator.dart",
+        "lib/services/ble.dart",
+        "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth",
+        "ios/Runner/BluetoothManager.swift"
+      ],
+      "documentation": [
+        "docs/G1_BLE_CONNECTION.md",
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#g1-transport",
+        "docs/development/MODULE_HANDOFF.md#g1-transport"
+      ],
+      "tests": [
+        "test/runtime/ble_manager_authority_test.dart",
+        "test/runtime/ble_request_slot_test.dart",
+        "test/runtime/even_g1_transport_authority_test.dart",
+        "test/runtime/dual_leg_coordinator_test.dart",
+        "ios/RunnerTests/RunnerTests.swift",
+        "android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt"
+      ],
+      "contracts": [
+        "contracts/g1-ble-protocol-v1.json",
+        "schemas/glasses-event.schema.json"
+      ],
+      "external_gates": [
+        "physical Android/iOS G1 qualification and vendor protocol authority"
+      ]
+    },
+    {
+      "id": "g1-protocol-features",
+      "owner": "device-runtime",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#g1-protocol-features",
+      "platform_status": "Feature orchestration is Dart; native layers provide platform transport and audio primitives.",
+      "evidence_ceiling": "Source validates framing and retry safety, not vendor command authority or physical display/notification behavior.",
+      "source_roots": [
+        "lib/services/proto.dart",
+        "lib/services/evenai_proto.dart",
+        "lib/controllers/bmp_update_manager.dart",
+        "lib/services/features_services.dart",
+        "lib/services/text_service.dart",
+        "lib/views/features",
+        "lib/runtime/packet_codec.dart"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#g1-protocol-features",
+        "docs/G1_BLE_CONNECTION.md",
+        "docs/development/MODULE_HANDOFF.md#g1-protocol-features",
+        "docs/development/CRITICAL_TEST_DEPTH.md"
+      ],
+      "tests": [
+        "test/runtime/bmp_update_manager_test.dart",
+        "test/runtime/heartbeat_retry_contract_test.dart",
+        "test/runtime/tool_effect_semantics_test.dart",
+        "test/runtime/packet_codec_test.dart",
+        "test/runtime/packet_codec_contract_support.dart",
+        "test/runtime/packet_codec_generated_support.dart"
+      ],
+      "contracts": [
+        "contracts/g1-ble-protocol-v1.json",
+        "contracts/conformance/g1-packet-v1.json"
+      ],
+      "external_gates": [
+        "firmware command confirmation, readback support and physical display/notification qualification"
+      ]
+    },
+    {
+      "id": "assistant-speech",
+      "owner": "mobile-ai",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#assistant-speech",
+      "platform_status": "iOS uses system speech when permission, locale and device support are present. Android consumes right-leg G1 LC3 frames through a bounded, ticket-bound PCM-to-ASR session whose bootstrap and final response are bound to assistant generation, BLE generation and pair identity.",
+      "evidence_ceiling": "Source integration does not establish live speech tenancy, production identity/token delivery, retention/revocation operations or physical latency/accuracy/privacy qualification.",
+      "source_roots": [
+        "lib/services/evenai.dart",
+        "lib/runtime/assistant_session.dart",
+        "lib/runtime/model_gateway.dart",
+        "lib/services/api_services.dart",
+        "lib/services/api_services_deepseek.dart",
+        "ios/Runner/SpeechStreamRecognizer.swift",
+        "services/model_gateway/speech.py",
+        "services/model_gateway/speech_ingress.py"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#assistant-speech",
+        "docs/development/MODULE_HANDOFF.md#assistant-speech",
+        "docs/development/SPEECH_BOOTSTRAP_CUSTODY.md",
+        "docs/operations/SPEECH_BOOTSTRAP_RUNBOOK.md",
+        "docs/development/AUTHENTICATED_PRINCIPALS.md"
+      ],
+      "tests": [
+        "test/runtime/assistant_session_test.dart",
+        "test/runtime/model_gateway_test.dart",
+        "test/runtime/ios_speech_finalization_contract_test.dart",
+        "test/runtime/microphone_retry_contract_test.dart",
+        "services/model_gateway/test_speech_custody.py",
+        "services/model_gateway/test_speech_ingress.py"
+      ],
+      "contracts": [
+        "schemas/realtime-ticket.schema.json",
+        "schemas/display-card.schema.json"
+      ],
+      "external_gates": [
+        "Android PCM-to-ASR, production model/realtime tenancy and physical latency/privacy qualification"
+      ]
+    },
+    {
+      "id": "android-native",
+      "owner": "android",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#android-native",
+      "platform_status": "Android device target with LC3 decoding and authenticated, generation/pair-bound PCM-to-ASR source integration; provider activation remains fail closed without a runtime identity token and configured speech tenant.",
+      "evidence_ceiling": "Builds and tests are E3 at most; Play Integrity, signing, live speech-provider tenancy, OEM/device matrices and physical G1 evidence remain external.",
+      "source_roots": [
+        "android/app/src/main/kotlin",
+        "android/app/src/main/cpp",
+        "android/app/src/main/AndroidManifest.xml",
+        "android/app/build.gradle",
+        "android"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#android-native",
+        "docs/G1_BLE_CONNECTION.md",
+        "docs/development/MODULE_HANDOFF.md#android-native"
+      ],
+      "tests": [
+        "android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt",
+        "test/runtime/heartbeat_retry_contract_test.dart"
+      ],
+      "contracts": [
+        "contracts/g1-ble-protocol-v1.json",
+        "docs/PLATFORM_CAPABILITIES.json"
+      ],
+      "external_gates": [
+        "physical G1, Android ASR, signing, Play Integrity and release-device matrix"
+      ]
+    },
+    {
+      "id": "ios-native",
+      "owner": "ios",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#ios-native",
+      "platform_status": "iOS device and simulator builds; speech depends on permission, locale and device capability.",
+      "evidence_ceiling": "Simulator/XCTest does not establish signed-device, App Attest, battery, thermal, locale matrix or physical G1 qualification.",
+      "source_roots": [
+        "ios/Runner",
+        "ios/Runner.xcodeproj",
+        "ios"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#ios-native",
+        "docs/G1_BLE_CONNECTION.md",
+        "docs/development/MODULE_HANDOFF.md#ios-native"
+      ],
+      "tests": [
+        "ios/RunnerTests/RunnerTests.swift",
+        "test/runtime/ios_speech_finalization_contract_test.dart"
+      ],
+      "contracts": [
+        "contracts/g1-ble-protocol-v1.json",
+        "docs/PLATFORM_CAPABILITIES.json"
+      ],
+      "external_gates": [
+        "physical G1, locale/device speech qualification, App Attest and release signing"
+      ]
+    },
+    {
+      "id": "digital-twin",
+      "owner": "device",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#digital-twin",
+      "platform_status": "Pure Dart deterministic test component.",
+      "evidence_ceiling": "Supplies E2 behavior only and cannot prove firmware, RF, timing, power, thermal or hardware compatibility.",
+      "source_roots": [
+        "lib/simulator/g1_digital_twin.dart"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#digital-twin",
+        "docs/development/MODULE_HANDOFF.md#digital-twin"
+      ],
+      "tests": [
+        "test/runtime/g1_digital_twin_authority_test.dart",
+        "test/runtime/dual_leg_coordinator_test.dart"
+      ],
+      "contracts": [
+        "contracts/g1-ble-protocol-v1.json"
+      ],
+      "external_gates": [
+        "never substitutes for physical E5 evidence"
+      ]
+    },
+    {
+      "id": "model-gateway-service",
+      "owner": "ai-platform",
+      "lifecycle": "development_reference",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/development/DURABLE_MODEL_GATEWAY.md",
+      "platform_status": "Python provides authenticated framework-neutral ingress, SQLite v2 request custody and a fixed-endpoint text-only foreground Responses adapter; the Flutter client composes it through a runtime token-provider registry.",
+      "evidence_ceiling": "Source tests establish principal/body binding, local quota/idempotency/revocation and wire-contract behavior only; live identity/provider tenancy, retention, remote cancellation/recovery, encrypted metadata and independent qualification remain open.",
+      "source_roots": [
+        "services/model_gateway",
+        "services/model_gateway/responses_provider.py",
+        "services/model_gateway/recovery_inventory.py",
+        "services/model_gateway/model_ingress.py"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#model-gateway-service",
+        "services/model_gateway/README.md",
+        "docs/development/MODULE_HANDOFF.md#model-gateway-service",
+        "docs/development/DURABLE_MODEL_GATEWAY.md",
+        "docs/operations/DURABLE_MODEL_GATEWAY_RUNBOOK.md",
+        "docs/development/MODEL_RECOVERY_INVENTORY.md",
+        "docs/development/AUTHENTICATED_MODEL_INGRESS.md",
+        "docs/development/CRITICAL_TEST_DEPTH.md"
+      ],
+      "tests": [
+        "services/model_gateway/test_app.py",
+        "services/model_gateway/test_production.py",
+        "services/model_gateway/test_model_boundaries.py",
+        "services/model_gateway/test_responses_provider.py",
+        "services/model_gateway/test_model_send_admission.py",
+        "services/model_gateway/test_recovery_inventory.py",
+        "services/model_gateway/test_model_ingress.py",
+        "services/model_gateway/test_bounded_worker_determinism.py"
+      ],
+      "contracts": [
+        "contracts/control-plane-v1.json",
+        "contracts/durable-model-gateway-v2.json",
+        "contracts/hg0087-production-v1.json"
+      ],
+      "external_gates": [
+        "production provider tenancy, KMS secret reference, quotas, retention and observability"
+      ]
+    },
+    {
+      "id": "identity-control-plane",
+      "owner": "cloud-security",
+      "lifecycle": "development_reference",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/development/DURABLE_IDENTITY.md",
+      "platform_status": "Python provides SQLite durable identity, an authenticated signing-broker client, unified model/speech/mutation principals and a durable mutation-lease authority; Flutter consumes account token providers through fail-closed registries.",
+      "evidence_ceiling": "Source integration does not establish deployed KMS/HSM, Android/Apple attestation, lost-device recovery, durable downstream revoke delivery, active-pair service operation or independent acceptance.",
+      "source_roots": [
+        "services/control_plane/identity.py",
+        "services/control_plane/__init__.py",
+        "services/control_plane/durable_state.py",
+        "services/control_plane/durable_identity.py",
+        "services/control_plane/identity_authority.py",
+        "services/control_plane/authenticated_principals.py",
+        "services/control_plane/mutation_authority.py",
+        "services/control_plane/account_runtime.py"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#identity-control-plane",
+        "docs/operations/PRODUCTION_CONTROL_PLANE_RUNBOOK.md",
+        "docs/development/MODULE_HANDOFF.md#identity-control-plane",
+        "docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md",
+        "docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md",
+        "docs/development/DURABLE_IDENTITY.md",
+        "docs/operations/IDENTITY_AUTHORITY_RUNBOOK.md",
+        "docs/development/IDENTITY_ENROLLMENT_FRESHNESS.md",
+        "docs/development/AUTHENTICATED_PRINCIPALS.md",
+        "docs/development/MUTATION_AUTHORITY.md"
+      ],
+      "tests": [
+        "services/control_plane/test_identity.py",
+        "services/control_plane/test_durable_identity.py",
+        "services/control_plane/test_identity_authority.py",
+        "services/control_plane/test_identity_enrollment_freshness.py",
+        "services/control_plane/test_authenticated_principals.py",
+        "services/control_plane/test_mutation_authority.py",
+        "services/control_plane/test_account_runtime.py"
+      ],
+      "contracts": [
+        "contracts/control-plane-v1.json",
+        "schemas/access-token-claims.schema.json",
+        "contracts/realtime-speech-custody-v2.json",
+        "contracts/identity-authority-v1.json",
+        "contracts/hg0087-production-v1.json"
+      ],
+      "external_gates": [
+        "persistent database, KMS/HSM, platform attestation, multi-instance revocation and recovery drills"
+      ]
+    },
+    {
+      "id": "realtime-control-plane",
+      "owner": "cloud",
+      "lifecycle": "development_reference",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/development/REALTIME_ADMISSION.md",
+      "platform_status": "Python reference APIs plus SQLite realtime custody with an explicit trusted host clock, final admission-expiry checks and durable cleanup of expired activation results.",
+      "evidence_ceiling": "Local custody and deadline tests do not establish live provider exchange, authenticated ingress, session-lifetime enforcement, remote cleanup facts, anti-rollback or production latency.",
+      "source_roots": [
+        "services/control_plane/realtime.py",
+        "services/control_plane/durable_realtime.py",
+        "services/control_plane/realtime_recovery.py",
+        "services/control_plane/realtime_provider_binding.py"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#realtime-control-plane",
+        "docs/operations/REALTIME_AND_CAPABILITY_RUNBOOK.md",
+        "docs/development/MODULE_HANDOFF.md#realtime-control-plane",
+        "docs/development/HG0087_PRODUCTION_IMPLEMENTATION.md",
+        "docs/operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md",
+        "docs/development/REALTIME_ADMISSION.md",
+        "docs/operations/REALTIME_ADMISSION_RUNBOOK.md",
+        "docs/development/REALTIME_PROVIDER_BINDING.md"
+      ],
+      "tests": [
+        "services/control_plane/test_realtime.py",
+        "services/control_plane/test_durable_realtime.py",
+        "services/control_plane/test_realtime_custody.py",
+        "services/control_plane/test_realtime_admission.py",
+        "services/control_plane/test_realtime_recovery_budget.py",
+        "services/control_plane/test_realtime_result_custody.py",
+        "services/control_plane/test_realtime_provider_binding.py"
+      ],
+      "contracts": [
+        "contracts/control-plane-v1.json",
+        "schemas/realtime-ticket.schema.json",
+        "contracts/realtime-speech-custody-v2.json",
+        "contracts/realtime-admission-v1.json"
+      ],
+      "external_gates": [
+        "production realtime provider, OAuth registration, broker persistence and provider-side revoke"
+      ]
+    },
+    {
+      "id": "capability-control-plane",
+      "owner": "capabilities",
+      "lifecycle": "development_reference",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/development/DURABLE_CAPABILITIES.md",
+      "platform_status": "Python reference APIs plus SQLite intent/lease/readback custody and a Google Calendar single-event HTTPS adapter with final pre-POST authority revalidation; no authenticated production ingress is connected.",
+      "evidence_ceiling": "Local source and wire tests do not establish an OAuth consent/refresh vault, live provider ownership, encrypted payload custody, process isolation, independent review or product qualification.",
+      "source_roots": [
+        "services/control_plane/capabilities.py",
+        "services/control_plane/bounded_calls.py",
+        "services/control_plane/durable_capabilities.py",
+        "services/control_plane/google_calendar.py",
+        "services/control_plane/capability_suspension.py",
+        "services/control_plane/oauth_vault.py",
+        "services/control_plane/capability_payload_store.py"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#capability-control-plane",
+        "docs/operations/REALTIME_AND_CAPABILITY_RUNBOOK.md",
+        "docs/development/REFERENCE_RUNTIME_HARDENING.md",
+        "docs/development/MODULE_HANDOFF.md#capability-control-plane",
+        "docs/development/DURABLE_CAPABILITIES.md",
+        "docs/operations/DURABLE_CAPABILITY_RUNBOOK.md",
+        "docs/development/GOOGLE_CALENDAR_CAPABILITY.md",
+        "docs/operations/GOOGLE_CALENDAR_CAPABILITY_RUNBOOK.md",
+        "docs/development/CAPABILITY_REVOCATION_SAFETY.md"
+      ],
+      "tests": [
+        "services/control_plane/test_capabilities.py",
+        "services/control_plane/test_capability_boundaries.py",
+        "services/control_plane/test_durable_capabilities.py",
+        "services/control_plane/test_google_calendar.py",
+        "services/control_plane/test_capability_schema_integrity.py",
+        "services/control_plane/test_capability_suspension.py",
+        "services/control_plane/test_oauth_vault.py",
+        "services/control_plane/test_capability_payload_store.py"
+      ],
+      "contracts": [
+        "contracts/control-plane-v1.json",
+        "schemas/decision-lease.schema.json",
+        "schemas/tool-receipt.schema.json",
+        "contracts/capability-reference-v2.json",
+        "contracts/durable-capability-v1.json",
+        "contracts/google-calendar-capability-v1.json"
+      ],
+      "external_gates": [
+        "production OAuth adapters, opaque credential vault, authoritative receipts and timeout reconciliation"
+      ]
+    },
+    {
+      "id": "skills-registry",
+      "owner": "skills",
+      "lifecycle": "development_reference",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/development/SIGNED_SKILLS.md",
+      "platform_status": "Python legacy reference plus Linux Ed25519 package verification, exact inventory checks, SQLite consent/version/revocation, a restricted zero-egress R0 data VM and signed-log inclusion verification; arbitrary-code execution is not enabled.",
+      "evidence_ceiling": "Source checks establish signed-byte admission and restricted data execution only; arbitrary-code sandboxing, enforced nonempty egress, external publisher/log governance, authenticated consent and independent qualification remain open.",
+      "source_roots": [
+        "services/skills/registry.py",
+        "services/skills/__init__.py",
+        "services/skills/signed_package.py",
+        "services/skills/signed_registry.py",
+        "services/skills/signed_registry_schema.py",
+        "services/skills/data_vm.py",
+        "services/skills/package_transparency.py",
+        "services/skills/package_vault.py",
+        "services/skills/sandbox_runtime.py",
+        "services/skills/skill_service.py"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#skills-registry",
+        "docs/CAPABILITY_MODEL.md",
+        "docs/development/MODULE_HANDOFF.md#skills-registry",
+        "docs/development/SIGNED_SKILLS.md",
+        "docs/operations/SIGNED_SKILLS_RUNBOOK.md",
+        "docs/development/SIGNED_SKILL_SCHEMA_INTEGRITY.md",
+        "docs/operations/SIGNED_SKILL_SCHEMA_RUNBOOK.md",
+        "docs/development/DATA_SKILL_RUNTIME.md",
+        "docs/operations/DATA_SKILL_RUNTIME_RUNBOOK.md",
+        "docs/development/PACKAGE_TRANSPARENCY.md",
+        "docs/operations/PACKAGE_TRANSPARENCY_RUNBOOK.md"
+      ],
+      "tests": [
+        "services/skills/test_registry.py",
+        "services/skills/test_signed_registry.py",
+        "services/skills/test_signed_registry_schema.py",
+        "services/skills/test_data_vm.py",
+        "services/skills/test_package_transparency.py",
+        "services/skills/test_package_vault.py",
+        "services/skills/test_sandbox_runtime.py",
+        "services/skills/test_skill_service.py"
+      ],
+      "contracts": [
+        "schemas/skill-manifest.schema.json",
+        "contracts/signed-skill-package-v1.json",
+        "contracts/data-skill-runtime-v1.json",
+        "contracts/signed-skill-transparency-v1.json"
+      ],
+      "external_gates": [
+        "asymmetric trust roots, encrypted package store, execution sandbox and independent review"
+      ]
+    },
+    {
+      "id": "memory",
+      "owner": "privacy",
+      "lifecycle": "development_reference",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/development/DURABLE_MEMORY.md",
+      "platform_status": "Python includes a SQLite ciphertext-only durable Memory store with an external per-subject cipher/key-provider interface; Flutter answer history remains a separate default-off process-memory feature.",
+      "evidence_ceiling": "The repository fixture cipher is not a production key service; authenticated ingress, KMS/HSM-backed subject keys, backup anti-rollback, downstream deletion evidence and independent privacy qualification remain open.",
+      "source_roots": [
+        "services/skills/memory.py",
+        "lib/controllers/evenai_model_controller.dart",
+        "services/skills/durable_memory.py",
+        "services/skills/durable_memory_schema.py",
+        "services/skills/memory_service.py"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#memory",
+        "docs/PRIVACY_MODEL.md",
+        "docs/development/REFERENCE_RUNTIME_HARDENING.md",
+        "docs/development/MODULE_HANDOFF.md#memory",
+        "docs/development/DURABLE_MEMORY.md",
+        "docs/development/MEMORY_COMPONENT_IDENTITY.md"
+      ],
+      "tests": [
+        "services/skills/test_memory.py",
+        "test/runtime/even_ai_history_page_test.dart",
+        "services/qualification/test_history_consent_contract.py",
+        "services/skills/test_memory_boundaries.py",
+        "services/skills/test_durable_memory.py",
+        "services/skills/test_durable_memory_schema.py",
+        "services/skills/test_durable_memory_component_identity.py",
+        "services/skills/test_memory_service.py"
+      ],
+      "contracts": [
+        "schemas/memory-record.schema.json",
+        "contracts/durable-memory-v1.json"
+      ],
+      "external_gates": [
+        "encrypted persistent storage, deletion/backup drills, regional retention and independent privacy review"
+      ]
+    },
+    {
+      "id": "codex-worker",
+      "owner": "developer-platform",
+      "lifecycle": "development_reference",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "services/codex_worker/README.md",
+      "platform_status": "Linux source includes a fixed-executable task supervisor, bounded process/output/resource custody and an exact-domain HTTPS broker; it still requires an external OS isolation boundary for arbitrary code.",
+      "evidence_ceiling": "Source tests do not prove installed/authenticated Codex, namespaces/seccomp/cgroups, broker-exclusive egress, per-task identity, compromise containment or independently qualified deployment.",
+      "source_roots": [
+        "services/codex_worker"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#codex-worker",
+        "services/codex_worker/README.md",
+        "docs/development/MODULE_HANDOFF.md#codex-worker"
+      ],
+      "tests": [
+        "services/codex_worker/test_worker.py"
+      ],
+      "contracts": [
+        "services/codex_worker/policy.json"
+      ],
+      "external_gates": [
+        "deployed isolation, per-task identity, egress proxy, resource quotas and compromise exercise"
+      ]
+    },
+    {
+      "id": "mcp-adapter",
+      "owner": "developer-platform",
+      "lifecycle": "development_reference",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#mcp-adapter",
+      "platform_status": "Python stdio development adapter.",
+      "evidence_ceiling": "No production registration/authorization compatibility or live runtime connection is claimed.",
+      "source_roots": [
+        "adapters/mcp",
+        "adapters/__init__.py"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#mcp-adapter",
+        "adapters/mcp/README.md",
+        "docs/development/MODULE_HANDOFF.md#mcp-adapter"
+      ],
+      "tests": [
+        "adapters/mcp/test_mcp_server.py"
+      ],
+      "contracts": [
+        "schemas/tool-request.schema.json",
+        "schemas/tool-receipt.schema.json"
+      ],
+      "external_gates": [
+        "production registration and authorization profile if a mutating MCP surface is ever introduced"
+      ]
+    },
+    {
+      "id": "qualification-release",
+      "owner": "release",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#qualification-release",
+      "platform_status": "Python qualification validates HG-0087 source closure, module ownership, external-evidence and release contracts; the canonical workflow covers repository/services, Flutter, Android, iOS, native sanitizers, boundary/history scanning and exact-head source evidence.",
+      "evidence_ceiling": "E0–E4 never manufacture physical, deployed, independent assurance, signing, pilot or store evidence.",
+      "source_roots": [
+        "services/qualification",
+        "tools/qualify_device_trace.py",
+        "tools/build_source_evidence.py",
+        "tools/evaluate_release_gate.py",
+        "tools/run_native_sanitizers.sh",
+        "tools/scan_git_history.py",
+        "evidence/templates",
+        "services/__init__.py",
+        "tools/__init__.py",
+        "test",
+        "tools/validate_release_version.py",
+        "tools/verify_source_archive_receipt.py",
+        "tools/validate_external_closure_program.py"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#qualification-release",
+        "docs/operations/DEVICE_QUALIFICATION_RUNBOOK.md",
+        "docs/operations/RELEASE_AND_ROLLBACK_RUNBOOK.md",
+        "docs/development/MODULE_HANDOFF.md#qualification-release",
+        "docs/development/RELEASE_VERSIONING.md",
+        "docs/development/SOURCE_ARTIFACT_ARCHIVAL.md",
+        "docs/EXTERNAL_CLOSURE_PROGRAM.json",
+        "docs/operations/EXTERNAL_CLOSURE_ORCHESTRATION.md"
+      ],
+      "tests": [
+        "services/qualification/test_device_report.py",
+        "services/qualification/test_release_gate.py",
+        "services/qualification/test_history_scan.py",
+        "services/qualification/test_history_object_scope.py",
+        "services/qualification/test_g10_structured_controls.py",
+        "services/qualification/test_hg0087_source_status.py",
+        "services/qualification/test_release_version.py",
+        "services/qualification/test_source_artifact_archive_receipt.py",
+        "services/qualification/test_external_closure_program.py"
+      ],
+      "contracts": [
+        "contracts/qualification-slo-v1.json",
+        "contracts/release-gates-v1.json",
+        "schemas/device-qualification-report.schema.json",
+        "schemas/release-evidence-bundle.schema.json",
+        "contracts/release-versioning-v1.json",
+        "schemas/source-artifact-archive-receipt.schema.json",
+        "schemas/external-closure-program.schema.json"
+      ],
+      "external_gates": [
+        "physical traces, independent assurance, signing, pilot, rollout, rollback and store approval"
+      ]
+    },
+    {
+      "id": "contracts-compatibility",
+      "owner": "architecture",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#contracts-compatibility",
+      "platform_status": "Contracts span Dart/Python and native adapters; vector coverage does not imply deployed consumer compatibility.",
+      "evidence_ceiling": "Source conformance is not production rollout, backward compatibility telemetry or provider/vendor certification.",
+      "source_roots": [
+        "contracts",
+        "schemas",
+        "contracts/conformance",
+        "services/qualification/cross_language_json_reference.py",
+        "services/qualification/g1_packet_reference.py"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#contracts-compatibility",
+        "docs/development/MODULE_HANDOFF.md#contracts-compatibility",
+        "docs/development/CRITICAL_TEST_DEPTH.md",
+        "docs/development/RELEASE_VERSIONING.md",
+        "docs/development/SOURCE_ARTIFACT_ARCHIVAL.md"
+      ],
+      "tests": [
+        "tools/validate_repository.py",
+        "tools/validate_repository_metadata.py",
+        "services/qualification/test_cross_language_conformance.py",
+        "test/runtime/canonical_json_conformance_test.dart",
+        "services/qualification/test_mutation_authority_conformance.py",
+        "services/qualification/test_release_version.py",
+        "services/qualification/test_source_artifact_archive_receipt.py"
+      ],
+      "contracts": [
+        "contracts/hepta-glasses-runtime-v1.json",
+        "contracts/control-plane-v1.json",
+        "contracts/g1-ble-protocol-v1.json",
+        "contracts/release-gates-v1.json",
+        "contracts/conformance/canonical-json-v1.json",
+        "contracts/conformance/g1-packet-v1.json",
+        "contracts/conformance/mutation-authority-v1.json",
+        "contracts/release-versioning-v1.json",
+        "schemas/source-artifact-archive-receipt.schema.json"
+      ],
+      "external_gates": [
+        "consumer/provider compatibility evidence when contracts are deployed across independently versioned services"
+      ]
+    },
+    {
+      "id": "repository-governance",
+      "owner": "repository-admin",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#repository-governance",
+      "platform_status": "GitHub repository governance plus deterministic local validators.",
+      "evidence_ceiling": "Source cannot apply/read inaccessible administrator settings, issue an independent review or merge itself.",
+      "source_roots": [
+        ".github",
+        "tools/repository_governance.py",
+        "docs/GAP_LEDGER.yaml",
+        "docs/EVIDENCE_INDEX.yaml",
+        "docs/MODULES.json",
+        "tools/validate_source_coverage.py",
+        "tools/repository_snapshot.py",
+        "docs/MODULE_COVERAGE.json",
+        "tools/validate_module_handoff.py",
+        "docs/MODULE_HANDOFF.json",
+        "tools/server_provider_boundary.py",
+        "tools/generate_module_docs.py",
+        "tools/validate_module_semantics.py"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#repository-governance",
+        "docs/operations/REPOSITORY_GOVERNANCE_RUNBOOK.md",
+        "docs/development/SOURCE_COVERAGE_AND_STATE.md",
+        "docs/development/2026-09-03_BLOCKER_EXECUTION_PLAN.md",
+        "docs/development/MODULE_HANDOFF.md#repository-governance",
+        "docs/development/MODULE_HANDOFF.md",
+        "docs/development/SERVER_PROVIDER_BOUNDARY.md",
+        "docs/modules/README.md",
+        "docs/modules/modules.json"
+      ],
+      "tests": [
+        "services/qualification/test_governance.py",
+        "tools/validate_repository.py",
+        "tools/validate_repository_metadata.py",
+        "services/qualification/test_source_coverage.py",
+        "services/qualification/test_module_handoff.py",
+        "services/qualification/test_handoff_status_drift.py",
+        "services/qualification/test_server_provider_boundary.py",
+        "services/qualification/test_calendar_provider_boundary.py",
+        "services/qualification/test_module_semantic_docs.py"
+      ],
+      "contracts": [
+        "contracts/main-branch-protection-v1.json",
+        "contracts/server-provider-boundary-v1.json"
+      ],
+      "external_gates": [
+        "administrator-applied and API-verified branch protection plus eligible latest-head approval"
+      ]
+    },
+    {
+      "id": "native-dependencies",
+      "owner": "native-tooling",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/MODULE_DEVELOPMENT_GUIDE.md#native-dependencies",
+      "platform_status": "C/C++/Objective-C code compiled in Android and iOS paths.",
+      "evidence_ceiling": "Sanitizers and source digests do not prove exact upstream provenance, CVE response, binary reproducibility or physical audio quality.",
+      "source_roots": [
+        "android/app/src/main/cpp",
+        "ios/Runner/PcmConverter.h",
+        "ios/Runner/PcmConverter.m",
+        "tools/native",
+        "third_party"
+      ],
+      "documentation": [
+        "docs/MODULE_DEVELOPMENT_GUIDE.md#native-dependencies",
+        "docs/development/MODULE_HANDOFF.md#native-dependencies"
+      ],
+      "tests": [
+        "tools/run_native_sanitizers.sh"
+      ],
+      "contracts": [
+        "contracts/release-gates-v1.json"
+      ],
+      "external_gates": [
+        "supplier/version confirmation, license review, vulnerability response and binary provenance"
+      ]
+    },
+    {
+      "id": "external-evidence-authentication",
+      "owner": "release-security",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/development/G9_TERMINAL_EXTERNAL_CLOSURE.md",
+      "platform_status": "Python trusted verifier on a controlled POSIX host.",
+      "evidence_ceiling": "The repository cannot create real issuer authority, out-of-band pin administration, independent acceptance or the facts described by external evidence.",
+      "source_roots": [
+        "tools/external_evidence",
+        "tools/external_evidence/snapshot_io.py",
+        "tools/external_evidence/signing_io.py",
+        "tools/external_evidence/signing.py",
+        "tools/validate_external_evidence.py",
+        "tools/sign_external_evidence.py",
+        "evidence/external",
+        "evidence/templates/external-evidence-bundle.template.json",
+        "evidence/templates/external-authority-trust-registry.template.json"
+      ],
+      "documentation": [
+        "docs/development/G9_TERMINAL_EXTERNAL_CLOSURE.md",
+        "docs/development/G9_FILESYSTEM_CUSTODY_HARDENING.md",
+        "docs/adr/ADR-0004-external-evidence-authentication.md",
+        "docs/adr/ADR-0006-external-evidence-filesystem-custody.md",
+        "docs/adr/ADR-0007-evidence-object-identity-and-bounded-custody.md",
+        "evidence/external/README.md",
+        "docs/development/MODULE_HANDOFF.md#external-evidence-authentication"
+      ],
+      "tests": [
+        "services/qualification/external_evidence_test_support.py",
+        "services/qualification/test_external_evidence.py",
+        "services/qualification/test_external_evidence_adversarial.py",
+        "services/qualification/test_external_evidence_json_safety.py",
+        "services/qualification/test_external_evidence_key_alias.py",
+        "services/qualification/test_external_evidence_key_type.py",
+        "services/qualification/test_external_evidence_repository.py",
+        "services/qualification/test_external_evidence_review_order.py",
+        "services/qualification/test_external_evidence_scoped_snapshot.py",
+        "services/qualification/test_external_evidence_filesystem_hardening.py",
+        "services/qualification/test_external_evidence_signature_time.py",
+        "services/qualification/test_external_evidence_signing.py",
+        "services/qualification/test_external_evidence_signer_custody.py",
+        "services/qualification/test_external_evidence_signing_boundaries.py",
+        "services/qualification/test_external_evidence_snapshot.py",
+        "services/qualification/test_g9_metadata.py"
+      ],
+      "contracts": [
+        "contracts/external-evidence-envelope-v1.json",
+        "schemas/external-evidence-envelope.schema.json",
+        "schemas/external-authority-trust-registry.schema.json"
+      ],
+      "external_gates": [
+        "out-of-band trust-registry administration and digest distribution",
+        "proof of possession and authority for every enrolled issuer and reviewer key",
+        "real physical, provider, administrator, vendor, assurance, signing, pilot and store evidence"
+      ]
+    },
+    {
+      "id": "latest-head-ci-custody",
+      "owner": "quality-gates",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/adr/ADR-0005-latest-head-ci-concurrency.md",
+      "platform_status": "GitHub Actions hosted runners.",
+      "evidence_ceiling": "CI custody cannot guarantee administrator protection settings, independent approval, physical/deployed evidence or merge authorization.",
+      "source_roots": [
+        ".github/workflows/ci.yml",
+        "tools/validate_production_authority.py"
+      ],
+      "documentation": [
+        "docs/adr/ADR-0005-latest-head-ci-concurrency.md",
+        "docs/development/G8_PRODUCTION_AUTHORITY_CLOSURE.md",
+        "docs/development/MODULE_HANDOFF.md#latest-head-ci-custody"
+      ],
+      "tests": [
+        "services/qualification/test_ci_latest_head_custody.py",
+        "tools/validate_production_authority.py"
+      ],
+      "contracts": [
+        "contracts/release-gates-v1.json",
+        "contracts/main-branch-protection-v1.json"
+      ],
+      "external_gates": [
+        "GitHub-hosted runner availability",
+        "administrator cancellation of runs created before the PR-level concurrency rule",
+        "branch protection that requires all seven canonical contexts"
+      ]
+    },
+    {
+      "id": "authority-quorum-review-integrity",
+      "owner": "release-security",
+      "lifecycle": "source_candidate",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+      "platform_status": "Trusted POSIX verifier host with a controlled OS/runtime boundary.",
+      "evidence_ceiling": "Closes repository validation semantics only; real authorities, reviewers, trusted-host operation and evidence facts remain independently controlled.",
+      "source_roots": [
+        "tools/external_evidence/complete_closure.py",
+        "tools/external_evidence/authority_seat_policy.py",
+        "tools/external_evidence/repository_admission.py",
+        "tools/external_evidence/semantic_binding.py",
+        "tools/external_evidence/runtime_policy.py",
+        "tools/external_evidence/openssl_policy.py",
+        "tools/external_evidence/lexical_scope_policy.py",
+        "tools/external_evidence/signing_custody_policy.py",
+        "tools/external_evidence/cli.py",
+        "tools/external_evidence/__init__.py",
+        "tools/validate_external_evidence.py",
+        "tools/external_evidence/committed_snapshot.py"
+      ],
+      "documentation": [
+        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+        "docs/development/G10_AUTHORITY_SEAT_AND_REPOSITORY_ADMISSION_HARDENING.md",
+        "docs/development/G10_TRUSTED_VERIFIER_AND_CONTRACT_BINDING.md",
+        "docs/development/G10_LEXICAL_VALIDATION_CUSTODY.md",
+        "docs/development/G10_SIGNING_TRANSACTION_CUSTODY.md",
+        "docs/adr/ADR-0008-authority-quorum-and-review-set-integrity.md",
+        "docs/adr/ADR-0009-trusted-verifier-and-contract-content-binding.md",
+        "docs/adr/ADR-0010-lexical-validation-custody.md",
+        "evidence/external/README.md",
+        "docs/development/MODULE_HANDOFF.md#authority-quorum-review-integrity",
+        "docs/development/ADMISSION_CONTINUITY.md"
+      ],
+      "tests": [
+        "services/qualification/external_evidence_test_support.py",
+        "services/qualification/test_external_evidence.py",
+        "services/qualification/test_external_evidence_adversarial.py",
+        "services/qualification/test_external_evidence_authority_seat_scope.py",
+        "services/qualification/test_external_evidence_complete_closure.py",
+        "services/qualification/test_external_evidence_contract_binding.py",
+        "services/qualification/test_external_evidence_entrypoint_snapshot.py",
+        "services/qualification/test_external_evidence_lexical_scope_policy.py",
+        "services/qualification/test_external_evidence_runtime_policy.py",
+        "services/qualification/test_external_evidence_signing_transaction.py",
+        "services/qualification/test_external_evidence_review_order.py",
+        "services/qualification/test_external_evidence_repository.py",
+        "services/qualification/test_external_evidence_repository_admission.py",
+        "services/qualification/test_g9_metadata.py",
+        "services/qualification/test_g10_metadata.py",
+        "services/qualification/test_committed_snapshot.py",
+        "services/qualification/test_committed_snapshot_signed.py"
+      ],
+      "contracts": [
+        "contracts/external-evidence-envelope-v1.json",
+        "schemas/external-evidence-envelope.schema.json",
+        "schemas/external-authority-trust-registry.schema.json"
+      ],
+      "external_gates": [
+        "out-of-band trust-registry administration and digest distribution",
+        "real authority participation for every required issuer class",
+        "final reviewer roster selection and independent acceptance",
+        "protected CI pin for every committed accepted envelope",
+        "trusted verifier host, correct system clock, root-owned immutable /usr/bin/openssl and controlled operating-system runtime dependencies",
+        "physical, provider, administrator, vendor, assurance, signing, pilot and store evidence"
+      ]
+    },
+    {
+      "id": "agent-os-plugin",
+      "owner": "developer-platform",
+      "lifecycle": "development_reference",
+      "profile": "engineering-handoff-v1",
+      "primary_document": "plugins/hepta-glasses-agent-os/DEVELOPMENT.md",
+      "platform_status": "Host-plugin development integration with relative Python stdio launch.",
+      "evidence_ceiling": "No host compatibility, production authorization, runtime connectivity or physical effect is established by source packaging.",
+      "source_roots": [
+        "plugins/hepta-glasses-agent-os"
+      ],
+      "documentation": [
+        "plugins/hepta-glasses-agent-os/DEVELOPMENT.md",
+        "docs/development/MODULE_HANDOFF.md#agent-os-plugin"
+      ],
+      "tests": [
+        "services/qualification/test_source_coverage.py",
+        "adapters/mcp/test_mcp_server.py"
+      ],
+      "contracts": [
+        "plugins/hepta-glasses-agent-os/.mcp.json",
+        "schemas/tool-request.schema.json",
+        "schemas/tool-receipt.schema.json"
+      ],
+      "external_gates": [
+        "Host plugin installation and compatibility qualification; no physical effects or production credentials permitted"
+      ]
+    }
+  ],
+  "ownership_overrides": {
+    "android/app/src/main/cpp": "native-dependencies",
+    "tools/validate_external_evidence.py": "authority-quorum-review-integrity"
+  }
+}

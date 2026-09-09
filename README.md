@@ -31,6 +31,18 @@ Any successor commit—including documentation-only changes—must run all seven
 - `docs/MODULE_HANDOFF.json` and `docs/development/MODULE_HANDOFF.md` — primary technical handoff for all registered modules.
 - `contracts/conformance/canonical-json-v1.json` — shared Dart/Python canonical JSON vectors.
 
+<!-- module-controls:index:start -->
+## Active module and closure controls
+
+- `docs/modules/modules.json` — single active module ownership and handoff registry.
+- `docs/modules/README.md` — per-module engineering documentation index.
+- `docs/EXTERNAL_CLOSURE_PROGRAM.json` — machine-readable Administration, provider, device, assurance, firmware, signing, pilot, and store closure program.
+- `docs/development/RELEASE_VERSIONING.md` — source-version and promotion authority.
+- `docs/development/SOURCE_ARTIFACT_ARCHIVAL.md` — durable exact-head source-evidence custody.
+
+Generated module pages and closure records do not elevate source into deployed, physical, independently assured, signed, piloted, store-approved, or released status.
+<!-- module-controls:index:end -->
+
 ## Architecture boundary
 
 ```text

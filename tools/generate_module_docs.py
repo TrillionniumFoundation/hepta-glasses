@@ -246,9 +246,12 @@ def render_module(module: dict[str, Any]) -> str:
     external = "\n".join(f"- {value}" for value in module["external_gates"])
     return f"""# `{module['id']}` module engineering handoff
 
-Canonical registry digest: `{digest}`  
-Owner: `{module['owner']}`  
-Lifecycle: `{module['lifecycle']}`  
+Canonical registry digest: `{digest}`
+
+Owner: `{module['owner']}`
+
+Lifecycle: `{module['lifecycle']}`
+
 Profile: `{module['profile']}`
 
 This generated handoff is a module-specific navigation and consistency surface. It does not replace the owner-authored primary document `{module['primary_document']}` or manufacture deployment, physical-device, provider, signing, assurance, pilot, store, or release evidence.

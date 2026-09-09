@@ -24,6 +24,19 @@
 
 The live pull-request head and Git tree identify the active source object. A copied SHA in prose is descriptive only. `CLOSED_SOURCE` does not promote source into deployed, physical, independently assured, signed, piloted, store-approved, or released status.
 
+<!-- module-controls:docs-index:start -->
+## Active module and closure controls
+
+1. `modules/modules.json` — single active module registry; older layered registries are historical lineage.
+2. `modules/README.md` — 26 module-specific engineering handoff pages.
+3. `EXTERNAL_CLOSURE_PROGRAM.json` — authority-owned gate inventory and exact evidence requirements.
+4. `operations/EXTERNAL_CLOSURE_ORCHESTRATION.md` — operator workflow for authentic E5–E7 closure.
+5. `development/RELEASE_VERSIONING.md` — repository version and promotion contract.
+6. `development/SOURCE_ARTIFACT_ARCHIVAL.md` — externally signed Artifact archival and revalidation.
+
+Run the generator and semantic validator before proposing a registry, module, contract, or closure-program change.
+<!-- module-controls:docs-index:end -->
+
 ## Layered machine truth
 
 ### G9 authenticated evidence and latest-head custody
