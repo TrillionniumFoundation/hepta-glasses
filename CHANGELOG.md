@@ -20,6 +20,7 @@ This file records repository version objects. An entry is not a production-relea
 
 - No provider master key, OAuth refresh token, signing key, unrestricted shell, or test-only mutation authority is admitted into the consumer mobile release surface.
 - Timeouts after a possible side effect remain indeterminate and require authoritative reconciliation rather than blind replay.
+- Branch-protection admission now requires exact GitHub Actions app-bound checks, last-push approval, empty bypass allowances, and every declared top-level policy field; the administration CLI rejects stale post-apply snapshots and non-strict JSON.
 
 ### Qualification ceiling
 
