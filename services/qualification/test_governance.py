@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -180,6 +181,24 @@ class GovernanceTest(unittest.TestCase):
                 result = evaluate_branch_protection(snapshot, self.contract())
                 self.assertFalse(result.passed)
 
+    def test_bypass_allowances_reject_type_confusion(self) -> None:
+        for invalid in (None, "", {}, 0, False):
+            with self.subTest(invalid=invalid):
+                snapshot = self.snapshot()
+                reviews = snapshot["required_pull_request_reviews"]
+                assert isinstance(reviews, dict)
+                reviews["bypass_pull_request_allowances"] = {
+                    "users": invalid,
+                    "teams": [],
+                    "apps": [],
+                }
+                result = evaluate_branch_protection(
+                    snapshot,
+                    self.contract(),
+                )
+                self.assertFalse(result.passed)
+                self.assertIn("no_pull_request_bypass", result.missing)
+
     def test_every_top_level_policy_field_is_enforced(self) -> None:
         mutations = {
             "enforce_admins": {"enabled": False},
@@ -234,6 +253,66 @@ class GovernanceTest(unittest.TestCase):
                 result = evaluate_branch_protection(self.snapshot(), contract)
                 self.assertFalse(result.passed)
                 self.assertEqual(result.missing, ("contract_shape",))
+
+    def test_committed_contract_matches_canonical_fixture(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        committed = governance_cli.read_json_object(
+            root / "contracts/main-branch-protection-v1.json",
+            "committed_contract",
+        )
+        self.assertEqual(committed, self.contract())
+        result = evaluate_branch_protection(self.snapshot(), committed)
+        self.assertTrue(result.passed, result.missing)
+
+    def test_api_payload_rejects_weakened_contract(self) -> None:
+        contract = self.contract()
+        contract["enforce_admins"] = False
+        with self.assertRaises(governance_cli.GovernanceInputError):
+            governance_cli.branch_protection_payload(contract)
+
+    def test_apply_rejects_noncanonical_contract_before_network(self) -> None:
+        contract = self.contract()
+        contract["enforce_admins"] = False
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "weakened.json"
+            path.write_text(json.dumps(contract), encoding="utf-8")
+            with patch.dict(
+                "os.environ",
+                {"HEPTA_REPO_ADMIN_TOKEN": "redacted-test-token"},
+            ):
+                with patch(
+                    "sys.argv",
+                    [
+                        "repository_governance.py",
+                        "--apply",
+                        "--contract",
+                        str(path),
+                    ],
+                ):
+                    with patch.object(
+                        governance_cli,
+                        "request_json",
+                    ) as request:
+                        self.assertEqual(governance_cli.main(), 2)
+                        request.assert_not_called()
+
+    def test_noncanonical_target_is_rejected_before_network(self) -> None:
+        with patch(
+            "sys.argv",
+            [
+                "repository_governance.py",
+                "--repo",
+                "other/repository",
+                "--branch",
+                "main",
+            ],
+        ):
+            with patch.object(
+                governance_cli,
+                "request_json",
+            ) as request:
+                self.assertEqual(governance_cli.main(), 2)
+                request.assert_not_called()
 
     def test_api_payload_uses_checks_without_redundant_contexts(self) -> None:
         contract = self.contract()

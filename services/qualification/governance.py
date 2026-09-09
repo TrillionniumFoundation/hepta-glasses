@@ -105,12 +105,20 @@ def _empty_actor_allowances(value: Any, *, allow_absent: bool) -> bool:
         return True
     if not isinstance(value, Mapping) or set(value) != _ACTOR_ALLOWANCE_KEYS:
         return False
-    return all(
-        len(_sequence(value.get(key))) == 0 for key in _ACTOR_ALLOWANCE_KEYS
-    )
+    for key in _ACTOR_ALLOWANCE_KEYS:
+        actors = value.get(key)
+        if not isinstance(actors, Sequence) or isinstance(
+            actors, (str, bytes, bytearray)
+        ):
+            return False
+        if len(actors) != 0:
+            return False
+    return True
 
 
-def _contract_shape_is_canonical(contract: Mapping[str, Any]) -> bool:
+def is_canonical_branch_protection_contract(
+    contract: Mapping[str, Any],
+) -> bool:
     if set(contract) != _CONTRACT_KEYS:
         return False
 
@@ -164,7 +172,7 @@ def evaluate_branch_protection(
 ) -> GovernanceResult:
     """Evaluate one complete GitHub branch-protection readback fail closed."""
 
-    if not _contract_shape_is_canonical(contract):
+    if not is_canonical_branch_protection_contract(contract):
         return GovernanceResult(passed=False, checks={"contract_shape": False})
 
     required_status = _mapping(snapshot.get("required_status_checks"))

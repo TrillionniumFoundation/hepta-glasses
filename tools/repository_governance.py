@@ -22,10 +22,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from services.qualification.governance import evaluate_branch_protection
+from services.qualification.governance import (
+    evaluate_branch_protection,
+    is_canonical_branch_protection_contract,
+)
 
 
 API_VERSION = "2022-11-28"
+CANONICAL_REPOSITORY = "TrillionniumFoundation/hepta-glasses"
+CANONICAL_BRANCH = "main"
 MAX_JSON_BYTES = 1024 * 1024
 
 
@@ -101,6 +106,8 @@ def read_json_object(
 def branch_protection_payload(contract: dict[str, Any]) -> dict[str, Any]:
     """Project the closed repository contract onto GitHub's PUT payload."""
 
+    if not is_canonical_branch_protection_contract(contract):
+        raise GovernanceInputError("protection_contract_noncanonical")
     payload = json.loads(
         json.dumps(
             contract,
@@ -174,8 +181,8 @@ def _emit(document: dict[str, Any], *, stderr: bool = False) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--repo", default="TrillionniumFoundation/hepta-glasses")
-    parser.add_argument("--branch", default="main")
+    parser.add_argument("--repo", default=CANONICAL_REPOSITORY)
+    parser.add_argument("--branch", default=CANONICAL_BRANCH)
     parser.add_argument(
         "--contract",
         type=Path,
@@ -187,11 +194,23 @@ def main() -> int:
 
     if args.apply and args.snapshot is not None:
         parser.error("--apply cannot be combined with --snapshot")
+    if (
+        args.repo != CANONICAL_REPOSITORY
+        or args.branch != CANONICAL_BRANCH
+    ):
+        _emit({"ok": False, "error": "canonical_target_required"}, stderr=True)
+        return 2
 
     try:
         contract = read_json_object(args.contract, "protection_contract")
     except GovernanceInputError as error:
         _emit({"ok": False, "error": str(error)}, stderr=True)
+        return 2
+    if not is_canonical_branch_protection_contract(contract):
+        _emit(
+            {"ok": False, "error": "protection_contract_noncanonical"},
+            stderr=True,
+        )
         return 2
 
     token = os.environ.get("HEPTA_REPO_ADMIN_TOKEN", "")

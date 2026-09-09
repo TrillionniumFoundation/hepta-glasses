@@ -42,6 +42,10 @@ HEPTA_REPO_ADMIN_TOKEN='<short-lived-token>' \
 python3 tools/repository_governance.py --apply
 ```
 
+Before any HTTP request, the CLI rejects a noncanonical repository/branch
+target and validates the complete closed-world contract. It cannot mutate the
+repository with a weakened or malformed policy.
+
 `--apply` removes only the redundant repository-side `contexts` index, sends
 the canonical app-bound `checks` payload, and then performs a fresh API GET of
 the same branch-protection endpoint. It never accepts an offline snapshot as
