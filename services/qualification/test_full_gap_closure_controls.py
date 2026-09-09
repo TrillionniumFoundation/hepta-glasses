@@ -35,6 +35,11 @@ EXPECTED_OPEN_ISSUES = {
     102,
 }
 
+MODULE_AUDIT_NONCOMPLETION = (
+    "No row in this author-prepared audit is accepted as "
+    "`SEMANTIC_COMPLETE_SOURCE`."
+)
+
 
 class FullGapClosureControlTests(unittest.TestCase):
     def read(self, relative: str) -> str:
@@ -60,6 +65,50 @@ class FullGapClosureControlTests(unittest.TestCase):
         )
         self.assertIsInstance(value, dict, relative)
         return value
+
+    def module_identifiers(self) -> list[str]:
+        registry = self.read_json("docs/modules/modules.json")
+        modules = registry["modules"]
+        self.assertIsInstance(modules, list)
+        assert isinstance(modules, list)
+        self.assertEqual(len(modules), 26)
+        identifiers: list[str] = []
+        for module in modules:
+            self.assertIsInstance(module, dict)
+            assert isinstance(module, dict)
+            identifier = module.get("id")
+            self.assertIsInstance(identifier, str)
+            assert isinstance(identifier, str)
+            identifiers.append(identifier)
+        self.assertEqual(len(identifiers), len(set(identifiers)))
+        return identifiers
+
+    def assert_module_audit_contract(
+        self,
+        audit: str,
+        identifiers: list[str],
+    ) -> None:
+        rows = re.findall(
+            r"^\| `([^`]+)` \| `([A-Z_]+)` \|",
+            audit,
+            re.MULTILINE,
+        )
+        self.assertEqual(len(rows), 26)
+        self.assertEqual({identifier for identifier, _ in rows}, set(identifiers))
+        self.assertEqual({state for _, state in rows}, {"SEMANTIC_PARTIAL"})
+        self.assertIn(MODULE_AUDIT_NONCOMPLETION, audit)
+        self.assertIn(
+            "exact independent module-specific review bindings required by the standard are not yet recorded",
+            audit,
+        )
+        self.assertNotRegex(
+            audit,
+            r"^\| `[^`]+` \| `SEMANTIC_COMPLETE_SOURCE` \|",
+        )
+        self.assertIn(
+            "an eligible independent reviewer compares the document against the exact source",
+            audit,
+        )
 
     def test_control_files_are_present_and_indexed(self) -> None:
         root_readme = self.read("README.md")
@@ -142,36 +191,36 @@ class FullGapClosureControlTests(unittest.TestCase):
         self.assertEqual(len(rows), len(EXPECTED_OPEN_ISSUES))
         self.assertIn("coordination surface", board)
         self.assertIn("never replaces GitHub API state", board)
-        self.assertIn("does not have Repository Administration permission", board)
+        self.assertIn("does not provide Repository Administration permission", board)
+        self.assertIn(
+            "re-read the live authenticated actor, current PR author, current most recent source pusher",
+            board,
+        )
+        self.assertIn(
+            "compare the live reviewer identity against the live PR author and most recent source pusher",
+            board,
+        )
+        self.assertNotIn(
+            "The authenticated identity is also the author of PR #114",
+            board,
+        )
 
-    def test_module_depth_audit_matches_canonical_registry(self) -> None:
-        registry = self.read_json("docs/modules/modules.json")
-        modules = registry["modules"]
-        self.assertIsInstance(modules, list)
-        assert isinstance(modules, list)
-        self.assertEqual(len(modules), 26)
-        identifiers = []
-        for module in modules:
-            self.assertIsInstance(module, dict)
-            assert isinstance(module, dict)
-            identifier = module.get("id")
-            self.assertIsInstance(identifier, str)
-            identifiers.append(identifier)
-        self.assertEqual(len(identifiers), len(set(identifiers)))
-
+    def test_module_depth_audit_matches_canonical_registry_without_promotion(self) -> None:
+        identifiers = self.module_identifiers()
         audit = self.read(
             "docs/development/MODULE_DOCUMENTATION_DEPTH_AUDIT_2026-09-09.md"
         )
-        rows = re.findall(
-            r"^\| `([^`]+)` \| `(?:SEMANTIC_PARTIAL|SEMANTIC_COMPLETE_SOURCE)` \|",
-            audit,
-            re.MULTILINE,
+        self.assert_module_audit_contract(audit, identifiers)
+
+    def test_module_depth_audit_negative_control_rejects_missing_contract(self) -> None:
+        identifiers = self.module_identifiers()
+        audit = self.read(
+            "docs/development/MODULE_DOCUMENTATION_DEPTH_AUDIT_2026-09-09.md"
         )
-        self.assertEqual(len(rows), 26)
-        self.assertEqual(set(rows), set(identifiers))
-        self.assertIn("SEMANTIC_PARTIAL", audit)
-        self.assertIn("SEMANTIC_COMPLETE_SOURCE", audit)
-        self.assertIn("does not replace", audit)
+        mutated = audit.replace(MODULE_AUDIT_NONCOMPLETION, "", 1)
+        self.assertNotEqual(mutated, audit)
+        with self.assertRaises(AssertionError):
+            self.assert_module_audit_contract(mutated, identifiers)
 
     def test_documentation_standard_requires_semantic_review(self) -> None:
         standard = self.read(
@@ -193,7 +242,19 @@ class FullGapClosureControlTests(unittest.TestCase):
         for heading in required:
             self.assertIn(heading, standard)
         self.assertIn("Document length is not an acceptance criterion", standard)
-        self.assertIn("independent reviewer", standard)
+        self.assertIn("PROVISIONAL_SUBSTANTIVE_ASSESSMENT", standard)
+        self.assertIn(
+            "Completion is an accepted evidence state, not a descriptive adjective",
+            standard,
+        )
+        self.assertIn(
+            "That review cannot retroactively certify every inherited module implementation",
+            standard,
+        )
+        self.assertIn(
+            "Without that record, a module remains `SEMANTIC_PARTIAL`",
+            standard,
+        )
 
     def test_source_deepening_work_packages_are_complete(self) -> None:
         packages = self.read(

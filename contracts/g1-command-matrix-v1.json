@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "contract_id": "hepta-g1-command-matrix-v1",
   "status": "source_contract_vendor_and_physical_confirmation_required",
   "transport": {
@@ -7,57 +7,265 @@
     "service_uuid": "6E400001-B5A3-F393-E0A9-E50E24DCCA9E",
     "phone_write_uuid": "6E400002-B5A3-F393-E0A9-E50E24DCCA9E",
     "phone_notify_uuid": "6E400003-B5A3-F393-E0A9-E50E24DCCA9E",
-    "request_owner": "connection_generation_plus_side_plus_command",
-    "effect_authority": "pair_identity_plus_connection_generation_plus_side_plus_caller_key_plus_payload_sha256"
+    "request_owner": [
+      "connection_generation",
+      "side",
+      "command"
+    ],
+    "effect_authority": [
+      "pair_identity",
+      "connection_generation",
+      "side",
+      "caller_idempotency_key",
+      "payload_sha256"
+    ]
   },
   "platform_initialization": [
     {
       "platform": "android",
-      "bytes": "[0xF4,0x01]",
-      "admission": "after_cccd_success_and_mtu_at_least_203",
-      "ready_rule": "native_write_accepted_before_leg_ready",
-      "source_ref": "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt",
-      "external_gate": "vendor firmware confirmation and physical trace"
+      "bytes": [
+        244,
+        1
+      ],
+      "admission_steps": [
+        "gatt_connected",
+        "services_and_characteristics_discovered",
+        "notification_descriptor_accepted",
+        "mtu_at_least_203"
+      ],
+      "ready_after": "initialization_write_accepted",
+      "source_binding_id": "android-audio-frame"
     },
     {
       "platform": "ios",
-      "bytes": "[0x4D,0x01]",
-      "admission": "after_notification_enabled",
-      "ready_rule": "bounded_write_path_accepts_before_leg_ready",
-      "source_ref": "ios/Runner/BluetoothManager.swift",
-      "external_gate": "vendor firmware confirmation and physical trace"
+      "bytes": [
+        77,
+        1
+      ],
+      "admission_steps": [
+        "peripheral_connected",
+        "services_and_characteristics_discovered",
+        "notification_enabled"
+      ],
+      "ready_after": "initialization_write_enqueued",
+      "source_binding_id": "ios-audio-frame"
     }
   ],
   "response_status": {
-    "success": "0xC9",
+    "accepted_continue": "0xCB",
     "failure": "0xCA",
-    "accepted_continue": "0xCB"
+    "success": "0xC9"
   },
-  "assistant_events": {
-    "0": "exit",
-    "1": "manual_page_left_previous_right_next",
-    "23": "assistant_start",
-    "24": "recording_complete"
-  },
+  "assistant_events": [
+    {
+      "index": 0,
+      "event": "exit"
+    },
+    {
+      "index": 1,
+      "event": "manual_page_left_previous_right_next"
+    },
+    {
+      "index": 23,
+      "event": "assistant_start"
+    },
+    {
+      "index": 24,
+      "event": "recording_complete"
+    }
+  ],
+  "source_bindings": [
+    {
+      "id": "android-audio-frame",
+      "path": "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt",
+      "required_fragments": [
+        "private const val REQUIRED_MTU = 203",
+        "private const val REQUESTED_MTU = 251",
+        "byteArrayOf(0xf4.toByte(), 0x01)",
+        "frame[0] == 0xF1.toByte()",
+        "side != \"R\" || frame.size != 202",
+        "frame.copyOfRange(2, 202)"
+      ]
+    },
+    {
+      "id": "bitmap-producer-consumer",
+      "path": "lib/controllers/bmp_update_manager.dart",
+      "required_fragments": [
+        "packetPayloadLength = 194",
+        "maximumPacketCount = 256",
+        "<int>[0x00, 0x1c, 0x00, 0x00]",
+        "const <int>[0x20, 0x0d, 0x0e]",
+        "response.data.length >= 2",
+        "response.data[1] == 0xc9",
+        "response.data.length >= 6",
+        "response.data[5] == 0xc9",
+        "return DeviceEffectResult.indeterminate("
+      ]
+    },
+    {
+      "id": "ble-correlation-and-events",
+      "path": "lib/ble_manager.dart",
+      "required_fragments": [
+        "if (command == 0xF5 && response.data.length > 1)",
+        "case 0:",
+        "case 1:",
+        "case 23:",
+        "case 24:",
+        "BleRequestKey(",
+        "generation: generation,",
+        "side: response.lr,",
+        "command: command,"
+      ]
+    },
+    {
+      "id": "ble-correlation-and-timeout",
+      "path": "lib/ble_manager.dart",
+      "required_fragments": [
+        "'ack_timeout_after_native_write'",
+        "effectMayHaveOccurred: true",
+        "response.effectMayHaveOccurred",
+        "'retry_budget_exhausted_before_write'"
+      ]
+    },
+    {
+      "id": "display-packet-producer",
+      "path": "lib/services/evenai_proto.dart",
+      "required_fragments": [
+        "int len = 191",
+        "byteData.setInt16(0, pos, Endian.big);",
+        "currentPageNumber,",
+        "maxPageNumber,"
+      ]
+    },
+    {
+      "id": "ios-audio-frame",
+      "path": "ios/Runner/BluetoothManager.swift",
+      "required_fragments": [
+        "Data([0x4d, 0x01])",
+        "guard data.count == 202 else { return }",
+        "data.subdata(in: 2..<data.count)",
+        "guard compressed.count == 200 else { return }",
+        "guard pcm.count == 3_200 else { return }"
+      ]
+    },
+    {
+      "id": "proto-command-producers",
+      "path": "lib/services/proto.dart",
+      "required_fragments": [
+        "Uint8List.fromList(<int>[0x0E, 0x01])",
+        "EvenaiProto.evenaiMultiPackListV2(",
+        "const length = 6;",
+        "Uint8List.fromList(<int>[0x18])",
+        "Uint8List.fromList(<int>[0x34])",
+        "count: 180,",
+        "const payloadBytes = 176;",
+        "if (packetCount > 255)"
+      ]
+    },
+    {
+      "id": "proto-effect-state-machine",
+      "path": "lib/services/proto.dart",
+      "required_fragments": [
+        "if (response.effectMayHaveOccurred) {",
+        "'ack_missing_after_native_write'",
+        "if (response.isTimeout) {",
+        "'request_rejected_before_write'",
+        "'negative_or_malformed_ack_after_write'",
+        "'dual_leg_partial_effect_indeterminate'",
+        "'packet_sequence_partial_effect_indeterminate'"
+      ]
+    },
+    {
+      "id": "proto-status-predicates",
+      "path": "lib/services/proto.dart",
+      "required_fragments": [
+        "data.length > 1 && (data[1] == 0xc9 || data[1] == 0xcb)",
+        "response.data.length > 5",
+        "response.data[0] == 0x25",
+        "response.data[4] == 0x04"
+      ]
+    }
+  ],
   "commands": [
     {
       "id": "microphone_on",
       "command": "0x0E",
-      "direction": "phone_to_glasses",
-      "target": "one_selected_leg_normally_right",
-      "mutation": true,
-      "request_layout": "[command:u8=0x0E, enable:u8=0x01]",
-      "response_layout": "correlated response with status at byte 1",
-      "max_packet_bytes": 2,
-      "max_payload_bytes": 1,
-      "packet_count_max": 1,
-      "acknowledgement": "status_byte_1_is_0xC9_or_0xCB",
-      "retry_semantics": "retry only after a typed pre-write rejection; timeout or malformed/negative response after possible native acceptance is indeterminate",
-      "readback": "unavailable_in_current_firmware_contract",
-      "source_refs": [
-        "lib/services/proto.dart",
-        "lib/services/evenai.dart",
-        "lib/ble_manager.dart"
+      "direction": "phone_to_glasses_request",
+      "operation_kind": "mutating_command",
+      "target": "selected_leg_default_right",
+      "aggregation": "single_leg",
+      "frame": {
+        "kind": "fixed_request",
+        "first_frame_min_bytes": 2,
+        "first_frame_max_bytes": 2,
+        "subsequent_frame_min_bytes": null,
+        "subsequent_frame_max_bytes": null,
+        "payload_offset_first": 1,
+        "payload_offset_subsequent": null,
+        "payload_min_bytes": 1,
+        "payload_max_bytes": 1,
+        "payload_encoding": "u8_enable",
+        "frame_count_kind": "single",
+        "maximum_frames": 1,
+        "unbounded_reason": null,
+        "fields": [
+          {
+            "name": "command",
+            "offset_first": 0,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 14,
+            "relation": null
+          },
+          {
+            "name": "enable",
+            "offset_first": 1,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 1,
+            "relation": null
+          }
+        ]
+      },
+      "response": {
+        "kind": "status_ack",
+        "minimum_bytes": 2,
+        "maximum_bytes": 200,
+        "checks": [
+          {
+            "kind": "byte_in",
+            "offset": 1,
+            "values": [
+              201,
+              203
+            ]
+          }
+        ],
+        "payload_offset": null,
+        "payload_bytes": null,
+        "event_index_offset": null,
+        "unbounded_reason": null
+      },
+      "effect": {
+        "pre_write_rejection": "no_effect_retryable_only_with_fresh_current_authority",
+        "post_write_timeout": "indeterminate_effect_may_have_occurred",
+        "malformed_response": "indeterminate_after_possible_native_acceptance",
+        "negative_response": "command_specific_failure_after_write_requires_reconciliation",
+        "partial_progress": "single_leg_has_no_cross_leg_aggregation",
+        "automatic_retry": "pre_write_rejection_only_within_explicit_budget",
+        "manual_retry": "reconcile_or_retire_exact_generation_before_new_authority"
+      },
+      "readback": {
+        "kind": "unavailable",
+        "authoritative_for_mutated_state": false,
+        "scope": "selected_leg_microphone_state"
+      },
+      "source_binding_ids": [
+        "proto-command-producers",
+        "proto-effect-state-machine",
+        "proto-status-predicates"
       ],
       "tests": [
         "test/runtime/microphone_retry_contract_test.dart",
@@ -65,216 +273,1267 @@
       ],
       "external_gates": [
         "vendor command confirmation",
-        "physical microphone-state and privacy-indicator qualification"
+        "physical microphone and privacy-indicator qualification"
+      ],
+      "producer_examples": [
+        {
+          "name": "microphone_enable",
+          "position": "first",
+          "bytes": [
+            14,
+            1
+          ]
+        }
+      ],
+      "consumer_examples": [
+        {
+          "name": "microphone_success",
+          "position": "response",
+          "bytes": [
+            14,
+            201
+          ]
+        },
+        {
+          "name": "microphone_continue",
+          "position": "response",
+          "bytes": [
+            14,
+            203
+          ]
+        }
       ]
     },
     {
       "id": "microphone_data",
       "command": "0xF1",
-      "direction": "glasses_to_phone",
-      "target": "right_leg_only_in_current_source",
-      "mutation": false,
-      "request_layout": "not_applicable_unsolicited_notification",
-      "response_layout": "[command:u8=0xF1, packet_sequence:u8, lc3_payload:200_bytes] total 202 bytes; decoded PCM must be 3200 bytes at 16 kHz mono signed-16",
-      "max_packet_bytes": 202,
-      "max_payload_bytes": 200,
-      "packet_count_max": null,
-      "acknowledgement": "none",
-      "retry_semantics": "drop malformed, wrong-side or stale generation/pair frames; never replay audio into a newer assistant session",
-      "readback": "not_applicable_stream_event",
-      "source_refs": [
-        "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt",
-        "ios/Runner/BluetoothManager.swift",
-        "android/app/src/main/cpp/liblc3.cpp",
-        "ios/Runner/PcmConverter.m"
+      "direction": "glasses_to_phone_event",
+      "operation_kind": "stream_event",
+      "target": "right_leg_only",
+      "aggregation": "stream_append",
+      "frame": {
+        "kind": "fixed_audio_event",
+        "first_frame_min_bytes": 202,
+        "first_frame_max_bytes": 202,
+        "subsequent_frame_min_bytes": null,
+        "subsequent_frame_max_bytes": null,
+        "payload_offset_first": 2,
+        "payload_offset_subsequent": null,
+        "payload_min_bytes": 200,
+        "payload_max_bytes": 200,
+        "payload_encoding": "lc3_16khz_mono",
+        "frame_count_kind": "continuous_stream",
+        "maximum_frames": null,
+        "unbounded_reason": "stream length is bounded per frame; stream frame count is session-bounded outside this packet",
+        "fields": [
+          {
+            "name": "command",
+            "offset_first": 0,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 241,
+            "relation": null
+          },
+          {
+            "name": "packet_sequence",
+            "offset_first": 1,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "lc3_payload",
+            "offset_first": 2,
+            "offset_subsequent": null,
+            "width_bytes": null,
+            "encoding": "opaque_lc3",
+            "constant": null,
+            "relation": null
+          }
+        ]
+      },
+      "response": {
+        "kind": "not_applicable_event",
+        "minimum_bytes": null,
+        "maximum_bytes": null,
+        "checks": [],
+        "payload_offset": null,
+        "payload_bytes": null,
+        "event_index_offset": null,
+        "unbounded_reason": null
+      },
+      "effect": {
+        "pre_write_rejection": "not_applicable_for_inbound_event",
+        "post_write_timeout": "not_applicable_for_inbound_event",
+        "malformed_response": "drop_malformed_or_wrong_scope_event",
+        "negative_response": "not_applicable_for_inbound_event",
+        "partial_progress": "never_publish_partial_or_stale_event_into_new_generation",
+        "automatic_retry": "never_replay_an_inbound_event",
+        "manual_retry": "not_applicable_for_inbound_event"
+      },
+      "readback": {
+        "kind": "not_applicable",
+        "authoritative_for_mutated_state": false,
+        "scope": "inbound_audio_event"
+      },
+      "source_binding_ids": [
+        "android-audio-frame",
+        "ios-audio-frame",
+        "ble-correlation-and-events"
       ],
       "tests": [
         "ios/RunnerTests/RunnerTests.swift",
-        "tools/run_native_sanitizers.sh",
-        "test/runtime/ios_speech_finalization_contract_test.dart"
+        "tools/run_native_sanitizers.sh"
       ],
       "external_gates": [
         "firmware framing confirmation",
-        "physical audio accuracy, latency, power, thermal and privacy qualification"
+        "physical audio accuracy latency power thermal and privacy qualification"
+      ],
+      "producer_examples": [],
+      "consumer_examples": [
+        {
+          "name": "lc3_frame",
+          "position": "event",
+          "bytes": [
+            241,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
       ]
     },
     {
       "id": "touch_and_assistant_event",
       "command": "0xF5",
-      "direction": "glasses_to_phone",
+      "direction": "glasses_to_phone_event",
+      "operation_kind": "control_event",
       "target": "originating_leg",
-      "mutation": false,
-      "request_layout": "not_applicable_unsolicited_notification",
-      "response_layout": "[command:u8=0xF5, event_index:u8, optional_vendor_payload] with event indices 0,1,23,24 handled by source",
-      "max_packet_bytes": null,
-      "max_payload_bytes": null,
-      "packet_count_max": null,
-      "acknowledgement": "none",
-      "retry_semantics": "reject unscoped, stale generation, stale pair or unknown-side events; unknown event indices are logged as bounded metadata",
-      "readback": "not_applicable_event",
-      "source_refs": [
-        "lib/ble_manager.dart",
-        "lib/services/evenai.dart"
+      "aggregation": "event_dispatch",
+      "frame": {
+        "kind": "variable_control_event",
+        "first_frame_min_bytes": 2,
+        "first_frame_max_bytes": null,
+        "subsequent_frame_min_bytes": null,
+        "subsequent_frame_max_bytes": null,
+        "payload_offset_first": 2,
+        "payload_offset_subsequent": null,
+        "payload_min_bytes": 0,
+        "payload_max_bytes": null,
+        "payload_encoding": "vendor_event_payload",
+        "frame_count_kind": "event",
+        "maximum_frames": null,
+        "unbounded_reason": "vendor payload length has no source-enforced maximum; transport MTU and vendor contract remain external gates",
+        "fields": [
+          {
+            "name": "command",
+            "offset_first": 0,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 245,
+            "relation": null
+          },
+          {
+            "name": "event_index",
+            "offset_first": 1,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "optional_vendor_payload",
+            "offset_first": 2,
+            "offset_subsequent": null,
+            "width_bytes": null,
+            "encoding": "opaque_vendor",
+            "constant": null,
+            "relation": null
+          }
+        ]
+      },
+      "response": {
+        "kind": "not_applicable_event",
+        "minimum_bytes": null,
+        "maximum_bytes": null,
+        "checks": [],
+        "payload_offset": null,
+        "payload_bytes": null,
+        "event_index_offset": 1,
+        "unbounded_reason": null
+      },
+      "effect": {
+        "pre_write_rejection": "not_applicable_for_inbound_event",
+        "post_write_timeout": "not_applicable_for_inbound_event",
+        "malformed_response": "drop_malformed_or_wrong_scope_event",
+        "negative_response": "not_applicable_for_inbound_event",
+        "partial_progress": "never_publish_partial_or_stale_event_into_new_generation",
+        "automatic_retry": "never_replay_an_inbound_event",
+        "manual_retry": "not_applicable_for_inbound_event"
+      },
+      "readback": {
+        "kind": "not_applicable",
+        "authoritative_for_mutated_state": false,
+        "scope": "inbound_control_event"
+      },
+      "source_binding_ids": [
+        "ble-correlation-and-events",
+        "ble-correlation-and-timeout",
+        "proto-effect-state-machine"
       ],
       "tests": [
         "test/runtime/ble_receive_test.dart",
         "test/runtime/assistant_session_test.dart"
       ],
       "external_gates": [
-        "vendor event enumeration and physical touch behavior"
+        "vendor event enumeration",
+        "physical touch and assistant behavior qualification"
+      ],
+      "producer_examples": [],
+      "consumer_examples": [
+        {
+          "name": "assistant_exit_event",
+          "position": "event",
+          "bytes": [
+            245,
+            0
+          ]
+        }
       ]
     },
     {
       "id": "display_text_and_ai",
       "command": "0x4E",
-      "direction": "phone_to_glasses",
-      "target": "left_then_right_pair",
-      "mutation": true,
-      "request_layout": "[command:u8=0x4E, sync_sequence:u8, packet_count:u8, packet_sequence:u8, new_screen:u8, position:i16_big_endian, current_page:u8, max_page:u8, utf8_payload:0..191_bytes]",
-      "response_layout": "one correlated ACK per packet and leg",
-      "max_packet_bytes": 200,
-      "max_payload_bytes": 191,
-      "packet_count_max": 255,
-      "acknowledgement": "status_byte_1_is_0xC9_or_0xCB",
-      "retry_semantics": "a pre-write rejection may retry within budget; any accepted packet followed by uncertainty makes the sequence or pair result indeterminate",
-      "readback": "unavailable_in_current_firmware_contract",
-      "source_refs": [
-        "lib/services/proto.dart",
-        "lib/services/evenai_proto.dart",
-        "lib/services/evenai.dart",
-        "lib/services/text_service.dart"
+      "direction": "phone_to_glasses_request",
+      "operation_kind": "mutating_command",
+      "target": "pair_left_then_right",
+      "aggregation": "pair_all_legs_required",
+      "frame": {
+        "kind": "fragmented_display",
+        "first_frame_min_bytes": 10,
+        "first_frame_max_bytes": 200,
+        "subsequent_frame_min_bytes": 10,
+        "subsequent_frame_max_bytes": 200,
+        "payload_offset_first": 9,
+        "payload_offset_subsequent": 9,
+        "payload_min_bytes": 1,
+        "payload_max_bytes": 191,
+        "payload_encoding": "utf8",
+        "frame_count_kind": "u8_packet_count",
+        "maximum_frames": 255,
+        "unbounded_reason": null,
+        "fields": [
+          {
+            "name": "command",
+            "offset_first": 0,
+            "offset_subsequent": 0,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 78,
+            "relation": null
+          },
+          {
+            "name": "sync_sequence",
+            "offset_first": 1,
+            "offset_subsequent": 1,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "packet_count",
+            "offset_first": 2,
+            "offset_subsequent": 2,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "packet_sequence",
+            "offset_first": 3,
+            "offset_subsequent": 3,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "new_screen",
+            "offset_first": 4,
+            "offset_subsequent": 4,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "position",
+            "offset_first": 5,
+            "offset_subsequent": 5,
+            "width_bytes": 2,
+            "encoding": "i16_be",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "current_page",
+            "offset_first": 7,
+            "offset_subsequent": 7,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "max_page",
+            "offset_first": 8,
+            "offset_subsequent": 8,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "utf8_payload",
+            "offset_first": 9,
+            "offset_subsequent": 9,
+            "width_bytes": null,
+            "encoding": "utf8",
+            "constant": null,
+            "relation": null
+          }
+        ]
+      },
+      "response": {
+        "kind": "status_ack",
+        "minimum_bytes": 2,
+        "maximum_bytes": 200,
+        "checks": [
+          {
+            "kind": "byte_in",
+            "offset": 1,
+            "values": [
+              201,
+              203
+            ]
+          }
+        ],
+        "payload_offset": null,
+        "payload_bytes": null,
+        "event_index_offset": null,
+        "unbounded_reason": null
+      },
+      "effect": {
+        "pre_write_rejection": "no_effect_retryable_only_with_fresh_current_authority",
+        "post_write_timeout": "indeterminate_effect_may_have_occurred",
+        "malformed_response": "indeterminate_after_possible_native_acceptance",
+        "negative_response": "command_specific_failure_after_write_requires_reconciliation",
+        "partial_progress": "accepted_packet_or_one_leg_only_makes_pair_result_indeterminate_or_degraded",
+        "automatic_retry": "pre_write_rejection_only_within_explicit_budget",
+        "manual_retry": "reconcile_or_retire_exact_generation_before_new_authority"
+      },
+      "readback": {
+        "kind": "unavailable",
+        "authoritative_for_mutated_state": false,
+        "scope": "display_state_for_exact_pair_generation"
+      },
+      "source_binding_ids": [
+        "display-packet-producer",
+        "proto-command-producers",
+        "proto-effect-state-machine"
       ],
       "tests": [
         "test/runtime/packet_codec_test.dart",
-        "test/runtime/tool_effect_semantics_test.dart",
-        "test/runtime/dual_leg_coordinator_test.dart"
+        "test/runtime/tool_effect_semantics_test.dart"
       ],
       "external_gates": [
         "vendor field semantics",
-        "physical display rendering and pagination qualification",
-        "authoritative display readback or reconciliation protocol"
+        "physical rendering pagination and authoritative readback qualification"
+      ],
+      "producer_examples": [
+        {
+          "name": "display_first",
+          "position": "first",
+          "bytes": [
+            78,
+            1,
+            2,
+            0,
+            1,
+            0,
+            0,
+            1,
+            2,
+            65
+          ]
+        },
+        {
+          "name": "display_subsequent",
+          "position": "subsequent",
+          "bytes": [
+            78,
+            1,
+            2,
+            1,
+            0,
+            0,
+            1,
+            2,
+            2,
+            66
+          ]
+        }
+      ],
+      "consumer_examples": [
+        {
+          "name": "display_success",
+          "position": "response",
+          "bytes": [
+            78,
+            201
+          ]
+        },
+        {
+          "name": "display_continue",
+          "position": "response",
+          "bytes": [
+            78,
+            203
+          ]
+        }
       ]
     },
     {
       "id": "bitmap_packet",
       "command": "0x15",
-      "direction": "phone_to_glasses",
-      "target": "one_leg_per_transfer_left_then_right_at_application_layer",
-      "mutation": true,
-      "request_layout": "first packet [command:u8=0x15, sequence:u8=0, storage_address:4_bytes=00_1C_00_00, payload:1..194_bytes]; later packet [command:u8=0x15, sequence:u8, payload:1..194_bytes]",
-      "response_layout": "no protocol ACK awaited for each data packet; native write acceptance only",
-      "max_packet_bytes": 200,
-      "max_payload_bytes": 194,
-      "packet_count_max": 256,
-      "acknowledgement": "native_write_acceptance_only_then_finish_and_crc_commands",
-      "retry_semantics": "first-packet native rejection is pre-write; rejection after any accepted packet is indeterminate and must not restart blindly",
-      "readback": "final CRC response only during the active transfer; unavailable after session",
-      "source_refs": [
-        "lib/controllers/bmp_update_manager.dart",
-        "lib/bootstrap/hepta_bootstrap.dart"
+      "direction": "phone_to_glasses_request",
+      "operation_kind": "mutating_command",
+      "target": "active_bitmap_leg",
+      "aggregation": "staged_single_leg_transfer",
+      "frame": {
+        "kind": "fragmented_bitmap",
+        "first_frame_min_bytes": 7,
+        "first_frame_max_bytes": 200,
+        "subsequent_frame_min_bytes": 3,
+        "subsequent_frame_max_bytes": 196,
+        "payload_offset_first": 6,
+        "payload_offset_subsequent": 2,
+        "payload_min_bytes": 1,
+        "payload_max_bytes": 194,
+        "payload_encoding": "bitmap_bytes",
+        "frame_count_kind": "u8_sequence_0_to_255",
+        "maximum_frames": 256,
+        "unbounded_reason": null,
+        "fields": [
+          {
+            "name": "command",
+            "offset_first": 0,
+            "offset_subsequent": 0,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 21,
+            "relation": null
+          },
+          {
+            "name": "packet_sequence",
+            "offset_first": 1,
+            "offset_subsequent": 1,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "storage_address",
+            "offset_first": 2,
+            "offset_subsequent": null,
+            "width_bytes": 4,
+            "encoding": "bytes",
+            "constant": [
+              0,
+              28,
+              0,
+              0
+            ],
+            "relation": null
+          },
+          {
+            "name": "bitmap_payload",
+            "offset_first": 6,
+            "offset_subsequent": 2,
+            "width_bytes": null,
+            "encoding": "opaque_bitmap",
+            "constant": null,
+            "relation": null
+          }
+        ]
+      },
+      "response": {
+        "kind": "native_acceptance_only",
+        "minimum_bytes": null,
+        "maximum_bytes": null,
+        "checks": [],
+        "payload_offset": null,
+        "payload_bytes": null,
+        "event_index_offset": null,
+        "unbounded_reason": null
+      },
+      "effect": {
+        "pre_write_rejection": "no_effect_retryable_only_with_fresh_current_authority",
+        "post_write_timeout": "indeterminate_effect_may_have_occurred",
+        "malformed_response": "indeterminate_after_possible_native_acceptance",
+        "negative_response": "command_specific_failure_after_write_requires_reconciliation",
+        "partial_progress": "accepted_prefix_of_transfer_makes_restart_indeterminate_until_new_authority",
+        "automatic_retry": "pre_write_rejection_only_within_explicit_budget",
+        "manual_retry": "reconcile_or_retire_exact_generation_before_new_authority"
+      },
+      "readback": {
+        "kind": "deferred_crc_only",
+        "authoritative_for_mutated_state": false,
+        "scope": "active_bitmap_transfer"
+      },
+      "source_binding_ids": [
+        "bitmap-producer-consumer",
+        "ble-correlation-and-timeout",
+        "proto-effect-state-machine"
       ],
       "tests": [
         "test/runtime/bmp_update_manager_test.dart",
         "test/runtime/tool_effect_semantics_test.dart"
       ],
       "external_gates": [
-        "vendor storage-address and sequencing confirmation",
-        "physical bitmap persistence and dual-leg consistency qualification"
-      ]
+        "vendor storage address and sequencing confirmation",
+        "physical persistence and dual-leg consistency qualification"
+      ],
+      "producer_examples": [
+        {
+          "name": "bitmap_first",
+          "position": "first",
+          "bytes": [
+            21,
+            0,
+            0,
+            28,
+            0,
+            0,
+            170
+          ]
+        },
+        {
+          "name": "bitmap_subsequent",
+          "position": "subsequent",
+          "bytes": [
+            21,
+            1,
+            187
+          ]
+        }
+      ],
+      "consumer_examples": []
     },
     {
       "id": "bitmap_finish",
       "command": "0x20",
-      "direction": "phone_to_glasses",
+      "direction": "phone_to_glasses_request",
+      "operation_kind": "mutating_command",
       "target": "active_bitmap_leg",
-      "mutation": true,
-      "request_layout": "[command:u8=0x20, constant:u8=0x0D, constant:u8=0x0E]",
-      "response_layout": "minimum 2 bytes with response command 0x20 and status byte 1",
-      "max_packet_bytes": 3,
-      "max_payload_bytes": 2,
-      "packet_count_max": 1,
-      "acknowledgement": "response_command_0x20_and_status_byte_1_is_0xC9",
-      "retry_semantics": "missing or malformed response after data transfer is indeterminate; never resend the full bitmap automatically",
-      "readback": "followed_by_bitmap_crc_within_active_transfer",
-      "source_refs": [
-        "lib/controllers/bmp_update_manager.dart"
+      "aggregation": "staged_single_leg_transfer",
+      "frame": {
+        "kind": "fixed_finish",
+        "first_frame_min_bytes": 3,
+        "first_frame_max_bytes": 3,
+        "subsequent_frame_min_bytes": null,
+        "subsequent_frame_max_bytes": null,
+        "payload_offset_first": 1,
+        "payload_offset_subsequent": null,
+        "payload_min_bytes": 2,
+        "payload_max_bytes": 2,
+        "payload_encoding": "constant_suffix",
+        "frame_count_kind": "single",
+        "maximum_frames": 1,
+        "unbounded_reason": null,
+        "fields": [
+          {
+            "name": "command",
+            "offset_first": 0,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 32,
+            "relation": null
+          },
+          {
+            "name": "finish_suffix",
+            "offset_first": 1,
+            "offset_subsequent": null,
+            "width_bytes": 2,
+            "encoding": "bytes",
+            "constant": [
+              13,
+              14
+            ],
+            "relation": null
+          }
+        ]
+      },
+      "response": {
+        "kind": "command_status_ack",
+        "minimum_bytes": 2,
+        "maximum_bytes": 200,
+        "checks": [
+          {
+            "kind": "byte_equals",
+            "offset": 0,
+            "values": [
+              32
+            ]
+          },
+          {
+            "kind": "byte_equals",
+            "offset": 1,
+            "values": [
+              201
+            ]
+          }
+        ],
+        "payload_offset": null,
+        "payload_bytes": null,
+        "event_index_offset": null,
+        "unbounded_reason": null
+      },
+      "effect": {
+        "pre_write_rejection": "no_effect_retryable_only_with_fresh_current_authority",
+        "post_write_timeout": "indeterminate_effect_may_have_occurred",
+        "malformed_response": "indeterminate_after_possible_native_acceptance",
+        "negative_response": "command_specific_failure_after_write_requires_reconciliation",
+        "partial_progress": "finish_after_data_is_indeterminate_on_missing_or_negative_response",
+        "automatic_retry": "pre_write_rejection_only_within_explicit_budget",
+        "manual_retry": "reconcile_or_retire_exact_generation_before_new_authority"
+      },
+      "readback": {
+        "kind": "followed_by_crc",
+        "authoritative_for_mutated_state": false,
+        "scope": "active_bitmap_transfer"
+      },
+      "source_binding_ids": [
+        "bitmap-producer-consumer",
+        "ble-correlation-and-timeout",
+        "proto-effect-state-machine"
       ],
       "tests": [
-        "test/runtime/bmp_update_manager_test.dart"
+        "test/runtime/bmp_update_manager_test.dart",
+        "test/runtime/tool_effect_semantics_test.dart"
       ],
       "external_gates": [
-        "vendor finish-command confirmation",
+        "vendor finish command confirmation",
         "physical interrupted-transfer recovery"
+      ],
+      "producer_examples": [
+        {
+          "name": "bitmap_finish_request",
+          "position": "first",
+          "bytes": [
+            32,
+            13,
+            14
+          ]
+        }
+      ],
+      "consumer_examples": [
+        {
+          "name": "bitmap_finish_success",
+          "position": "response",
+          "bytes": [
+            32,
+            201
+          ]
+        }
       ]
     },
     {
       "id": "bitmap_crc",
       "command": "0x16",
-      "direction": "phone_to_glasses",
+      "direction": "phone_to_glasses_request",
+      "operation_kind": "mutating_command",
       "target": "active_bitmap_leg",
-      "mutation": true,
-      "request_layout": "[command:u8=0x16, crc32_xz_over_storage_address_plus_image:u32_big_endian]",
-      "response_layout": "minimum 6 bytes with response command 0x16 and success status at byte 5",
-      "max_packet_bytes": 5,
-      "max_payload_bytes": 4,
-      "packet_count_max": 1,
-      "acknowledgement": "response_command_0x16_and_status_byte_5_is_0xC9",
-      "retry_semantics": "missing or negative CRC response after packet writes is indeterminate; reconcile or start a separately authorized new transfer",
-      "readback": "active_transfer_crc_only",
-      "source_refs": [
-        "lib/controllers/bmp_update_manager.dart"
+      "aggregation": "staged_single_leg_transfer",
+      "frame": {
+        "kind": "fixed_crc",
+        "first_frame_min_bytes": 5,
+        "first_frame_max_bytes": 5,
+        "subsequent_frame_min_bytes": null,
+        "subsequent_frame_max_bytes": null,
+        "payload_offset_first": 1,
+        "payload_offset_subsequent": null,
+        "payload_min_bytes": 4,
+        "payload_max_bytes": 4,
+        "payload_encoding": "u32_be_crc32_xz",
+        "frame_count_kind": "single",
+        "maximum_frames": 1,
+        "unbounded_reason": null,
+        "fields": [
+          {
+            "name": "command",
+            "offset_first": 0,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 22,
+            "relation": null
+          },
+          {
+            "name": "crc32_xz",
+            "offset_first": 1,
+            "offset_subsequent": null,
+            "width_bytes": 4,
+            "encoding": "u32_be",
+            "constant": null,
+            "relation": null
+          }
+        ]
+      },
+      "response": {
+        "kind": "crc_status_ack",
+        "minimum_bytes": 6,
+        "maximum_bytes": 200,
+        "checks": [
+          {
+            "kind": "byte_equals",
+            "offset": 0,
+            "values": [
+              22
+            ]
+          },
+          {
+            "kind": "byte_equals",
+            "offset": 5,
+            "values": [
+              201
+            ]
+          }
+        ],
+        "payload_offset": null,
+        "payload_bytes": null,
+        "event_index_offset": null,
+        "unbounded_reason": null
+      },
+      "effect": {
+        "pre_write_rejection": "no_effect_retryable_only_with_fresh_current_authority",
+        "post_write_timeout": "indeterminate_effect_may_have_occurred",
+        "malformed_response": "indeterminate_after_possible_native_acceptance",
+        "negative_response": "command_specific_failure_after_write_requires_reconciliation",
+        "partial_progress": "negative_or_missing_crc_after_packets_is_indeterminate_not_safe_replay",
+        "automatic_retry": "pre_write_rejection_only_within_explicit_budget",
+        "manual_retry": "reconcile_or_retire_exact_generation_before_new_authority"
+      },
+      "readback": {
+        "kind": "active_transfer_crc",
+        "authoritative_for_mutated_state": false,
+        "scope": "active_bitmap_transfer"
+      },
+      "source_binding_ids": [
+        "bitmap-producer-consumer",
+        "ble-correlation-and-timeout",
+        "proto-effect-state-machine"
       ],
       "tests": [
-        "test/runtime/bmp_update_manager_test.dart"
+        "test/runtime/bmp_update_manager_test.dart",
+        "test/runtime/tool_effect_semantics_test.dart"
       ],
       "external_gates": [
-        "vendor CRC polynomial/input confirmation",
-        "physical CRC failure and persistence behavior"
+        "vendor CRC polynomial and input confirmation",
+        "physical CRC failure persistence and recovery qualification"
+      ],
+      "producer_examples": [
+        {
+          "name": "bitmap_crc_request",
+          "position": "first",
+          "bytes": [
+            22,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "consumer_examples": [
+        {
+          "name": "bitmap_crc_success",
+          "position": "response",
+          "bytes": [
+            22,
+            0,
+            0,
+            0,
+            0,
+            201
+          ]
+        }
       ]
     },
     {
       "id": "heartbeat",
       "command": "0x25",
-      "direction": "phone_to_glasses",
-      "target": "left_then_right_pair",
-      "mutation": true,
-      "request_layout": "[command:u8=0x25, length_lo:u8=0x06, length_hi:u8=0x00, sequence:u8, type:u8=0x04, echoed_sequence:u8]",
-      "response_layout": "minimum 6 bytes with response command 0x25 and type byte 4 equal 0x04",
-      "max_packet_bytes": 6,
-      "max_payload_bytes": 5,
-      "packet_count_max": 1,
-      "acknowledgement": "response_command_0x25_and_byte_4_is_0x04",
-      "retry_semantics": "retry only a typed pre-write rejection and never overlap heartbeat attempts; uncertainty requires reconciliation/generation retirement",
-      "readback": "heartbeat_response_only",
-      "source_refs": [
-        "lib/services/proto.dart",
-        "lib/ble_manager.dart"
+      "direction": "phone_to_glasses_request",
+      "operation_kind": "mutating_command",
+      "target": "pair_left_then_right",
+      "aggregation": "pair_all_legs_required",
+      "frame": {
+        "kind": "fixed_heartbeat",
+        "first_frame_min_bytes": 6,
+        "first_frame_max_bytes": 6,
+        "subsequent_frame_min_bytes": null,
+        "subsequent_frame_max_bytes": null,
+        "payload_offset_first": 1,
+        "payload_offset_subsequent": null,
+        "payload_min_bytes": 5,
+        "payload_max_bytes": 5,
+        "payload_encoding": "heartbeat_fields",
+        "frame_count_kind": "single",
+        "maximum_frames": 1,
+        "unbounded_reason": null,
+        "fields": [
+          {
+            "name": "command",
+            "offset_first": 0,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 37,
+            "relation": null
+          },
+          {
+            "name": "length_lo",
+            "offset_first": 1,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 6,
+            "relation": null
+          },
+          {
+            "name": "length_hi",
+            "offset_first": 2,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 0,
+            "relation": null
+          },
+          {
+            "name": "sequence",
+            "offset_first": 3,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "type",
+            "offset_first": 4,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 4,
+            "relation": null
+          },
+          {
+            "name": "echoed_sequence",
+            "offset_first": 5,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": "equals:sequence"
+          }
+        ]
+      },
+      "response": {
+        "kind": "heartbeat_ack",
+        "minimum_bytes": 6,
+        "maximum_bytes": 200,
+        "checks": [
+          {
+            "kind": "byte_equals",
+            "offset": 0,
+            "values": [
+              37
+            ]
+          },
+          {
+            "kind": "byte_equals",
+            "offset": 4,
+            "values": [
+              4
+            ]
+          }
+        ],
+        "payload_offset": null,
+        "payload_bytes": null,
+        "event_index_offset": null,
+        "unbounded_reason": null
+      },
+      "effect": {
+        "pre_write_rejection": "no_effect_retryable_only_with_fresh_current_authority",
+        "post_write_timeout": "indeterminate_effect_may_have_occurred",
+        "malformed_response": "indeterminate_after_possible_native_acceptance",
+        "negative_response": "command_specific_failure_after_write_requires_reconciliation",
+        "partial_progress": "one_leg_only_or_post_write_uncertainty_is_degraded_pair_effect",
+        "automatic_retry": "pre_write_rejection_only_within_explicit_budget",
+        "manual_retry": "reconcile_or_retire_exact_generation_before_new_authority"
+      },
+      "readback": {
+        "kind": "heartbeat_response_only",
+        "authoritative_for_mutated_state": false,
+        "scope": "exact_pair_generation"
+      },
+      "source_binding_ids": [
+        "proto-command-producers",
+        "proto-status-predicates",
+        "ble-correlation-and-timeout"
       ],
       "tests": [
         "test/runtime/heartbeat_retry_contract_test.dart",
         "test/runtime/ble_request_slot_test.dart"
       ],
       "external_gates": [
-        "vendor heartbeat response semantics",
-        "physical interval, power and disconnect qualification"
+        "vendor heartbeat semantics",
+        "physical interval power and disconnect qualification"
+      ],
+      "producer_examples": [
+        {
+          "name": "heartbeat_request",
+          "position": "first",
+          "bytes": [
+            37,
+            6,
+            0,
+            1,
+            4,
+            1
+          ]
+        }
+      ],
+      "consumer_examples": [
+        {
+          "name": "heartbeat_response",
+          "position": "response",
+          "bytes": [
+            37,
+            0,
+            0,
+            1,
+            4,
+            1
+          ]
+        }
       ]
     },
     {
       "id": "exit_mode",
       "command": "0x18",
-      "direction": "phone_to_glasses",
-      "target": "left_then_right_pair",
-      "mutation": true,
-      "request_layout": "[command:u8=0x18]",
-      "response_layout": "one correlated ACK per leg",
-      "max_packet_bytes": 1,
-      "max_payload_bytes": 0,
-      "packet_count_max": 1,
-      "acknowledgement": "status_byte_1_is_0xC9_or_0xCB",
-      "retry_semantics": "pre-write rejection may retry; one-leg success or post-write uncertainty is a degraded/indeterminate pair effect",
-      "readback": "unavailable_in_current_firmware_contract",
-      "source_refs": [
-        "lib/services/proto.dart"
+      "direction": "phone_to_glasses_request",
+      "operation_kind": "mutating_command",
+      "target": "pair_left_then_right",
+      "aggregation": "pair_all_legs_required",
+      "frame": {
+        "kind": "fixed_exit",
+        "first_frame_min_bytes": 1,
+        "first_frame_max_bytes": 1,
+        "subsequent_frame_min_bytes": null,
+        "subsequent_frame_max_bytes": null,
+        "payload_offset_first": 1,
+        "payload_offset_subsequent": null,
+        "payload_min_bytes": 0,
+        "payload_max_bytes": 0,
+        "payload_encoding": "none",
+        "frame_count_kind": "single",
+        "maximum_frames": 1,
+        "unbounded_reason": null,
+        "fields": [
+          {
+            "name": "command",
+            "offset_first": 0,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 24,
+            "relation": null
+          }
+        ]
+      },
+      "response": {
+        "kind": "status_ack",
+        "minimum_bytes": 2,
+        "maximum_bytes": 200,
+        "checks": [
+          {
+            "kind": "byte_in",
+            "offset": 1,
+            "values": [
+              201,
+              203
+            ]
+          }
+        ],
+        "payload_offset": null,
+        "payload_bytes": null,
+        "event_index_offset": null,
+        "unbounded_reason": null
+      },
+      "effect": {
+        "pre_write_rejection": "no_effect_retryable_only_with_fresh_current_authority",
+        "post_write_timeout": "indeterminate_effect_may_have_occurred",
+        "malformed_response": "indeterminate_after_possible_native_acceptance",
+        "negative_response": "command_specific_failure_after_write_requires_reconciliation",
+        "partial_progress": "one_leg_exit_or_post_write_uncertainty_is_degraded_pair_effect",
+        "automatic_retry": "pre_write_rejection_only_within_explicit_budget",
+        "manual_retry": "reconcile_or_retire_exact_generation_before_new_authority"
+      },
+      "readback": {
+        "kind": "unavailable",
+        "authoritative_for_mutated_state": false,
+        "scope": "pair_mode_state"
+      },
+      "source_binding_ids": [
+        "proto-command-producers",
+        "proto-effect-state-machine",
+        "proto-status-predicates"
       ],
       "tests": [
         "test/runtime/tool_effect_semantics_test.dart",
@@ -282,87 +1541,425 @@
       ],
       "external_gates": [
         "vendor mode enumeration",
-        "physical exit and state-readback behavior"
+        "physical exit and state-readback qualification"
+      ],
+      "producer_examples": [
+        {
+          "name": "exit_request",
+          "position": "first",
+          "bytes": [
+            24
+          ]
+        }
+      ],
+      "consumer_examples": [
+        {
+          "name": "exit_success",
+          "position": "response",
+          "bytes": [
+            24,
+            201
+          ]
+        }
       ]
     },
     {
       "id": "notification_whitelist",
       "command": "0x04",
-      "direction": "phone_to_glasses",
+      "direction": "phone_to_glasses_request",
+      "operation_kind": "mutating_command",
       "target": "left_leg",
-      "mutation": true,
-      "request_layout": "[command:u8=0x04, packet_count:u8, packet_sequence:u8, utf8_json_payload:0..177_bytes] maximum packet 180 bytes",
-      "response_layout": "one correlated ACK per packet",
-      "max_packet_bytes": 180,
-      "max_payload_bytes": 177,
-      "packet_count_max": 255,
-      "acknowledgement": "status_byte_1_is_0xC9_or_0xCB",
-      "retry_semantics": "a partial multi-packet write is indeterminate; same transfer must not be blindly restarted",
-      "readback": "unavailable_in_current_firmware_contract",
-      "source_refs": [
-        "lib/services/proto.dart",
-        "lib/views/features/notification/notify_model.dart"
+      "aggregation": "single_leg_fragmented",
+      "frame": {
+        "kind": "fragmented_whitelist",
+        "first_frame_min_bytes": 4,
+        "first_frame_max_bytes": 180,
+        "subsequent_frame_min_bytes": 4,
+        "subsequent_frame_max_bytes": 180,
+        "payload_offset_first": 3,
+        "payload_offset_subsequent": 3,
+        "payload_min_bytes": 1,
+        "payload_max_bytes": 177,
+        "payload_encoding": "utf8_json",
+        "frame_count_kind": "u8_packet_count",
+        "maximum_frames": 255,
+        "unbounded_reason": null,
+        "fields": [
+          {
+            "name": "command",
+            "offset_first": 0,
+            "offset_subsequent": 0,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 4,
+            "relation": null
+          },
+          {
+            "name": "packet_count",
+            "offset_first": 1,
+            "offset_subsequent": 1,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "packet_sequence",
+            "offset_first": 2,
+            "offset_subsequent": 2,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "utf8_json_payload",
+            "offset_first": 3,
+            "offset_subsequent": 3,
+            "width_bytes": null,
+            "encoding": "utf8_json",
+            "constant": null,
+            "relation": null
+          }
+        ]
+      },
+      "response": {
+        "kind": "status_ack",
+        "minimum_bytes": 2,
+        "maximum_bytes": 200,
+        "checks": [
+          {
+            "kind": "byte_in",
+            "offset": 1,
+            "values": [
+              201,
+              203
+            ]
+          }
+        ],
+        "payload_offset": null,
+        "payload_bytes": null,
+        "event_index_offset": null,
+        "unbounded_reason": null
+      },
+      "effect": {
+        "pre_write_rejection": "no_effect_retryable_only_with_fresh_current_authority",
+        "post_write_timeout": "indeterminate_effect_may_have_occurred",
+        "malformed_response": "indeterminate_after_possible_native_acceptance",
+        "negative_response": "command_specific_failure_after_write_requires_reconciliation",
+        "partial_progress": "accepted_prefix_of_fragmented_whitelist_is_indeterminate",
+        "automatic_retry": "pre_write_rejection_only_within_explicit_budget",
+        "manual_retry": "reconcile_or_retire_exact_generation_before_new_authority"
+      },
+      "readback": {
+        "kind": "unavailable",
+        "authoritative_for_mutated_state": false,
+        "scope": "left_leg_whitelist_state"
+      },
+      "source_binding_ids": [
+        "proto-command-producers",
+        "proto-effect-state-machine",
+        "proto-status-predicates"
       ],
       "tests": [
         "test/runtime/tool_effect_semantics_test.dart",
         "test/runtime/packet_codec_test.dart"
       ],
       "external_gates": [
-        "vendor whitelist schema and persistence confirmation",
-        "physical notification filtering qualification"
+        "vendor whitelist schema persistence confirmation",
+        "physical filtering and privacy qualification"
+      ],
+      "producer_examples": [
+        {
+          "name": "whitelist_first",
+          "position": "first",
+          "bytes": [
+            4,
+            2,
+            0,
+            123
+          ]
+        },
+        {
+          "name": "whitelist_subsequent",
+          "position": "subsequent",
+          "bytes": [
+            4,
+            2,
+            1,
+            125
+          ]
+        }
+      ],
+      "consumer_examples": [
+        {
+          "name": "whitelist_success",
+          "position": "response",
+          "bytes": [
+            4,
+            201
+          ]
+        }
       ]
     },
     {
       "id": "notification",
       "command": "0x4B",
-      "direction": "phone_to_glasses",
+      "direction": "phone_to_glasses_request",
+      "operation_kind": "mutating_command",
       "target": "left_leg",
-      "mutation": true,
-      "request_layout": "[command:u8=0x4B, message_id:u8, packet_count:u8, packet_sequence:u8, utf8_json_payload:0..176_bytes] maximum packet 180 bytes",
-      "response_layout": "one correlated ACK per packet",
-      "max_packet_bytes": 180,
-      "max_payload_bytes": 176,
-      "packet_count_max": 255,
-      "acknowledgement": "status_byte_1_is_0xC9_or_0xCB",
-      "retry_semantics": "a partial multi-packet write is indeterminate; notification ID wrap does not authorize replay",
-      "readback": "unavailable_in_current_firmware_contract",
-      "source_refs": [
-        "lib/services/proto.dart",
-        "lib/views/features/notification/notify_model.dart"
+      "aggregation": "single_leg_fragmented",
+      "frame": {
+        "kind": "fragmented_notification",
+        "first_frame_min_bytes": 5,
+        "first_frame_max_bytes": 180,
+        "subsequent_frame_min_bytes": 5,
+        "subsequent_frame_max_bytes": 180,
+        "payload_offset_first": 4,
+        "payload_offset_subsequent": 4,
+        "payload_min_bytes": 1,
+        "payload_max_bytes": 176,
+        "payload_encoding": "utf8_json",
+        "frame_count_kind": "u8_packet_count",
+        "maximum_frames": 255,
+        "unbounded_reason": null,
+        "fields": [
+          {
+            "name": "command",
+            "offset_first": 0,
+            "offset_subsequent": 0,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 75,
+            "relation": null
+          },
+          {
+            "name": "message_id",
+            "offset_first": 1,
+            "offset_subsequent": 1,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "packet_count",
+            "offset_first": 2,
+            "offset_subsequent": 2,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "packet_sequence",
+            "offset_first": 3,
+            "offset_subsequent": 3,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": null,
+            "relation": null
+          },
+          {
+            "name": "utf8_json_payload",
+            "offset_first": 4,
+            "offset_subsequent": 4,
+            "width_bytes": null,
+            "encoding": "utf8_json",
+            "constant": null,
+            "relation": null
+          }
+        ]
+      },
+      "response": {
+        "kind": "status_ack",
+        "minimum_bytes": 2,
+        "maximum_bytes": 200,
+        "checks": [
+          {
+            "kind": "byte_equals",
+            "offset": 0,
+            "values": [
+              75
+            ]
+          },
+          {
+            "kind": "byte_in",
+            "offset": 1,
+            "values": [
+              201,
+              203
+            ]
+          }
+        ],
+        "payload_offset": null,
+        "payload_bytes": null,
+        "event_index_offset": null,
+        "unbounded_reason": null
+      },
+      "effect": {
+        "pre_write_rejection": "no_effect_retryable_only_with_fresh_current_authority",
+        "post_write_timeout": "indeterminate_effect_may_have_occurred",
+        "malformed_response": "indeterminate_after_possible_native_acceptance",
+        "negative_response": "command_specific_failure_after_write_requires_reconciliation",
+        "partial_progress": "accepted_prefix_of_notification_is_indeterminate_and_id_wrap_never_authorizes_replay",
+        "automatic_retry": "pre_write_rejection_only_within_explicit_budget",
+        "manual_retry": "reconcile_or_retire_exact_generation_before_new_authority"
+      },
+      "readback": {
+        "kind": "unavailable",
+        "authoritative_for_mutated_state": false,
+        "scope": "left_leg_notification_display_state"
+      },
+      "source_binding_ids": [
+        "proto-command-producers",
+        "proto-effect-state-machine",
+        "proto-status-predicates"
       ],
       "tests": [
         "test/runtime/tool_effect_semantics_test.dart",
         "test/runtime/packet_codec_test.dart"
       ],
       "external_gates": [
-        "vendor notification JSON schema and display behavior",
-        "privacy, overload and physical delivery qualification"
+        "vendor notification JSON and display behavior",
+        "privacy overload and physical delivery qualification"
+      ],
+      "producer_examples": [
+        {
+          "name": "notification_first",
+          "position": "first",
+          "bytes": [
+            75,
+            1,
+            1,
+            0,
+            123
+          ]
+        }
+      ],
+      "consumer_examples": [
+        {
+          "name": "notification_success",
+          "position": "response",
+          "bytes": [
+            75,
+            201
+          ]
+        },
+        {
+          "name": "notification_continue",
+          "position": "response",
+          "bytes": [
+            75,
+            203
+          ]
+        }
       ]
     },
     {
       "id": "serial_number_read",
       "command": "0x34",
-      "direction": "phone_to_glasses",
-      "target": "one_selected_leg",
-      "mutation": false,
-      "request_layout": "[command:u8=0x34]",
-      "response_layout": "minimum 18 bytes; current source decodes bytes 2 through 17 inclusive as a 16-byte character sequence",
-      "max_packet_bytes": 1,
-      "max_payload_bytes": 0,
-      "packet_count_max": 1,
-      "acknowledgement": "response_length_at_least_18_and_command_correlated_by_request_owner",
-      "retry_semantics": "bounded read retry is allowed under unchanged pair/generation/side authority; malformed data never becomes identity",
-      "readback": "this_command_is_readback_but_vendor_identity_semantics_remain_unconfirmed",
-      "source_refs": [
-        "lib/services/proto.dart",
-        "lib/ble_manager.dart"
+      "direction": "phone_to_glasses_request",
+      "operation_kind": "read_query",
+      "target": "selected_leg",
+      "aggregation": "single_leg",
+      "frame": {
+        "kind": "fixed_query",
+        "first_frame_min_bytes": 1,
+        "first_frame_max_bytes": 1,
+        "subsequent_frame_min_bytes": null,
+        "subsequent_frame_max_bytes": null,
+        "payload_offset_first": 1,
+        "payload_offset_subsequent": null,
+        "payload_min_bytes": 0,
+        "payload_max_bytes": 0,
+        "payload_encoding": "none",
+        "frame_count_kind": "single",
+        "maximum_frames": 1,
+        "unbounded_reason": null,
+        "fields": [
+          {
+            "name": "command",
+            "offset_first": 0,
+            "offset_subsequent": null,
+            "width_bytes": 1,
+            "encoding": "u8",
+            "constant": 52,
+            "relation": null
+          }
+        ]
+      },
+      "response": {
+        "kind": "serial_payload",
+        "minimum_bytes": 18,
+        "maximum_bytes": 200,
+        "checks": [],
+        "payload_offset": 2,
+        "payload_bytes": 16,
+        "event_index_offset": null,
+        "unbounded_reason": null
+      },
+      "effect": {
+        "pre_write_rejection": "no_device_request_was_accepted_and_fresh_query_may_retry",
+        "post_write_timeout": "query_delivery_is_indeterminate_but_no_mutation_is_claimed",
+        "malformed_response": "discard_response_and_do_not_publish_identity",
+        "negative_response": "query_failed_without_an_authoritative_serial_value",
+        "partial_progress": "partial_serial_bytes_are_never_returned",
+        "automatic_retry": "pre_write_rejection_only_within_explicit_budget",
+        "manual_retry": "new_query_requires_current_pair_generation_and_selected_leg"
+      },
+      "readback": {
+        "kind": "query_response",
+        "authoritative_for_mutated_state": false,
+        "scope": "selected_leg_serial_identity"
+      },
+      "source_binding_ids": [
+        "proto-command-producers",
+        "ble-correlation-and-timeout",
+        "proto-effect-state-machine"
       ],
       "tests": [
-        "test/runtime/ble_manager_authority_test.dart",
-        "test/runtime/ble_receive_test.dart"
+        "test/runtime/ble_receive_test.dart",
+        "test/runtime/ble_manager_authority_test.dart"
       ],
       "external_gates": [
-        "vendor serial-number encoding, uniqueness and privacy semantics"
+        "vendor serial response layout confirmation",
+        "physical left-right identity stability qualification"
+      ],
+      "producer_examples": [
+        {
+          "name": "serial_query",
+          "position": "first",
+          "bytes": [
+            52
+          ]
+        }
+      ],
+      "consumer_examples": [
+        {
+          "name": "serial_response",
+          "position": "response",
+          "bytes": [
+            52,
+            0,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55,
+            56,
+            57,
+            48,
+            65,
+            66,
+            67,
+            68,
+            69,
+            70
+          ]
+        }
       ]
     }
   ],
@@ -377,11 +1974,11 @@
     "source_contract_does_not_establish_vendor_or_physical_truth"
   ],
   "external_gates": [
-    "authoritative vendor command and firmware version matrix",
-    "capability negotiation and deprecation policy",
-    "physical Android/iOS plus G1 traces",
-    "authoritative state readback for mutating commands",
-    "latency, RF-loss, power, thermal and soak qualification",
-    "firmware secure-boot, OTA, recovery and rollback authority"
+    "vendor command and event semantics",
+    "declared firmware compatibility matrix",
+    "physical BLE timing reliability and reconnect qualification",
+    "physical audio quality latency power thermal and privacy qualification",
+    "authoritative device state readback and reconciliation",
+    "secure boot OTA recovery rollback and revocation authority"
   ]
 }

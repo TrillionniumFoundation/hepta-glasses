@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "manifest_kind": "native-import-provenance",
   "repository": "TrillionniumFoundation/hepta-glasses",
   "import_snapshot": {
@@ -14,6 +14,98 @@
     "external_observation_requires_live_revalidation": true,
     "source_record": "UPSTREAM.md"
   },
+  "external_path_observations": [
+    {
+      "path": "android/app/src/main/cpp/CMakeLists.txt",
+      "kind": "blob",
+      "object": "394b4dafe5580accb2f68534c5c0efe485dc8bf8",
+      "repository": "even-realities/EvenDemoApp",
+      "commit": "3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "api_url": "https://api.github.com/repos/even-realities/EvenDemoApp/contents/android/app/src/main/cpp/CMakeLists.txt?ref=3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "observation_source": "GitHub Contents API",
+      "external_observation_requires_live_revalidation": true
+    },
+    {
+      "path": "android/app/src/main/cpp/include",
+      "kind": "tree",
+      "object": "c873a86171fb0c5434651ec7fcc2fe5b98cac887",
+      "repository": "even-realities/EvenDemoApp",
+      "commit": "3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "api_url": "https://api.github.com/repos/even-realities/EvenDemoApp/contents/android/app/src/main/cpp/include?ref=3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "observation_source": "GitHub Contents API",
+      "external_observation_requires_live_revalidation": true
+    },
+    {
+      "path": "android/app/src/main/cpp/liblc3",
+      "kind": "tree",
+      "object": "8f1326133bcc16bec8a368f39e66bc3c318bb960",
+      "repository": "even-realities/EvenDemoApp",
+      "commit": "3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "api_url": "https://api.github.com/repos/even-realities/EvenDemoApp/contents/android/app/src/main/cpp/liblc3?ref=3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "observation_source": "GitHub Contents API",
+      "external_observation_requires_live_revalidation": true
+    },
+    {
+      "path": "android/app/src/main/cpp/liblc3.cpp",
+      "kind": "blob",
+      "object": "fd34bf16a328bcfddaa0bed68c02bcd61608fa3d",
+      "repository": "even-realities/EvenDemoApp",
+      "commit": "3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "api_url": "https://api.github.com/repos/even-realities/EvenDemoApp/contents/android/app/src/main/cpp/liblc3.cpp?ref=3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "observation_source": "GitHub Contents API",
+      "external_observation_requires_live_revalidation": true
+    },
+    {
+      "path": "android/app/src/main/cpp/rnnoise",
+      "kind": "tree",
+      "object": "368ecd589aea5b42cc54bc27b342ef52b99f527b",
+      "repository": "even-realities/EvenDemoApp",
+      "commit": "3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "api_url": "https://api.github.com/repos/even-realities/EvenDemoApp/contents/android/app/src/main/cpp/rnnoise?ref=3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "observation_source": "GitHub Contents API",
+      "external_observation_requires_live_revalidation": true
+    },
+    {
+      "path": "ios/Runner/PcmConverter.h",
+      "kind": "blob",
+      "object": "cfb6d66245fd0d21cd07d3364867759e14faf6ec",
+      "repository": "even-realities/EvenDemoApp",
+      "commit": "3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "api_url": "https://api.github.com/repos/even-realities/EvenDemoApp/contents/ios/Runner/PcmConverter.h?ref=3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "observation_source": "GitHub Contents API",
+      "external_observation_requires_live_revalidation": true
+    },
+    {
+      "path": "ios/Runner/PcmConverter.m",
+      "kind": "blob",
+      "object": "00745d79760f747cf8b29c2886c34fa5aa6d2865",
+      "repository": "even-realities/EvenDemoApp",
+      "commit": "3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "api_url": "https://api.github.com/repos/even-realities/EvenDemoApp/contents/ios/Runner/PcmConverter.m?ref=3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "observation_source": "GitHub Contents API",
+      "external_observation_requires_live_revalidation": true
+    },
+    {
+      "path": "ios/Runner/Runner-Bridging-Header.h",
+      "kind": "blob",
+      "object": "4754a9fdc22deba7de475615aa89c1d185cafee9",
+      "repository": "even-realities/EvenDemoApp",
+      "commit": "3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "api_url": "https://api.github.com/repos/even-realities/EvenDemoApp/contents/ios/Runner/Runner-Bridging-Header.h?ref=3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "observation_source": "GitHub Contents API",
+      "external_observation_requires_live_revalidation": true
+    },
+    {
+      "path": "ios/Runner/lc3",
+      "kind": "tree",
+      "object": "f87a7d9e6da0db4e219754f482b17bf061286f2d",
+      "repository": "even-realities/EvenDemoApp",
+      "commit": "3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "api_url": "https://api.github.com/repos/even-realities/EvenDemoApp/contents/ios/Runner/lc3?ref=3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+      "observation_source": "GitHub Contents API",
+      "external_observation_requires_live_revalidation": true
+    }
+  ],
   "direct_upstream_components": [
     {
       "id": "google-liblc3",
@@ -167,5 +259,5 @@
       "status": "unchanged_from_import_snapshot"
     }
   ],
-  "claim_ceiling": "This manifest proves repository Git-object custody for imported native subtrees and integration files, while recording a separately observed exact EvenDemoApp commit/tree anchor that is not present in this repository object database. It does not identify the exact direct google/liblc3 or xiph/rnnoise revision, independently revalidate the external commit offline, establish legal approval, prove absence of vulnerabilities, establish binary reproducibility, or qualify physical audio behavior."
+  "claim_ceiling": "This manifest proves exact repository Git-object custody for fixed imported native paths and current local deltas. Every historical path/object tuple is separately observed at one immutable EvenDemoApp commit through a canonical GitHub Contents API URL and still requires live independent revalidation. It does not identify the exact direct google/liblc3 or xiph/rnnoise revision, establish legal approval, prove absence of vulnerabilities, establish binary reproducibility, or qualify physical audio behavior."
 }

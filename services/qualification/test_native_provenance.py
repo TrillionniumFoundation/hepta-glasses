@@ -14,6 +14,9 @@ class NativeProvenanceTests(unittest.TestCase):
     def document(self) -> dict[str, object]:
         return provenance.strict_json(ROOT / provenance.MANIFEST)
 
+    def inventory(self) -> dict[str, object]:
+        return provenance.strict_json(ROOT / provenance.INVENTORY)
+
     def test_exact_import_and_local_delta_inventory_matches_git(self) -> None:
         result = provenance.validate(ROOT)
         self.assertIs(result["ok"], True)
@@ -25,12 +28,26 @@ class NativeProvenanceTests(unittest.TestCase):
             result["external_import_tree"],
             "bc593f9b23ce9a49ead8b5652181639157032572",
         )
-        self.assertIs(result["external_observation_requires_live_revalidation"], True)
+        self.assertIs(
+            result["external_observation_requires_live_revalidation"],
+            True,
+        )
+        self.assertEqual(result["external_path_observations"], 9)
         self.assertEqual(result["tree_units"], 4)
         self.assertEqual(result["tree_deltas"], 4)
         self.assertEqual(result["integration_files"], 5)
         self.assertEqual(result["integration_deltas"], 3)
         self.assertIs(result["direct_upstream_revision_known"], False)
+        source_paths = result["component_source_path_sets"]
+        self.assertIsInstance(source_paths, dict)
+        assert isinstance(source_paths, dict)
+        self.assertEqual(
+            source_paths["xiph-rnnoise"],
+            [
+                "android/app/src/main/cpp/include",
+                "android/app/src/main/cpp/rnnoise",
+            ],
+        )
 
     def test_changed_current_blob_fails_closed(self) -> None:
         document = copy.deepcopy(self.document())
@@ -67,6 +84,113 @@ class NativeProvenanceTests(unittest.TestCase):
             "declared delta inventory does not match Git objects",
         ):
             provenance.validate_document(ROOT, document)
+
+    def test_count_preserving_tree_alias_is_rejected(self) -> None:
+        document = copy.deepcopy(self.document())
+        units = document["tree_units"]
+        assert isinstance(units, list)
+        source = copy.deepcopy(
+            next(
+                unit
+                for unit in units
+                if isinstance(unit, dict)
+                and unit.get("id") == "android-liblc3-source"
+            )
+        )
+        assert isinstance(source, dict)
+        for unit in units:
+            assert isinstance(unit, dict)
+            for field in (
+                "component_ids",
+                "path",
+                "kind",
+                "imported_object",
+                "current_object",
+                "status",
+                "deltas",
+            ):
+                unit[field] = copy.deepcopy(source[field])
+        with self.assertRaisesRegex(
+            provenance.NativeProvenanceError,
+            "fixed ID/path/component/import binding drifted",
+        ):
+            provenance.validate_document(ROOT, document)
+
+    def test_imported_baseline_cannot_be_replaced_by_current_objects(self) -> None:
+        document = copy.deepcopy(self.document())
+        units = document["tree_units"]
+        files = document["integration_files"]
+        assert isinstance(units, list)
+        assert isinstance(files, list)
+        for unit in units:
+            assert isinstance(unit, dict)
+            unit["imported_object"] = unit["current_object"]
+            unit["deltas"] = []
+            unit["status"] = "unchanged_from_import_snapshot"
+        for record in files:
+            assert isinstance(record, dict)
+            record["imported_blob"] = record["current_blob"]
+            record["status"] = "unchanged_from_import_snapshot"
+        with self.assertRaisesRegex(
+            provenance.NativeProvenanceError,
+            "fixed ID/path/component/import binding drifted",
+        ):
+            provenance.validate_document(ROOT, document)
+
+    def test_external_path_observation_cannot_follow_current_tree(self) -> None:
+        document = copy.deepcopy(self.document())
+        units = document["tree_units"]
+        observations = document["external_path_observations"]
+        assert isinstance(units, list)
+        assert isinstance(observations, list)
+        unit = next(
+            item
+            for item in units
+            if isinstance(item, dict)
+            and item.get("id") == "android-liblc3-source"
+        )
+        assert isinstance(unit, dict)
+        observation = next(
+            item
+            for item in observations
+            if isinstance(item, dict)
+            and item.get("path") == unit["path"]
+        )
+        assert isinstance(observation, dict)
+        observation["object"] = unit["current_object"]
+        with self.assertRaisesRegex(
+            provenance.NativeProvenanceError,
+            "external import path/object binding drifted",
+        ):
+            provenance.validate_document(ROOT, document)
+
+    def test_component_source_paths_match_tree_unit_coverage(self) -> None:
+        document = self.document()
+        snapshot = document["import_snapshot"]
+        self.assertIsInstance(snapshot, dict)
+        assert isinstance(snapshot, dict)
+        inventory = copy.deepcopy(self.inventory())
+        components = inventory["components"]
+        assert isinstance(components, list)
+        component = next(
+            item
+            for item in components
+            if isinstance(item, dict) and item.get("id") == "xiph-rnnoise"
+        )
+        assert isinstance(component, dict)
+        component["source_paths"] = [
+            "android/app/src/main/cpp/rnnoise",
+        ]
+        with self.assertRaisesRegex(
+            provenance.NativeProvenanceError,
+            "source_paths does not match fixed tree-unit coverage",
+        ):
+            provenance.validate_inventory_document(
+                ROOT,
+                snapshot,
+                inventory,
+                provenance.expected_component_source_paths(),
+            )
 
     def test_extra_manifest_field_fails_closed(self) -> None:
         document = copy.deepcopy(self.document())

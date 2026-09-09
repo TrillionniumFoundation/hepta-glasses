@@ -3,7 +3,9 @@
 Status: mandatory semantic review standard for all 26 registered modules.  
 Applies to: owner-authored primary documents, generated module handoff pages, contracts, tests and operational runbooks.
 
-Generated pages under `docs/modules/<module>/README.md` prove navigation and registry consistency. They do not, by themselves, prove that a module has a complete technical design. A module is “detailed-documentation complete” only when its owner-authored documentation satisfies this standard and an independent reviewer checks it against the implementation.
+Generated pages under `docs/modules/<module>/README.md` prove navigation and registry consistency. They do not, by themselves, prove that a module has a complete technical design. A module is “detailed-documentation complete” only when its owner-authored documentation satisfies this standard and an eligible independent reviewer checks it against the exact implementation, contracts and tests.
+
+An author, maintainer, automation job or coordination review may assess that material is substantial, but that assessment is not `SEMANTIC_COMPLETE_SOURCE`. Completion is an accepted evidence state, not a descriptive adjective.
 
 ## 1. Required engineering dimensions
 
@@ -97,17 +99,33 @@ For every module changed by a pull request:
 6. Regenerate module pages when the canonical registry changes.
 7. Run `python3 tools/generate_module_docs.py --check` and `python3 tools/validate_module_semantics.py`.
 8. Run all seven canonical jobs on the unchanged final head.
-9. Do not mark documentation complete from the author's assertion or an automated character-count check alone.
+9. Do not mark documentation complete from the author's assertion, a coordination-PR approval, or an automated character-count check alone.
+10. Bind the final module decision to the exact source head, primary-document digest, applicable contract/test inventory, accountable owner and independent review ID.
 
-## 5. Completion matrix
+A reviewer of a cross-repository coordination or index change certifies only the reviewed delta. That review cannot retroactively certify every inherited module implementation.
+
+## 5. Assessment and completion states
 
 A module may be recorded as:
 
 - `STRUCTURAL_ONLY`: registry, generated page and references exist;
-- `SEMANTIC_PARTIAL`: substantive design exists but one or more required dimensions are incomplete or stale;
-- `SEMANTIC_COMPLETE_SOURCE`: all dimensions are implemented and independently reviewed against source/contracts/tests;
+- `SEMANTIC_PARTIAL`: substantive design exists but one or more required dimensions, current-state reconciliations or independent module-specific review bindings are incomplete;
+- `PROVISIONAL_SUBSTANTIVE_ASSESSMENT`: an author or maintainer believes all dimensions appear substantial, but the exact independent module-specific review binding has not yet been accepted; this is not completion and must not be promoted as such;
+- `SEMANTIC_COMPLETE_SOURCE`: all dimensions are implemented and independently reviewed against the exact source/contracts/tests, with the accepted review binding recorded;
 - `OPERATIONS_QUALIFIED`: operational procedures and controlled integration evidence exist;
 - `PHYSICAL_OR_EXTERNAL_QUALIFIED`: required provider/device/vendor facts are independently evidenced;
 - `RELEASE_QUALIFIED`: exact release candidate satisfies all applicable assurance and distribution gates.
+
+`SEMANTIC_COMPLETE_SOURCE` requires, at minimum, an accepted record containing:
+
+- module ID and accountable owner;
+- repository, exact commit and tree;
+- primary-document path and digest;
+- applicable contract and test inventory digests;
+- independent reviewer identity, review ID, decision and timestamp;
+- resolved findings and explicit residual limitations;
+- confirmation that the reviewer is not merely approving an index/coordination change.
+
+Without that record, a module remains `SEMANTIC_PARTIAL` or, at most, `PROVISIONAL_SUBSTANTIVE_ASSESSMENT`.
 
 These documentation states do not replace the canonical product maturity model. The product remains bounded by the least mature required evidence axis.
