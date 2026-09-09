@@ -1,4 +1,4 @@
-name: hepta-pr110-format-transport-v2
+name: hepta-pr110-ci-repair-transport-v3
 
 on:
   push:
@@ -9,71 +9,150 @@ permissions:
   contents: write
 
 concurrency:
-  group: hepta-pr110-format-transport-v2
+  group: hepta-pr110-ci-repair-transport-v3
   cancel-in-progress: true
 
 jobs:
-  format:
+  repair:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: '158ed2e688e1492173f72b5beaa806b1403be019'
+          ref: '7b6e947eb7c7ab9def1e940bbf94b12ef0ecac1a'
           fetch-depth: 0
           persist-credentials: true
       - name: Verify immutable source and target lease
         shell: bash
         run: |
           set -euo pipefail
-          SOURCE='158ed2e688e1492173f72b5beaa806b1403be019'
+          SOURCE='7b6e947eb7c7ab9def1e940bbf94b12ef0ecac1a'
           TARGET='codex/hepta-critical-test-depth-20260908'
           test "$(git rev-parse HEAD)" = "$SOURCE"
           remote_head="$(git ls-remote --heads origin "refs/heads/$TARGET" | awk '{print $1}')"
           test "$remote_head" = "$SOURCE"
+      - name: Apply exact analyzer and deterministic concurrency repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one replacement, found {count}')
+              file.write_text(text.replace(old, new), encoding='utf-8')
+
+          replace_exact(
+              'test/runtime/mutation_authority_http_test.dart',
+              "        'policy_hash': '${List<String>.filled(64, 'a').join()}',",
+              "        'policy_hash': List<String>.filled(64, 'a').join(),",
+          )
+          replace_exact(
+              'test/runtime/packet_codec_test.dart',
+              "import 'dart:convert';\n",
+              '',
+          )
+          replace_exact(
+              'services/model_gateway/test_model_boundaries.py',
+              '''    def test_actual_late_worker_does_not_commit(self):
+                  entered, release = threading.Event(), threading.Event()
+                  def block(kw):
+                      entered.set()
+                      release.wait(2)
+                  self.provider.before = block
+                  self.error("model_effect_indeterminate", lambda: self.execute(timeout_seconds=0.05))
+                  self.assertTrue(entered.is_set())
+                  release.set()
+                  time.sleep(0.03)
+                  self.assertEqual(self.status().state, "indeterminate")
+                  self.assertIsNone(self.status().answer_digest)
+          ''',
+              '''    def test_actual_late_worker_does_not_commit(self):
+                  entered, release = threading.Event(), threading.Event()
+                  self.addCleanup(release.set)
+
+                  def block(kw):
+                      entered.set()
+                      release.wait(2)
+
+                  self.provider.before = block
+                  outcomes = []
+                  failures = []
+
+                  def execute():
+                      try:
+                          self.execute(timeout_seconds=0.2)
+                      except ModelExecutionError as error:
+                          outcomes.append(error.code)
+                      except BaseException as error:
+                          failures.append(error)
+                      else:
+                          outcomes.append("unexpected_success")
+
+                  thread = threading.Thread(target=execute)
+                  thread.start()
+                  self.assertTrue(entered.wait(2))
+                  thread.join(2)
+                  self.assertFalse(thread.is_alive())
+                  self.assertEqual(failures, [])
+                  self.assertEqual(outcomes, ["model_effect_indeterminate"])
+                  release.set()
+                  time.sleep(0.05)
+                  self.assertEqual(self.status().state, "indeterminate")
+                  self.assertIsNone(self.status().answer_digest)
+          ''',
+          )
+          PY
+          mapfile -t changed < <(git diff --name-only --diff-filter=ACMRT | sort)
+          expected=(
+            services/model_gateway/test_model_boundaries.py
+            test/runtime/mutation_authority_http_test.dart
+            test/runtime/packet_codec_test.dart
+          )
+          mapfile -t wanted < <(printf '%s\n' "${expected[@]}" | sort)
+          diff -u <(printf '%s\n' "${wanted[@]}") <(printf '%s\n' "${changed[@]}")
+          git diff --check
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: '3.47.2'
           channel: stable
           cache: false
-      - name: Resolve canonical dependency context
-        run: flutter pub get
-      - name: Apply exact pinned Dart formatter output
+      - name: Resolve canonical dependency context and validate Dart
         shell: bash
         run: |
           set -euo pipefail
-          expected=(
-            lib/runtime/mutation_authority.dart
-            lib/runtime/mutation_authority_http.dart
-            lib/runtime/strict_json.dart
-            test/runtime/mutation_authority_http_test.dart
-            test/runtime/packet_codec_contract_support.dart
-            test/runtime/packet_codec_generated_support.dart
+          flutter pub get
+          dart format \
+            test/runtime/mutation_authority_http_test.dart \
             test/runtime/packet_codec_test.dart
-          )
-          dart format "${expected[@]}"
-          mapfile -t changed < <(git diff --name-only --diff-filter=ACMRT -- '*.dart' | sort)
-          mapfile -t wanted < <(printf '%s\n' "${expected[@]}" | sort)
-          diff -u <(printf '%s\n' "${wanted[@]}") <(printf '%s\n' "${changed[@]}")
           dart format --output=none --set-exit-if-changed lib test
-          git diff --check
+          flutter analyze --no-fatal-infos
+      - name: Prove late-worker test is deterministic under repetition
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            python3 -m unittest \
+              services.model_gateway.test_model_boundaries.ModelBoundaryTests.test_actual_late_worker_does_not_commit
+          done
+          python3 -m unittest services.model_gateway.test_bounded_worker_determinism
       - name: Commit and lease-protected push to PR 110
         shell: bash
         run: |
           set -euo pipefail
-          SOURCE='158ed2e688e1492173f72b5beaa806b1403be019'
+          SOURCE='7b6e947eb7c7ab9def1e940bbf94b12ef0ecac1a'
           TARGET='codex/hepta-critical-test-depth-20260908'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -- \
-            lib/runtime/mutation_authority.dart \
-            lib/runtime/mutation_authority_http.dart \
-            lib/runtime/strict_json.dart \
+            services/model_gateway/test_model_boundaries.py \
             test/runtime/mutation_authority_http_test.dart \
-            test/runtime/packet_codec_contract_support.dart \
-            test/runtime/packet_codec_generated_support.dart \
             test/runtime/packet_codec_test.dart
-          git commit -m 'style: apply pinned Dart formatter to critical-depth slice'
+          git commit -m 'test: make critical-depth qualification deterministic'
           git push origin \
             --force-with-lease="refs/heads/$TARGET:$SOURCE" \
             "HEAD:refs/heads/$TARGET"
