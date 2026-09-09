@@ -21,6 +21,7 @@ This file records repository version objects. An entry is not a production-relea
 
 - No provider master key, OAuth refresh token, signing key, unrestricted shell, or test-only mutation authority is admitted into the consumer mobile release surface.
 - Timeouts after a possible side effect remain indeterminate and require authoritative reconciliation rather than blind replay.
+- Branch-protection admission requires exact GitHub Actions app-bound checks, last-push approval, empty bypass allowances, and every declared top-level policy field; the administration CLI rejects stale post-apply snapshots, noncanonical targets, weakened contracts, and non-strict JSON before mutation.
 - Historical CI identity no longer depends on a mutable GitHub association projection while all immutable commit, tree, job, Artifact, review, CODEOWNERS, and timestamp checks remain mandatory.
 
 ### Qualification ceiling
