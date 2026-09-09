@@ -1,0 +1,70 @@
+name: hepta-archive-tests-materialize-v1
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-archive-tests-materialize-20260909-v1'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hepta-archive-tests-materialize-v1
+  cancel-in-progress: true
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 'f0970362607ff2451a6c3aa8a9411614d57db098'
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify immutable source and target lease
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE='f0970362607ff2451a6c3aa8a9411614d57db098'
+          TARGET='codex/hepta-terminal-convergence-20260909'
+          test "$(git rev-parse HEAD)" = "$SOURCE"
+          remote_head="$(git ls-remote --heads origin "refs/heads/$TARGET" | awk '{print $1}')"
+          test "$remote_head" = "$SOURCE"
+          test -z "$(git status --porcelain)"
+      - name: Materialize and run reviewed hostile archive tests
+        shell: bash
+        env:
+          PAYLOAD: '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'
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, hashlib, os, zlib
+          from pathlib import Path
+          data = zlib.decompress(base64.b64decode(os.environ['PAYLOAD'], validate=True))
+          if len(data) != 22967:
+              raise SystemExit(f'payload_size_mismatch:{len(data)}')
+          digest = hashlib.sha256(data).hexdigest()
+          if digest != '9b7d4d39ab1247405974e192678b0ba27d240fd0fbc1c12316a46a7a31a437a0':
+              raise SystemExit(f'payload_digest_mismatch:{digest}')
+          Path('services/qualification/test_source_artifact_archive_receipt.py').write_bytes(data)
+          PY
+          test "$(git status --porcelain)" = '?? services/qualification/test_source_artifact_archive_receipt.py'
+          python3 -m py_compile \
+            tools/verify_source_archive_receipt.py \
+            services/qualification/test_source_artifact_archive_receipt.py
+          PYTHONPATH=. python3 -m unittest -v \
+            services.qualification.test_source_artifact_archive_receipt
+      - name: Commit and lease-protected push
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE='f0970362607ff2451a6c3aa8a9411614d57db098'
+          TARGET='codex/hepta-terminal-convergence-20260909'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- services/qualification/test_source_artifact_archive_receipt.py
+          git commit -m 'test: cover durable source Artifact archive trust boundaries'
+          git push origin \
+            --force-with-lease="refs/heads/$TARGET:$SOURCE" \
+            "HEAD:refs/heads/$TARGET"
