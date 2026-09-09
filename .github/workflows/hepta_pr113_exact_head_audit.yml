@@ -1,0 +1,40 @@
+name: hepta-pr113-exact-head-audit
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-pr111-audit-20260909-v1'
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: hepta-pr113-exact-head-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Audit PR 113 exact-head packet
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 ops/audit_source_packet.py \
+            --repository '${{ github.repository }}' \
+            --token "$GH_TOKEN" \
+            --pr 113 \
+            --branch 'codex/hepta-source-artifact-durability-20260908' \
+            --expected-base 'codex/hepta-version-authority-20260908' \
+            --parent-branch 'codex/hepta-version-authority-20260908' \
+            --sentinel 'docs/development/SOURCE_ARTIFACT_DURABILITY_REBASE_READY' \
+            --timeout-seconds 1800
