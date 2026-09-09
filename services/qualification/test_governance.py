@@ -19,6 +19,7 @@ class GovernanceTest(unittest.TestCase):
         return {
             "required_status_checks": {
                 "strict": True,
+                "contexts": list(CANONICAL_REQUIRED_CONTEXTS),
                 "checks": [
                     {
                         "context": context,
@@ -233,6 +234,17 @@ class GovernanceTest(unittest.TestCase):
                 result = evaluate_branch_protection(self.snapshot(), contract)
                 self.assertFalse(result.passed)
                 self.assertEqual(result.missing, ("contract_shape",))
+
+    def test_api_payload_uses_checks_without_redundant_contexts(self) -> None:
+        contract = self.contract()
+        payload = governance_cli.branch_protection_payload(contract)
+        original_status = contract["required_status_checks"]
+        payload_status = payload["required_status_checks"]
+        assert isinstance(original_status, dict)
+        assert isinstance(payload_status, dict)
+        self.assertIn("contexts", original_status)
+        self.assertNotIn("contexts", payload_status)
+        self.assertEqual(payload_status["checks"], original_status["checks"])
 
     def test_apply_cannot_validate_an_offline_snapshot(self) -> None:
         with patch(

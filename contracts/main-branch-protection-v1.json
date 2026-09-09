@@ -1,6 +1,15 @@
 {
   "required_status_checks": {
     "strict": true,
+    "contexts": [
+      "repository-contracts",
+      "flutter",
+      "android-native",
+      "ios-native",
+      "native-sanitizers",
+      "secret-and-boundary-scan",
+      "source-evidence"
+    ],
     "checks": [
       {
         "context": "repository-contracts",

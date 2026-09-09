@@ -31,7 +31,7 @@ _CONTRACT_KEYS = frozenset(
         "allow_fork_syncing",
     }
 )
-_STATUS_KEYS = frozenset({"strict", "checks"})
+_STATUS_KEYS = frozenset({"strict", "contexts", "checks"})
 _REVIEW_KEYS = frozenset(
     {
         "dismiss_stale_reviews",
@@ -116,6 +116,9 @@ def _contract_shape_is_canonical(contract: Mapping[str, Any]) -> bool:
 
     status = _mapping(contract.get("required_status_checks"))
     if set(status) != _STATUS_KEYS or status.get("strict") is not True:
+        return False
+    contract_contexts = _string_tuple(status.get("contexts"))
+    if contract_contexts != CANONICAL_REQUIRED_CONTEXTS:
         return False
     bindings = _status_bindings(status.get("checks"))
     expected_bindings = tuple(

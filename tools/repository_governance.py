@@ -98,6 +98,24 @@ def read_json_object(
     return decode_json_object(raw, label, maximum_bytes=maximum_bytes)
 
 
+def branch_protection_payload(contract: dict[str, Any]) -> dict[str, Any]:
+    """Project the closed repository contract onto GitHub's PUT payload."""
+
+    payload = json.loads(
+        json.dumps(
+            contract,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        )
+    )
+    status = payload.get("required_status_checks")
+    if not isinstance(status, dict):
+        raise GovernanceInputError("protection_contract_status_invalid")
+    status.pop("contexts", None)
+    return payload
+
+
 def request_json(
     url: str,
     *,
@@ -187,7 +205,12 @@ def main() -> int:
             if not token:
                 _emit({"ok": False, "error": "admin_token_required"})
                 return 2
-            request_json(url, token=token, method="PUT", payload=contract)
+            request_json(
+                url,
+                token=token,
+                method="PUT",
+                payload=branch_protection_payload(contract),
+            )
 
         if args.snapshot is not None:
             snapshot = read_json_object(

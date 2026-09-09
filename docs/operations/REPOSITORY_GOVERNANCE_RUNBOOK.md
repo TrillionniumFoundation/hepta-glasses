@@ -1,8 +1,10 @@
 # Repository governance runbook
 
-The canonical branch-protection payload is
+The canonical branch-protection policy is
 `contracts/main-branch-protection-v1.json`. It is an exact security contract,
-not a documentation example.
+not a documentation example. Its `contexts` array is a repository-side
+compatibility index; the administration CLI proves it matches `checks` and
+sends only the app-bound `checks` form to GitHub.
 
 ## Canonical policy
 
@@ -40,8 +42,9 @@ HEPTA_REPO_ADMIN_TOKEN='<short-lived-token>' \
 python3 tools/repository_governance.py --apply
 ```
 
-`--apply` sends the canonical payload and then performs a fresh API GET of the
-same branch-protection endpoint. It never accepts an offline snapshot as
+`--apply` removes only the redundant repository-side `contexts` index, sends
+the canonical app-bound `checks` payload, and then performs a fresh API GET of
+the same branch-protection endpoint. It never accepts an offline snapshot as
 post-apply evidence. Combining `--apply` and `--snapshot` is rejected before
 any network mutation.
 
