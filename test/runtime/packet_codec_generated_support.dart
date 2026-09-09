@@ -18,7 +18,6 @@ final class _Lcg {
       );
 }
 
-
 void _runGeneratedCase(
   PacketCodec codec,
   String family,
@@ -28,8 +27,7 @@ void _runGeneratedCase(
     case 'round-trip':
       final metadata = random.bytes(random.nextInt(4));
       final payload = random.bytes(random.nextInt(129));
-      final maxPacketBytes =
-          4 + metadata.length + random.nextInt(20);
+      final maxPacketBytes = 4 + metadata.length + random.nextInt(20);
       final command = random.nextInt(256);
       final frames = codec.fragment(
         command: command,
@@ -125,8 +123,7 @@ void _runGeneratedCase(
       return;
     case 'metadata-drift':
       final metadata = random.bytes(1 + random.nextInt(3));
-      final changed = Uint8List.fromList(metadata)
-        ..[0] = metadata[0] ^ 0x01;
+      final changed = Uint8List.fromList(metadata)..[0] = metadata[0] ^ 0x01;
       final frames = <Uint8List>[
         _frame(
           command: 78,
@@ -223,7 +220,6 @@ void _expectFormat(void Function() operation, String message) {
     ),
   );
 }
-
 
 String _mutantHarness(String packetCodecFile) => '''
 import 'dart:io';

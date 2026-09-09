@@ -58,7 +58,6 @@ final class _PacketContract {
   final List<_GeneratedFamily> generatedFamilies;
 }
 
-
 _PacketContract _loadContract() {
   final bytes = File(
     'contracts/conformance/g1-packet-v1.json',
@@ -267,7 +266,6 @@ _GeneratedFamily _generatedFamily(Object? value) {
   );
 }
 
-
 Map<String, Object?> _closedObject(
   Object? value,
   Set<String> fields,
@@ -294,8 +292,7 @@ List<String> _stringList(
   bool allowEmpty = false,
 }) {
   final list = _list(value, label);
-  if ((!allowEmpty && list.isEmpty) ||
-      list.any((item) => item is! String)) {
+  if ((!allowEmpty && list.isEmpty) || list.any((item) => item is! String)) {
     throw FormatException('$label must be a string array.');
   }
   return list.cast<String>();
@@ -345,8 +342,7 @@ void _requireExactIds(
 }
 
 Uint8List _hex(String value) {
-  if (value.length.isOdd ||
-      !RegExp(r'^[0-9a-f]*$').hasMatch(value)) {
+  if (value.length.isOdd || !RegExp(r'^[0-9a-f]*$').hasMatch(value)) {
     throw const FormatException('Invalid lowercase hexadecimal fixture.');
   }
   return Uint8List.fromList(
@@ -359,4 +355,3 @@ Uint8List _hex(String value) {
 
 String _toHex(Uint8List bytes) =>
     bytes.map((value) => value.toRadixString(16).padLeft(2, '0')).join();
-

@@ -104,7 +104,9 @@ void main() {
     );
     expect(
       () => codec.reassemble(
-        <Uint8List>[Uint8List.fromList(const <int>[0, 1, 0])],
+        <Uint8List>[
+          Uint8List.fromList(const <int>[0, 1, 0])
+        ],
         metadataLength: -1,
       ),
       throwsArgumentError,
