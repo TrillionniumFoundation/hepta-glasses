@@ -9,6 +9,7 @@ import hashlib
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -55,12 +56,17 @@ _SPEC_CHECKSUM = re.compile(
     rf"^  (?P<name>{_POD_NAME}): (?P<digest>[0-9a-f]{{40}})$"
 )
 
-# Reviewed content identities. Any movement requires a new exact-head review.
+# Reviewed raw-object identities. Any byte movement requires a fresh exact-head
+# review. The hashes are calculated over the exact bytes read from Git, without
+# newline normalization, decoding, re-encoding, or splitlines().
 _APPROVED_DEPENDABOT_CONFIG_SHA256 = (
     "c50632e8373a28bceeb5fcd6716172a3cecf97e46f31ad85a49787c638f227a5"
 )
 _APPROVED_PODFILE_SHA256 = (
     "cf4f50875914e973aaed1f3627faebb458ce0550d3b59ab45a95e6410f882f80"
+)
+_APPROVED_PODFILE_LOCK_SHA256 = (
+    "0c1b8e7654df3a9ba524d519a5547f22bb72ccf067b3f3f6552ab848d2fa975d"
 )
 _APPROVED_WORKFLOW_GIT_BLOB_SHA1 = (
     "7624aaf9cafa5bfef6b55f91d714bf50bb5c92ee"
@@ -80,6 +86,23 @@ _LOCK_SECTION_ORDER = (
     "SPEC CHECKSUMS",
     "PODFILE CHECKSUM",
     "COCOAPODS",
+)
+
+# Python str.splitlines() treats all of these as line boundaries. They are
+# forbidden before parsing so Ruby/CocoaPods and Python can never disagree
+# because a behavior-bearing byte was silently normalized to LF.
+_NON_LF_LINE_BOUNDARIES = frozenset(
+    {
+        "\r",
+        "\v",
+        "\f",
+        "\x1c",
+        "\x1d",
+        "\x1e",
+        "\x85",
+        "\u2028",
+        "\u2029",
+    }
 )
 
 
@@ -107,14 +130,40 @@ def _closed_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _read_bytes(path: Path) -> bytes:
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        raise DependencyPolicyError(
+            f"cannot read {_display_path(path)}: {exc}"
+        ) from exc
+
+
+def _read(path: Path) -> str:
+    raw = _read_bytes(path)
+    try:
+        return raw.decode("utf-8")
+    except UnicodeError as exc:
+        raise DependencyPolicyError(
+            f"cannot read {_display_path(path)} as UTF-8: {exc}"
+        ) from exc
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(
-            path.read_text(encoding="utf-8"),
+            _read(path),
             object_pairs_hook=_closed_object,
             parse_constant=_reject_constant,
         )
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+    except json.JSONDecodeError as exc:
         raise DependencyPolicyError(
             f"cannot parse {_display_path(path)}: {exc}"
         ) from exc
@@ -125,29 +174,66 @@ def _load_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def _display_path(path: Path) -> str:
-    try:
-        return str(path.relative_to(ROOT))
-    except ValueError:
-        return str(path)
-
-
-def _read(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
+def _strict_utf8_lf_text(raw: bytes, label: str) -> str:
+    """Decode one exact text object without normalizing any behavior byte."""
+    if not raw:
+        raise DependencyPolicyError(f"{label} must not be empty")
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raise DependencyPolicyError(f"{label} must not contain a UTF-8 BOM")
+    if not raw.endswith(b"\n"):
         raise DependencyPolicyError(
-            f"cannot read {_display_path(path)}: {exc}"
+            f"{label} must end with exactly one ASCII LF"
+        )
+    if raw.endswith(b"\n\n"):
+        raise DependencyPolicyError(
+            f"{label} must end with exactly one ASCII LF, not a blank tail"
+        )
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise DependencyPolicyError(
+            f"{label} is not strict UTF-8: {exc}"
         ) from exc
 
+    for index, char in enumerate(text):
+        codepoint = ord(char)
+        if char == "\n":
+            continue
+        category = unicodedata.category(char)
+        if (
+            char in _NON_LF_LINE_BOUNDARIES
+            or codepoint < 0x20
+            or 0x7F <= codepoint <= 0x9F
+            or category in {"Cc", "Cf", "Cs", "Zl", "Zp"}
+        ):
+            raise DependencyPolicyError(
+                f"{label} contains forbidden U+{codepoint:04X} "
+                f"at character offset {index}"
+            )
 
-def _read_bytes(path: Path) -> bytes:
-    try:
-        return path.read_bytes()
-    except OSError as exc:
+    return text
+
+
+def _exact_text_object(
+    value: bytes | str,
+    label: str,
+) -> tuple[bytes, str]:
+    if isinstance(value, bytes):
+        raw = value
+    elif isinstance(value, str):
+        raw = value.encode("utf-8")
+    else:
         raise DependencyPolicyError(
-            f"cannot read {_display_path(path)}: {exc}"
-        ) from exc
+            f"{label} must be bytes or text"
+        )
+    return raw, _strict_utf8_lf_text(raw, label)
+
+
+def _raw_sha256(raw: bytes, label: str) -> str:
+    digest = hashlib.sha256(raw).hexdigest()
+    if not _SHA256.fullmatch(digest):
+        raise DependencyPolicyError(f"{label} SHA-256 is malformed")
+    return digest
 
 
 def _string_list(value: Any, name: str) -> list[str]:
@@ -205,7 +291,8 @@ def load_contract() -> dict[str, Any]:
             "official source commit must be a lowercase full Git SHA"
         )
     if not isinstance(source["retrieved_at"], str) or not re.fullmatch(
-        r"20[0-9]{2}-[0-9]{2}-[0-9]{2}", source["retrieved_at"]
+        r"20[0-9]{2}-[0-9]{2}-[0-9]{2}",
+        source["retrieved_at"],
     ):
         raise DependencyPolicyError(
             "official source retrieval date must be YYYY-MM-DD"
@@ -414,23 +501,25 @@ def _pod_root(name: str) -> str:
     return name.split("/", 1)[0]
 
 
-def _closed_lock_lines(lock_text: str) -> list[str]:
-    if "\ufeff" in lock_text or "\x00" in lock_text or "\r" in lock_text:
-        raise DependencyPolicyError(
-            "Podfile.lock contains a forbidden BOM, NUL or CR byte"
-        )
-    lines = lock_text.splitlines()
+def _closed_lock_lines(
+    lock_value: bytes | str,
+) -> tuple[bytes, str, list[str]]:
+    raw, text = _exact_text_object(lock_value, "Podfile.lock")
+    # Deliberately parse only ASCII LF after the raw-object boundary check.
+    lines = text[:-1].split("\n")
     if not lines or any(
         line.rstrip(" ") != line or "\t" in line for line in lines
     ):
         raise DependencyPolicyError(
             "Podfile.lock must be non-empty with no tabs or trailing spaces"
         )
-    return lines
+    return raw, text, lines
 
 
-def _split_lock_sections(lock_text: str) -> dict[str, list[str]]:
-    lines = _closed_lock_lines(lock_text)
+def _split_lock_sections(
+    lock_value: bytes | str,
+) -> tuple[bytes, dict[str, list[str]]]:
+    raw, _, lines = _closed_lock_lines(lock_value)
     sections: dict[str, list[str]] = {}
     current: str | None = None
     observed: list[str] = []
@@ -459,7 +548,8 @@ def _split_lock_sections(lock_text: str) -> dict[str, list[str]]:
                 continue
 
             scalar_match = re.fullmatch(
-                r"(PODFILE CHECKSUM|COCOAPODS): (.+)", line
+                r"(PODFILE CHECKSUM|COCOAPODS): (.+)",
+                line,
             )
             if scalar_match is None:
                 raise DependencyPolicyError(
@@ -491,7 +581,7 @@ def _split_lock_sections(lock_text: str) -> dict[str, list[str]]:
         raise DependencyPolicyError(
             "every Podfile.lock section must contain data"
         )
-    return sections
+    return raw, sections
 
 
 def _unique_add(
@@ -507,8 +597,10 @@ def _unique_add(
     values[name] = value
 
 
-def parse_cocoapods_lock(lock_text: str) -> dict[str, Any]:
-    sections = _split_lock_sections(lock_text)
+def parse_cocoapods_lock(
+    lock_value: bytes | str,
+) -> dict[str, Any]:
+    raw, sections = _split_lock_sections(lock_value)
 
     pods: dict[str, str] = {}
     child_dependencies: dict[str, list[str]] = {}
@@ -638,6 +730,7 @@ def parse_cocoapods_lock(lock_text: str) -> dict[str, Any]:
 
     registry_roots = sorted(pod_roots - source_roots)
     return {
+        "raw_sha256": _raw_sha256(raw, "Podfile.lock"),
         "pods": sorted(pods),
         "pod_versions": dict(sorted(pods.items())),
         "pod_roots": sorted(pod_roots),
@@ -660,13 +753,16 @@ def parse_cocoapods_lock(lock_text: str) -> dict[str, Any]:
     }
 
 
-def _podfile_digest(podfile: str) -> str:
-    if "\ufeff" in podfile or "\x00" in podfile or "\r" in podfile:
-        raise DependencyPolicyError(
-            "Podfile contains a forbidden BOM, NUL or CR byte"
-        )
-    canonical = "\n".join(podfile.splitlines()) + "\n"
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+def _podfile_digest(podfile: bytes | str) -> str:
+    if isinstance(podfile, bytes):
+        raw = podfile
+    elif isinstance(podfile, str):
+        raw = podfile.encode("utf-8")
+    else:
+        raise DependencyPolicyError("Podfile must be bytes or text")
+    digest = _raw_sha256(raw, "Podfile")
+    _strict_utf8_lf_text(raw, "Podfile")
+    return digest
 
 
 def _git_blob_sha1(payload: bytes) -> str:
@@ -676,15 +772,12 @@ def _git_blob_sha1(payload: bytes) -> str:
 
 def parse_canonical_ios_lock_step(workflow_text: str) -> dict[str, str]:
     """Locate one unconditional exact lock-install step in ios-native."""
-    if (
-        "\ufeff" in workflow_text
-        or "\x00" in workflow_text
-        or "\r" in workflow_text
-    ):
-        raise DependencyPolicyError(
-            "canonical workflow contains a forbidden BOM, NUL or CR byte"
-        )
-    lines = workflow_text.splitlines()
+    workflow_raw = workflow_text.encode("utf-8")
+    workflow_text = _strict_utf8_lf_text(
+        workflow_raw,
+        "canonical workflow",
+    )
+    lines = workflow_text[:-1].split("\n")
     current_job: str | None = None
     matches: list[int] = []
     for index, line in enumerate(lines):
@@ -735,30 +828,36 @@ def verify_canonical_workflow() -> dict[str, str]:
             "canonical workflow Git blob identity differs from the reviewed "
             f"object: observed={actual}, expected={_APPROVED_WORKFLOW_GIT_BLOB_SHA1}"
         )
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeError as exc:
-        raise DependencyPolicyError(
-            f"canonical workflow is not UTF-8: {exc}"
-        ) from exc
+    text = _strict_utf8_lf_text(raw, "canonical workflow")
     result = parse_canonical_ios_lock_step(text)
     result["git_blob_sha1"] = actual
     return result
 
 
 def inspect_cocoapods() -> dict[str, Any]:
-    podfile = _read(PODFILE)
-    lock = _read(LOCKFILE)
+    podfile_raw = _read_bytes(PODFILE)
+    lock_raw = _read_bytes(LOCKFILE)
 
-    podfile_sha256 = _podfile_digest(podfile)
+    podfile_sha256 = _podfile_digest(podfile_raw)
     if podfile_sha256 != _APPROVED_PODFILE_SHA256:
         raise DependencyPolicyError(
-            "Podfile differs from the reviewed closed-world source; any Ruby, "
-            "helper, alias, variable, plugin installer or source change requires "
-            "an explicit policy update"
+            "Podfile raw bytes differ from the reviewed closed-world source; "
+            "any Ruby, newline, encoding, helper, alias, variable, plugin "
+            "installer, source, or target change requires an explicit policy update"
         )
 
-    graph = parse_cocoapods_lock(lock)
+    # Bind the complete raw lock object before decoding or semantic parsing.
+    # This prevents parser differentials and makes every graph/encoding/newline
+    # movement an explicit reviewed source change.
+    lock_sha256 = _raw_sha256(lock_raw, "Podfile.lock")
+    if lock_sha256 != _APPROVED_PODFILE_LOCK_SHA256:
+        raise DependencyPolicyError(
+            "Podfile.lock raw bytes differ from the reviewed closed-world object: "
+            f"observed={lock_sha256}, expected={_APPROVED_PODFILE_LOCK_SHA256}"
+        )
+    _strict_utf8_lf_text(lock_raw, "Podfile.lock")
+
+    graph = parse_cocoapods_lock(lock_raw)
     if graph["pod_versions"] != _APPROVED_LOCK_PODS:
         raise DependencyPolicyError(
             "PODS inventory/version differs from the reviewed "
@@ -806,9 +905,7 @@ def inspect_cocoapods() -> dict[str, Any]:
         "mode": "closed-world-local-flutter-pod-only",
         "repository_executes_update": False,
         "podfile_sha256": podfile_sha256,
-        "podfile_lock_sha256": hashlib.sha256(
-            lock.encode("utf-8")
-        ).hexdigest(),
+        "podfile_lock_sha256": lock_sha256,
         "lock_pods": graph["pods"],
         "lock_dependencies": graph["dependencies"],
         "lock_spec_checksums": sorted(graph["spec_checksums"]),

@@ -24,9 +24,11 @@ Dependabot does not support CocoaPods. The `swift` ecosystem value is for Swift 
 
 The CocoaPods boundary is closed-world rather than based on a best-effort Ruby regular expression.
 
-`tools/native/dependency_update_policy.py --check-cocoapods` binds the complete reviewed `ios/Podfile` through SHA-256. Any Ruby source, helper call, alias, variable, plugin-installation behavior, source declaration, or target movement fails closed until the Podfile and policy are changed together in an ordinary reviewed pull request. This prevents legal Ruby forms such as parenthesized `pod(...)` calls or helper-driven declarations from bypassing a line-oriented matcher.
+`tools/native/dependency_update_policy.py --check-cocoapods` binds the complete raw bytes of both `ios/Podfile` and `ios/Podfile.lock` before decoding or semantic parsing. SHA-256 is computed directly over the bytes read from Git; there is no newline normalization, `splitlines()` call, decoding/re-encoding, or synthesized final newline in the identity decision. Any Ruby source, helper call, alias, variable, plugin-installation behavior, source declaration, target, lock graph, encoding, control character, or newline movement therefore requires the object hash and policy to change together in an ordinary reviewed pull request.
 
-The same command parses the complete dependency-bearing `Podfile.lock` surface in a fixed, unique order:
+After raw-object identity, the policy requires strict UTF-8 and ASCII LF only. Each object must end in exactly one LF. It rejects BOM, NUL, CR/CRLF, VT, FF, U+0085, U+2028, U+2029, the remaining Python `str.splitlines()` non-LF boundaries, C0/C1 controls, Unicode format controls, missing final LF, and a blank/double terminal LF. This prevents a byte sequence that Ruby/CocoaPods treats differently from being silently normalized by Python. In particular, replacing the first Podfile LF with U+2028 cannot preserve the approved digest or attach the `platform :ios` call to the leading comment while passing policy.
+
+Only after that byte and shape boundary does the command parse the complete dependency-bearing `Podfile.lock` surface in a fixed, unique order:
 
 - `PODS`;
 - `DEPENDENCIES`;
@@ -73,7 +75,7 @@ That contract binds the exact current Podfile, Podfile.lock, canonical workflow,
 - generated lockfile SHA-256;
 - invocation transcript digest.
 
-The external environment must produce only `ios/Podfile.lock` as the proposed repository change. The resulting pull request must update the closed-world constants and hostile fixtures whenever the graph, generator, checksums, source, or canonical workflow changes. A repository comment, local shell transcript, mutable container tag, self-issued key, or the old executable path cannot substitute for the external evidence.
+The external environment must produce only `ios/Podfile.lock` as the proposed repository change. The resulting pull request must update the closed-world constants and hostile fixtures whenever the graph, generator, checksums, source, raw-object identity, or canonical workflow changes. A repository comment, local shell transcript, mutable container tag, self-issued key, or the old executable path cannot substitute for the external evidence.
 
 This separation is deliberate: repository source can prove what it will accept, but it cannot self-authenticate the toolchain that generated a new dependency graph. Until a real external hermetic refresh packet is supplied, CocoaPods update execution remains an explicit external operational gate rather than a falsely closed repository automation claim.
 
@@ -107,6 +109,6 @@ The source SBOM is source evidence only. A release additionally needs binary SBO
 
 ## Failure and rollback
 
-If an update fails tests, changes behavior, increases permissions, weakens a fail-closed boundary, lacks the required external toolchain evidence, or cannot be independently reviewed, close or revert the proposal. Do not reduce test coverage, relax scanners, add broad version ignores, transfer an earlier Artifact, restore the ambient executable path, or alter branch protection to make the update pass.
+If an update fails tests, changes behavior, increases permissions, weakens a fail-closed boundary, lacks the required external toolchain evidence, or cannot be independently reviewed, close or revert the proposal. Do not reduce test coverage, relax scanners, add broad version ignores, transfer an earlier Artifact, restore the ambient executable path, normalize behavior-bearing bytes before identity checks, or alter branch protection to make the update pass.
 
 A rollback is itself a new source object and requires fresh exact-head qualification. Production rollback additionally follows the signed-binary and provider/device rollback runbooks.
