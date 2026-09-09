@@ -18,13 +18,14 @@ class NativeProvenanceTests(unittest.TestCase):
         result = provenance.validate(ROOT)
         self.assertIs(result["ok"], True)
         self.assertEqual(
-            result["import_commit"],
+            result["external_import_commit"],
             "3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
         )
         self.assertEqual(
-            result["import_tree"],
+            result["external_import_tree"],
             "bc593f9b23ce9a49ead8b5652181639157032572",
         )
+        self.assertIs(result["external_observation_requires_live_revalidation"], True)
         self.assertEqual(result["tree_units"], 4)
         self.assertEqual(result["tree_deltas"], 4)
         self.assertEqual(result["integration_files"], 5)
