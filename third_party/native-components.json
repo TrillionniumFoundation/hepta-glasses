@@ -15,7 +15,13 @@
         "android/app/src/main/cpp/liblc3",
         "ios/Runner/lc3"
       ],
-      "provenance_note": "Imported with the upstream demo; an exact native upstream revision was not preserved, so the source tree digest is authoritative."
+      "import_snapshot": {
+        "repository": "even-realities/EvenDemoApp",
+        "commit": "3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+        "tree": "bc593f9b23ce9a49ead8b5652181639157032572"
+      },
+      "provenance_manifest": "third_party/native-import-provenance.json",
+      "provenance_note": "The exact direct google/liblc3 revision was not preserved. Repository custody is instead anchored to the exact EvenDemoApp import snapshot and the machine-verified current tree/blob deltas in the provenance manifest. Do not infer an upstream revision from source similarity."
     },
     {
       "id": "xiph-rnnoise",
@@ -29,7 +35,13 @@
       "source_paths": [
         "android/app/src/main/cpp/rnnoise"
       ],
-      "provenance_note": "Imported with the upstream demo; an exact native upstream revision was not preserved, so the source tree digest is authoritative."
+      "import_snapshot": {
+        "repository": "even-realities/EvenDemoApp",
+        "commit": "3899aac2b39ce969582cf6eb96ecb36be3e0e9e6",
+        "tree": "bc593f9b23ce9a49ead8b5652181639157032572"
+      },
+      "provenance_manifest": "third_party/native-import-provenance.json",
+      "provenance_note": "The exact direct xiph/rnnoise revision was not preserved. Repository custody is instead anchored to the exact EvenDemoApp import snapshot and the machine-verified current tree/blob deltas in the provenance manifest. Do not infer an upstream revision from source similarity."
     }
   ]
 }
