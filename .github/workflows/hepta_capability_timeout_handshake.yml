@@ -1,0 +1,120 @@
+name: hepta-capability-timeout-handshake
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-capability-timeout-handshake-20260909-v1'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hepta-capability-timeout-handshake
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 'a37acfcc8946f2865ce169bee6d4b3f3bc24c0e6'
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify immutable source and target identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE='a37acfcc8946f2865ce169bee6d4b3f3bc24c0e6'
+          TARGET='codex/hepta-main-convergence-20260909-v2'
+          test "$(git rev-parse HEAD)" = "$SOURCE"
+          remote_head="$(git ls-remote --heads origin "refs/heads/$TARGET" | awk '{print $1}')"
+          test "$remote_head" = "$SOURCE"
+
+      - name: Replace timing-only timeout fixture with an explicit provider-entry handshake
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('services/control_plane/test_durable_capabilities.py')
+          source = path.read_text(encoding='utf-8')
+          old = '''    def test_timeout_does_not_accept_late_success(self):
+                  other, adapter = self.make(maximum_wait_seconds=0.01)
+                  adapter.block = True
+                  receipt = self.execute(gateway=other)
+                  self.assertEqual(receipt.status, "indeterminate")
+                  adapter.release.set()
+                  self.assertEqual(self.execute(gateway=other).status, "indeterminate")
+                  self.assertEqual(other.reconcile(self.request).status, "succeeded")
+          '''
+          new = '''    def test_timeout_does_not_accept_late_success(self):
+                  other, adapter = self.make(maximum_wait_seconds=0.5)
+                  adapter.block = True
+                  receipts = []
+                  failures = []
+
+                  def execute() -> None:
+                      try:
+                          receipts.append(self.execute(gateway=other))
+                      except BaseException as error:
+                          failures.append(error)
+
+                  caller = threading.Thread(target=execute)
+                  caller.start()
+                  self.assertTrue(
+                      adapter.entered.wait(1),
+                      "provider dispatch did not enter before the timeout proof",
+                  )
+                  caller.join(2)
+                  self.assertFalse(caller.is_alive())
+                  self.assertEqual(failures, [])
+                  self.assertEqual(len(receipts), 1)
+                  self.assertEqual(receipts[0].status, "indeterminate")
+                  adapter.release.set()
+                  self.assertEqual(
+                      self.execute(gateway=other).status,
+                      "indeterminate",
+                  )
+                  self.assertEqual(
+                      other.reconcile(self.request).status,
+                      "succeeded",
+                  )
+          '''
+          if source.count(old) != 1:
+              raise SystemExit('expected one exact legacy timeout test block')
+          path.write_text(source.replace(old, new), encoding='utf-8')
+          PY
+          git diff --check
+
+      - name: Repeat the exact timeout and not-started semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          for iteration in $(seq 1 12); do
+            echo "iteration=$iteration"
+            python3 -m unittest -v \
+              services.control_plane.test_durable_capabilities.DurableCapabilitiesTests.test_timeout_does_not_accept_late_success \
+              services.control_plane.test_durable_capabilities.DurableCapabilitiesTests.test_not_started_is_failed_but_never_auto_retried
+          done
+
+      - name: Run complete Python repository suites
+        run: |
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+
+      - name: Commit and fast-forward the convergence branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET='codex/hepta-main-convergence-20260909-v2'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- services/control_plane/test_durable_capabilities.py
+          git diff --cached --check
+          git commit -m 'test(capability): prove timeout only after provider entry'
+          git push origin "HEAD:refs/heads/$TARGET"
