@@ -1,0 +1,77 @@
+name: hepta-pr110-format-transport-v2
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-pr110-format-20260909-v2'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hepta-pr110-format-transport-v2
+  cancel-in-progress: true
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: '158ed2e688e1492173f72b5beaa806b1403be019'
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify immutable source and target lease
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE='158ed2e688e1492173f72b5beaa806b1403be019'
+          TARGET='codex/hepta-critical-test-depth-20260908'
+          test "$(git rev-parse HEAD)" = "$SOURCE"
+          remote_head="$(git ls-remote --heads origin "refs/heads/$TARGET" | awk '{print $1}')"
+          test "$remote_head" = "$SOURCE"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - name: Apply exact pinned Dart formatter output
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=(
+            lib/runtime/mutation_authority.dart
+            lib/runtime/mutation_authority_http.dart
+            lib/runtime/strict_json.dart
+            test/runtime/mutation_authority_http_test.dart
+            test/runtime/packet_codec_contract_support.dart
+            test/runtime/packet_codec_generated_support.dart
+            test/runtime/packet_codec_test.dart
+          )
+          dart format "${expected[@]}"
+          mapfile -t changed < <(git diff --name-only --diff-filter=ACMRT -- '*.dart' | sort)
+          mapfile -t wanted < <(printf '%s\n' "${expected[@]}" | sort)
+          diff -u <(printf '%s\n' "${wanted[@]}") <(printf '%s\n' "${changed[@]}")
+          dart format --output=none --set-exit-if-changed lib test
+          git diff --check
+      - name: Commit and lease-protected push to PR 110
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE='158ed2e688e1492173f72b5beaa806b1403be019'
+          TARGET='codex/hepta-critical-test-depth-20260908'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- \
+            lib/runtime/mutation_authority.dart \
+            lib/runtime/mutation_authority_http.dart \
+            lib/runtime/strict_json.dart \
+            test/runtime/mutation_authority_http_test.dart \
+            test/runtime/packet_codec_contract_support.dart \
+            test/runtime/packet_codec_generated_support.dart \
+            test/runtime/packet_codec_test.dart
+          git commit -m 'style: apply pinned Dart formatter to critical-depth slice'
+          git push origin \
+            --force-with-lease="refs/heads/$TARGET:$SOURCE" \
+            "HEAD:refs/heads/$TARGET"
