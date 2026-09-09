@@ -1,216 +1,210 @@
-# G1 command matrix, retry safety, and firmware compatibility boundary
+# G1 typed command, wire, effect and readback matrix
 
-Status: source contract supplement for `g1-transport` and `g1-protocol-features`.  
-Machine contract: `contracts/g1-command-matrix-v1.json`.  
+Status: source contract; vendor semantics and physical qualification remain external.  
+Machine contract: `contracts/g1-command-matrix-v1.json` (`schema_version=2`).  
 Validator: `services/qualification/g1_command_matrix.py`.  
-Claim ceiling: source semantics only; vendor and physical confirmation remain required.
+Regression: `services/qualification/test_g1_command_matrix.py`.
 
-## 1. Purpose and authority boundary
+## 1. Why schema version 2 exists
 
-This document centralizes every G1 command/event currently consumed by the application and gives each one an explicit direction, target leg, byte layout, packet bound, acknowledgement rule, retry classification, readback status, source implementation, test surface, and external gate.
+The first draft used long prose fields for target, ACK, retry and readback. A sufficiently long but unsafe sentence could satisfy that validator, and several wire bounds were only checked for total count rather than by command identity. Schema version 2 removes that ambiguity.
 
-The mobile edge runtime remains the final application authority for local effects. Native Android/iOS code owns platform BLE readiness and byte acceptance. G1 firmware owns physical interpretation and state. A command appearing in source does not prove that every firmware version implements it, that a write was applied, or that a returned byte has the assumed vendor meaning.
+Every command now has a closed, command-specific typed profile for:
 
-The authoritative effect identity remains:
+- direction and operation class;
+- target leg and pair aggregation;
+- first/subsequent frame bounds;
+- payload offsets, bounds and encoding;
+- frame count representation and maximum;
+- byte fields, widths, endianness, constants and relations;
+- response minimum/maximum, byte predicates and payload offsets;
+- pre-write, post-write, malformed, negative and partial-progress dispositions;
+- automatic and manual retry authority;
+- readback kind, scope and whether it is authoritative for mutated state;
+- source bindings and producer/consumer golden examples.
+
+The contract identity remains `hepta-g1-command-matrix-v1` because it has not yet been released as an external compatibility surface. The schema is explicitly versioned and the validator rejects schema 1.
+
+## 2. Authority model
+
+A phone-to-glasses request is owned by:
 
 ```text
-(pair identity,
- connection generation,
+(connection_generation, side, command)
+```
+
+Mutation authority is scoped by:
+
+```text
+(pair_identity,
+ connection_generation,
  side,
- caller idempotency key,
- SHA-256(device bytes))
+ caller_idempotency_key,
+ payload_sha256)
 ```
 
-The response owner and uncertain-write quarantine key remain:
+Both structures are compared to `contracts/g1-ble-protocol-v1.json`. Current source also proves that a native-accepted write followed by timeout enters quarantine and returns `effectMayHaveOccurred=true`; it is not translated into a retry-safe failure.
+
+For pair commands, left success followed by right rejection or uncertainty is not pair success. For fragmented commands, any failure after an accepted packet is partial progress and cannot authorize a blind restart.
+
+## 3. Exact command profiles
+
+| ID | Byte | Operation / direction | Target / aggregation | Frame bytes | Payload bytes @ first offset | Response | Post-write timeout | Automatic retry | Readback |
+|---|---:|---|---|---|---|---|---|---|---|
+| `microphone_on` | `0x0E` | `mutating_command` / `phone_to_glasses_request` | `selected_leg_default_right` / `single_leg` | 2..2 | 0..0 @ None | correlated_status, min=2 | `indeterminate_reconciliation_required` | `none` | `none` |
+| `microphone_data` | `0xF1` | `stream_event` / `glasses_to_phone_event` | `right_leg_only` / `stream_append` | 202..202 | 200..200 @ 2 | not_applicable_event, min=None | `not_applicable_event` | `none` | `event_payload` |
+| `touch_and_assistant_event` | `0xF5` | `control_event` / `glasses_to_phone_event` | `originating_leg` / `event_dispatch` | 2..unbounded | 0..unbounded @ 2 | not_applicable_event, min=None | `not_applicable_event` | `none` | `event_payload` |
+| `display_text_and_ai` | `0x4E` | `mutating_command` / `phone_to_glasses_request` | `pair_left_then_right` / `pair_all_legs_required` | 10..200 / next 10..200 | 1..191 @ 9 | correlated_status, min=2 | `indeterminate_reconciliation_required` | `none` | `none` |
+| `bitmap_packet` | `0x15` | `mutating_command` / `phone_to_glasses_request` | `active_bitmap_leg` / `staged_single_leg_transfer` | 7..200 / next 3..196 | 1..194 @ 6 | native_acceptance_only, min=None | `not_applicable_no_protocol_ack` | `none` | `terminal_crc_after_finish_only` |
+| `bitmap_finish` | `0x20` | `mutating_command` / `phone_to_glasses_request` | `active_bitmap_leg` / `staged_single_leg_transfer` | 3..3 | 0..0 @ None | correlated_status, min=2 | `indeterminate_reconciliation_required` | `none` | `terminal_crc_follows` |
+| `bitmap_crc` | `0x16` | `mutating_command` / `phone_to_glasses_request` | `active_bitmap_leg` / `staged_single_leg_transfer` | 5..5 | 0..0 @ None | crc_status, min=6 | `indeterminate_reconciliation_required` | `none` | `protocol_terminal_validation_not_state_readback` |
+| `heartbeat` | `0x25` | `mutating_command` / `phone_to_glasses_request` | `pair_left_then_right` / `pair_all_legs_required` | 6..6 | 0..0 @ None | heartbeat_liveness, min=6 | `indeterminate_reconciliation_required` | `pre_write_only_maximum_two_retries` | `correlated_liveness_response` |
+| `exit_mode` | `0x18` | `mutating_command` / `phone_to_glasses_request` | `pair_left_then_right` / `pair_all_legs_required` | 1..1 | 0..0 @ None | correlated_status, min=2 | `indeterminate_reconciliation_required` | `none` | `none` |
+| `notification_whitelist` | `0x04` | `mutating_command` / `phone_to_glasses_request` | `left_leg` / `single_leg_fragmented` | 3..180 / next 3..180 | 0..177 @ 3 | correlated_status, min=2 | `indeterminate_reconciliation_required` | `none` | `none` |
+| `notification` | `0x4B` | `mutating_command` / `phone_to_glasses_request` | `left_leg` / `single_leg_fragmented` | 4..180 / next 4..180 | 0..176 @ 4 | correlated_status, min=2 | `indeterminate_reconciliation_required` | `none` | `none` |
+| `serial_number_read` | `0x34` | `read_query` / `phone_to_glasses_request` | `selected_leg` / `single_leg` | 1..1 | 0..0 @ None | serial_identity, min=18 | `no_identity_returned_manual_new_attempt` | `none` | `query_response_vendor_semantics_unconfirmed` |
+
+`unbounded` is permitted only where current source enforces a minimum but deliberately has no upper bound. Each such field carries a machine-readable `unbounded_reason`. In particular, the optional vendor payload on `0xF5` is not silently assigned an invented limit.
+
+## 4. Wire rules
+
+### 4.1 Fixed one-frame commands
+
+- Microphone enable is exactly `[0x0E, 0x01]`.
+- Bitmap finish is exactly `[0x20, 0x0D, 0x0E]`.
+- Bitmap CRC is exactly five bytes: command plus a big-endian CRC32/XZ value.
+- Heartbeat is exactly six bytes. Byte 1 is `0x06`, byte 2 is `0x00`, byte 4 is `0x04`, and byte 5 must equal the sequence at byte 3.
+- Exit mode is the zero-payload one-byte frame `[0x18]`.
+- Serial-number read is the zero-payload one-byte query `[0x34]`.
+
+The validator executes golden examples for all of these forms. Expanding a one-byte zero-payload command to two bytes fails.
+
+### 4.2 Display text
+
+The display header is nine bytes:
+
+| Offset | Field | Encoding |
+|---:|---|---|
+| 0 | command | `u8`, constant `0x4E` |
+| 1 | sync sequence | `u8` |
+| 2 | packet count | `u8` |
+| 3 | packet sequence | `u8` |
+| 4 | new-screen flag | `u8` |
+| 5 | position | signed 16-bit big-endian |
+| 7 | current page | `u8` |
+| 8 | maximum page | `u8` |
+| 9 | text payload | UTF-8, 1–191 bytes |
+
+A frame is 10–200 bytes and the count is at most 255. The big-endian rule is compared to the base BLE contract and to the producer source.
+
+### 4.3 Notification whitelist
+
+The whitelist header is three bytes:
 
 ```text
-(connection generation, side, command byte)
+[0x04, packet_count, packet_sequence]
 ```
 
-A timeout or malformed response after native acceptance is indeterminate. It is never converted into a retryable failure merely because no success ACK was observed.
+The payload is 0–177 UTF-8 JSON bytes; each frame is 3–180 bytes; packet count is at most 255. These values are derived from `_getPackList(... count: 180)` and its three-byte header. The regression suite changes all three numbers together to 181/178/256 and requires rejection, preventing a coordinated drift from passing.
 
-## 2. Transport and platform initialization
+### 4.4 Notification
 
-Both legs expose the same Nordic-UART-style service and phone-facing write/notify characteristics recorded in the base BLE contract. Pair readiness requires both legs independently ready.
-
-Android currently performs service/characteristic discovery, CCCD enablement, MTU negotiation to at least 203 bytes, then attempts `[0xF4, 0x01]`. iOS enables notification and sends `[0x4D, 0x01]` through its bounded write path. Those platform-specific initialization bytes are source facts, not vendor-certified protocol facts; a firmware matrix and physical traces must confirm them.
-
-## 3. Command summary
-
-| ID | Byte | Direction | Target | Packet/payload bound | ACK/readback |
-|---|---:|---|---|---|---|
-| `microphone_on` | `0x0E` | phone → glasses | selected leg, normally right | 2 / 1 bytes | correlated `0xC9` or `0xCB`; no state readback |
-| `microphone_data` | `0xF1` | glasses → phone | right leg in current source | 202 / 200 LC3 bytes | event, no ACK |
-| `touch_and_assistant_event` | `0xF5` | glasses → phone | originating leg | vendor bounded | event, no ACK |
-| `display_text_and_ai` | `0x4E` | phone → glasses | left then right | 200 / 191 UTF-8 bytes | per-packet ACK; no display readback |
-| `bitmap_packet` | `0x15` | phone → glasses | one leg per transfer | 200 / 194 bytes | native acceptance, then finish/CRC |
-| `bitmap_finish` | `0x20` | phone → glasses | active bitmap leg | 3 / 2 bytes | command plus `0xC9` |
-| `bitmap_crc` | `0x16` | phone → glasses | active bitmap leg | 5 / 4 bytes | command plus byte-5 `0xC9` |
-| `heartbeat` | `0x25` | phone → glasses | left then right | 6 / 5 bytes | command plus byte-4 type `0x04` |
-| `exit_mode` | `0x18` | phone → glasses | left then right | 1 / 0 bytes | per-leg ACK; no mode readback |
-| `notification_whitelist` | `0x04` | phone → glasses | left | 180 / 177 JSON bytes | per-packet ACK; no readback |
-| `notification` | `0x4B` | phone → glasses | left | 180 / 176 JSON bytes | per-packet ACK; no readback |
-| `serial_number_read` | `0x34` | phone → glasses | selected leg | request 1 byte | response ≥18 bytes; bytes 2–17 decoded |
-
-The JSON contract contains the normative field descriptions and exact source/test references.
-
-## 4. Framing details
-
-### 4.1 Assistant and text display
-
-A `0x4E` packet is:
+The notification header is four bytes:
 
 ```text
-0     command = 0x4E
-1     sync sequence
-2     total packet count
-3     packet sequence
-4     new-screen/status byte
-5..6  position, signed 16-bit big-endian
-7     current page
-8     maximum page
-9..   UTF-8 payload, at most 191 bytes
+[0x4B, message_id, packet_count, packet_sequence]
 ```
 
-Each packet is sent to the left leg and then the right leg. An accepted left sequence followed by any right-leg uncertainty is a degraded pair effect. Automatic or user-triggered paging must remain generation-fenced so a cancelled assistant cannot publish later pages.
+The payload is 0–176 UTF-8 JSON bytes; each frame is 4–180 bytes; packet count is at most 255. The extra message ID means this profile cannot inherit the whitelist offsets by count alone.
 
-### 4.2 Notification whitelist
+### 4.5 Bitmap data
 
-A `0x04` frame uses:
+The first bitmap frame is:
 
 ```text
-0     command
-1     total packet count
-2     packet sequence
-3..   UTF-8 JSON payload, at most 177 bytes
+[0x15, sequence=0, 0x00, 0x1C, 0x00, 0x00, payload 1..194]
 ```
 
-The current source sends the whitelist to the left leg. The firmware-side JSON schema, persistence and propagation to the pair are not established by source.
-
-### 4.3 Notification
-
-A `0x4B` frame uses:
+Subsequent frames are:
 
 ```text
-0     command
-1     message ID
-2     total packet count
-3     packet sequence
-4..   UTF-8 JSON payload, at most 176 bytes
+[0x15, sequence, payload 1..194]
 ```
 
-The eight-bit message ID may wrap. Wraparound is not an idempotency guarantee and does not authorize replay of an uncertain earlier notification.
+First-frame bounds are 7–200 bytes; subsequent-frame bounds are 3–196 bytes; sequences span 0–255, for at most 256 frames. Data packets use native write acceptance rather than a protocol ACK. Rejection before any accepted packet is pre-write; rejection after progress is indeterminate.
 
-### 4.4 Bitmap
+### 4.6 Inbound audio and assistant events
 
-The first `0x15` packet contains sequence zero, fixed storage address `00 1C 00 00`, and up to 194 image bytes. Later packets contain only command, sequence and payload. The application allows at most 256 packets.
-
-Data packets use native write acceptance rather than a protocol ACK. After all are accepted, `0x20 0D 0E` requests transfer finalization. A `0x16` request supplies CRC-32/XZ of the storage address concatenated with the image, encoded big-endian. Missing finish or CRC acknowledgement after any data write is indeterminate. The application must not silently restart the full image.
-
-### 4.5 Heartbeat
-
-The request is:
+LC3 microphone data is exactly 202 bytes:
 
 ```text
-[0x25, 0x06, 0x00, sequence, 0x04, sequence]
+[0xF1, packet_sequence, 200-byte LC3 payload]
 ```
 
-The response must be correlated to command `0x25` and have type `0x04` at byte 4. Heartbeats do not overlap. Only a typed pre-write rejection may be retried; a post-acceptance timeout remains quarantined.
+Both Android and iOS source bindings enforce 202 input bytes, offset 2, 200 compressed bytes and 3,200 decoded PCM bytes. Current Android source accepts only the right leg for this stream.
 
-### 4.6 Audio
+Assistant events require at least `[0xF5, event_index]`. Indices 0, 1, 23 and 24 are bound to exit, manual page, assistant start and recording complete. Unknown indices are bounded metadata; stale or unscoped events are dropped.
 
-A microphone event must be exactly 202 bytes:
+## 5. Response and effect semantics
 
-```text
-0       0xF1
-1       packet sequence
-2..201  200 bytes LC3
-```
+Generic status commands require a response correlated by generation, side and command, with status byte 1 in `(201, 203)`. Bitmap finish accepts only `0xC9` at byte 1. Bitmap CRC requires command `0x16` at byte 0 and `0xC9` at byte 5. Heartbeat requires command `0x25` and byte 4 equal to `0x04`. Serial identity requires at least 18 bytes and reads exactly bytes 2–17.
 
-Current source accepts audio only from the right leg. LC3 decode must produce exactly 3,200 bytes of 16-kHz, mono, signed-16 PCM. The decoder output is still generation/pair checked before entering the active speech session. Malformed, wrong-side, stale-attempt or stale-generation audio is discarded, not attached to a newer session.
+The typed effect state is intentionally conservative:
 
-## 5. Assistant event indices
+| Window | Mutating command |
+|---|---|
+| native rejection before acceptance | not applied; retry only after authority recheck |
+| timeout after possible acceptance | indeterminate; reconciliation required |
+| malformed response after write | indeterminate; reconciliation required |
+| negative response after write | indeterminate under current source contract |
+| accepted fragment followed by failure | partial/indeterminate; no blind restart |
+| one pair leg succeeds and the other does not | degraded or indeterminate pair result |
 
-For a correlated `0xF5` event, source recognizes:
+Only heartbeat performs automatic retry, and only while the result remains explicitly pre-write/retry-safe, with at most two retries after the initial attempt. Serial read has no automatic retry; a caller may begin a bounded new read under the unchanged authority.
 
-- `0`: exit all device modes;
-- `1`: manual page, left for previous and right for next;
-- `23`: start assistant;
-- `24`: recording complete.
+## 6. Source binding
 
-Unknown indices produce bounded diagnostic metadata only. They cannot be reinterpreted as a privileged command. Vendor enumeration and physical touch behavior remain external.
+The machine contract names nine closed source bindings. The validator reads the exact head and requires the implementation fragments that establish:
 
-## 6. Retry and uncertainty matrix
+- command bytes and producer constants;
+- display payload size and big-endian position;
+- bitmap payload/count/address/finish/CRC behavior;
+- request correlation, quarantine and timeout disposition;
+- pair/fragment aggregation and partial-effect codes;
+- Android/iOS initialization and LC3 frame sizes;
+- assistant event dispatch.
 
-| Observation | Effect classification | Continuation |
-|---|---|---|
-| generation/pair/side mismatch before native write | rejected before write | reacquire current authority and retry within policy budget |
-| side not ready or native explicitly rejects before acceptance | rejected before write | bounded retry only while authority remains unchanged |
-| protocol data packet accepted, later packet rejected | indeterminate partial sequence | stop and reconcile; do not restart blindly |
-| one leg committed, other leg uncertain | degraded/indeterminate pair effect | surface recovery; do not claim pair success |
-| ACK timeout after native acceptance | indeterminate | retain command quarantine until late response, authoritative readback, generation retirement or terminal disposal |
-| malformed or negative response after possible write | indeterminate unless vendor contract proves terminal non-application | investigate/read back; no automatic mutation replay |
-| read-only serial response malformed | read failed | bounded read retry under unchanged authority; never use malformed bytes as identity |
+Changing source without updating the corresponding profile, golden examples and qualification code fails. Changing only the prose does not change normative behavior.
 
-## 7. Readback and reconciliation gaps
+## 7. Adversarial coverage
 
-Current source lacks authoritative post-session readback for:
+The regression suite rejects:
 
-- display contents/page;
-- microphone mode;
-- device mode after exit;
-- notification whitelist;
-- notification delivery;
-- persisted bitmap state after the active finish/CRC exchange.
+- duplicate command bytes;
+- count-preserving direction swaps;
+- count-preserving effect-policy swaps;
+- long unsafe retry prose placed where a closed enum is required;
+- ACK/status offset drift;
+- coordinated whitelist 181/178/256 drift;
+- notification payload-offset drift;
+- display endian-field offset drift;
+- transfer of the `0xF5` unbounded exception to LC3 audio;
+- expansion of one-byte zero-payload commands;
+- short event frames and invalid response vectors;
+- readback authority promotion;
+- count-preserving source-binding swaps;
+- missing required implementation fragments;
+- unknown fields and duplicate JSON keys.
 
-These are protocol/product gaps, not reasons to weaken the runtime's indeterminate outcome. Preferred firmware evolution is to add an operation/effect ID and a side-specific state query whose response binds firmware version, pair/leg identity, generation or connection epoch, operation ID, payload digest and terminal disposition.
+## 8. External limits
 
-Until such support exists, the UI and operational tooling must present uncertainty and a safe recovery action rather than claiming failure.
+This contract does not prove:
 
-## 8. Compatibility and versioning
+- vendor command meaning or firmware compatibility;
+- an authoritative readback protocol for general mutated display/device state;
+- physical RF loss, callback timing, latency, power, thermal or soak behavior;
+- secure boot, OTA, recovery, rollback or firmware signing authority;
+- Android production ASR quality or platform privacy compliance;
+- release-binary or store qualification.
 
-The contract describes the current source profile, not a universal G1 firmware specification. Production compatibility requires a matrix of:
-
-- G1 product/hardware revision;
-- left and right firmware versions;
-- command support and field semantics;
-- initialization sequence;
-- maximum MTU and packet size;
-- ACK/NACK/error behavior;
-- readback support;
-- downgrade/upgrade behavior;
-- Android/iOS application versions.
-
-A field meaning, command byte, status meaning, packet bound, target leg, retry class or readback behavior change requires a new explicit contract revision and migration plan. Implementations may become more restrictive but must not silently widen accepted input or retry authority.
-
-## 9. Verification
-
-Run:
-
-```bash
-python3 -m services.qualification.g1_command_matrix
-python3 -m unittest services.qualification.test_g1_command_matrix -v
-flutter test test/runtime/packet_codec_test.dart
-flutter test test/runtime/ble_manager_authority_test.dart
-flutter test test/runtime/tool_effect_semantics_test.dart
-```
-
-The validator checks the closed command set, unique bytes, transport UUIDs, initialization values, response statuses, assistant events, framing bounds, repository references, tests, invariants and external gates against the base G1 BLE contract.
-
-Tests prove source behavior only. The release candidate still requires Android/iOS native builds, sanitizers, signed physical traces, firmware identity and independent acceptance.
-
-## 10. Change checklist
-
-A protocol change must update, in one reviewed candidate:
-
-1. `contracts/g1-command-matrix-v1.json` or its explicit successor;
-2. `contracts/g1-ble-protocol-v1.json` where shared transport/authority semantics change;
-3. Dart/Kotlin/Swift/native producer and consumer code;
-4. cross-language golden vectors and malformed-input tests;
-5. this document and the BLE connection guide;
-6. firmware compatibility/migration notes;
-7. module ownership/handoff records when interfaces or evidence ceilings change;
-8. physical qualification scenarios and release evidence templates;
-9. exact-head CI and artifact evidence.
-
-No command is considered vendor-certified, physically reliable, safe to replay, or released merely because the source matrix validator passes.
+Those conclusions require the named vendor, lab, platform, assurance and release authorities. Source CI cannot manufacture them.
