@@ -34,6 +34,24 @@
       "fingerprint": "3021d90eb9437b2d8f30e8363695c4418b5e5f1870801b5c317e9398ee0f572d",
       "classification": "synthetic_test_fixture",
       "reason": "Exact initial historical version of the same invalid symlink-test sentinel; only formatting and the expected exception type changed later. The complete Git blob pin prevents this exception applying to any future key-shaped content."
+    },
+    {
+      "id": "invalid-full-gap-control-key-marker-initial-blob",
+      "pattern": "private_key",
+      "path": "services/qualification/test_full_gap_closure_controls.py",
+      "object": "597a3ccdd42e126d947e44e3105b8f318ba98f83",
+      "fingerprint": "3021d90eb9437b2d8f30e8363695c4418b5e5f1870801b5c317e9398ee0f572d",
+      "classification": "synthetic_test_fixture",
+      "reason": "Exact historical test blob embedded only the invalid PEM header sentinel while asserting that policy documents exclude it. It contained no key body or private material and was immediately replaced. The complete Git blob pin prevents this acknowledgement from matching any altered or real key-shaped content."
+    },
+    {
+      "id": "invalid-full-gap-control-key-marker-semantic-test-blob",
+      "pattern": "private_key",
+      "path": "services/qualification/test_full_gap_closure_controls.py",
+      "object": "c938c8575bbb9d2933cfd2b0eadd7d69a897c92b",
+      "fingerprint": "3021d90eb9437b2d8f30e8363695c4418b5e5f1870801b5c317e9398ee0f572d",
+      "classification": "synthetic_test_fixture",
+      "reason": "Exact successor test blob retained the same invalid header-only sentinel during an unrelated semantic assertion repair. It contained no key body or private material and was replaced by fragmented construction. The complete object binding forbids acknowledgement reuse for any future blob."
     }
   ]
 }

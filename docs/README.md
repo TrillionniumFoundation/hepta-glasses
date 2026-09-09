@@ -8,19 +8,26 @@
 4. `HG0087_IMPLEMENTATION_STATUS.json` — seven source-closed production-reference slices and their remaining external requirements.
 5. `MATURITY_MODEL.md` — ordered maturity vocabulary from design through released product.
 6. `development/2026-09-08_PRODUCTIZATION_ROADMAP.md` — prioritized productization and blocker-closure route.
-7. `HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md` — normative G0–G8 source sequence, invariants, gates, and evidence levels.
-8. `PRODUCT_BOUNDARY.md` — device, edge, cloud, capability, model, Codex, firmware, and release boundaries.
-9. `ARCHITECTURE.md` — data flow and authority topology.
-10. `CAPABILITY_MODEL.md` — risk tiers, exact leases, and mutation admission.
-11. `PLATFORM_CAPABILITIES.json` — source capability and physical-attestation matrix.
-12. `THREAT_MODEL.md` — trust boundaries and fail-closed controls.
-13. `PRIVACY_MODEL.md` — data classes, retention defaults, consent, export, and deletion.
-14. `GAP_LEDGER.yaml` — G8 source gaps and inherited external gates.
-15. `EVIDENCE_INDEX.yaml` — source, CI, device, governance, review, pilot, and release evidence registry.
-16. `MODULES.json` — base machine-readable module ownership and coverage registry.
-17. `MODULE_COVERAGE.json` — flattened tracked-source ownership registry.
-18. `MODULE_HANDOFF.json` and `development/MODULE_HANDOFF.md` — primary technical handoff for all 26 flattened modules.
-19. `MODULE_DEVELOPMENT_GUIDE.md` — base detailed technical development guide.
+7. `development/2026-09-09_FULL_GAP_CLOSURE_PLAN.md` — dependency-ordered C0–C11 execution transaction for all remaining gaps.
+8. `operations/FULL_GAP_CLOSURE_CONTROL_BOARD.md` — accountable authority, next non-substitutable action and acceptance object for every active issue.
+9. `development/2026-09-09_SOURCE_DEEPENING_WORK_PACKAGES.md` — product identity, protocol, mobile architecture, testing, observability, native provenance and UX work packages.
+10. `development/MODULE_DOCUMENTATION_COMPLETENESS_STANDARD.md` — semantic definition of detailed module documentation.
+11. `development/MODULE_DOCUMENTATION_DEPTH_AUDIT_2026-09-09.md` — 26-module documentation-depth assessment and prioritized backlog.
+12. `HEPTA_GLASSES_CANONICAL_DEVELOPMENT_PLAN.md` — normative G0–G8 source sequence, invariants, gates, and evidence levels.
+13. `PRODUCT_BOUNDARY.md` — device, edge, cloud, capability, model, Codex, firmware, and release boundaries.
+14. `ARCHITECTURE.md` — data flow and authority topology.
+15. `CAPABILITY_MODEL.md` — risk tiers, exact leases, and mutation admission.
+16. `PLATFORM_CAPABILITIES.json` — source capability and physical-attestation matrix.
+17. `THREAT_MODEL.md` — trust boundaries and fail-closed controls.
+18. `PRIVACY_MODEL.md` — data classes, retention defaults, consent, export, and deletion.
+19. `GAP_LEDGER.yaml` — G8 source gaps and inherited external gates.
+20. `EVIDENCE_INDEX.yaml` — source, CI, device, governance, review, pilot, and release evidence registry.
+21. `MODULES.json` — base machine-readable module ownership and coverage registry.
+22. `MODULE_COVERAGE.json` — compatibility pointer to the canonical tracked-source ownership registry.
+23. `MODULE_HANDOFF.json` and `development/MODULE_HANDOFF.md` — primary technical handoff for all 26 modules.
+24. `MODULE_DEVELOPMENT_GUIDE.md` — base detailed technical development guide.
+
+Repository-level contribution and confidential-reporting controls live in `../.github/CONTRIBUTING.md` and `../.github/SECURITY.md`.
 
 The live pull-request head and Git tree identify the active source object. A copied SHA in prose is descriptive only. `CLOSED_SOURCE` does not promote source into deployed, physical, independently assured, signed, piloted, store-approved, or released status.
 
@@ -82,11 +89,15 @@ Tests include:
 - `services/qualification/test_external_evidence_contract_binding.py`
 - `services/qualification/test_external_evidence_repository_admission.py`
 
-### Active remediation
+### Active remediation and closure control
 
 The active remediation layer closes repository-controlled source slices while preserving the external claim ceiling:
 
 - `development/2026-09-03_BLOCKER_EXECUTION_PLAN.md`
+- `development/2026-09-09_FULL_GAP_CLOSURE_PLAN.md`
+- `development/2026-09-09_SOURCE_DEEPENING_WORK_PACKAGES.md`
+- `development/MODULE_DOCUMENTATION_COMPLETENESS_STANDARD.md`
+- `development/MODULE_DOCUMENTATION_DEPTH_AUDIT_2026-09-09.md`
 - `development/ADMISSION_CONTINUITY.md`
 - `development/AUTHENTICATED_MODEL_INGRESS.md`
 - `development/AUTHENTICATED_PRINCIPALS.md`
@@ -115,6 +126,8 @@ The active remediation layer closes repository-controlled source slices while pr
 - `development/SOURCE_COVERAGE_AND_STATE.md`
 - `development/SPEECH_BOOTSTRAP_CUSTODY.md`
 
+The 2026-09-09 control documents do not promote an external gap. They enforce the execution order and identify facts that only administrators, independent reviewers, providers, physical labs, vendors, signing authorities, pilot operators and stores can issue.
+
 ## Device and protocol documentation
 
 - `G1_BLE_CONNECTION.md`
@@ -132,6 +145,8 @@ The source documents protocol and failure semantics. Vendor protocol authority, 
 - `operations/DEVICE_QUALIFICATION_RUNBOOK.md`
 - `operations/DURABLE_CAPABILITY_RUNBOOK.md`
 - `operations/DURABLE_MODEL_GATEWAY_RUNBOOK.md`
+- `operations/EXTERNAL_CLOSURE_ORCHESTRATION.md`
+- `operations/FULL_GAP_CLOSURE_CONTROL_BOARD.md`
 - `operations/GOOGLE_CALENDAR_CAPABILITY_RUNBOOK.md`
 - `operations/HG0087_PRODUCTION_RUNTIME_RUNBOOK.md`
 - `operations/IDENTITY_AUTHORITY_RUNBOOK.md`
@@ -201,11 +216,15 @@ Key schemas:
 
 ## Truth validation
 
-`services/qualification/documentation_truth.py` and `services/qualification/test_documentation_truth.py` reject:
+`services/qualification/documentation_truth.py`, `services/qualification/test_documentation_truth.py`, and `services/qualification/test_full_gap_closure_controls.py` reject:
 
 - disagreement over HG-0087 source closure;
 - promotion of HG-0089 without Administration evidence;
 - stale README/Current State phrases;
+- conflation of PR #114's live successor with PR #101's historical qualified baseline;
+- missing C0–C11 closure stages or open-issue coverage;
+- missing 26-module depth audit entries or WP1–WP7 work packages;
+- loss of the no-self-review, no-secret or no-override boundary;
 - required-check drift;
 - transfer of a predecessor artifact to a successor;
 - missing maturity stages or productization index entries;

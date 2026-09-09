@@ -106,9 +106,9 @@
   },
   "schema_version": 5,
   "source_authority": {
-    "branch": "work/hepta-g10-trusted-openssl-custody-20260902",
+    "branch": "codex/hepta-main-convergence-20260909-v2",
     "identity_rule": "live_pr_head_and_tree",
-    "pull_request": 101,
+    "pull_request": 114,
     "repository": "TrillionniumFoundation/hepta-glasses",
     "required_artifact": "hepta-source-evidence-<exact-head-sha>",
     "self_attested_sha_is_authoritative": false,
