@@ -71,7 +71,13 @@ jobs:
                       )
               bundle.extractall(Path.cwd())
           PYCODE
-          sed -i 's/[[:space:]]\+$//' docs/operations/EXTERNAL_GAP_EXECUTION.md
+          sed -i 's/[[:space:]]\+$//' \
+            README.md \
+            CHANGELOG.md \
+            docs/development/RELEASE_VERSIONING.md \
+            docs/operations/EXTERNAL_GAP_EXECUTION.md \
+            docs/modules/README.md \
+            docs/modules/*/README.md
       - name: Import reviewed source Artifact archival slice without stray files
         shell: bash
         run: |
