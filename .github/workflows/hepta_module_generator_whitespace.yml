@@ -1,0 +1,129 @@
+name: hepta-module-generator-whitespace
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-module-generator-whitespace-20260909-v1'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hepta-module-generator-whitespace
+  cancel-in-progress: true
+
+jobs:
+  repair-and-generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 'cad07c7534b8a3ba6c69d5b3fceb3acabc76b191'
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify immutable source and target
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE='cad07c7534b8a3ba6c69d5b3fceb3acabc76b191'
+          TARGET='codex/hepta-main-convergence-20260909-v2'
+          test "$(git rev-parse HEAD)" = "$SOURCE"
+          remote_head="$(git ls-remote --heads origin "refs/heads/$TARGET" | awk '{print $1}')"
+          test "$remote_head" = "$SOURCE"
+
+      - name: Remove generated Markdown trailing whitespace at the source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('tools/generate_module_docs.py')
+          source = path.read_text(encoding='utf-8')
+          old = '''# `{module['id']}` module engineering handoff
+
+          Canonical registry digest: `{digest}`  
+          Owner: `{module['owner']}`  
+          Lifecycle: `{module['lifecycle']}`  
+          Profile: `{module['profile']}`
+          '''
+          new = '''# `{module['id']}` module engineering handoff
+
+          Canonical registry digest: `{digest}`
+
+          Owner: `{module['owner']}`
+
+          Lifecycle: `{module['lifecycle']}`
+
+          Profile: `{module['profile']}`
+          '''
+          if source.count(old) != 1:
+              raise SystemExit('expected one exact generated module header block')
+          path.write_text(source.replace(old, new), encoding='utf-8')
+          PY
+          git diff --check
+
+      - name: Bootstrap and verify the canonical module truth
+        run: |
+          python3 tools/generate_module_docs.py --bootstrap
+          python3 tools/generate_module_docs.py --check
+          python3 tools/validate_module_semantics.py
+          python3 tools/validate_source_coverage.py
+          python3 tools/validate_module_handoff.py
+          python3 tools/validate_release_version.py
+          python3 tools/validate_external_closure_program.py
+          python3 tools/validate_repository.py
+          python3 tools/validate_repository_metadata.py
+          python3 tools/validate_production_authority.py
+
+      - name: Run focused and complete Python suites
+        run: |
+          python3 -m unittest -v \
+            services.qualification.test_module_semantic_docs \
+            services.qualification.test_external_closure_program \
+            services.qualification.test_release_version \
+            services.qualification.test_source_artifact_archive_receipt \
+            services.codex_worker.test_task_supervisor.TaskSupervisorTests.test_cancellation_kills_entire_process_group \
+            services.model_gateway.test_model_boundaries.ModelBoundaryTests.test_actual_hung_workers_exhaust_fixed_pool \
+            services.model_gateway.test_bounded_worker_determinism
+          python3 -m unittest discover -s services -p 'test_*.py'
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+
+      - name: Verify generated path and whitespace custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          mapfile -t changed < <(
+            {
+              git diff --name-only --diff-filter=ACMRT
+              git ls-files --others --exclude-standard
+            } | sort -u
+          )
+          test "${#changed[@]}" -gt 0
+          for path in "${changed[@]}"; do
+            case "$path" in
+              tools/generate_module_docs.py|README.md|docs/README.md|docs/MODULE_COVERAGE.json|docs/modules/modules.json|docs/modules/README.md|docs/modules/*/README.md)
+                ;;
+              *)
+                echo "unexpected generated path: $path" >&2
+                exit 1
+                ;;
+            esac
+          done
+          test "$(find docs/modules -mindepth 2 -maxdepth 2 -name README.md -type f | wc -l)" -eq 26
+
+      - name: Commit and fast-forward the convergence branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET='codex/hepta-main-convergence-20260909-v2'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- tools/generate_module_docs.py README.md docs/README.md docs/MODULE_COVERAGE.json docs/modules
+          git diff --cached --check
+          git commit -m 'docs: generate whitespace-clean canonical 26-module handoff'
+          git push origin "HEAD:refs/heads/$TARGET"
