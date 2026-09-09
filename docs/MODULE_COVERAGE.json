@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "extends_registry": "docs/MODULE_COVERAGE_BASE_2026-09-09.json",
-  "scope": "Reverse ownership additions for strict authority-wire and G1 packet conformance; inherits the complete prior registry.",
+  "scope": "Reverse ownership additions for strict authority-wire, G1 packet conformance, release-version truth, and durable source-Artifact verification; inherits the complete prior registry.",
   "module_extensions": [
     {
       "id": "policy-tool-gateway",
@@ -45,17 +45,42 @@
       ]
     },
     {
+      "id": "qualification-release",
+      "source_roots": [
+        "tools/validate_release_version.py",
+        "tools/verify_source_archive_receipt.py"
+      ],
+      "documentation": [
+        "docs/development/RELEASE_VERSIONING.md",
+        "docs/development/SOURCE_ARTIFACT_ARCHIVAL.md"
+      ],
+      "tests": [
+        "services/qualification/test_release_version.py",
+        "services/qualification/test_source_artifact_archive_receipt.py"
+      ],
+      "contracts": [
+        "contracts/release-versioning-v1.json",
+        "schemas/source-artifact-archive-receipt.schema.json"
+      ]
+    },
+    {
       "id": "contracts-compatibility",
       "documentation": [
-        "docs/development/CRITICAL_TEST_DEPTH.md"
+        "docs/development/CRITICAL_TEST_DEPTH.md",
+        "docs/development/RELEASE_VERSIONING.md",
+        "docs/development/SOURCE_ARTIFACT_ARCHIVAL.md"
       ],
       "tests": [
         "services/qualification/test_cross_language_conformance.py",
-        "services/qualification/test_mutation_authority_conformance.py"
+        "services/qualification/test_mutation_authority_conformance.py",
+        "services/qualification/test_release_version.py",
+        "services/qualification/test_source_artifact_archive_receipt.py"
       ],
       "contracts": [
         "contracts/conformance/g1-packet-v1.json",
-        "contracts/conformance/mutation-authority-v1.json"
+        "contracts/conformance/mutation-authority-v1.json",
+        "contracts/release-versioning-v1.json",
+        "schemas/source-artifact-archive-receipt.schema.json"
       ],
       "source_roots": [
         "services/qualification/cross_language_json_reference.py",
