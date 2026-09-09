@@ -1,0 +1,124 @@
+name: hepta-admin-closure-v12
+
+on:
+  push:
+    branches:
+      - ops/hepta-admin-closure-20260909-v12
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  apply-canonical-main-protection:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CANDIDATE_HEAD: 317ee1141ceac6df7d711aeaaca27b22d735e48d
+      CANDIDATE_TREE: 51e673238d30b81ef8eb64b93eef14fc7bf850cb
+      RECEIPT_DIR: ${{ runner.temp }}/hepta-admin-closure-v12
+    steps:
+      - name: Check out one-shot operator commit without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Bind operator commit to the qualified immutable candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$CANDIDATE_HEAD"
+          test "$(git rev-parse HEAD^^{tree})" = "$CANDIDATE_TREE"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/hepta-admin-closure-v12.yml"
+          git diff --check HEAD^ HEAD
+
+      - name: Apply canonical protection and capture complete sanitized readback
+        id: apply
+        continue-on-error: true
+        shell: bash
+        env:
+          HEPTA_REPO_ADMIN_TOKEN: ${{ secrets.HEPTA_REPO_ADMIN_TOKEN }}
+        run: |
+          set -uo pipefail
+          mkdir -p "$RECEIPT_DIR"
+          chmod 700 "$RECEIPT_DIR"
+
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          root = pathlib.Path(os.environ["RECEIPT_DIR"])
+          metadata = {
+              "schema_version": 1,
+              "repository": "TrillionniumFoundation/hepta-glasses",
+              "target_branch": "main",
+              "candidate_head": os.environ["CANDIDATE_HEAD"],
+              "candidate_tree": os.environ["CANDIDATE_TREE"],
+              "operator_workflow_sha": os.environ["GITHUB_SHA"],
+              "operator_run_id": os.environ["GITHUB_RUN_ID"],
+              "admin_secret_present": bool(os.environ.get("HEPTA_REPO_ADMIN_TOKEN")),
+              "github_token_used_as_admin_fallback": False,
+          }
+          (root / "operator-metadata.json").write_text(
+              json.dumps(metadata, sort_keys=True, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+          if [ -z "${HEPTA_REPO_ADMIN_TOKEN:-}" ]; then
+            printf '%s\n' '{"ok":false,"error":"admin_token_required"}' > "$RECEIPT_DIR/apply-result.json"
+            printf '%s\n' '2' > "$RECEIPT_DIR/return-code.txt"
+            exit 2
+          fi
+
+          set +e
+          python3 tools/repository_governance.py --apply \
+            > "$RECEIPT_DIR/apply-result.json" \
+            2> "$RECEIPT_DIR/apply-stderr.log"
+          rc=$?
+          set -e
+          printf '%s\n' "$rc" > "$RECEIPT_DIR/return-code.txt"
+
+          if [ "$rc" -eq 0 ]; then
+            python3 - <<'PY'
+          import json, os, pathlib, urllib.request
+          root = pathlib.Path(os.environ["RECEIPT_DIR"])
+          token = os.environ["HEPTA_REPO_ADMIN_TOKEN"]
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": f"Bearer {token}",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+          endpoints = {
+              "protection-readback.json": "https://api.github.com/repos/TrillionniumFoundation/hepta-glasses/branches/main/protection",
+              "rulesets-readback.json": "https://api.github.com/repos/TrillionniumFoundation/hepta-glasses/rulesets?includes_parents=true",
+          }
+          for filename, url in endpoints.items():
+              request = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  value = json.loads(response.read().decode("utf-8"))
+              (root / filename).write_text(
+                  json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n",
+                  encoding="utf-8",
+              )
+          PY
+          fi
+
+          exit "$rc"
+
+      - name: Upload sanitized administration receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-admin-closure-v12-${{ github.sha }}
+          path: ${{ env.RECEIPT_DIR }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Preserve fail-closed result
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$RECEIPT_DIR/return-code.txt"
+          rc="$(cat "$RECEIPT_DIR/return-code.txt")"
+          test "$rc" = "0"
