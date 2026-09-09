@@ -289,13 +289,37 @@ class DurableCapabilitiesTests(unittest.TestCase):
         self.assertEqual(adapter.calls, 0)
 
     def test_timeout_does_not_accept_late_success(self):
-        other, adapter = self.make(maximum_wait_seconds=0.01)
+        other, adapter = self.make(maximum_wait_seconds=0.5)
         adapter.block = True
-        receipt = self.execute(gateway=other)
-        self.assertEqual(receipt.status, "indeterminate")
+        receipts = []
+        failures = []
+
+        def execute() -> None:
+            try:
+                receipts.append(self.execute(gateway=other))
+            except BaseException as error:
+                failures.append(error)
+
+        caller = threading.Thread(target=execute)
+        caller.start()
+        self.assertTrue(
+            adapter.entered.wait(1),
+            "provider dispatch did not enter before the timeout proof",
+        )
+        caller.join(2)
+        self.assertFalse(caller.is_alive())
+        self.assertEqual(failures, [])
+        self.assertEqual(len(receipts), 1)
+        self.assertEqual(receipts[0].status, "indeterminate")
         adapter.release.set()
-        self.assertEqual(self.execute(gateway=other).status, "indeterminate")
-        self.assertEqual(other.reconcile(self.request).status, "succeeded")
+        self.assertEqual(
+            self.execute(gateway=other).status,
+            "indeterminate",
+        )
+        self.assertEqual(
+            other.reconcile(self.request).status,
+            "succeeded",
+        )
 
     def test_not_started_is_failed_but_never_auto_retried(self):
         with patch.object(self.gateway._calls, "run", return_value=CallOutcome("not_started")):
