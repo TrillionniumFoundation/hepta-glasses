@@ -1,0 +1,291 @@
+name: hepta-source-adoption-gate
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-source-adoption-gate-20260909-v1'
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: hepta-source-adoption-gate
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Evaluate exact staged source admissions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          repo = os.environ['GH_REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          api = 'https://api.github.com'
+          staged = [107, 108, 109, 110, 111, 113]
+          jobs_expected = {
+              'repository-contracts', 'flutter', 'android-native', 'ios-native',
+              'native-sanitizers', 'secret-and-boundary-scan', 'source-evidence',
+          }
+
+          def call(path, method='GET', body=None):
+              raw = None if body is None else json.dumps(body, separators=(',', ':')).encode()
+              request = urllib.request.Request(
+                  api + path,
+                  data=raw,
+                  method=method,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'User-Agent': 'hepta-source-adoption-gate/1',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      **({'Content-Type': 'application/json'} if raw is not None else {}),
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=45) as response:
+                  payload = response.read()
+                  return json.loads(payload) if payload else None
+
+          def unresolved(number):
+              owner, name = repo.split('/', 1)
+              query = '''
+              query($owner:String!,$name:String!,$number:Int!,$cursor:String){
+                repository(owner:$owner,name:$name){
+                  pullRequest(number:$number){
+                    reviewThreads(first:100,after:$cursor){
+                      nodes{isResolved}
+                      pageInfo{hasNextPage endCursor}
+                    }
+                  }
+                }
+              }
+              '''
+              cursor = None
+              count = 0
+              while True:
+                  raw = json.dumps({'query': query, 'variables': {
+                      'owner': owner, 'name': name, 'number': number, 'cursor': cursor,
+                  }}).encode()
+                  request = urllib.request.Request(
+                      'https://api.github.com/graphql',
+                      data=raw,
+                      method='POST',
+                      headers={
+                          'Accept': 'application/vnd.github+json',
+                          'Authorization': f'Bearer {token}',
+                          'Content-Type': 'application/json',
+                          'User-Agent': 'hepta-source-adoption-gate/1',
+                          'X-GitHub-Api-Version': '2022-11-28',
+                      },
+                  )
+                  with urllib.request.urlopen(request, timeout=45) as response:
+                      document = json.loads(response.read())
+                  if document.get('errors'):
+                      raise RuntimeError(str(document['errors']))
+                  page = document['data']['repository']['pullRequest']['reviewThreads']
+                  count += sum(1 for node in page['nodes'] if not node['isResolved'])
+                  if not page['pageInfo']['hasNextPage']:
+                      return count
+                  cursor = page['pageInfo']['endCursor']
+
+          prs = {number: call(f'/repos/{repo}/pulls/{number}') for number in [101, *staged]}
+          expected_bases = {
+              107: prs[101]['head']['ref'],
+              108: prs[107]['head']['ref'],
+              109: prs[108]['head']['ref'],
+              110: prs[109]['head']['ref'],
+              111: prs[110]['head']['ref'],
+              113: prs[111]['head']['ref'],
+          }
+          rows = []
+          blockers = []
+          for number in staged:
+              pr = prs[number]
+              head = pr['head']['sha']
+              base_ok = pr['base']['ref'] == expected_bases[number]
+              comparison = call(f"/repos/{repo}/compare/{pr['base']['sha']}...{head}")
+              ancestry_ok = comparison['status'] == 'ahead' and comparison['ahead_by'] > 0
+              branch = urllib.parse.quote(pr['head']['ref'], safe='')
+              runs = call(f'/repos/{repo}/actions/workflows/ci.yml/runs?branch={branch}&per_page=50')['workflow_runs']
+              run_matches = [run for run in runs if run.get('head_sha') == head and run.get('event') == 'pull_request']
+              run = max(run_matches, key=lambda item: (item['run_number'], item['run_attempt'])) if run_matches else None
+              run_ok = run is not None and run['status'] == 'completed' and run['conclusion'] == 'success'
+              jobs_ok = False
+              artifact_ok = False
+              if run_ok:
+                  jobs = call(f"/repos/{repo}/actions/runs/{run['id']}/jobs?per_page=100")['jobs']
+                  jobs_ok = len(jobs) == 7 and {job['name'] for job in jobs} == jobs_expected and all(job['status'] == 'completed' and job['conclusion'] == 'success' and job.get('steps') for job in jobs)
+                  artifacts = call(f"/repos/{repo}/actions/runs/{run['id']}/artifacts?per_page=100")['artifacts']
+                  exact = [item for item in artifacts if item['name'] == f'hepta-source-evidence-{head}' and not item['expired']]
+                  artifact_ok = len(exact) == 1 and exact[0].get('size_in_bytes', 0) > 0
+
+              committers = set()
+              for commit in comparison.get('commits', []):
+                  for party in (commit.get('author'), commit.get('committer')):
+                      if party and party.get('login'):
+                          committers.add(party['login'])
+              approvals = []
+              for review in call(f'/repos/{repo}/pulls/{number}/reviews?per_page=100'):
+                  login = (review.get('user') or {}).get('login')
+                  if (
+                      review.get('state') == 'APPROVED'
+                      and review.get('commit_id') == head
+                      and login
+                      and login != (pr.get('user') or {}).get('login')
+                      and login not in committers
+                  ):
+                      approvals.append(login)
+              approvals = sorted(set(approvals))
+              open_threads = unresolved(number)
+              checks = {
+                  'open_draft': pr['state'] == 'open' and pr['draft'] is True,
+                  'base': base_ok,
+                  'ancestry': ancestry_ok,
+                  'ci': run_ok,
+                  'jobs': jobs_ok,
+                  'artifact': artifact_ok,
+                  'threads': open_threads == 0,
+                  'approval': bool(approvals),
+              }
+              failed = sorted(key for key, value in checks.items() if not value)
+              if failed:
+                  blockers.append({'pr': number, 'failed': failed})
+              rows.append({
+                  'pr': number,
+                  'head': head,
+                  'base': pr['base']['ref'],
+                  'run_id': run['id'] if run else None,
+                  'run_number': run['run_number'] if run else None,
+                  'approvals': approvals,
+                  'unresolved_threads': open_threads,
+                  'checks': checks,
+              })
+
+          ready = not blockers
+          state = {
+              'ready': ready,
+              'blockers': blockers,
+              'rows': rows,
+              'candidate_base': prs[101]['head']['ref'],
+              'top_branch': prs[113]['head']['ref'],
+              'top_head': prs[113]['head']['sha'],
+              'old_top_base': prs[113]['base']['ref'],
+          }
+          with open('/tmp/hepta-source-adoption.json', 'w', encoding='utf-8') as handle:
+              json.dump(state, handle, sort_keys=True)
+          if not ready:
+              lines = [
+                  '## Final source adoption gate — BLOCKED', '',
+                  'The top source stack was not retargeted and no PR was merged. Exact missing conditions:', '',
+              ]
+              lines += [f"- PR #{item['pr']}: `{item['failed']}`" for item in blockers]
+              lines += ['', 'No staged CI, Artifact or review evidence is transferred. The gate may be retried only after the listed exact-head facts exist.']
+              call(f'/repos/{repo}/issues/82/comments', 'POST', {'body': '\n'.join(lines)})
+          else:
+              call(
+                  f'/repos/{repo}/issues/82/comments',
+                  'POST',
+                  {'body': (
+                      '## Final source adoption gate — STAGED ADMISSIONS PASSED\n\n'
+                      'All six staged PRs have exact-head successful canonical CI, a non-empty exact-head source Artifact, zero unresolved threads, '
+                      'and an approval from a reviewer who is neither the PR author nor a commit author/committer in that staged delta. '
+                      'The top branch may now be retargeted to the PR #101 candidate, but all earlier evidence becomes non-transferable and a fresh final packet is required.'
+                  )},
+              )
+          print(json.dumps(state, sort_keys=True))
+          PY
+      - name: Retarget only when every staged admission passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready="$(python3 -c 'import json; print(str(json.load(open("/tmp/hepta-source-adoption.json"))["ready"]).lower())')"
+          if [ "$ready" != true ]; then
+            echo 'Staged admissions are not complete; no source object is moved.'
+            exit 0
+          fi
+
+          repository="$GH_REPOSITORY"
+          candidate_base="$(python3 -c 'import json; print(json.load(open("/tmp/hepta-source-adoption.json"))["candidate_base"])')"
+          top_branch="$(python3 -c 'import json; print(json.load(open("/tmp/hepta-source-adoption.json"))["top_branch"])')"
+          old_head="$(python3 -c 'import json; print(json.load(open("/tmp/hepta-source-adoption.json"))["top_head"])')"
+          old_top_base="$(python3 -c 'import json; print(json.load(open("/tmp/hepta-source-adoption.json"))["old_top_base"])')"
+          test "$old_top_base" = 'codex/hepta-version-authority-20260908'
+          sentinel='docs/development/FINAL_SOURCE_ADOPTION_READY'
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${repository}.git"
+
+          git clone --filter=blob:none "$remote" repository
+          cd repository
+          git fetch origin "refs/heads/${top_branch}:refs/remotes/origin/${top_branch}"
+          test "$(git rev-parse "origin/${top_branch}")" = "$old_head"
+          git checkout -B adoption-work "origin/${top_branch}"
+          git cat-file -e "HEAD:docs/development/SOURCE_ARTIFACT_DURABILITY_REBASE_READY"
+          test ! -e "$sentinel"
+          mkdir -p "$(dirname "$sentinel")"
+          : > "$sentinel"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$sentinel"
+          git commit -m 'chore: prepare final source adoption requalification'
+          new_head="$(git rev-parse HEAD)"
+          git push origin \
+            --force-with-lease="refs/heads/${top_branch}:${old_head}" \
+            "HEAD:refs/heads/${top_branch}"
+
+          python3 - "$repository" "$candidate_base" "$new_head" <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          repository, base, head = sys.argv[1:]
+          token = os.environ['GH_TOKEN']
+          headers = {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': f'Bearer {token}',
+              'Content-Type': 'application/json',
+              'User-Agent': 'hepta-source-adoption-gate/1',
+              'X-GitHub-Api-Version': '2022-11-28',
+          }
+          request = urllib.request.Request(
+              f'https://api.github.com/repos/{repository}/pulls/113',
+              data=json.dumps({
+                  'base': base,
+                  'title': '[DRAFT / FINAL REQUALIFICATION] consolidated repository-source closure candidate',
+              }).encode(),
+              method='PATCH',
+              headers=headers,
+          )
+          with urllib.request.urlopen(request, timeout=45) as response:
+              response.read()
+          request = urllib.request.Request(
+              f'https://api.github.com/repos/{repository}/issues/113/comments',
+              data=json.dumps({'body': (
+                  '## Final source consolidation prepared\n\n'
+                  f'This PR was retargeted to `{base}` and its head moved to `{head}` only after every staged exact-head admission passed. '
+                  'The empty `FINAL_SOURCE_ADOPTION_READY` sentinel now requires a connector-authored commit to trigger fresh canonical CI. '
+                  'No staged CI, Artifact, review, prospective-merge or external-authority evidence transfers to this final object.'
+              )}).encode(),
+              method='POST',
+              headers=headers,
+          )
+          with urllib.request.urlopen(request, timeout=45) as response:
+              response.read()
+          PY
