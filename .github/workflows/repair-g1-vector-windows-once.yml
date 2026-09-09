@@ -1,0 +1,44 @@
+name: repair-g1-vector-windows-once
+
+on:
+  push:
+    branches:
+      - ops/hepta-repair-g1-vector-win-20260910
+    paths:
+      - .github/workflows/repair-g1-vector-windows-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - name: Check out the exact repair branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ops/hepta-repair-g1-vector-win-20260910
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up fixed Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Repair, validate and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/repair_g1_vector_once.py
+          rm .github/workflows/repair-g1-vector-windows-once.yml
+          rm tools/repair_g1_vector_once.py
+          python services/qualification/g1_command_matrix.py
+          python -m unittest services.qualification.test_g1_command_matrix
+          python tools/validate_source_coverage.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add contracts/g1-command-matrix-v1.json services/qualification/g1_command_matrix.py .github/workflows/repair-g1-vector-windows-once.yml tools/repair_g1_vector_once.py
+          git commit -m "protocol: repair exact 202-byte LC3 event vector"
+          git push origin HEAD:ops/hepta-repair-g1-vector-win-20260910
