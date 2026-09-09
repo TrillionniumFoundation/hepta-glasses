@@ -104,11 +104,12 @@ jobs:
           PY
 
           rm .github/workflows/repair-g1-vector-once.yml
+          git add -u .github/workflows/repair-g1-vector-once.yml
           python3 services/qualification/g1_command_matrix.py
           python3 -m unittest services.qualification.test_g1_command_matrix
           python3 tools/validate_source_coverage.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add contracts/g1-command-matrix-v1.json services/qualification/g1_command_matrix.py .github/workflows/repair-g1-vector-once.yml
+          git add contracts/g1-command-matrix-v1.json services/qualification/g1_command_matrix.py
           git commit -m "protocol: repair exact 202-byte LC3 event vector"
           git push origin HEAD:ops/hepta-repair-g1-vector-20260910
