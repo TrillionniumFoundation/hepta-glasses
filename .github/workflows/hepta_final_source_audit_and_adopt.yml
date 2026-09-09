@@ -1,0 +1,311 @@
+name: hepta-final-source-audit-and-adopt
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-pr111-audit-20260909-v1'
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: hepta-final-source-audit-and-adopt
+  cancel-in-progress: true
+
+jobs:
+  audit-and-adopt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Detect a consolidated final-source candidate
+        id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          repo = os.environ['GH_REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          api = 'https://api.github.com'
+
+          def get(path):
+              request = urllib.request.Request(
+                  api + path,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'User-Agent': 'hepta-final-source-adopt/1',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=45) as response:
+                  return json.loads(response.read())
+
+          pr101 = get(f'/repos/{repo}/pulls/101')
+          pr113 = get(f'/repos/{repo}/pulls/113')
+          expected_base = pr101['head']['ref']
+          ready = (
+              pr113['state'] == 'open'
+              and pr113['head']['ref'] == 'codex/hepta-source-artifact-durability-20260908'
+              and pr113['base']['ref'] == expected_base
+          )
+          sentinel_ok = False
+          if ready:
+              try:
+                  document = get(
+                      f"/repos/{repo}/contents/docs/development/FINAL_SOURCE_ADOPTION_READY?ref={pr113['head']['sha']}"
+                  )
+                  raw = base64.b64decode(
+                      document['content'].replace('\r', '').replace('\n', ''),
+                      validate=True,
+                  )
+                  text = raw.decode('utf-8')
+                  sentinel_ok = (
+                      bool(text.strip())
+                      and 'No staged CI, Artifact, review' in text
+                      and 'does not create provider' in text
+                  )
+              except (KeyError, ValueError, UnicodeError, urllib.error.HTTPError):
+                  sentinel_ok = False
+          ready = ready and sentinel_ok
+
+          output = os.environ['GITHUB_OUTPUT']
+          with open(output, 'a', encoding='utf-8') as handle:
+              handle.write(f"ready={'true' if ready else 'false'}\n")
+              handle.write(f"base={expected_base}\n")
+              handle.write(f"head={pr113['head']['sha']}\n")
+          if not ready:
+              body = (
+                  '## Final consolidated source audit — NOT YET ELIGIBLE\n\n'
+                  f"PR #113 currently has base `{pr113['base']['ref']}`, head `{pr113['head']['sha']}`, "
+                  f"while the PR #101 candidate branch is `{expected_base}`. "
+                  f"Final adoption sentinel valid: `{sentinel_ok}`. "
+                  'No candidate was marked Ready or merged. The staged independent-approval gate must complete first.'
+              )
+              payload = json.dumps({'body': body}).encode()
+              request = urllib.request.Request(
+                  api + f'/repos/{repo}/issues/82/comments',
+                  data=payload,
+                  method='POST',
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'Content-Type': 'application/json',
+                      'User-Agent': 'hepta-final-source-adopt/1',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=45) as response:
+                  response.read()
+          print(json.dumps({
+              'ready': ready,
+              'expected_base': expected_base,
+              'actual_base': pr113['base']['ref'],
+              'head': pr113['head']['sha'],
+              'sentinel_ok': sentinel_ok,
+          }, sort_keys=True))
+          PY
+      - name: Audit the consolidated exact-head packet
+        if: steps.candidate.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 ops/audit_source_packet.py \
+            --repository '${{ github.repository }}' \
+            --token "$GH_TOKEN" \
+            --pr 113 \
+            --branch 'codex/hepta-source-artifact-durability-20260908' \
+            --expected-base '${{ steps.candidate.outputs.base }}' \
+            --parent-branch '${{ steps.candidate.outputs.base }}' \
+            --sentinel 'docs/development/FINAL_SOURCE_ADOPTION_READY' \
+            --timeout-seconds 2100
+      - name: Wait for a fresh eligible exact-head approval
+        if: steps.candidate.outputs.ready == 'true'
+        id: approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          EXPECTED_HEAD: ${{ steps.candidate.outputs.head }}
+          EXPECTED_BASE: ${{ steps.candidate.outputs.base }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.request
+
+          repo = os.environ['GH_REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          expected_head = os.environ['EXPECTED_HEAD']
+          expected_base = os.environ['EXPECTED_BASE']
+          api = 'https://api.github.com'
+
+          def get(path):
+              request = urllib.request.Request(
+                  api + path,
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'User-Agent': 'hepta-final-source-approval/1',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=45) as response:
+                  return json.loads(response.read())
+
+          deadline = time.monotonic() + 12 * 60
+          eligible = []
+          while time.monotonic() < deadline:
+              pr = get(f'/repos/{repo}/pulls/113')
+              if pr['head']['sha'] != expected_head or pr['base']['ref'] != expected_base:
+                  raise SystemExit('consolidated source object moved while waiting for review')
+              compare = get(
+                  f"/repos/{repo}/compare/{pr['base']['sha']}...{expected_head}"
+              )
+              committers = set()
+              for commit in compare.get('commits', []):
+                  for party in (commit.get('author'), commit.get('committer')):
+                      if party and party.get('login'):
+                          committers.add(party['login'])
+              reviews = get(f'/repos/{repo}/pulls/113/reviews?per_page=100')
+              eligible = sorted({
+                  review['user']['login']
+                  for review in reviews
+                  if review.get('state') == 'APPROVED'
+                  and review.get('commit_id') == expected_head
+                  and review.get('user', {}).get('login')
+                  and review['user']['login'] != pr.get('user', {}).get('login')
+                  and review['user']['login'] not in committers
+              })
+              if eligible:
+                  break
+              time.sleep(20)
+
+          output = os.environ['GITHUB_OUTPUT']
+          with open(output, 'a', encoding='utf-8') as handle:
+              handle.write(f"approved={'true' if eligible else 'false'}\n")
+              handle.write(f"reviewers={','.join(eligible)}\n")
+          if not eligible:
+              body = (
+                  '## Final consolidated source adoption — REVIEW BLOCKED\n\n'
+                  f'Head `{expected_head}` completed the exact-head audit but did not receive an eligible non-author/non-committer approval '
+                  'during this admission window. The PR remains Draft and unmerged. No prior review transfers.'
+              )
+              payload = json.dumps({'body': body}).encode()
+              request = urllib.request.Request(
+                  api + f'/repos/{repo}/issues/113/comments',
+                  data=payload,
+                  method='POST',
+                  headers={
+                      'Accept': 'application/vnd.github+json',
+                      'Authorization': f'Bearer {token}',
+                      'Content-Type': 'application/json',
+                      'User-Agent': 'hepta-final-source-approval/1',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=45) as response:
+                  response.read()
+          print(json.dumps({'approved': bool(eligible), 'reviewers': eligible}, sort_keys=True))
+          PY
+      - name: Mark ready and merge through the ordinary pull-request path
+        if: steps.candidate.outputs.ready == 'true' && steps.approval.outputs.approved == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          EXPECTED_HEAD: ${{ steps.candidate.outputs.head }}
+          EXPECTED_BASE: ${{ steps.candidate.outputs.base }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          repo = os.environ['GH_REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          expected_head = os.environ['EXPECTED_HEAD']
+          expected_base = os.environ['EXPECTED_BASE']
+          api = 'https://api.github.com'
+          headers = {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': f'Bearer {token}',
+              'Content-Type': 'application/json',
+              'User-Agent': 'hepta-final-source-adopt/1',
+              'X-GitHub-Api-Version': '2022-11-28',
+          }
+
+          def request(path, *, method='GET', body=None, graphql=False):
+              url = 'https://api.github.com/graphql' if graphql else api + path
+              payload = None if body is None else json.dumps(body).encode()
+              req = urllib.request.Request(url, data=payload, method=method, headers=headers)
+              with urllib.request.urlopen(req, timeout=45) as response:
+                  raw = response.read()
+                  return json.loads(raw) if raw else None
+
+          pr = request(f'/repos/{repo}/pulls/113')
+          if pr['head']['sha'] != expected_head or pr['base']['ref'] != expected_base:
+              raise SystemExit('final source candidate moved before adoption')
+          if pr['draft']:
+              query = '''
+              mutation($id:ID!){
+                markPullRequestReadyForReview(input:{pullRequestId:$id}){
+                  pullRequest{id isDraft}
+                }
+              }
+              '''
+              result = request('', method='POST', graphql=True, body={
+                  'query': query,
+                  'variables': {'id': pr['node_id']},
+              })
+              if result.get('errors'):
+                  raise SystemExit(str(result['errors']))
+              if result['data']['markPullRequestReadyForReview']['pullRequest']['isDraft']:
+                  raise SystemExit('PR remained Draft after ready transition')
+
+          merge = request(
+              f'/repos/{repo}/pulls/113/merge',
+              method='PUT',
+              body={
+                  'sha': expected_head,
+                  'merge_method': 'merge',
+                  'commit_title': 'source: adopt consolidated hepta-glasses closure stack (#113)',
+                  'commit_message': (
+                      'Adopt the independently qualified dependency, mobile identity, '
+                      'critical protocol, version authority and source Artifact durability slices. '
+                      'No external production evidence or release authorization is implied.'
+                  ),
+              },
+          )
+          if merge.get('merged') is not True:
+              raise SystemExit(f"ordinary merge failed: {merge}")
+          body = (
+              '## Consolidated repository-source stack adopted\n\n'
+              f'PR #113 head `{expected_head}` was marked Ready and merged through the ordinary pull-request endpoint into `{expected_base}` '
+              f"as `{merge.get('sha')}` after fresh exact-head CI, Artifact audit, zero threads and eligible approval. "
+              'No administrator bypass was requested. PR #101 now requires entirely fresh exact-head CI, Artifact and review.'
+          )
+          request(f'/repos/{repo}/issues/82/comments', method='POST', body={'body': body})
+          print(json.dumps({'merged': True, 'merge_sha': merge.get('sha')}, sort_keys=True))
+          PY
