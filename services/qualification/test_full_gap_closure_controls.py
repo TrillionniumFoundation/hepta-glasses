@@ -230,7 +230,10 @@ class FullGapClosureControlTests(unittest.TestCase):
         ):
             self.assertIn(phrase, combined)
         self.assertNotRegex(combined, r"gh[pousr]_[A-Za-z0-9]{30,}")
-        self.assertNotIn("-----BEGIN PRIVATE KEY-----", combined)
+        forbidden_private_key_marker = (
+            "-----" + "BEGIN " + "PRIVATE KEY" + "-----"
+        )
+        self.assertNotIn(forbidden_private_key_marker, combined)
 
 
 if __name__ == "__main__":
