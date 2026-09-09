@@ -1,0 +1,142 @@
+name: hepta-pr110-worker-determinism
+
+on:
+  push:
+    branches:
+      - 'ops/hepta-pr110-worker-determinism-20260909-v1'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hepta-pr110-worker-determinism
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 'ea16ecf768da55f37762e164753c669cc894f1e5'
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify exact source and target identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE='ea16ecf768da55f37762e164753c669cc894f1e5'
+          TARGET='codex/hepta-critical-test-depth-20260908'
+          test "$(git rev-parse HEAD)" = "$SOURCE"
+          remote_head="$(git ls-remote --heads origin "refs/heads/$TARGET" | awk '{print $1}')"
+          test "$remote_head" = "$SOURCE"
+
+      - name: Replace timing race with explicit four-worker entry handshake
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('services/model_gateway/test_model_boundaries.py')
+          source = path.read_text(encoding='utf-8')
+          old = '''    def test_actual_hung_workers_exhaust_fixed_pool(self):
+                  release = threading.Event()
+                  self.addCleanup(release.set)
+                  self.provider.before = lambda kw: release.wait(2)
+                  for i in range(5):
+                      self.error("model_effect_indeterminate", lambda: self.execute(idempotency_key=f"key{i}", timeout_seconds=0.03))
+                  self.assertEqual(self.provider.calls, 4)
+                  release.set()
+                  time.sleep(0.03)
+          '''
+          new = '''    def test_actual_hung_workers_exhaust_fixed_pool(self):
+                  condition = threading.Condition()
+                  release = threading.Event()
+                  self.addCleanup(release.set)
+                  entered = 0
+                  outcomes = {}
+                  failures = []
+
+                  def block(_kw):
+                      nonlocal entered
+                      with condition:
+                          entered += 1
+                          condition.notify_all()
+                      if not release.wait(2):
+                          raise AssertionError(
+                              "test did not release blocked provider workers"
+                          )
+
+                  self.provider.before = block
+
+                  def execute(index):
+                      try:
+                          self.execute(
+                              idempotency_key=f"key{index}",
+                              timeout_seconds=0.5,
+                          )
+                      except ModelExecutionError as error:
+                          outcomes[index] = error.code
+                      except BaseException as error:
+                          failures.append(error)
+                      else:
+                          outcomes[index] = "unexpected_success"
+
+                  callers = [
+                      threading.Thread(target=execute, args=(index,))
+                      for index in range(4)
+                  ]
+                  for caller in callers:
+                      caller.start()
+                  with condition:
+                      self.assertTrue(
+                          condition.wait_for(lambda: entered == 4, timeout=2),
+                          f"entered={entered}; expected 4",
+                      )
+                  for caller in callers:
+                      caller.join(2)
+                      self.assertFalse(caller.is_alive())
+                  self.assertEqual(failures, [])
+                  self.assertEqual(
+                      outcomes,
+                      {
+                          index: "model_effect_indeterminate"
+                          for index in range(4)
+                      },
+                  )
+                  self.error(
+                      "model_effect_indeterminate",
+                      lambda: self.execute(
+                          idempotency_key="key4",
+                          timeout_seconds=0.5,
+                      ),
+                  )
+                  self.assertEqual(self.provider.calls, 4)
+                  release.set()
+                  time.sleep(0.03)
+          '''
+          if source.count(old) != 1:
+              raise SystemExit('expected one exact legacy worker-exhaustion test block')
+          path.write_text(source.replace(old, new), encoding='utf-8')
+          PY
+          git diff --check
+
+      - name: Run deterministic worker tests
+        run: |
+          python3 -m unittest -v \
+            services.model_gateway.test_model_boundaries.ModelBoundaryTests.test_actual_hung_workers_exhaust_fixed_pool \
+            services.model_gateway.test_bounded_worker_determinism
+
+      - name: Commit and fast-forward the draft branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET='codex/hepta-critical-test-depth-20260908'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- services/model_gateway/test_model_boundaries.py
+          git commit -m 'test(model): make fixed-pool exhaustion deterministic'
+          git push origin "HEAD:refs/heads/$TARGET"
