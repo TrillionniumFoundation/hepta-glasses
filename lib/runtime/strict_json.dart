@@ -20,6 +20,12 @@ Object? decodeStrictJsonBytes(
   if (bytes.length > maxBytes) {
     throw const FormatException('JSON body exceeds the byte limit.');
   }
+  if (bytes.length >= 3 &&
+      bytes[0] == 0xef &&
+      bytes[1] == 0xbb &&
+      bytes[2] == 0xbf) {
+    throw const FormatException('JSON body must not contain a UTF-8 BOM.');
+  }
 
   late final String source;
   try {
