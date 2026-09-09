@@ -128,7 +128,7 @@ class FullGapClosureControlTests(unittest.TestCase):
             self.assertIn(f"#{issue}", plan)
         for rule in (
             "Never mark a gap closed",
-            "must not satisfy the required independent latest-head approval",
+            "cannot satisfy the required independent latest-head approval",
             "product release gate has no override",
             "All gaps closed",
         ):
@@ -162,8 +162,13 @@ class FullGapClosureControlTests(unittest.TestCase):
         audit = self.read(
             "docs/development/MODULE_DOCUMENTATION_DEPTH_AUDIT_2026-09-09.md"
         )
-        for identifier in identifiers:
-            self.assertEqual(audit.count(f"`{identifier}`"), 1, identifier)
+        rows = re.findall(
+            r"^\| `([^`]+)` \| `(?:SEMANTIC_PARTIAL|SEMANTIC_COMPLETE_SOURCE)` \|",
+            audit,
+            re.MULTILINE,
+        )
+        self.assertEqual(len(rows), 26)
+        self.assertEqual(set(rows), set(identifiers))
         self.assertIn("SEMANTIC_PARTIAL", audit)
         self.assertIn("SEMANTIC_COMPLETE_SOURCE", audit)
         self.assertIn("does not replace", audit)
