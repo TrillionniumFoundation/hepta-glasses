@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +30,40 @@ def product_dart_sources() -> list[Path]:
     return sorted(path for path in (ROOT / "lib").rglob("*.dart") if path.is_file())
 
 
+def mutation_authority_library_source() -> str:
+    """Read the closed primary library plus its one reviewed Dart part."""
+    primary_path = ROOT / "lib/runtime/mutation_authority.dart"
+    primary = primary_path.read_text(encoding="utf-8")
+    parts = re.findall(r"(?m)^part '([^']+)';$", primary)
+    expected_parts = ["mutation_authority_http.dart"]
+    if parts != expected_parts:
+        fail(
+            "mutation authority Dart part set/order differs: "
+            f"observed={parts}, expected={expected_parts}"
+        )
+
+    surfaces = [primary]
+    for part_name in parts:
+        if Path(part_name).name != part_name:
+            fail("mutation authority part must remain in lib/runtime")
+        part_path = primary_path.parent / part_name
+        if not part_path.is_file():
+            fail(f"mutation authority part is missing: {part_name}")
+        source = part_path.read_text(encoding="utf-8")
+        expected_directive = f"part of '{primary_path.name}';"
+        if source.count(expected_directive) != 1 or not source.startswith(
+            expected_directive + "\n"
+        ):
+            fail(
+                "mutation authority part-of binding differs: "
+                f"{part_name}"
+            )
+        if re.search(r"(?m)^part ['\"]", source):
+            fail("nested mutation authority Dart parts are forbidden")
+        surfaces.append(source)
+    return "\n".join(surfaces)
+
+
 def validate_product_graph() -> None:
     violations: list[str] = []
     for path in product_dart_sources():
@@ -47,9 +82,7 @@ def validate_production_entrypoint() -> None:
     bootstrap = (ROOT / "lib/bootstrap/hepta_bootstrap.dart").read_text(
         encoding="utf-8"
     )
-    authority = (ROOT / "lib/runtime/mutation_authority.dart").read_text(
-        encoding="utf-8"
-    )
+    authority = mutation_authority_library_source()
     service_tokens = (
         ROOT / "lib/runtime/authenticated_service_tokens.dart"
     ).read_text(encoding="utf-8")
@@ -215,6 +248,7 @@ def main() -> int:
                 "ci_main_trigger": "push_only",
                 "ci_concurrency": "latest_pull_request_or_branch_only",
                 "exact_head_identity": "verified_inside_every_job",
+                "mutation_authority_library_surface": "closed_primary_plus_reviewed_http_part",
             },
             separators=(",", ":"),
         )
