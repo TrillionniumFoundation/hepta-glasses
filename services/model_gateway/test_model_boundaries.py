@@ -353,14 +353,35 @@ class ModelBoundaryTests(unittest.TestCase):
 
     def test_actual_late_worker_does_not_commit(self):
         entered, release = threading.Event(), threading.Event()
+        self.addCleanup(release.set)
+
         def block(kw):
             entered.set()
             release.wait(2)
+
         self.provider.before = block
-        self.error("model_effect_indeterminate", lambda: self.execute(timeout_seconds=0.05))
-        self.assertTrue(entered.is_set())
+        outcomes = []
+        failures = []
+
+        def execute():
+            try:
+                self.execute(timeout_seconds=0.2)
+            except ModelExecutionError as error:
+                outcomes.append(error.code)
+            except BaseException as error:
+                failures.append(error)
+            else:
+                outcomes.append("unexpected_success")
+
+        thread = threading.Thread(target=execute)
+        thread.start()
+        self.assertTrue(entered.wait(2))
+        thread.join(2)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(failures, [])
+        self.assertEqual(outcomes, ["model_effect_indeterminate"])
         release.set()
-        time.sleep(0.03)
+        time.sleep(0.05)
         self.assertEqual(self.status().state, "indeterminate")
         self.assertIsNone(self.status().answer_digest)
 

@@ -58,7 +58,7 @@ void main() {
         ),
         'subject': 'subject-1',
         'device_id': 'device-1',
-        'policy_hash': '${List<String>.filled(64, 'a').join()}',
+        'policy_hash': List<String>.filled(64, 'a').join(),
         'authenticated': true,
         'user_present': true,
         'biometric_verified': true,
