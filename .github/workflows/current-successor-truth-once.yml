@@ -1,4 +1,4 @@
-name: hepta-current-successor-truth-once
+name: hepta-final-source-closure-once
 
 on:
   push:
@@ -9,156 +9,94 @@ on:
       - tools/one_shot_current_successor_truth_repair.py
 
 permissions:
-  actions: write
-  contents: read
+  actions: read
+  contents: write
   pull-requests: read
 
 concurrency:
-  group: hepta-current-successor-truth-once
+  group: hepta-final-source-closure-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
-  apply-test-export:
+  close-repository-blockers:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      SOURCE_HEAD_SHA: ${{ github.sha }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-          persist-credentials: false
-      - name: Verify bounded controller repair v4
+          persist-credentials: true
+      - name: Verify exact bounded controller object
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "codex/hepta-identity-migration-20260910"
-          actual="$(git diff --name-only HEAD^ HEAD | LC_ALL=C sort)"
-          expected="$(printf '%s\n' '.github/workflows/current-successor-truth-once.yml' 'tools/one_shot_current_successor_truth_repair.py' | LC_ALL=C sort)"
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(git rev-parse HEAD^^)" = "300e2abdbe1f4939125af87eaa0958e8bd44b12b"
+          actual="$(git diff --name-only HEAD^^ HEAD | LC_ALL=C sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/current-successor-truth-once.yml' \
+            'tools/one_shot_current_successor_truth_repair.py' \
+            | LC_ALL=C sort)"
           test "$actual" = "$expected"
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
-      - name: Apply current-successor truth migration and fixture repair
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - name: Apply the bounded final source-closure transaction
         run: python3 tools/one_shot_current_successor_truth_repair.py
-      - name: Validate final candidate worktree
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
+      - name: Remove temporary execution authority from the final tree
         run: |
-          set -euo pipefail
-          python3 services/qualification/documentation_truth.py
-          python3 -m unittest \
-            services.qualification.test_documentation_truth \
-            services.qualification.test_documentation_truth_live \
-            services.qualification.test_documentation_truth_projection \
-            services.qualification.test_full_gap_closure_controls \
-            services.qualification.test_server_provider_boundary \
-            -v
           git rm \
             .github/workflows/current-successor-truth-once.yml \
             tools/one_shot_current_successor_truth.py \
             tools/one_shot_current_successor_truth_repair.py
+      - name: Resolve dependencies and commit canonical formatting
+        run: |
+          flutter pub get
+          dart format --output=write lib test
+      - name: Validate repository, current truth and source boundaries
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | wc -l | tr -d ' ')" = "1"
+          test -f .github/workflows/ci.yml
           python3 tools/validate_repository.py
           python3 tools/validate_repository_metadata.py
           python3 tools/validate_production_authority.py
+          python3 tools/native/dependency_update_policy.py --check-dependabot-contract
           python3 services/qualification/documentation_truth.py --verify-github
           python3 -m unittest discover -s services -p 'test_*.py'
           python3 -m unittest discover -s adapters -p 'test_*.py'
           python3 -m compileall -q services adapters tools
-          git diff --check
-      - name: Stage exact tested truth payload
+      - name: Validate Flutter and Android source behavior
+        run: |
+          flutter analyze --no-fatal-infos
+          flutter test
+          (cd android && ./gradlew testDebugUnitTest)
+      - name: Commit and publish the carrier-free candidate
         shell: bash
         run: |
           set -euo pipefail
-          root=build/current-successor-truth
-          rm -rf "$root"
-          mkdir -p "$root/payload"
-          files=(
-            README.md
-            docs/CURRENT_STATE.md
-            docs/PROJECT_STATE.json
-            docs/development/2026-09-09_FULL_GAP_CLOSURE_PLAN.md
-            docs/operations/FULL_GAP_CLOSURE_CONTROL_BOARD.md
-            services/qualification/documentation_truth_core.py
-            services/qualification/test_documentation_truth.py
-            services/qualification/test_documentation_truth_live.py
-            services/qualification/test_full_gap_closure_controls.py
-            services/qualification/test_server_provider_boundary.py
-          )
-          for path in "${files[@]}"; do
-            mkdir -p "$root/payload/$(dirname "$path")"
-            cp "$path" "$root/payload/$path"
-          done
-          python3 - <<'PY'
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-
-          root = Path('build/current-successor-truth')
-          payload = root / 'payload'
-          files = sorted(
-              str(path.relative_to(payload))
-              for path in payload.rglob('*')
-              if path.is_file()
-          )
-          expected = sorted([
-              'README.md',
-              'docs/CURRENT_STATE.md',
-              'docs/PROJECT_STATE.json',
-              'docs/development/2026-09-09_FULL_GAP_CLOSURE_PLAN.md',
-              'docs/operations/FULL_GAP_CLOSURE_CONTROL_BOARD.md',
-              'services/qualification/documentation_truth_core.py',
-              'services/qualification/test_documentation_truth.py',
-              'services/qualification/test_documentation_truth_live.py',
-              'services/qualification/test_full_gap_closure_controls.py',
-              'services/qualification/test_server_provider_boundary.py',
-          ])
-          if files != expected:
-              raise SystemExit(f'payload mismatch: {files!r}')
-          manifest = {
-              'schema_version': 1,
-              'parent': os.environ['SOURCE_HEAD_SHA'],
-              'commit_message': 'truth: bind active source authority to live PR 125',
-              'files': {
-                  relative: {
-                      'bytes': (payload / relative).stat().st_size,
-                      'sha256': hashlib.sha256(
-                          (payload / relative).read_bytes()
-                      ).hexdigest(),
-                  }
-                  for relative in files
-              },
-              'delete': [
-                  '.github/workflows/current-successor-truth-once.yml',
-                  'tools/one_shot_current_successor_truth.py',
-                  'tools/one_shot_current_successor_truth_repair.py',
-              ],
-              'validation': {
-                  'project_state_schema': 6,
-                  'active_pull_request': 125,
-                  'live_github_double_read': True,
-                  'repository_actionable_open': 0,
-                  'full_service_and_adapter_tests': True,
-              },
-          }
-          encoded = json.dumps(
-              manifest,
-              sort_keys=True,
-              separators=(',', ':'),
-          ).encode('utf-8') + b'\n'
-          (root / 'manifest.json').write_bytes(encoded)
-          (root / 'manifest.sha256').write_text(
-              hashlib.sha256(encoded).hexdigest() + '  manifest.json\n',
-              encoding='utf-8',
-          )
-          PY
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: hepta-current-successor-truth-${{ github.sha }}
-          path: build/current-successor-truth
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 7
+          git diff --check
+          git add -A
+          git diff --cached --check
+          test -n "$(git diff --cached --name-only)"
+          test ! -e .github/workflows/current-successor-truth-once.yml
+          test ! -e tools/one_shot_current_successor_truth.py
+          test ! -e tools/one_shot_current_successor_truth_repair.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: close final repository source blockers'
+          git push origin HEAD:codex/hepta-identity-migration-20260910
