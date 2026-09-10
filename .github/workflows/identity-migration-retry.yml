@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
           test "${GITHUB_REF_NAME}" = "${TARGET_BRANCH}"
           git merge-base --is-ancestor "${BASE_SHA}" HEAD
-          test "$(git rev-list --count "${BASE_SHA}"..HEAD)" -eq 2
+          test "$(git rev-list --count "${BASE_SHA}"..HEAD)" -eq 3
           test "$(git rev-parse HEAD:.github/workflows/identity-migration-retry.yml)" = "$(git hash-object .github/workflows/identity-migration-retry.yml)"
           test -f .github/workflows/identity-migration-once.yml
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -46,7 +46,7 @@ jobs:
           flutter-version: '3.47.2'
           channel: stable
           cache: false
-      - name: Reproduce migration and bind changed native object
+      - name: Reproduce migration, repair typed BLE status, and bind native object
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -64,11 +64,7 @@ jobs:
           if len(starts) != 1:
               raise SystemExit(f"expected one migration heredoc, observed {len(starts)}")
           start = starts[0]
-          ends = [
-              index
-              for index in range(start + 1, len(lines))
-              if lines[index].strip() == "PY"
-          ]
+          ends = [index for index in range(start + 1, len(lines)) if lines[index].strip() == "PY"]
           if len(ends) != 1:
               raise SystemExit(f"expected one migration terminator, observed {len(ends)}")
           script = textwrap.dedent("\n".join(lines[start + 1 : ends[0]])) + "\n"
@@ -81,11 +77,22 @@ jobs:
               encoding="utf-8",
           )
 
+          wrong_status = ") == BluetoothGatt.GATT_SUCCESS"
+          right_status = ") == android.bluetooth.BluetoothStatusCodes.SUCCESS"
+          status_paths = (
+              "android/app/src/main/kotlin/org/trillionnium/heptaglasses/model/BleDevice.kt",
+              "android/app/src/main/kotlin/org/trillionnium/heptaglasses/bluetooth/BleManager.kt",
+          )
+          for relative in status_paths:
+              path = root / relative
+              text = path.read_text(encoding="utf-8")
+              if text.count(wrong_status) != 1:
+                  raise SystemExit(f"expected one API 33 status-domain defect in {relative}")
+              path.write_text(text.replace(wrong_status, right_status, 1), encoding="utf-8")
+
           native_path = "android/app/src/main/cpp/liblc3.cpp"
           native_blob = subprocess.check_output(
-              ["git", "hash-object", native_path],
-              cwd=root,
-              text=True,
+              ["git", "hash-object", native_path], cwd=root, text=True
           ).strip()
           if len(native_blob) != 40:
               raise SystemExit("native integration blob was not computed")
@@ -123,21 +130,14 @@ jobs:
               retry.unlink()
           if source_path.exists():
               raise SystemExit("original one-shot workflow was not removed")
-          print(
-              json.dumps(
-                  {
-                      "migration_script_sha": subprocess.check_output(
-                          ["git", "hash-object", "--stdin"],
-                          input=script,
-                          cwd=root,
-                          text=True,
-                      ).strip(),
-                      "native_integration_old_blob": old_blob,
-                      "native_integration_new_blob": native_blob,
-                  },
-                  sort_keys=True,
-              )
-          )
+          print(json.dumps({
+              "migration_script_sha": subprocess.check_output(
+                  ["git", "hash-object", "--stdin"], input=script, cwd=root, text=True
+              ).strip(),
+              "native_integration_old_blob": old_blob,
+              "native_integration_new_blob": native_blob,
+              "api33_status_repairs": len(status_paths),
+          }, sort_keys=True))
           PY
       - name: Create local candidate commit without publishing
         run: |
@@ -151,6 +151,7 @@ jobs:
           grep -qx 'name: hepta_glasses' <(head -n1 pubspec.yaml)
           grep -q 'namespace = "org.trillionnium.heptaglasses"' android/app/build.gradle
           grep -q 'Java_org_trillionnium_heptaglasses_cpp_Cpp_decodeLC3' android/app/src/main/cpp/liblc3.cpp
+          test "$(grep -R --include='*.kt' -F ') == android.bluetooth.BluetoothStatusCodes.SUCCESS' android/app/src/main/kotlin/org/trillionnium/heptaglasses | wc -l)" -eq 2
           git diff --check
           git config user.name 'hepta-identity-migration-bot'
           git config user.email 'actions@users.noreply.github.com'
