@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
           test "${GITHUB_REF_NAME}" = "${TARGET_BRANCH}"
           git merge-base --is-ancestor "${BASE_SHA}" HEAD
-          test "$(git rev-list --count "${BASE_SHA}"..HEAD)" -eq 3
+          test "$(git rev-list --count "${BASE_SHA}"..HEAD)" -eq 4
           test "$(git rev-parse HEAD:.github/workflows/identity-migration-retry.yml)" = "$(git hash-object .github/workflows/identity-migration-retry.yml)"
           test -f .github/workflows/identity-migration-once.yml
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -46,7 +46,7 @@ jobs:
           flutter-version: '3.47.2'
           channel: stable
           cache: false
-      - name: Reproduce migration, repair typed BLE status, and bind native object
+      - name: Reproduce migration, repair typed BLE status, and bind generated truth
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -125,6 +125,17 @@ jobs:
               encoding="utf-8",
           )
 
+          subprocess.run(
+              ["python3", "tools/generate_module_docs.py", "--write"],
+              cwd=root,
+              check=True,
+          )
+          subprocess.run(
+              ["python3", "tools/generate_module_docs.py", "--check"],
+              cwd=root,
+              check=True,
+          )
+
           retry = root / ".github/workflows/identity-migration-retry.yml"
           if retry.exists():
               retry.unlink()
@@ -137,6 +148,7 @@ jobs:
               "native_integration_old_blob": old_blob,
               "native_integration_new_blob": native_blob,
               "api33_status_repairs": len(status_paths),
+              "module_handoffs_regenerated": 26,
           }, sort_keys=True))
           PY
       - name: Create local candidate commit without publishing
@@ -152,6 +164,7 @@ jobs:
           grep -q 'namespace = "org.trillionnium.heptaglasses"' android/app/build.gradle
           grep -q 'Java_org_trillionnium_heptaglasses_cpp_Cpp_decodeLC3' android/app/src/main/cpp/liblc3.cpp
           test "$(grep -R --include='*.kt' -F ') == android.bluetooth.BluetoothStatusCodes.SUCCESS' android/app/src/main/kotlin/org/trillionnium/heptaglasses | wc -l)" -eq 2
+          python3 tools/generate_module_docs.py --check
           git diff --check
           git config user.name 'hepta-identity-migration-bot'
           git config user.email 'actions@users.noreply.github.com'
