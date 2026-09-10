@@ -6,7 +6,7 @@ on:
       - codex/hepta-identity-migration-20260910
     paths:
       - .github/workflows/current-successor-truth-once.yml
-      - tools/one_shot_current_successor_truth.py
+      - tools/one_shot_current_successor_truth_repair.py
 
 permissions:
   actions: write
@@ -35,14 +35,14 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REF_NAME" = "codex/hepta-identity-migration-20260910"
           actual="$(git diff --name-only HEAD^ HEAD | LC_ALL=C sort)"
-          expected="$(printf '%s\n' '.github/workflows/current-successor-truth-once.yml' 'tools/one_shot_current_successor_truth.py' | LC_ALL=C sort)"
+          expected="$(printf '%s\n' '.github/workflows/current-successor-truth-once.yml' 'tools/one_shot_current_successor_truth_repair.py' | LC_ALL=C sort)"
           test "$actual" = "$expected"
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
-      - name: Apply current-successor truth migration
-        run: python3 tools/one_shot_current_successor_truth.py
-      - name: Validate local and live truth contracts
+      - name: Apply current-successor truth migration and fixture repair
+        run: python3 tools/one_shot_current_successor_truth_repair.py
+      - name: Validate final candidate worktree
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
@@ -51,16 +51,15 @@ jobs:
           python3 services/qualification/documentation_truth.py
           python3 -m unittest \
             services.qualification.test_documentation_truth \
+            services.qualification.test_documentation_truth_live \
+            services.qualification.test_documentation_truth_projection \
             services.qualification.test_full_gap_closure_controls \
+            services.qualification.test_server_provider_boundary \
             -v
-          mkdir -p /tmp/hepta-current-successor-controller
-          mv .github/workflows/current-successor-truth-once.yml /tmp/hepta-current-successor-controller/
-          mv tools/one_shot_current_successor_truth.py /tmp/hepta-current-successor-controller/
-          restore_controller() {
-            mv /tmp/hepta-current-successor-controller/current-successor-truth-once.yml .github/workflows/
-            mv /tmp/hepta-current-successor-controller/one_shot_current_successor_truth.py tools/
-          }
-          trap restore_controller EXIT
+          git rm \
+            .github/workflows/current-successor-truth-once.yml \
+            tools/one_shot_current_successor_truth.py \
+            tools/one_shot_current_successor_truth_repair.py
           python3 tools/validate_repository.py
           python3 tools/validate_repository_metadata.py
           python3 tools/validate_production_authority.py
@@ -69,8 +68,6 @@ jobs:
           python3 -m unittest discover -s adapters -p 'test_*.py'
           python3 -m compileall -q services adapters tools
           git diff --check
-          restore_controller
-          trap - EXIT
       - name: Stage exact tested truth payload
         shell: bash
         run: |
@@ -86,7 +83,9 @@ jobs:
             docs/operations/FULL_GAP_CLOSURE_CONTROL_BOARD.md
             services/qualification/documentation_truth_core.py
             services/qualification/test_documentation_truth.py
+            services/qualification/test_documentation_truth_live.py
             services/qualification/test_full_gap_closure_controls.py
+            services/qualification/test_server_provider_boundary.py
           )
           for path in "${files[@]}"; do
             mkdir -p "$root/payload/$(dirname "$path")"
@@ -113,16 +112,16 @@ jobs:
               'docs/operations/FULL_GAP_CLOSURE_CONTROL_BOARD.md',
               'services/qualification/documentation_truth_core.py',
               'services/qualification/test_documentation_truth.py',
+              'services/qualification/test_documentation_truth_live.py',
               'services/qualification/test_full_gap_closure_controls.py',
+              'services/qualification/test_server_provider_boundary.py',
           ])
           if files != expected:
               raise SystemExit(f'payload mismatch: {files!r}')
           manifest = {
               'schema_version': 1,
               'parent': os.environ['SOURCE_HEAD_SHA'],
-              'commit_message': (
-                  'truth: bind active source authority to live PR 125'
-              ),
+              'commit_message': 'truth: bind active source authority to live PR 125',
               'files': {
                   relative: {
                       'bytes': (payload / relative).stat().st_size,
@@ -135,6 +134,7 @@ jobs:
               'delete': [
                   '.github/workflows/current-successor-truth-once.yml',
                   'tools/one_shot_current_successor_truth.py',
+                  'tools/one_shot_current_successor_truth_repair.py',
               ],
               'validation': {
                   'project_state_schema': 6,
