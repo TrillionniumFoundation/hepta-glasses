@@ -72,18 +72,20 @@ jobs:
           python3 tools/one_shot_current_successor_truth_repair.py
           python3 - <<'PY'
           from pathlib import Path
-          import re
+          import hashlib
 
+          workflow_path = Path('.github/workflows/ci.yml')
           policy_path = Path('tools/native/dependency_update_policy.py')
           test_path = Path('services/qualification/test_dependency_automation.py')
+
+          workflow = workflow_path.read_bytes()
+          approved = hashlib.sha1(
+              f'blob {len(workflow)}\0'.encode('ascii') + workflow
+          ).hexdigest()
           policy = policy_path.read_text(encoding='utf-8')
-          match = re.search(
-              r'_APPROVED_WORKFLOW_GIT_BLOB_SHA1 = "([0-9a-f]{40})"',
-              policy,
-          )
-          if match is None:
-              raise SystemExit('canonical workflow blob pin is missing')
-          approved = match.group(1)
+          if policy.count(approved) != 1:
+              raise SystemExit('dependency policy is not bound to final workflow blob')
+
           test = test_path.read_text(encoding='utf-8')
           old = '526ff56e187c5ec2d2093fe9616c4978fed776f0'
           if test.count(old) != 1:
