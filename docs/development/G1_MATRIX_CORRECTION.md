@@ -5,7 +5,7 @@ Status: exact source-contract repair; no vendor, physical, deployment or release
 ## Subject
 
 The schema-v2 matrix at `contracts/g1-command-matrix-v1.json` is pinned by canonical JSON SHA-256
-`900deb5e601bcce7a6ac0241d3e4bab37dce8659a6d40f9fb3bfa4e47e9fec17`.
+`ef6df32301d99e3ca4ff2307852dd03bff558a5fa864b3531e43423c95eb875f`.
 Its `microphone_data/lc3_frame` example contains 203 bytes: command `0xF1`, sequence `0x00`, and 201 zero fixture bytes. Android and iOS source both require a 202-byte event containing exactly 200 compressed LC3 payload bytes.
 
 ## Closed correction
