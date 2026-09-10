@@ -166,6 +166,16 @@ def inspect_dependabot_contract() -> dict[str, Any]:
         raise SystemExit("failed to update canonical workflow object binding")
     policy_path.write_text(policy, encoding="utf-8")
 
+    automation_path = ROOT / "services/qualification/test_dependency_automation.py"
+    automation = automation_path.read_text(encoding="utf-8")
+    automation = exact(
+        automation,
+        "7624aaf9cafa5bfef6b55f91d714bf50bb5c92ee",
+        workflow_blob,
+        "dependency automation workflow object binding",
+    )
+    automation_path.write_text(automation, encoding="utf-8")
+
 
 def close_module_semantics() -> None:
     validator_path = ROOT / "tools/validate_module_semantics.py"
