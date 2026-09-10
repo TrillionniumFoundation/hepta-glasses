@@ -156,5 +156,6 @@ jobs:
         with:
           name: hepta-source-truth-candidate-${{ github.sha }}
           path: build/source-truth-candidate
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
