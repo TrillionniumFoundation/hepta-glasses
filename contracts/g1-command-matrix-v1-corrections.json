@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "contract_id": "hepta-g1-command-matrix-v1-correction-1",
-  "applies_to_canonical_sha256": "900deb5e601bcce7a6ac0241d3e4bab37dce8659a6d40f9fb3bfa4e47e9fec17",
+  "applies_to_canonical_sha256": "ef6df32301d99e3ca4ff2307852dd03bff558a5fa864b3531e43423c95eb875f",
   "operations": [
     {
       "op": "drop_exact_trailing_byte",
