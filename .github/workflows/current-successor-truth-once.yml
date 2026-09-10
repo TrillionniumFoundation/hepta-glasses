@@ -133,6 +133,7 @@ jobs:
         run: |
           flutter analyze --no-fatal-infos
           flutter test
+          flutter build apk --debug
           (cd android && ./gradlew testDebugUnitTest)
       - name: Commit and publish the carrier-free candidate
         shell: bash
