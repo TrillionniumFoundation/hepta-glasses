@@ -2,7 +2,7 @@
 """Repair the PR #125 live-readback fixtures and canonical job parser.
 
 This script composes the bounded current-successor migration and adds only the
-two test updates exposed by the first complete validation run.
+test and formatting updates exposed by complete validation runs.
 """
 
 from __future__ import annotations
@@ -143,10 +143,40 @@ def update_job_matrix_parser() -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def remove_markdown_trailing_spaces() -> None:
+    replacements = (
+        (
+            ROOT / "docs/CURRENT_STATE.md",
+            "Last updated: 2026-09-10  \n",
+            "Last updated: 2026-09-10\n",
+            "CURRENT_STATE date whitespace",
+        ),
+        (
+            ROOT / "docs/development/2026-09-09_FULL_GAP_CLOSURE_PLAN.md",
+            "Status: active execution refinement for PR #125 and the G11 terminal-closure program.  \n",
+            "Status: active execution refinement for PR #125 and the G11 terminal-closure program.\n",
+            "closure plan status whitespace",
+        ),
+        (
+            ROOT / "docs/operations/FULL_GAP_CLOSURE_CONTROL_BOARD.md",
+            "Status date: 2026-09-10  \n",
+            "Status date: 2026-09-10\n",
+            "control board date whitespace",
+        ),
+    )
+    for path, old, new, label in replacements:
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            replace_once(text, old, new, label),
+            encoding="utf-8",
+        )
+
+
 def main() -> int:
     base.main()
     update_live_fixture()
     update_job_matrix_parser()
+    remove_markdown_trailing_spaces()
     return 0
 
 
