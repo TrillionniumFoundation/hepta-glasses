@@ -7,11 +7,14 @@ two test updates exposed by the first complete validation run.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
-from tools import one_shot_current_successor_truth as base
-
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools import one_shot_current_successor_truth as base
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -95,12 +98,14 @@ def update_live_fixture() -> None:
         '            truth.DocumentationTruthError, "head branch drifted"\n'
         '        ):\n'
         '            self.verify()\n\n'
-        '    def test_successor_tree_substitution_is_rejected(self) -> None:\n'
+        '    def test_successor_tree_malformed_sha_is_rejected(self) -> None:\n'
         '        self.payloads[self.paths["successor_commit"]]["commit"]["tree"][\n'
         '            "sha"\n'
-        '        ] = "0" * 40\n'
-        '        result = self.verify()\n'
-        '        self.assertEqual(result["current_successor"]["tree"], "0" * 40)\n\n'
+        '        ] = "not-a-sha"\n'
+        '        with self.assertRaisesRegex(\n'
+        '            truth.DocumentationTruthError, "current successor tree"\n'
+        '        ):\n'
+        '            self.verify()\n\n'
         '    def test_commit_tree_substitution_is_rejected(self) -> None:\n',
         "live fixture successor assertions",
     )
