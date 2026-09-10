@@ -99,8 +99,19 @@ jobs:
             tools/one_shot_current_successor_truth.py \
             tools/one_shot_current_successor_truth_repair.py
       - name: Resolve dependencies and commit canonical formatting
+        shell: bash
         run: |
-          flutter pub get
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if flutter pub get; then
+              break
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo 'flutter pub get failed after bounded retries' >&2
+              exit 1
+            fi
+            sleep "$((attempt * 10))"
+          done
           dart format --output=write lib test
       - name: Validate repository, current truth and source boundaries
         env:
