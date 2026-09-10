@@ -1,3 +1,4 @@
+# one-shot revision: exact canonical workflow object binding
 name: hepta-source-truth-closure-once
 
 on:
