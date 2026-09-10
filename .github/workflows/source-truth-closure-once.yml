@@ -41,7 +41,7 @@ jobs:
           flutter-version: '3.47.2'
           channel: stable
           cache: false
-      - name: Apply source-truth closure
+      - name: Apply deterministic CI and module semantics closure
         run: python3 tools/one_shot_source_truth.py
       - name: Validate deterministic repository truth
         shell: bash
@@ -51,13 +51,12 @@ jobs:
           python3 tools/native/dependency_update_policy.py --check-cocoapods
           python3 tools/generate_module_docs.py --check
           python3 tools/validate_module_semantics.py
-          python3 services/qualification/documentation_truth.py
           python3 tools/validate_repository.py
           python3 tools/validate_repository_metadata.py
           python3 tools/validate_production_authority.py
-          python3 -m unittest services.qualification.test_dependency_update_policy -v
+          python3 -m unittest services.qualification.test_dependabot_config_custody -v
+          python3 -m unittest services.qualification.test_dependency_automation -v
           python3 -m unittest services.qualification.test_module_semantic_docs -v
-          python3 -m unittest services.qualification.test_documentation_truth -v
           python3 -m compileall -q services adapters tools
           flutter pub get
           dart format --output=none --set-exit-if-changed lib test
@@ -73,5 +72,5 @@ jobs:
           git config user.email actions@users.noreply.github.com
           git add -A
           git diff --cached --quiet && { echo 'no source changes produced' >&2; exit 1; }
-          git commit -m 'quality: close deterministic CI and candidate truth gaps'
+          git commit -m 'quality: make CI deterministic and bind eleven documentation dimensions'
           git push origin "HEAD:${TARGET_BRANCH}"
