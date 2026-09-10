@@ -1,4 +1,4 @@
-package com.example.demo_ai_even.utils
+package org.trillionnium.heptaglasses.utils
 
 object ByteUtil {
 

@@ -1,5 +1,5 @@
-import 'package:demo_ai_even/runtime/assistant_session.dart';
-import 'package:demo_ai_even/runtime/clock.dart';
+import 'package:hepta_glasses/runtime/assistant_session.dart';
+import 'package:hepta_glasses/runtime/clock.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

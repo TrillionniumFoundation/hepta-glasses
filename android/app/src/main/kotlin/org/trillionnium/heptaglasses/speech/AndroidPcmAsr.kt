@@ -1,4 +1,4 @@
-package com.example.demo_ai_even.speech
+package org.trillionnium.heptaglasses.speech
 
 import java.io.ByteArrayOutputStream
 import java.io.InputStream

@@ -1,5 +1,5 @@
-import 'package:demo_ai_even/controllers/evenai_model_controller.dart';
-import 'package:demo_ai_even/services/evenai.dart';
+import 'package:hepta_glasses/controllers/evenai_model_controller.dart';
+import 'package:hepta_glasses/services/evenai.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 

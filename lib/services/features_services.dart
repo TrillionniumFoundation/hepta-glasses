@@ -1,5 +1,5 @@
-import 'package:demo_ai_even/runtime/contracts.dart';
-import 'package:demo_ai_even/runtime/hepta_runtime.dart';
+import 'package:hepta_glasses/runtime/contracts.dart';
+import 'package:hepta_glasses/runtime/hepta_runtime.dart';
 
 class FeaturesServices {
   Future<ToolReceipt> sendBmp(String imageUrl) {

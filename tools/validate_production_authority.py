@@ -71,7 +71,7 @@ def validate_product_graph() -> None:
         for token in FORBIDDEN_PRODUCT_TOKENS:
             if token in source:
                 violations.append(f"{path.relative_to(ROOT)}:{token}")
-        if "../test/" in source or "package:demo_ai_even/test/" in source:
+        if "../test/" in source or "package:hepta_glasses/test/" in source:
             violations.append(f"{path.relative_to(ROOT)}:test_import")
     if violations:
         fail("test/development mutation authority reached lib/: " + ", ".join(violations))

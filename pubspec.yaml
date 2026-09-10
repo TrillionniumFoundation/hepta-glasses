@@ -1,4 +1,4 @@
-name: demo_ai_even
+name: hepta_glasses
 description: "Hepta Glasses distributed AI-native edge runtime and Even G1 companion application."
 publish_to: 'none'
 version: 0.2.0+2

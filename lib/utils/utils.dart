@@ -1,4 +1,4 @@
-import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
+import 'package:hepta_glasses/runtime/privacy_safe_log.dart';
 import 'package:flutter/services.dart';
 
 class Utils {

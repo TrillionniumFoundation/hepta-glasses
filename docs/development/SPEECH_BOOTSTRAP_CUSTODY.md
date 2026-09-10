@@ -12,9 +12,9 @@ Primary implementation:
 - `services/model_gateway/speech_ingress.py`
 - `lib/runtime/model_gateway.dart`
 - `lib/services/evenai.dart`
-- `android/app/src/main/kotlin/com/example/demo_ai_even/speech/AndroidPcmAsr.kt`
-- `android/app/src/main/kotlin/com/example/demo_ai_even/speech/AndroidSpeechSession.kt`
-- `android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt`
+- `android/app/src/main/kotlin/org/trillionnium/heptaglasses/speech/AndroidPcmAsr.kt`
+- `android/app/src/main/kotlin/org/trillionnium/heptaglasses/speech/AndroidSpeechSession.kt`
+- `android/app/src/main/kotlin/org/trillionnium/heptaglasses/bluetooth/BleManager.kt`
 - `ios/Runner/SpeechStreamRecognizer.swift`
 
 Contract: `contracts/realtime-speech-custody-v2.json`. Operations:

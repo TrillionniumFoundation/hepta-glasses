@@ -77,7 +77,7 @@
   "source_bindings": [
     {
       "id": "android-audio-frame",
-      "path": "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt",
+      "path": "android/app/src/main/kotlin/org/trillionnium/heptaglasses/bluetooth/BleManager.kt",
       "required_fragments": [
         "private const val REQUIRED_MTU = 203",
         "private const val REQUESTED_MTU = 251",

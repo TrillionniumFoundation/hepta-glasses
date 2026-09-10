@@ -1,4 +1,4 @@
-package com.example.demo_ai_even.speech
+package org.trillionnium.heptaglasses.speech
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows

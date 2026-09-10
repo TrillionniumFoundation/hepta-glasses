@@ -84,9 +84,9 @@ REQUIRED = {
     "evidence/templates/ios-g1-qualification-scenario.json",
     "evidence/templates/product-release-bundle.template.json",
     ".github/workflows/ci.yml",
-    "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt",
-    "android/app/src/main/kotlin/com/example/demo_ai_even/security/AuditCheckpointSigner.kt",
-    "android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt",
+    "android/app/src/main/kotlin/org/trillionnium/heptaglasses/bluetooth/BleManager.kt",
+    "android/app/src/main/kotlin/org/trillionnium/heptaglasses/security/AuditCheckpointSigner.kt",
+    "android/app/src/test/kotlin/org/trillionnium/heptaglasses/model/BlePairDeviceTest.kt",
     "ios/Runner/BluetoothManager.swift",
     "ios/Runner/AuditCheckpointSigner.swift",
     "ios/RunnerTests/RunnerTests.swift",
@@ -336,7 +336,7 @@ def validate_ble_authority() -> None:
     )
     android = (
         ROOT
-        / "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt"
+        / "android/app/src/main/kotlin/org/trillionnium/heptaglasses/bluetooth/BleManager.kt"
     ).read_text(encoding="utf-8")
     transport_test = (
         ROOT / "test/runtime/even_g1_transport_authority_test.dart"
@@ -493,11 +493,11 @@ def validate_checkpoint_authority() -> None:
     ).read_text(encoding="utf-8")
     android_channel = (
         ROOT
-        / "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleChannelHelper.kt"
+        / "android/app/src/main/kotlin/org/trillionnium/heptaglasses/bluetooth/BleChannelHelper.kt"
     ).read_text(encoding="utf-8")
     android_signer = (
         ROOT
-        / "android/app/src/main/kotlin/com/example/demo_ai_even/security/AuditCheckpointSigner.kt"
+        / "android/app/src/main/kotlin/org/trillionnium/heptaglasses/security/AuditCheckpointSigner.kt"
     ).read_text(encoding="utf-8")
     ios_delegate = (ROOT / "ios/Runner/AppDelegate.swift").read_text(
         encoding="utf-8"

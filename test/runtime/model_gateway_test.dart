@@ -1,4 +1,4 @@
-import 'package:demo_ai_even/runtime/model_gateway.dart';
+import 'package:hepta_glasses/runtime/model_gateway.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

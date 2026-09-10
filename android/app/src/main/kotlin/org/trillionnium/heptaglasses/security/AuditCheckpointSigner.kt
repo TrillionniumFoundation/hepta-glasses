@@ -1,4 +1,4 @@
-package com.example.demo_ai_even.security
+package org.trillionnium.heptaglasses.security
 
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties

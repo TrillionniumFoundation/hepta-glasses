@@ -1,4 +1,4 @@
-import 'package:demo_ai_even/runtime/model_gateway.dart';
+import 'package:hepta_glasses/runtime/model_gateway.dart';
 
 /// Legacy class name kept for source compatibility. The implementation now
 /// targets the Hepta model gateway and never embeds a third-party provider key.

@@ -1,4 +1,4 @@
-package com.example.demo_ai_even.bluetooth
+package org.trillionnium.heptaglasses.bluetooth
 
 import android.Manifest
 import android.app.Activity

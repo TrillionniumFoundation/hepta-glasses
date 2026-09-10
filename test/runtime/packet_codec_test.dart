@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:demo_ai_even/runtime/packet_codec.dart';
-import 'package:demo_ai_even/runtime/strict_json.dart';
+import 'package:hepta_glasses/runtime/packet_codec.dart';
+import 'package:hepta_glasses/runtime/strict_json.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 part 'packet_codec_contract_support.dart';

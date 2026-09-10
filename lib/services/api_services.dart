@@ -1,4 +1,4 @@
-import 'package:demo_ai_even/runtime/model_gateway.dart';
+import 'package:hepta_glasses/runtime/model_gateway.dart';
 
 /// Compatibility facade retained while the legacy UI is migrated to the
 /// typed runtime. Provider credentials and provider endpoints are deliberately

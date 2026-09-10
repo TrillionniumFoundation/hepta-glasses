@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:demo_ai_even/runtime/device_effect_scheduler.dart';
+import 'package:hepta_glasses/runtime/device_effect_scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

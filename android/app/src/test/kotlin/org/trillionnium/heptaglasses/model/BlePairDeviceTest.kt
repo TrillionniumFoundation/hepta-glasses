@@ -1,4 +1,4 @@
-package com.example.demo_ai_even.model
+package org.trillionnium.heptaglasses.model
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

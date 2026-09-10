@@ -22,7 +22,7 @@ jbyteArray emptyByteArray(JNIEnv *env) {
 }  // namespace
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_example_demo_1ai_1even_cpp_Cpp_decodeLC3(
+Java_org_trillionnium_heptaglasses_cpp_Cpp_decodeLC3(
     JNIEnv *env,
     jclass,
     jbyteArray lc3Data
@@ -140,7 +140,7 @@ Java_com_example_demo_1ai_1even_cpp_Cpp_decodeLC3(
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_example_demo_1ai_1even_cpp_Cpp_rnNoise(
+Java_org_trillionnium_heptaglasses_cpp_Cpp_rnNoise(
     JNIEnv *env,
     jclass,
     jlong state,
@@ -163,7 +163,7 @@ Java_com_example_demo_1ai_1even_cpp_Cpp_rnNoise(
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_example_demo_1ai_1even_cpp_Cpp_createRNNoiseState(
+Java_org_trillionnium_heptaglasses_cpp_Cpp_createRNNoiseState(
     JNIEnv *,
     jclass
 ) {
@@ -171,7 +171,7 @@ Java_com_example_demo_1ai_1even_cpp_Cpp_createRNNoiseState(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_demo_1ai_1even_cpp_Cpp_destroyRNNoiseState(
+Java_org_trillionnium_heptaglasses_cpp_Cpp_destroyRNNoiseState(
     JNIEnv *,
     jclass,
     jlong state

@@ -2,14 +2,14 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:demo_ai_even/ble_manager.dart';
-import 'package:demo_ai_even/runtime/contracts.dart';
-import 'package:demo_ai_even/runtime/device_effect_result.dart';
-import 'package:demo_ai_even/runtime/hepta_runtime.dart';
-import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
-import 'package:demo_ai_even/services/ble.dart';
-import 'package:demo_ai_even/services/evenai_proto.dart';
-import 'package:demo_ai_even/utils/utils.dart';
+import 'package:hepta_glasses/ble_manager.dart';
+import 'package:hepta_glasses/runtime/contracts.dart';
+import 'package:hepta_glasses/runtime/device_effect_result.dart';
+import 'package:hepta_glasses/runtime/hepta_runtime.dart';
+import 'package:hepta_glasses/runtime/privacy_safe_log.dart';
+import 'package:hepta_glasses/services/ble.dart';
+import 'package:hepta_glasses/services/evenai_proto.dart';
+import 'package:hepta_glasses/utils/utils.dart';
 
 class Proto {
   Proto._();

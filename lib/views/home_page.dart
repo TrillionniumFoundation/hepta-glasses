@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:demo_ai_even/ble_manager.dart';
-import 'package:demo_ai_even/services/evenai.dart';
-import 'package:demo_ai_even/views/even_list_page.dart';
-import 'package:demo_ai_even/views/features_page.dart';
+import 'package:hepta_glasses/ble_manager.dart';
+import 'package:hepta_glasses/services/evenai.dart';
+import 'package:hepta_glasses/views/even_list_page.dart';
+import 'package:hepta_glasses/views/features_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';

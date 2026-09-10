@@ -229,8 +229,8 @@ Flutter 停止 pair heartbeat，按 side 失败关闭 pending 请求，并发布
 - `lib/services/ble.dart`
 - `lib/services/proto.dart`
 - `lib/services/evenai.dart`
-- `android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt`
-- `android/app/src/main/kotlin/com/example/demo_ai_even/model/BleDevice.kt`
+- `android/app/src/main/kotlin/org/trillionnium/heptaglasses/bluetooth/BleManager.kt`
+- `android/app/src/main/kotlin/org/trillionnium/heptaglasses/model/BleDevice.kt`
 - `ios/Runner/BluetoothManager.swift`
 - `ios/Runner/SpeechStreamRecognizer.swift`
 - `contracts/g1-ble-protocol-v1.json`

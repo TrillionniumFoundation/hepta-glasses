@@ -1,11 +1,11 @@
-import 'package:demo_ai_even/ble_manager.dart';
-import 'package:demo_ai_even/bootstrap/hepta_bootstrap.dart';
-import 'package:demo_ai_even/controllers/evenai_model_controller.dart';
-import 'package:demo_ai_even/runtime/audit_checkpoint_authenticator.dart';
-import 'package:demo_ai_even/runtime/authenticated_service_tokens.dart';
-import 'package:demo_ai_even/runtime/mutation_authority.dart';
-import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
-import 'package:demo_ai_even/views/home_page.dart';
+import 'package:hepta_glasses/ble_manager.dart';
+import 'package:hepta_glasses/bootstrap/hepta_bootstrap.dart';
+import 'package:hepta_glasses/controllers/evenai_model_controller.dart';
+import 'package:hepta_glasses/runtime/audit_checkpoint_authenticator.dart';
+import 'package:hepta_glasses/runtime/authenticated_service_tokens.dart';
+import 'package:hepta_glasses/runtime/mutation_authority.dart';
+import 'package:hepta_glasses/runtime/privacy_safe_log.dart';
+import 'package:hepta_glasses/views/home_page.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 

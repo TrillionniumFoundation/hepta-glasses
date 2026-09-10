@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
-import 'package:demo_ai_even/controllers/bmp_update_manager.dart';
-import 'package:demo_ai_even/services/ble.dart';
+import 'package:hepta_glasses/controllers/bmp_update_manager.dart';
+import 'package:hepta_glasses/services/ble.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 BleReceive response(List<int> data) =>

@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:demo_ai_even/app.dart';
-import 'package:demo_ai_even/runtime/ble_request_slot.dart';
-import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
-import 'package:demo_ai_even/services/ble.dart';
-import 'package:demo_ai_even/services/evenai.dart';
-import 'package:demo_ai_even/services/proto.dart';
+import 'package:hepta_glasses/app.dart';
+import 'package:hepta_glasses/runtime/ble_request_slot.dart';
+import 'package:hepta_glasses/runtime/privacy_safe_log.dart';
+import 'package:hepta_glasses/services/ble.dart';
+import 'package:hepta_glasses/services/evenai.dart';
+import 'package:hepta_glasses/services/proto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 

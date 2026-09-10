@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:demo_ai_even/runtime/strict_json.dart';
+import 'package:hepta_glasses/runtime/strict_json.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Object? decode(

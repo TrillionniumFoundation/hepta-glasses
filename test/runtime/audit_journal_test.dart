@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:demo_ai_even/runtime/audit_checkpoint_authenticator.dart';
-import 'package:demo_ai_even/runtime/audit_journal.dart';
-import 'package:demo_ai_even/runtime/clock.dart';
+import 'package:hepta_glasses/runtime/audit_checkpoint_authenticator.dart';
+import 'package:hepta_glasses/runtime/audit_journal.dart';
+import 'package:hepta_glasses/runtime/clock.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 JsonlAuditJournal journalFor(File file, {Clock? clock}) => JsonlAuditJournal(

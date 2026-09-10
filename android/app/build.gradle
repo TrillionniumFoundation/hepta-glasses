@@ -6,9 +6,9 @@ plugins {
 }
 
 android {
-    // Source packages retain the inherited namespace until the atomic package migration.
-    // This is not the installed application identity.
-    namespace = "com.example.demo_ai_even"
+    // Canonical source, generated-code and installed application namespace.
+    // A future change requires an explicit data/signing/store migration.
+    namespace = "org.trillionnium.heptaglasses"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 

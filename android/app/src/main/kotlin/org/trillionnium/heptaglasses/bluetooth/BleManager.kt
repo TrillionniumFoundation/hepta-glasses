@@ -1,4 +1,4 @@
-package com.example.demo_ai_even.bluetooth
+package org.trillionnium.heptaglasses.bluetooth
 
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -15,11 +15,11 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
-import com.example.demo_ai_even.cpp.Cpp
-import com.example.demo_ai_even.model.BleDevice
-import com.example.demo_ai_even.model.BlePairDevice
-import com.example.demo_ai_even.speech.AndroidSpeechSession
-import com.example.demo_ai_even.speech.SpeechTicket
+import org.trillionnium.heptaglasses.cpp.Cpp
+import org.trillionnium.heptaglasses.model.BleDevice
+import org.trillionnium.heptaglasses.model.BlePairDevice
+import org.trillionnium.heptaglasses.speech.AndroidSpeechSession
+import org.trillionnium.heptaglasses.speech.SpeechTicket
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -349,7 +349,7 @@ class BleManager private constructor() {
                     gatt.writeDescriptor(
                         descriptor,
                         BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE,
-                    ) == BluetoothGatt.GATT_SUCCESS
+                    ) == android.bluetooth.BluetoothStatusCodes.SUCCESS
                 } else {
                     @Suppress("DEPRECATION")
                     descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
