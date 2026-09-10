@@ -9,7 +9,8 @@ on:
       - tools/one_shot_source_truth.py
 
 permissions:
-  contents: write
+  actions: write
+  contents: read
 
 concurrency:
   group: hepta-source-truth-closure-once
@@ -31,7 +32,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REF_NAME" = "codex/hepta-identity-migration-20260910"
           actual="$(git diff --name-only HEAD^ HEAD | LC_ALL=C sort)"
-          expected="$(printf '%s\n' '.github/workflows/source-truth-closure-once.yml' 'tools/one_shot_source_truth.py' | LC_ALL=C sort)"
+          expected='.github/workflows/source-truth-closure-once.yml'
           test "$actual" = "$expected"
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
@@ -73,7 +74,87 @@ jobs:
           flutter analyze --no-fatal-infos
           flutter test
           git diff --check
-      - name: Publish unreferenced tested candidate object
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 tools/one_shot_source_truth.py --publish
+      - name: Stage exact tested candidate payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=build/source-truth-candidate
+          rm -rf "$root"
+          mkdir -p "$root/payload"
+          files=(
+            .github/workflows/ci.yml
+            services/qualification/test_dependency_automation.py
+            services/qualification/test_module_semantic_docs.py
+            tools/native/dependency_update_policy.py
+            tools/validate_module_semantics.py
+          )
+          for path in "${files[@]}"; do
+            mkdir -p "$root/payload/$(dirname "$path")"
+            cp "$path" "$root/payload/$path"
+          done
+          SOURCE_HEAD_SHA="$GITHUB_SHA" python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path('build/source-truth-candidate')
+          payload = root / 'payload'
+          files = sorted(
+              str(path.relative_to(payload))
+              for path in payload.rglob('*')
+              if path.is_file()
+          )
+          expected = sorted([
+              '.github/workflows/ci.yml',
+              'services/qualification/test_dependency_automation.py',
+              'services/qualification/test_module_semantic_docs.py',
+              'tools/native/dependency_update_policy.py',
+              'tools/validate_module_semantics.py',
+          ])
+          if files != expected:
+              raise SystemExit(f'payload mismatch: {files!r}')
+          manifest = {
+              'schema_version': 1,
+              'parent': os.environ['SOURCE_HEAD_SHA'],
+              'commit_message': (
+                  'quality: make CI deterministic and bind eleven '
+                  'documentation dimensions'
+              ),
+              'files': {
+                  relative: {
+                      'bytes': (payload / relative).stat().st_size,
+                      'sha256': hashlib.sha256(
+                          (payload / relative).read_bytes()
+                      ).hexdigest(),
+                  }
+                  for relative in files
+              },
+              'delete': [
+                  '.github/workflows/source-truth-closure-once.yml',
+                  'tools/one_shot_source_truth.py',
+              ],
+              'validation': {
+                  'repository_contract': True,
+                  'module_semantic_dimensions': 11,
+                  'generated_handoff_sections': 8,
+                  'flutter_tests': 135,
+              },
+          }
+          encoded = json.dumps(
+              manifest,
+              sort_keys=True,
+              separators=(',', ':'),
+          ).encode('utf-8') + b'\n'
+          (root / 'manifest.json').write_bytes(encoded)
+          (root / 'manifest.sha256').write_text(
+              hashlib.sha256(encoded).hexdigest() + '  manifest.json\n',
+              encoding='utf-8',
+          )
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-source-truth-candidate-${{ github.sha }}
+          path: build/source-truth-candidate
+          if-no-files-found: error
+          retention-days: 7
