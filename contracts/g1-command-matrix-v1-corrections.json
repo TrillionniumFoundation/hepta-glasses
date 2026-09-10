@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "contract_id": "hepta-g1-command-matrix-v1-correction-1",
+  "applies_to_canonical_sha256": "900deb5e601bcce7a6ac0241d3e4bab37dce8659a6d40f9fb3bfa4e47e9fec17",
+  "operations": [
+    {
+      "op": "drop_exact_trailing_byte",
+      "command_id": "microphone_data",
+      "example_collection": "consumer_examples",
+      "example_name": "lc3_frame",
+      "expected_original_length": 203,
+      "expected_prefix": [
+        241,
+        0
+      ],
+      "expected_payload_fill": 0,
+      "drop_count": 1,
+      "expected_result_length": 202,
+      "reason": "source-bound LC3 events are command plus sequence plus exactly 200 payload bytes"
+    }
+  ],
+  "claim_ceiling": "This correction changes only one synthetic zero-filled golden vector. It does not change runtime bytes, vendor semantics, firmware support, physical qualification, state readback, deployment, signing or release authority."
+}
