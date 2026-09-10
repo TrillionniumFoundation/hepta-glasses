@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 import unittest
 from http import HTTPStatus
 
 from services.model_gateway.app import (
     RequestError,
+    _closed_json_object,
+    _reject_json_constant,
     authorize,
     deterministic_answer,
     validate_chat_request,
@@ -13,22 +16,47 @@ from services.model_gateway.app import (
 
 
 class ModelGatewayTest(unittest.TestCase):
-    def test_valid_request_is_minimized(self) -> None:
+    def test_valid_request_is_minimized_and_response_is_closed(self) -> None:
         request = validate_chat_request(
             {"question": "  status  ", "task_id": "task-1", "context": {}}
         )
         self.assertEqual(request.question, "status")
-        self.assertEqual(deterministic_answer(request)["provider"], "deterministic-development")
+        self.assertEqual(
+            deterministic_answer(request),
+            {"answer": "Hepta development gateway received 6 characters."},
+        )
+        self.assertEqual(set(deterministic_answer(request)), {"answer"})
 
     def test_unknown_field_fails_closed(self) -> None:
         with self.assertRaises(RequestError) as raised:
             validate_chat_request({"question": "status", "credential": "secret"})
         self.assertEqual(raised.exception.code, "unknown_request_fields")
 
+    def test_duplicate_json_member_fails_closed(self) -> None:
+        with self.assertRaises(RequestError) as raised:
+            json.loads(
+                '{"question":"first","question":"second"}',
+                object_pairs_hook=_closed_json_object,
+                parse_constant=_reject_json_constant,
+            )
+        self.assertEqual(raised.exception.code, "duplicate_json_member")
+
+    def test_non_finite_json_number_fails_closed(self) -> None:
+        with self.assertRaises(RequestError) as raised:
+            json.loads(
+                '{"question":"status","context":{"value":NaN}}',
+                object_pairs_hook=_closed_json_object,
+                parse_constant=_reject_json_constant,
+            )
+        self.assertEqual(raised.exception.code, "invalid_json")
+
     def test_large_question_has_stable_status(self) -> None:
         with self.assertRaises(RequestError) as raised:
             validate_chat_request({"question": "x" * 8_001})
-        self.assertEqual(raised.exception.status, HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+        self.assertEqual(
+            raised.exception.status,
+            HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+        )
 
     def test_token_comparison(self) -> None:
         self.assertTrue(authorize("Bearer expected", "expected"))
