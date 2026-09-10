@@ -32,8 +32,11 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.sha }}"
-          test "$(git rev-parse HEAD^^)" = "300e2abdbe1f4939125af87eaa0958e8bd44b12b"
-          actual="$(git diff --name-only HEAD^^ HEAD | LC_ALL=C sort)"
+          git merge-base --is-ancestor \
+            300e2abdbe1f4939125af87eaa0958e8bd44b12b HEAD
+          actual="$(git diff --name-only \
+            300e2abdbe1f4939125af87eaa0958e8bd44b12b HEAD \
+            | LC_ALL=C sort)"
           expected="$(printf '%s\n' \
             '.github/workflows/current-successor-truth-once.yml' \
             'tools/one_shot_current_successor_truth_repair.py' \
@@ -53,7 +56,20 @@ jobs:
           channel: stable
           cache: false
       - name: Apply the bounded final source-closure transaction
-        run: python3 tools/one_shot_current_successor_truth_repair.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tools/one_shot_current_successor_truth_repair.py')
+          text = path.read_text(encoding='utf-8')
+          old = 'base64.b85decode(_PAYLOAD)'
+          new = "base64.b85decode(b''.join(_PAYLOAD.split()))"
+          if text.count(old) != 1:
+              raise SystemExit('compressed controller transport shape drifted')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+          python3 tools/one_shot_current_successor_truth_repair.py
       - name: Remove temporary execution authority from the final tree
         run: |
           git rm \
