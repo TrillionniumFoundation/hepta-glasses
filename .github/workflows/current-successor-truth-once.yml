@@ -26,7 +26,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
       - name: Verify exact bounded controller object
         shell: bash
         run: |
@@ -135,7 +135,7 @@ jobs:
           flutter test
           flutter build apk --debug
           (cd android && ./gradlew testDebugUnitTest)
-      - name: Commit and publish the carrier-free candidate
+      - name: Commit and package the carrier-free candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -149,4 +149,61 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'fix: close final repository source blockers'
-          git push origin HEAD:codex/hepta-identity-migration-20260910
+          mkdir -p build/final-source-closure
+          git branch -f final-source-closure-artifact HEAD
+          git bundle create \
+            build/final-source-closure/final-source-closure.bundle \
+            final-source-closure-artifact
+          git format-patch --binary --stdout \
+            "${{ github.sha }}"..HEAD \
+            > build/final-source-closure/final-source-closure.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+          import subprocess
+
+          def git(*args: str) -> str:
+              return subprocess.check_output(['git', *args], text=True).strip()
+
+          root = Path('build/final-source-closure')
+          changed = git('diff-tree', '--no-commit-id', '--name-status', '-r', 'HEAD').splitlines()
+          files = {}
+          for line in changed:
+              status, path = line.split('\t', 1)
+              item = {'status': status}
+              if status != 'D':
+                  raw = Path(path).read_bytes()
+                  item.update({
+                      'bytes': len(raw),
+                      'sha256': hashlib.sha256(raw).hexdigest(),
+                      'git_blob_sha1': git('rev-parse', f'HEAD:{path}'),
+                  })
+              files[path] = item
+          manifest = {
+              'schema_version': 1,
+              'controller_head': '${{ github.sha }}',
+              'commit': git('rev-parse', 'HEAD'),
+              'tree': git('rev-parse', 'HEAD^{tree}'),
+              'parent': git('rev-parse', 'HEAD^'),
+              'message': git('log', '-1', '--format=%B'),
+              'files': files,
+          }
+          encoded = json.dumps(
+              manifest,
+              ensure_ascii=False,
+              sort_keys=True,
+              separators=(',', ':'),
+          ).encode('utf-8') + b'\n'
+          (root / 'manifest.json').write_bytes(encoded)
+          (root / 'manifest.sha256').write_text(
+              hashlib.sha256(encoded).hexdigest() + '  manifest.json\n',
+              encoding='utf-8',
+          )
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hepta-final-source-closure-${{ github.sha }}
+          path: build/final-source-closure
+          if-no-files-found: error
+          retention-days: 30
