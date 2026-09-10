@@ -2,6 +2,8 @@ name: hepta-glasses-ci
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'
   pull_request:
   push:
     branches:
@@ -40,7 +42,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 services/qualification/documentation_truth.py --verify-github
-      - name: Verify Dependabot values against immutable GitHub docs
+      - name: Verify committed Dependabot contract without network
+        run: python3 tools/native/dependency_update_policy.py --check-dependabot-contract
+      - name: Refresh Dependabot values against immutable GitHub docs
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 tools/native/dependency_update_policy.py --verify-dependabot-official

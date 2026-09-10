@@ -69,7 +69,7 @@ _APPROVED_PODFILE_LOCK_SHA256 = (
     "0c1b8e7654df3a9ba524d519a5547f22bb72ccf067b3f3f6552ab848d2fa975d"
 )
 _APPROVED_WORKFLOW_GIT_BLOB_SHA1 = (
-    "7624aaf9cafa5bfef6b55f91d714bf50bb5c92ee"
+    "526ff56e187c5ec2d2093fe9616c4978fed776f0"
 )
 _APPROVED_COCOAPODS_VERSION = "1.17.0"
 _APPROVED_LOCK_PODS = {"Flutter": "1.0.0"}
@@ -438,6 +438,49 @@ def _configured_dependabot_values() -> list[str]:
             "Dependabot ecosystem set/order differs from the reviewed object"
         )
     return sorted(values)
+
+
+def inspect_dependabot_contract() -> dict[str, Any]:
+    """Validate committed dependency-update policy without network I/O."""
+    contract = load_contract()
+    configured = _configured_dependabot_values()
+    expected = contract["configured_ecosystems"]
+    if configured != expected:
+        raise DependencyPolicyError(
+            f"Dependabot ecosystems {configured} differ from contract {expected}"
+        )
+    unsupported = contract["unsupported_repository_managers"]
+    if unsupported != ["cocoapods"]:
+        raise DependencyPolicyError(
+            "unsupported repository manager contract drifted"
+        )
+    if set(configured) & set(unsupported):
+        raise DependencyPolicyError(
+            "configured ecosystems overlap unsupported managers"
+        )
+    if not PODFILE.is_file() or not LOCKFILE.is_file():
+        raise DependencyPolicyError("the declared CocoaPods graph is absent")
+    if "cocoapods" in configured or "swift" in configured:
+        raise DependencyPolicyError(
+            "another ecosystem cannot substitute for the CocoaPods graph"
+        )
+    if (ROOT / "Package.swift").exists():
+        raise DependencyPolicyError(
+            "Package.swift appeared without a reviewed ecosystem change"
+        )
+    source = contract["official_source"]
+    return {
+        "schema_version": 1,
+        "mode": "deterministic-committed-contract",
+        "configured_ecosystems": configured,
+        "unsupported_repository_managers": unsupported,
+        "pinned_official_repository": source["repository"],
+        "pinned_official_commit": source["commit"],
+        "pinned_official_path": source["path"],
+        "live_freshness_revalidation_required": True,
+        "network_used": False,
+        "passed": True,
+    }
 
 
 def verify_dependabot_official() -> dict[str, Any]:
@@ -974,6 +1017,11 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     mode.add_argument(
+        "--check-dependabot-contract",
+        action="store_true",
+        help="validate the committed dependency-update contract without network I/O",
+    )
+    mode.add_argument(
         "--check-cocoapods",
         action="store_true",
         help="inspect the committed Pod graph without network access",
@@ -990,6 +1038,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.verify_dependabot_official:
             result = verify_dependabot_official()
+        elif args.check_dependabot_contract:
+            result = inspect_dependabot_contract()
         elif args.emit_cocoapods_update_contract:
             result = emit_cocoapods_update_contract()
         else:

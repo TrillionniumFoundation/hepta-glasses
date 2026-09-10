@@ -10,7 +10,11 @@ from tools.generate_module_docs import (
     module_digest,
     render_module,
 )
-from tools.validate_module_semantics import REQUIRED_HEADINGS, validate
+from tools.validate_module_semantics import (
+    CANONICAL_SEMANTIC_HEADINGS,
+    REQUIRED_HEADINGS,
+    validate,
+)
 
 
 class ModuleSemanticDocumentationTests(unittest.TestCase):
@@ -19,7 +23,8 @@ class ModuleSemanticDocumentationTests(unittest.TestCase):
         result = validate(root)
         self.assertTrue(result["ok"])
         self.assertEqual(result["modules"], 26)
-        self.assertEqual(result["semantic_dimensions"], 8)
+        self.assertEqual(result["semantic_dimensions"], 11)
+        self.assertEqual(result["generated_handoff_sections"], 8)
         self.assertEqual(len(result["registry_digest"]), 64)
 
     def test_every_record_uses_the_complete_required_shape(self) -> None:
@@ -41,12 +46,19 @@ class ModuleSemanticDocumentationTests(unittest.TestCase):
         module["contracts"] = [*module["contracts"], "contracts/fixture-change.json"]
         self.assertNotEqual(before, module_digest(module))
 
-    def test_generated_page_binds_all_eight_dimensions_and_module_data(self) -> None:
+    def test_generated_page_binds_all_compact_sections_and_module_data(self) -> None:
         root = Path(__file__).resolve().parents[2]
         module = load_canonical(root)["modules"][0]
         rendered = render_module(module)
         positions = [rendered.index(heading) for heading in REQUIRED_HEADINGS]
         self.assertEqual(positions, sorted(positions))
+        standard = (
+            root / "docs/development/MODULE_DOCUMENTATION_COMPLETENESS_STANDARD.md"
+        ).read_text(encoding="utf-8")
+        semantic_positions = [
+            standard.index(heading) for heading in CANONICAL_SEMANTIC_HEADINGS
+        ]
+        self.assertEqual(semantic_positions, sorted(semantic_positions))
         self.assertIn(module_digest(module), rendered)
         self.assertIn(module["owner"], rendered)
         self.assertIn(module["primary_document"], rendered)
