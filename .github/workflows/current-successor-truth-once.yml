@@ -72,7 +72,7 @@ jobs:
           python3 tools/one_shot_current_successor_truth_repair.py
       - name: Remove temporary execution authority from the final tree
         run: |
-          git rm \
+          git rm -f \
             .github/workflows/current-successor-truth-once.yml \
             tools/one_shot_current_successor_truth.py \
             tools/one_shot_current_successor_truth_repair.py
