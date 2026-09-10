@@ -1,13 +1,39 @@
 #!/usr/bin/env python3
-"""One-shot deterministic CI and module-documentation repair."""
+"""One-shot deterministic CI and module-documentation repair.
+
+The controller applies a closed, deterministic five-file patch in a GitHub
+Actions checkout. After validation it may publish an unreferenced Git commit
+object through the Git Data API. It never updates a branch ref itself. A
+separate authorized actor must inspect the receipt and perform the expected
+fast-forward.
+"""
 
 from __future__ import annotations
 
+import argparse
+import base64
 import hashlib
+import json
+import os
 import re
+import subprocess
 from pathlib import Path
+from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
+TARGET_FILES = (
+    ".github/workflows/ci.yml",
+    "services/qualification/test_dependency_automation.py",
+    "services/qualification/test_module_semantic_docs.py",
+    "tools/native/dependency_update_policy.py",
+    "tools/validate_module_semantics.py",
+)
+TEMPORARY_FILES = (
+    ".github/workflows/source-truth-closure-once.yml",
+    "tools/one_shot_source_truth.py",
+)
 
 
 def exact(text: str, old: str, new: str, label: str) -> str:
@@ -112,7 +138,6 @@ def inspect_dependabot_contract() -> dict[str, Any]:
 ''',
         "route deterministic dependency CLI mode",
     )
-    policy_path.write_text(policy, encoding="utf-8")
 
     ci_path = ROOT / ".github/workflows/ci.yml"
     ci = ci_path.read_text(encoding="utf-8")
@@ -155,7 +180,6 @@ def inspect_dependabot_contract() -> dict[str, Any]:
     workflow_blob = hashlib.sha1(
         f"blob {len(encoded)}\0".encode("ascii") + encoded
     ).hexdigest()
-    policy = policy_path.read_text(encoding="utf-8")
     policy, count = re.subn(
         r'(_APPROVED_WORKFLOW_GIT_BLOB_SHA1 = \(\n    ")[0-9a-f]{40}("\n\))',
         rf"\g<1>{workflow_blob}\g<2>",
@@ -284,20 +308,135 @@ STANDARD = Path("docs/development/MODULE_DOCUMENTATION_COMPLETENESS_STANDARD.md"
     test_path.write_text(test, encoding="utf-8")
 
 
-def cleanup() -> None:
-    for relative in (
-        ".github/workflows/source-truth-closure-once.yml",
-        "tools/one_shot_source_truth.py",
+def _run(*args: str) -> str:
+    return subprocess.check_output(args, cwd=ROOT, text=True).strip()
+
+
+def _api(method: str, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    token = os.environ.get("GITHUB_TOKEN", "")
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    if len(token) < 16 or not repository:
+        raise SystemExit("GitHub publication environment is unavailable")
+    request = Request(
+        f"https://api.github.com/repos/{repository}{path}",
+        data=json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(
+            "utf-8"
+        ),
+        method=method,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "User-Agent": "hepta-source-truth-controller/1",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    try:
+        with urlopen(request, timeout=30) as response:
+            raw = response.read(2 * 1024 * 1024 + 1)
+    except (HTTPError, URLError, TimeoutError, OSError) as error:
+        raise SystemExit(f"GitHub Git Data API failed closed: {error}") from error
+    if len(raw) > 2 * 1024 * 1024:
+        raise SystemExit("GitHub Git Data API response exceeded two MiB")
+    value = json.loads(raw.decode("utf-8"))
+    if not isinstance(value, dict):
+        raise SystemExit("GitHub Git Data API response was not an object")
+    return value
+
+
+def publish_candidate() -> None:
+    changed = tuple(
+        sorted(
+            line
+            for line in _run("git", "diff", "--name-only", "HEAD").splitlines()
+            if line
+        )
+    )
+    if changed != tuple(sorted(TARGET_FILES)):
+        raise SystemExit(
+            f"unexpected generated source delta: {changed!r} != {TARGET_FILES!r}"
+        )
+    if _run("git", "diff", "--check"):
+        raise SystemExit("generated source delta contains whitespace errors")
+
+    head = _run("git", "rev-parse", "HEAD")
+    base_tree = _run("git", "rev-parse", "HEAD^{tree}")
+    entries: list[dict[str, Any]] = []
+    blob_receipts: dict[str, str] = {}
+    for relative in TARGET_FILES:
+        raw = (ROOT / relative).read_bytes()
+        blob = _api(
+            "POST",
+            "/git/blobs",
+            {
+                "content": base64.b64encode(raw).decode("ascii"),
+                "encoding": "base64",
+            },
+        )
+        sha = blob.get("sha")
+        if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
+            raise SystemExit(f"invalid blob receipt for {relative}")
+        entries.append(
+            {"path": relative, "mode": "100644", "type": "blob", "sha": sha}
+        )
+        blob_receipts[relative] = sha
+    for relative in TEMPORARY_FILES:
+        entries.append(
+            {"path": relative, "mode": "100644", "type": "blob", "sha": None}
+        )
+
+    tree = _api(
+        "POST",
+        "/git/trees",
+        {"base_tree": base_tree, "tree": entries},
+    )
+    tree_sha = tree.get("sha")
+    if not isinstance(tree_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", tree_sha):
+        raise SystemExit("invalid candidate tree receipt")
+    commit = _api(
+        "POST",
+        "/git/commits",
+        {
+            "message": "quality: make CI deterministic and bind eleven documentation dimensions",
+            "tree": tree_sha,
+            "parents": [head],
+        },
+    )
+    commit_sha = commit.get("sha")
+    if not isinstance(commit_sha, str) or not re.fullmatch(
+        r"[0-9a-f]{40}", commit_sha
     ):
-        path = ROOT / relative
-        if path.exists():
-            path.unlink()
+        raise SystemExit("invalid candidate commit receipt")
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "candidate_commit": commit_sha,
+                "candidate_tree": tree_sha,
+                "parent": head,
+                "modified_files": list(TARGET_FILES),
+                "deleted_temporary_files": list(TEMPORARY_FILES),
+                "blobs": blob_receipts,
+                "ref_updated": False,
+            },
+            sort_keys=True,
+        )
+    )
+
+
+def apply_patch() -> None:
+    close_dependency_policy()
+    close_module_semantics()
 
 
 def main() -> int:
-    close_dependency_policy()
-    close_module_semantics()
-    cleanup()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--publish", action="store_true")
+    arguments = parser.parse_args()
+    if arguments.publish:
+        publish_candidate()
+    else:
+        apply_patch()
     return 0
 
 

@@ -1,37 +1,36 @@
-# one-shot revision: exact canonical workflow object binding
 name: hepta-source-truth-closure-once
 
 on:
   push:
     branches:
       - codex/hepta-identity-migration-20260910
+    paths:
+      - .github/workflows/source-truth-closure-once.yml
+      - tools/one_shot_source_truth.py
 
 permissions:
   contents: write
 
 concurrency:
   group: hepta-source-truth-closure-once
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   apply-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      SOURCE_BASE_SHA: d483c1f31cf08f0eb437637fa7619613f50137a9
-      TARGET_BRANCH: codex/hepta-identity-migration-20260910
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-          persist-credentials: true
-      - name: Verify bounded temporary scope
+          persist-credentials: false
+      - name: Verify bounded controller update
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "$TARGET_BRANCH"
-          actual="$(git diff --name-only "$SOURCE_BASE_SHA" HEAD | LC_ALL=C sort)"
+          test "$GITHUB_REF_NAME" = "codex/hepta-identity-migration-20260910"
+          actual="$(git diff --name-only HEAD^ HEAD | LC_ALL=C sort)"
           expected="$(printf '%s\n' '.github/workflows/source-truth-closure-once.yml' 'tools/one_shot_source_truth.py' | LC_ALL=C sort)"
           test "$actual" = "$expected"
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -42,9 +41,9 @@ jobs:
           flutter-version: '3.47.2'
           channel: stable
           cache: false
-      - name: Apply deterministic CI and module semantics closure
+      - name: Apply deterministic source-truth patch
         run: python3 tools/one_shot_source_truth.py
-      - name: Validate deterministic repository truth
+      - name: Validate generated source candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -52,6 +51,14 @@ jobs:
           python3 tools/native/dependency_update_policy.py --check-cocoapods
           python3 tools/generate_module_docs.py --check
           python3 tools/validate_module_semantics.py
+          mkdir -p /tmp/hepta-source-truth-controller
+          mv .github/workflows/source-truth-closure-once.yml /tmp/hepta-source-truth-controller/
+          mv tools/one_shot_source_truth.py /tmp/hepta-source-truth-controller/
+          restore_controller() {
+            mv /tmp/hepta-source-truth-controller/source-truth-closure-once.yml .github/workflows/
+            mv /tmp/hepta-source-truth-controller/one_shot_source_truth.py tools/
+          }
+          trap restore_controller EXIT
           python3 tools/validate_repository.py
           python3 tools/validate_repository_metadata.py
           python3 tools/validate_production_authority.py
@@ -59,19 +66,14 @@ jobs:
           python3 -m unittest services.qualification.test_dependency_automation -v
           python3 -m unittest services.qualification.test_module_semantic_docs -v
           python3 -m compileall -q services adapters tools
+          restore_controller
+          trap - EXIT
           flutter pub get
           dart format --output=none --set-exit-if-changed lib test
           flutter analyze --no-fatal-infos
+          flutter test
           git diff --check
-          test ! -e .github/workflows/source-truth-closure-once.yml
-          test ! -e tools/one_shot_source_truth.py
-      - name: Publish tested source successor
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name hepta-source-closure-bot
-          git config user.email actions@users.noreply.github.com
-          git add -A
-          git diff --cached --quiet && { echo 'no source changes produced' >&2; exit 1; }
-          git commit -m 'quality: make CI deterministic and bind eleven documentation dimensions'
-          git push origin "HEAD:${TARGET_BRANCH}"
+      - name: Publish unreferenced tested candidate object
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/one_shot_source_truth.py --publish
