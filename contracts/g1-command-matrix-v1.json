@@ -31,7 +31,7 @@
         "gatt_connected",
         "services_and_characteristics_discovered",
         "notification_descriptor_accepted",
-        "mtu_at_least_203"
+        "mtu_at_least_205"
       ],
       "ready_after": "initialization_write_accepted",
       "source_binding_id": "android-audio-frame"
@@ -79,7 +79,7 @@
       "id": "android-audio-frame",
       "path": "android/app/src/main/kotlin/org/trillionnium/heptaglasses/bluetooth/BleManager.kt",
       "required_fragments": [
-        "private const val REQUIRED_MTU = 203",
+        "const val REQUIRED_MTU = 205",
         "private const val REQUESTED_MTU = 251",
         "byteArrayOf(0xf4.toByte(), 0x01)",
         "frame[0] == 0xF1.toByte()",

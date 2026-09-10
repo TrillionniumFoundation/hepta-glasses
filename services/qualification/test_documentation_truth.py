@@ -26,6 +26,10 @@ class DocumentationTruthRepositoryTests(unittest.TestCase):
         self.assertEqual(result["required_jobs"], 7)
         self.assertEqual(result["successor_maturity"], "source_implemented")
         self.assertEqual(result["last_qualified_commit"], PINNED_BASELINE["commit"])
+        self.assertEqual(result["successor_pull_request"], 125)
+        self.assertEqual(result["successor_branch"], "codex/hepta-identity-migration-20260910")
+        self.assertEqual(result["successor_base_branch"], "codex/hepta-main-convergence-20260909-v2")
+        self.assertEqual(result["module_registry"], "docs/modules/modules.json")
 
 
 class DocumentationTruthNegativeTests(unittest.TestCase):
@@ -124,6 +128,27 @@ class DocumentationTruthNegativeTests(unittest.TestCase):
         project["repository_actionable_gate"]["required_checks"].pop()
         self.save_project(project)
         with self.assertRaisesRegex(DocumentationTruthError, "required check set drifted"):
+            validate(self.root)
+
+    def test_current_successor_pointer_drift_is_rejected(self) -> None:
+        project = self.project()
+        project["source_authority"]["pull_request"] = 114
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "pull request drifted"):
+            validate(self.root)
+
+    def test_current_successor_branch_drift_is_rejected(self) -> None:
+        project = self.project()
+        project["source_authority"]["branch"] = "wrong-branch"
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "head branch drifted"):
+            validate(self.root)
+
+    def test_canonical_module_registry_pointer_drift_is_rejected(self) -> None:
+        project = self.project()
+        project["repository_actionable_gate"]["module_registry"] = "docs/MODULE_COVERAGE.json"
+        self.save_project(project)
+        with self.assertRaisesRegex(DocumentationTruthError, "canonical module registry"):
             validate(self.root)
 
     def test_artifact_name_substitution_is_rejected(self) -> None:

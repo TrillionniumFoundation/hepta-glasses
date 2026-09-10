@@ -19,7 +19,7 @@ if str(_ROOT) not in sys.path:
 
 from services.qualification import g1_command_matrix_impl as _impl
 
-EXPECTED_MATRIX_SHA256 = "3761c6f1e7bc275b6d7a6e2fad90cc4e606f5767a076f6d2f4c9e7b2d2db1823"
+EXPECTED_MATRIX_SHA256 = "3142b741fb1ba9f94064a22c31e3cb0db5276b4aa47791f7951aa28b02b99450"
 EXPECTED_PROFILE_SHA256 = {
     "bitmap_crc": "d8b30592c04ce8f0c59f835570172b099ea15d4d5fb69e47abcec7e514baaedb",
     "bitmap_finish": "1c842279ad7f6426b16b00cd704abc26e85604c4139bf88624613b803a0507b5",

@@ -1,6 +1,7 @@
 package org.trillionnium.heptaglasses.model
 
 import org.junit.Assert.assertFalse
+import org.trillionnium.heptaglasses.bluetooth.BleMtuContract
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -16,5 +17,13 @@ class BlePairDeviceTest {
         assertFalse(pair.isBothConnected())
         pair.update(isRightConnected = true)
         assertTrue(pair.isBothConnected())
+    }
+
+    @Test
+    fun fixed202ByteNotificationRequiresMtu205() {
+        assertFalse(BleMtuContract.admits(203))
+        assertFalse(BleMtuContract.admits(204))
+        assertTrue(BleMtuContract.admits(205))
+        assertTrue(BleMtuContract.admits(251))
     }
 }

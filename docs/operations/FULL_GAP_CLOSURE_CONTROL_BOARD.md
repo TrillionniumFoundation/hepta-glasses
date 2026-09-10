@@ -1,10 +1,12 @@
 # Full gap-closure control board
 
-Status date: 2026-09-09  
+Status date: 2026-09-10
 Parent control: issue #82  
 Execution plan: `docs/development/2026-09-09_FULL_GAP_CLOSURE_PLAN.md`
 
 This board is a coordination surface. It never replaces GitHub API state, provider records, physical measurements, vendor authorization, signatures, independent review, store decisions, or the canonical evidence validators.
+
+Active source subject: the live head and Git tree of open PR #125 (`codex/hepta-identity-migration-20260910` into `codex/hepta-main-convergence-20260909-v2`). The board deliberately stores no copied current-head SHA; every execution re-reads GitHub before binding evidence or reviewer eligibility.
 
 ## 1. State vocabulary
 

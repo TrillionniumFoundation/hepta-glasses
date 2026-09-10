@@ -6,9 +6,9 @@ The product boundary is explicit: this repository is **not** vendor-authorized G
 
 ## Authoritative status
 
-The live head and Git tree of open PR #114 identify the active successor source object. PR #114 targets `main` from `codex/hepta-main-convergence-20260909-v2`; it is out of Draft but still requires an eligible non-author/non-latest-pusher Code Owner `APPROVED` review, complete canonical `main` protection readback, and ordinary protected adoption. The active successor therefore remains `source_implemented`, not `ci_qualified`, `released`, or production-authorized.
+The live head and Git tree of open PR #125 identify the active successor source object. PR #125 targets `codex/hepta-main-convergence-20260909-v2` from `codex/hepta-identity-migration-20260910`. The live GitHub pull-request and commit readback—not a copied SHA in prose—determines the current source identity. The active successor remains `source_implemented`, not `ci_qualified`, `released`, or production-authorized, until one unchanged final head completes all seven jobs, yields a freshly inspected source Artifact, and receives an eligible non-author/non-latest-pusher approval.
 
-The immediately preceding PR #114 object at commit `317ee1141ceac6df7d711aeaaca27b22d735e48d`, tree `51e673238d30b81ef8eb64b93eef14fc7bf850cb`, completed all seven jobs and produced source artifact `10098668276` with ZIP SHA-256 `6eac5358c5b0f1555043ac99250e583d5baeb7a89a2133365d72ad5bead7037c`. It received artifact-integrity comments but no eligible `APPROVED` review. Any later source commit—including the closure-control refinement described below—supersedes that exact-head evidence and must generate fresh CI, artifact and review evidence.
+The prior PR #114 object at commit `317ee1141ceac6df7d711aeaaca27b22d735e48d`, tree `51e673238d30b81ef8eb64b93eef14fc7bf850cb`, completed all seven jobs and produced source artifact `10098668276` with ZIP SHA-256 `6eac5358c5b0f1555043ac99250e583d5baeb7a89a2133365d72ad5bead7037c`. It is historical predecessor evidence only: it received artifact-integrity comments but no eligible `APPROVED` review, and neither its CI nor its Artifact attests PR #125 or any later head.
 
 The last independently qualified historical baseline remains PR #101 at:
 

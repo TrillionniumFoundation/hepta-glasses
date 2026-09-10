@@ -84,7 +84,7 @@
       "HG-0092"
     ],
     "independent_latest_head_approval_required": true,
-    "module_registry": "docs/MODULE_COVERAGE.json",
+    "module_registry": "docs/modules/modules.json",
     "module_handoff": "docs/MODULE_HANDOFF.json",
     "module_guide": "docs/development/MODULE_HANDOFF.md",
     "base_gap_ledger": "docs/GAP_LEDGER.yaml",
@@ -104,11 +104,12 @@
     ],
     "status": "source_closed_historical_baseline_live_readback_required_successor_source_implemented_pending_admin_and_external_authority"
   },
-  "schema_version": 5,
+  "schema_version": 6,
   "source_authority": {
-    "branch": "codex/hepta-main-convergence-20260909-v2",
-    "identity_rule": "live_pr_head_and_tree",
-    "pull_request": 114,
+    "base_branch": "codex/hepta-main-convergence-20260909-v2",
+    "branch": "codex/hepta-identity-migration-20260910",
+    "identity_rule": "live_pull_request_head_and_tree",
+    "pull_request": 125,
     "repository": "TrillionniumFoundation/hepta-glasses",
     "required_artifact": "hepta-source-evidence-<exact-head-sha>",
     "self_attested_sha_is_authoritative": false,

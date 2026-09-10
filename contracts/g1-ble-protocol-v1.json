@@ -85,7 +85,7 @@
       "gatt_connected",
       "services_and_characteristics_discovered",
       "notification_descriptor_accepted",
-      "mtu_at_least_203",
+      "mtu_at_least_205",
       "initialization_write_accepted"
     ],
     "ios": [
@@ -102,7 +102,7 @@
     "success": "0xC9"
   },
   "transport": {
-    "android_minimum_ready_mtu": 203,
+    "android_minimum_ready_mtu": 205,
     "android_requested_mtu": 251,
     "phone_notify_uuid": "6E400003-B5A3-F393-E0A9-E50E24DCCA9E",
     "phone_write_uuid": "6E400002-B5A3-F393-E0A9-E50E24DCCA9E",

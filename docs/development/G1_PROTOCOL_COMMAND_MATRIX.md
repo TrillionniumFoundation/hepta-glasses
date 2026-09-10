@@ -71,7 +71,7 @@ Android readiness is ordered as:
 gatt connected
 -> services and characteristics discovered
 -> notification descriptor accepted
--> MTU at least 203
+-> MTU at least 205 (202-byte value plus the 3-byte ATT notification header)
 -> [0xF4,0x01] initialization write accepted
 ```
 

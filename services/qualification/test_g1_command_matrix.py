@@ -42,6 +42,24 @@ class G1CommandMatrixTests(unittest.TestCase):
         self.assertIs(result["vendor_confirmation_required"], True)
         self.assertIs(result["physical_qualification_required"], True)
 
+    def test_fixed_audio_notification_requires_att_mtu_205(self) -> None:
+        document = self.document()
+        android = next(
+            item
+            for item in document["platform_initialization"]
+            if item["platform"] == "android"
+        )
+        self.assertIn("mtu_at_least_205", android["admission_steps"])
+        base_contract = matrix.strict_json(ROOT / matrix.BASE_CONTRACT)
+        self.assertEqual(
+            base_contract["transport"]["android_minimum_ready_mtu"],
+            205,
+        )
+        self.assertNotIn(
+            "mtu_at_least_203",
+            base_contract["readiness"]["android"],
+        )
+
     def test_duplicate_command_byte_fails_closed(self) -> None:
         document = copy.deepcopy(self.document())
         first = self.command(document, "microphone_on")

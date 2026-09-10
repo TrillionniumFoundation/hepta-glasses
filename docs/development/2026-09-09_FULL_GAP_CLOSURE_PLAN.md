@@ -1,6 +1,6 @@
 # Full gap-closure execution plan — 2026-09-09
 
-Status: active execution refinement for PR #114 and the G11 terminal-closure program.  
+Status: active execution refinement for PR #125 and the G11 terminal-closure program.
 Scope: repository adoption plus all authority-owned product gates.  
 Authority rule: the live pull-request head and Git tree are authoritative; a SHA copied into this document is never a substitute for live readback.
 
@@ -17,9 +17,9 @@ This document converts the productization roadmap and issues #82, #84–#96 and 
 
 ## 2. Starting state
 
-The closure campaign starts from the source candidate formerly observed at PR #114 head `317ee1141ceac6df7d711aeaaca27b22d735e48d`, tree `51e673238d30b81ef8eb64b93eef14fc7bf850cb`. That object completed all seven source jobs and produced a verified source artifact, but it did not have an eligible `APPROVED` review and was not protected-main adopted.
+The active source subject is the live head and Git tree of open PR #125, whose head branch is `codex/hepta-identity-migration-20260910` and whose base branch is `codex/hepta-main-convergence-20260909-v2`. A SHA copied into this plan is never current-source authority. The final unchanged head must obtain its own seven-job execution, source Artifact inspection and eligible independent approval.
 
-This plan is intentionally prepared as a small successor change. Once committed, the predecessor CI, artifact, review state, and prospective merge are historical only. The new live head must complete the same exact-head qualification sequence before any promotion.
+PR #114 at commit `317ee1141ceac6df7d711aeaaca27b22d735e48d`, tree `51e673238d30b81ef8eb64b93eef14fc7bf850cb`, is retained only as a historical predecessor observation. Its CI, Artifact, review state and prospective merge do not transfer to PR #125.
 
 `main` remains the older baseline until canonical protection is applied and independently read back, followed by ordinary protected adoption.
 
@@ -44,7 +44,7 @@ This plan is intentionally prepared as a small successor change. Once committed,
 
 The current source-side change must:
 
-- correct `README.md`, `docs/CURRENT_STATE.md`, and `docs/PROJECT_STATE.json` so PR #114 is the live successor while PR #101 remains only the last independently qualified historical baseline;
+- keep `README.md`, `docs/CURRENT_STATE.md`, and `docs/PROJECT_STATE.json` bound to the live head/tree of PR #125, while PR #101 remains only the last independently qualified historical baseline;
 - preserve `source_implemented` as the current successor maturity until exact-head CI, artifact verification and eligible review are all complete;
 - publish this plan and `docs/operations/FULL_GAP_CLOSURE_CONTROL_BOARD.md`;
 - publish `docs/development/MODULE_DOCUMENTATION_COMPLETENESS_STANDARD.md` so generated handoff pages cannot be mistaken for owner-authored implementation specifications;

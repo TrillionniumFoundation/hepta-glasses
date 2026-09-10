@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
@@ -92,9 +94,11 @@ final class HttpModelGateway implements ModelGateway {
     required RuntimeTokenProvider tokenProvider,
     Dio? dio,
     bool allowInsecureLoopback = false,
+    Duration responseDeadline = const Duration(seconds: 60),
   })  : _baseUri = _validatedGatewayUri(baseUri, allowInsecureLoopback),
         _tokenProvider = tokenProvider,
-        _dio = dio ?? Dio();
+        _dio = dio ?? Dio(),
+        _responseDeadline = _validatedResponseDeadline(responseDeadline);
 
   static const int maxRequestBytes = 64 * 1024;
   static const int maxResponseBytes = 64 * 1024;
@@ -110,6 +114,7 @@ final class HttpModelGateway implements ModelGateway {
   final Uri _baseUri;
   final RuntimeTokenProvider _tokenProvider;
   final Dio _dio;
+  final Duration _responseDeadline;
 
   @override
   Future<String> answer({
@@ -158,16 +163,14 @@ final class HttpModelGateway implements ModelGateway {
     }
     final secondToken = await _readValidToken();
     if (firstToken != secondToken) {
-      throw const ModelGatewayException(
-        'model_gateway_authority_changed',
-      );
+      throw const ModelGatewayException('model_gateway_authority_changed');
     }
     if (cancellation?.isCancelled == true) {
       throw const ModelGatewayException('model_request_cancelled');
     }
 
     try {
-      final response = await _dio.postUri<List<int>>(
+      final response = await _dio.postUri<ResponseBody>(
         _baseUri.resolve('v1/chat'),
         data: requestDocument,
         options: Options(
@@ -176,9 +179,9 @@ final class HttpModelGateway implements ModelGateway {
             'content-type': 'application/json',
             'accept': 'application/json',
           },
-          responseType: ResponseType.bytes,
+          responseType: ResponseType.stream,
           sendTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 60),
+          receiveTimeout: _responseDeadline,
           receiveDataWhenStatusError: false,
           followRedirects: false,
           maxRedirects: 0,
@@ -199,18 +202,19 @@ final class HttpModelGateway implements ModelGateway {
           'model_gateway_response_content_type_invalid',
         );
       }
-      final bytes = response.data;
-      if (bytes == null || bytes.isEmpty || bytes.length > maxResponseBytes) {
+      final body = response.data;
+      if (body == null) {
         throw const ModelGatewayException(
           'model_gateway_response_size_invalid',
         );
       }
       final declaredLength = _declaredContentLength(response.headers);
-      if (declaredLength != null && declaredLength != bytes.length) {
-        throw const ModelGatewayException(
-          'model_gateway_response_size_invalid',
-        );
-      }
+      final bytes = await _readBoundedBody(
+        body.stream,
+        declaredLength: declaredLength,
+        cancellation: cancellation,
+      );
+      await _confirmCurrentAuthority(secondToken, cancellation);
       final value = decodeStrictJsonBytes(
         bytes,
         maxBytes: maxResponseBytes,
@@ -256,22 +260,132 @@ final class HttpModelGateway implements ModelGateway {
     }
   }
 
+  Future<Uint8List> _readBoundedBody(
+    Stream<Uint8List> stream, {
+    required int? declaredLength,
+    required ModelRequestCancellation? cancellation,
+  }) {
+    final builder = BytesBuilder(copy: false);
+    final completer = Completer<Uint8List>();
+    StreamSubscription<Uint8List>? subscription;
+    Timer? timer;
+    var observedLength = 0;
+
+    void fail(String code) {
+      if (completer.isCompleted) {
+        return;
+      }
+      timer?.cancel();
+      final current = subscription;
+      if (current != null) {
+        unawaited(current.cancel());
+      }
+      completer.completeError(ModelGatewayException(code));
+    }
+
+    void finish() {
+      if (completer.isCompleted) {
+        return;
+      }
+      if (cancellation?.isCancelled == true) {
+        fail('model_request_cancelled');
+        return;
+      }
+      if (observedLength == 0 ||
+          (declaredLength != null && observedLength != declaredLength)) {
+        fail('model_gateway_response_size_invalid');
+        return;
+      }
+      timer?.cancel();
+      completer.complete(builder.takeBytes());
+    }
+
+    subscription = stream.listen(
+      (Uint8List chunk) {
+        if (completer.isCompleted) {
+          return;
+        }
+        if (cancellation?.isCancelled == true) {
+          fail('model_request_cancelled');
+          return;
+        }
+        observedLength += chunk.length;
+        if (observedLength > maxResponseBytes ||
+            (declaredLength != null && observedLength > declaredLength)) {
+          fail('model_gateway_response_size_invalid');
+          return;
+        }
+        builder.add(chunk);
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        fail('model_gateway_response_stream_failed');
+      },
+      onDone: finish,
+      cancelOnError: true,
+    );
+    if (completer.isCompleted) {
+      unawaited(subscription.cancel());
+      return completer.future;
+    }
+    timer = Timer(
+      _responseDeadline,
+      () => fail('model_gateway_response_timeout'),
+    );
+    final token = cancellation?._token;
+    if (token != null) {
+      unawaited(
+        token.whenCancel.then((DioException _) {
+          fail('model_request_cancelled');
+        }),
+      );
+    }
+    return completer.future;
+  }
+
+  Future<void> _confirmCurrentAuthority(
+    String expectedToken,
+    ModelRequestCancellation? cancellation,
+  ) async {
+    if (cancellation?.isCancelled == true) {
+      throw const ModelGatewayException('model_request_cancelled');
+    }
+    String? currentToken;
+    try {
+      currentToken = await _tokenProvider.getToken();
+    } on Object {
+      throw const ModelGatewayException('model_gateway_authority_changed');
+    }
+    if (cancellation?.isCancelled == true) {
+      throw const ModelGatewayException('model_request_cancelled');
+    }
+    if (!_validBearer(currentToken) || currentToken != expectedToken) {
+      throw const ModelGatewayException('model_gateway_authority_changed');
+    }
+  }
+
   Future<String> _readValidToken() async {
     try {
       final token = await _tokenProvider.getToken();
       if (!_validBearer(token)) {
-        throw const ModelGatewayException(
-          'model_gateway_unauthenticated',
-        );
+        throw const ModelGatewayException('model_gateway_unauthenticated');
       }
       return token!;
     } on ModelGatewayException {
       rethrow;
     } on Object {
-      throw const ModelGatewayException(
-        'model_gateway_unauthenticated',
+      throw const ModelGatewayException('model_gateway_unauthenticated');
+    }
+  }
+
+  static Duration _validatedResponseDeadline(Duration value) {
+    if (value <= Duration.zero || value > const Duration(minutes: 2)) {
+      throw ArgumentError.value(
+        value,
+        'responseDeadline',
+        'must be positive and at most two minutes',
       );
     }
+    return value;
   }
 
   static bool _validBearer(String? value) =>
@@ -322,7 +436,7 @@ final class HttpModelGateway implements ModelGateway {
       );
     }
     final value = int.tryParse(values.single);
-    if (value == null || value > maxResponseBytes) {
+    if (value == null || value == 0 || value > maxResponseBytes) {
       throw const ModelGatewayException(
         'model_gateway_response_size_invalid',
       );
@@ -336,9 +450,7 @@ final class HttpModelGateway implements ModelGateway {
     int nodes = 0,
   }) {
     if (depth > maxJsonDepth || nodes >= maxJsonNodes) {
-      throw const FormatException(
-        'JSON value exceeds structural bounds.',
-      );
+      throw const FormatException('JSON value exceeds structural bounds.');
     }
     final nextNodes = nodes + 1;
     if (value == null || value is bool || value is int) {
@@ -358,9 +470,7 @@ final class HttpModelGateway implements ModelGateway {
     }
     if (value is List<Object?>) {
       if (value.length > maxCollectionItems) {
-        throw const FormatException(
-          'JSON array exceeds the item limit.',
-        );
+        throw const FormatException('JSON array exceeds the item limit.');
       }
       var count = nextNodes;
       for (final item in value) {
@@ -374,9 +484,7 @@ final class HttpModelGateway implements ModelGateway {
     }
     if (value is Map<String, Object?>) {
       if (value.length > maxCollectionItems) {
-        throw const FormatException(
-          'JSON object exceeds the member limit.',
-        );
+        throw const FormatException('JSON object exceeds the member limit.');
       }
       var count = nextNodes;
       for (final entry in value.entries) {
@@ -391,9 +499,7 @@ final class HttpModelGateway implements ModelGateway {
       }
       return count;
     }
-    throw const FormatException(
-      'Value is not in the supported JSON domain.',
-    );
+    throw const FormatException('Value is not in the supported JSON domain.');
   }
 }
 
