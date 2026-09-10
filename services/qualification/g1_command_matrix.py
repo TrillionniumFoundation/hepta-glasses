@@ -2,13 +2,13 @@
 
 The schema-v2 matrix was committed with one deterministic fixture defect: the
 LC3 event example contains 201 zero payload bytes instead of the source-bound
-200.  Replacing the 1,984-line contract merely to delete one byte would make a
-second large, difficult-to-review subject.  This facade therefore applies one
+200. Replacing the 1,984-line contract merely to delete one byte would make a
+second large, difficult-to-review subject. This facade therefore applies one
 closed JSON correction whose base digest, selector, precondition and result are
-all pinned.  No other normalization is permitted.
+all pinned. No other normalization is permitted.
 
 The effective contract is uniquely identified by the exact base matrix digest
-plus the exact correction document.  The generic validator still checks every
+plus the exact correction document. The generic validator still checks every
 closed shape, command/profile digest, wire vector, source fragment and external
 claim ceiling after that correction is applied.
 """
@@ -26,7 +26,7 @@ if str(_ROOT) not in sys.path:
 
 from services.qualification import g1_command_matrix_impl as _impl
 
-BASE_MATRIX_SHA256 = "900deb5e601bcce7a6ac0241d3e4bab37dce8659a6d40f9fb3bfa4e47e9fec17"
+BASE_MATRIX_SHA256 = "ef6df32301d99e3ca4ff2307852dd03bff558a5fa864b3531e43423c95eb875f"
 CORRECTIONS = Path("contracts/g1-command-matrix-v1-corrections.json")
 
 EXPECTED_CORRECTION: dict[str, Any] = {
@@ -55,7 +55,7 @@ EXPECTED_CORRECTION: dict[str, Any] = {
 }
 
 # These digests bind every command other than the one profile whose example is
-# corrected below.  The corrected microphone-data profile and whole-document
+# corrected below. The corrected microphone-data profile and whole-document
 # digests are derived from the exact base+correction pair, not from the document
 # under test.
 EXPECTED_PROFILE_SHA256 = {
@@ -136,7 +136,10 @@ def apply_pinned_correction(
     prefix = operation["expected_prefix"]
     if data[: len(prefix)] != prefix:
         raise G1CommandMatrixError("G1 correction vector prefix drifted")
-    if any(value != operation["expected_payload_fill"] for value in data[len(prefix) :]):
+    if any(
+        value != operation["expected_payload_fill"]
+        for value in data[len(prefix) :]
+    ):
         raise G1CommandMatrixError("G1 correction vector payload is not the pinned fixture")
     if data[-operation["drop_count"] :] != [operation["expected_payload_fill"]]:
         raise G1CommandMatrixError("G1 correction trailing byte drifted")
