@@ -1,0 +1,887 @@
+name: hepta-model-wire-hardening-once
+
+on:
+  push:
+    branches:
+      - codex/hepta-identity-migration-20260910
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hepta-model-wire-hardening-once
+  cancel-in-progress: false
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      BASE_SHA: b239238a80ad73309bf9a390635ce314174a67d7
+      TARGET_BRANCH: codex/hepta-identity-migration-20260910
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify exact one-shot bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          changed="$(git diff --name-only "$BASE_SHA" HEAD)"
+          test "$changed" = ".github/workflows/model-wire-hardening-once.yml"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: false
+      - name: Apply fail-before-egress model wire closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import re
+          from pathlib import Path
+
+          root = Path.cwd()
+
+          def exact(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected one match, observed {count}")
+              return text.replace(old, new, 1)
+
+          model_path = root / "lib/runtime/model_gateway.dart"
+          model = model_path.read_text(encoding="utf-8")
+          model = exact(
+              model,
+              "import 'package:dio/dio.dart';\n",
+              "import 'dart:convert';\n\n"
+              "import 'package:dio/dio.dart';\n\n"
+              "import 'strict_json.dart';\n",
+              "model gateway imports",
+          )
+          replacement = r'''final class HttpModelGateway implements ModelGateway {
+            HttpModelGateway({
+              required Uri baseUri,
+              required RuntimeTokenProvider tokenProvider,
+              Dio? dio,
+              bool allowInsecureLoopback = false,
+            })  : _baseUri = _validatedGatewayUri(baseUri, allowInsecureLoopback),
+                  _tokenProvider = tokenProvider,
+                  _dio = dio ?? Dio();
+
+            static const int maxRequestBytes = 64 * 1024;
+            static const int maxResponseBytes = 64 * 1024;
+            static const int maxQuestionCharacters = 8000;
+            static const int maxContextBytes = 32 * 1024;
+            static const int maxTaskIdCharacters = 128;
+            static const int maxAnswerBytes = 64 * 1024;
+            static const int maxJsonDepth = 8;
+            static const int maxJsonNodes = 2048;
+            static const int maxCollectionItems = 256;
+            static const int maxStringCharacters = 8000;
+
+            final Uri _baseUri;
+            final RuntimeTokenProvider _tokenProvider;
+            final Dio _dio;
+
+            @override
+            Future<String> answer({
+              required String question,
+              String? taskId,
+              Map<String, Object?> context = const <String, Object?>{},
+              ModelRequestCancellation? cancellation,
+            }) async {
+              if (cancellation?.isCancelled == true) {
+                throw const ModelGatewayException('model_request_cancelled');
+              }
+
+              final normalizedQuestion = question.trim();
+              final normalizedTaskId = taskId?.trim();
+              if (normalizedQuestion.isEmpty ||
+                  normalizedQuestion.length > maxQuestionCharacters ||
+                  (normalizedTaskId != null &&
+                      (normalizedTaskId.isEmpty ||
+                          normalizedTaskId.length > maxTaskIdCharacters))) {
+                throw const ModelGatewayException('model_request_invalid');
+              }
+
+              try {
+                _validateJsonValue(context);
+              } on Object {
+                throw const ModelGatewayException('model_request_invalid');
+              }
+              final contextBytes = utf8.encode(jsonEncode(context));
+              if (contextBytes.length > maxContextBytes) {
+                throw const ModelGatewayException('model_request_too_large');
+              }
+
+              final requestDocument = <String, Object?>{
+                'question': normalizedQuestion,
+                'task_id': normalizedTaskId,
+                'context': context,
+              };
+              final requestBytes = utf8.encode(jsonEncode(requestDocument));
+              if (requestBytes.length > maxRequestBytes) {
+                throw const ModelGatewayException('model_request_too_large');
+              }
+
+              final firstToken = await _readValidToken();
+              if (cancellation?.isCancelled == true) {
+                throw const ModelGatewayException('model_request_cancelled');
+              }
+              final secondToken = await _readValidToken();
+              if (firstToken != secondToken) {
+                throw const ModelGatewayException(
+                  'model_gateway_authority_changed',
+                );
+              }
+              if (cancellation?.isCancelled == true) {
+                throw const ModelGatewayException('model_request_cancelled');
+              }
+
+              try {
+                final response = await _dio.postUri<List<int>>(
+                  _baseUri.resolve('v1/chat'),
+                  data: requestDocument,
+                  options: Options(
+                    headers: <String, Object?>{
+                      'authorization': 'Bearer $secondToken',
+                      'content-type': 'application/json',
+                      'accept': 'application/json',
+                    },
+                    responseType: ResponseType.bytes,
+                    sendTimeout: const Duration(seconds: 10),
+                    receiveTimeout: const Duration(seconds: 60),
+                    receiveDataWhenStatusError: false,
+                    followRedirects: false,
+                    maxRedirects: 0,
+                    validateStatus: (int? status) => status == 200,
+                  ),
+                  cancelToken: cancellation?._token,
+                );
+                if (cancellation?.isCancelled == true) {
+                  throw const ModelGatewayException('model_request_cancelled');
+                }
+                if (response.statusCode != 200) {
+                  throw ModelGatewayException(
+                    'gateway_http_${response.statusCode ?? 'unknown'}',
+                  );
+                }
+                if (!_hasSingleJsonContentType(response.headers)) {
+                  throw const ModelGatewayException(
+                    'model_gateway_response_content_type_invalid',
+                  );
+                }
+                final bytes = response.data;
+                if (bytes == null ||
+                    bytes.isEmpty ||
+                    bytes.length > maxResponseBytes) {
+                  throw const ModelGatewayException(
+                    'model_gateway_response_size_invalid',
+                  );
+                }
+                final declaredLength = _declaredContentLength(response.headers);
+                if (declaredLength != null && declaredLength != bytes.length) {
+                  throw const ModelGatewayException(
+                    'model_gateway_response_size_invalid',
+                  );
+                }
+                final value = decodeStrictJsonBytes(
+                  bytes,
+                  maxBytes: maxResponseBytes,
+                  maxDepth: maxJsonDepth,
+                  maxTokens: maxJsonNodes,
+                );
+                if (value is! Map<String, Object?> ||
+                    value.length != 1 ||
+                    !value.containsKey('answer')) {
+                  throw const ModelGatewayException(
+                    'model_gateway_response_shape_invalid',
+                  );
+                }
+                final answerValue = value['answer'];
+                if (answerValue is! String) {
+                  throw const ModelGatewayException(
+                    'model_gateway_response_shape_invalid',
+                  );
+                }
+                final answer = answerValue.trim();
+                if (answer.isEmpty || utf8.encode(answer).length > maxAnswerBytes) {
+                  throw const ModelGatewayException(
+                    'model_gateway_response_answer_invalid',
+                  );
+                }
+                return answer;
+              } on ModelGatewayException {
+                rethrow;
+              } on DioException catch (error) {
+                if (CancelToken.isCancel(error)) {
+                  throw const ModelGatewayException('model_request_cancelled');
+                }
+                final status = error.response?.statusCode;
+                throw ModelGatewayException(
+                  status == null ? 'gateway_unreachable' : 'gateway_http_$status',
+                );
+              } on FormatException {
+                throw const ModelGatewayException(
+                  'model_gateway_response_json_invalid',
+                );
+              } on Object {
+                throw const ModelGatewayException('gateway_unreachable');
+              }
+            }
+
+            Future<String> _readValidToken() async {
+              try {
+                final token = await _tokenProvider.getToken();
+                if (!_validBearer(token)) {
+                  throw const ModelGatewayException(
+                    'model_gateway_unauthenticated',
+                  );
+                }
+                return token!;
+              } on ModelGatewayException {
+                rethrow;
+              } on Object {
+                throw const ModelGatewayException(
+                  'model_gateway_unauthenticated',
+                );
+              }
+            }
+
+            static bool _validBearer(String? value) =>
+                value != null &&
+                value.length >= 16 &&
+                value.length <= 8192 &&
+                value.codeUnits.every((int unit) => unit >= 33 && unit <= 126);
+
+            static bool _hasSingleJsonContentType(Headers headers) {
+              final values = headers[Headers.contentTypeHeader];
+              if (values == null || values.length != 1) {
+                return false;
+              }
+              final parts = values.single.split(';');
+              if (parts.isEmpty ||
+                  parts.first.trim().toLowerCase() != 'application/json') {
+                return false;
+              }
+              var sawCharset = false;
+              for (final rawParameter in parts.skip(1)) {
+                final parameter = rawParameter.trim();
+                final equals = parameter.indexOf('=');
+                if (equals <= 0 || equals != parameter.lastIndexOf('=')) {
+                  return false;
+                }
+                final name = parameter.substring(0, equals).trim().toLowerCase();
+                var value = parameter.substring(equals + 1).trim().toLowerCase();
+                if (value.length >= 2 &&
+                    value.startsWith('"') &&
+                    value.endsWith('"')) {
+                  value = value.substring(1, value.length - 1);
+                }
+                if (name != 'charset' || sawCharset || value != 'utf-8') {
+                  return false;
+                }
+                sawCharset = true;
+              }
+              return true;
+            }
+
+            static int? _declaredContentLength(Headers headers) {
+              final values = headers[Headers.contentLengthHeader];
+              if (values == null) {
+                return null;
+              }
+              if (values.length != 1 ||
+                  !RegExp(r'^(0|[1-9][0-9]*)$').hasMatch(values.single)) {
+                throw const ModelGatewayException(
+                  'model_gateway_response_size_invalid',
+                );
+              }
+              final value = int.tryParse(values.single);
+              if (value == null || value > maxResponseBytes) {
+                throw const ModelGatewayException(
+                  'model_gateway_response_size_invalid',
+                );
+              }
+              return value;
+            }
+
+            static int _validateJsonValue(
+              Object? value, {
+              int depth = 0,
+              int nodes = 0,
+            }) {
+              if (depth > maxJsonDepth || nodes >= maxJsonNodes) {
+                throw const FormatException(
+                  'JSON value exceeds structural bounds.',
+                );
+              }
+              final nextNodes = nodes + 1;
+              if (value == null || value is bool || value is int) {
+                return nextNodes;
+              }
+              if (value is double) {
+                if (!value.isFinite) {
+                  throw const FormatException('JSON number must be finite.');
+                }
+                return nextNodes;
+              }
+              if (value is String) {
+                if (value.length > maxStringCharacters) {
+                  throw const FormatException('JSON string exceeds the limit.');
+                }
+                return nextNodes;
+              }
+              if (value is List<Object?>) {
+                if (value.length > maxCollectionItems) {
+                  throw const FormatException(
+                    'JSON array exceeds the item limit.',
+                  );
+                }
+                var count = nextNodes;
+                for (final item in value) {
+                  count = _validateJsonValue(
+                    item,
+                    depth: depth + 1,
+                    nodes: count,
+                  );
+                }
+                return count;
+              }
+              if (value is Map<String, Object?>) {
+                if (value.length > maxCollectionItems) {
+                  throw const FormatException(
+                    'JSON object exceeds the member limit.',
+                  );
+                }
+                var count = nextNodes;
+                for (final entry in value.entries) {
+                  if (entry.key.isEmpty ||
+                      entry.key.length > maxStringCharacters) {
+                    throw const FormatException('JSON object key is invalid.');
+                  }
+                  count = _validateJsonValue(
+                    entry.value,
+                    depth: depth + 1,
+                    nodes: count,
+                  );
+                }
+                return count;
+              }
+              throw const FormatException(
+                'Value is not in the supported JSON domain.',
+              );
+            }
+          }'''
+          model, count = re.subn(
+              r"final class HttpModelGateway implements ModelGateway \{.*?\n\}\n\nfinal class ModelGatewayRegistry",
+              lambda _match: replacement + "\n\nfinal class ModelGatewayRegistry",
+              model,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit(f"HTTP model gateway replacement count: {count}")
+          model_path.write_text(model, encoding="utf-8")
+
+          test_path = root / "test/runtime/model_gateway_test.dart"
+          test_path.write_text(r'''import 'dart:convert';
+
+          import 'package:dio/dio.dart';
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:hepta_glasses/runtime/model_gateway.dart';
+
+          final class _RecordingDio {
+            _RecordingDio({
+              String body = '{"answer":"ok"}',
+              int statusCode = 200,
+              String contentType = 'application/json; charset=utf-8',
+              int? declaredLength,
+            })  : responseBytes = utf8.encode(body),
+                  statusCode = statusCode,
+                  contentType = contentType,
+                  declaredLength = declaredLength {
+              dio.interceptors.add(
+                InterceptorsWrapper(
+                  onRequest: (
+                    RequestOptions options,
+                    RequestInterceptorHandler handler,
+                  ) {
+                    requests++;
+                    lastOptions = options;
+                    handler.resolve(
+                      Response<List<int>>(
+                        requestOptions: options,
+                        statusCode: this.statusCode,
+                        data: responseBytes,
+                        headers: Headers.fromMap(<String, List<String>>{
+                          Headers.contentTypeHeader: <String>[this.contentType],
+                          Headers.contentLengthHeader: <String>[
+                            (this.declaredLength ?? responseBytes.length)
+                                .toString(),
+                          ],
+                        }),
+                      ),
+                    );
+                  },
+                ),
+              );
+            }
+
+            final Dio dio = Dio();
+            final List<int> responseBytes;
+            final int statusCode;
+            final String contentType;
+            final int? declaredLength;
+            int requests = 0;
+            RequestOptions? lastOptions;
+          }
+
+          final class _SequenceTokenProvider implements RuntimeTokenProvider {
+            _SequenceTokenProvider(this.values);
+
+            final List<String?> values;
+            int reads = 0;
+
+            @override
+            Future<String?> getToken() async {
+              final index = reads < values.length ? reads : values.length - 1;
+              reads++;
+              return values[index];
+            }
+          }
+
+          final class _ThrowingTokenProvider implements RuntimeTokenProvider {
+            @override
+            Future<String?> getToken() async {
+              throw StateError('token source unavailable');
+            }
+          }
+
+          Matcher _gatewayCode(String code) => throwsA(
+                isA<ModelGatewayException>().having(
+                  (ModelGatewayException error) => error.code,
+                  'code',
+                  code,
+                ),
+              );
+
+          HttpModelGateway _gateway(
+            _RecordingDio transport,
+            RuntimeTokenProvider tokenProvider,
+          ) =>
+              HttpModelGateway(
+                baseUri: Uri.parse('https://gateway.example/'),
+                tokenProvider: tokenProvider,
+                dio: transport.dio,
+              );
+
+          void main() {
+            test('deterministic gateway returns a bounded answer', () async {
+              const gateway = DeterministicModelGateway(prefix: 'test');
+              expect(await gateway.answer(question: 'status'), 'test: status');
+            });
+
+            test('model request observes cancellation before execution', () async {
+              const gateway = DeterministicModelGateway(prefix: 'test');
+              final cancellation = ModelRequestCancellation()
+                ..cancel('session-ended');
+              await expectLater(
+                gateway.answer(
+                  question: 'status',
+                  cancellation: cancellation,
+                ),
+                _gatewayCode('model_request_cancelled'),
+              );
+            });
+
+            test('unconfigured gateway fails with a typed error', () async {
+              const gateway = UnavailableModelGateway();
+              await expectLater(
+                gateway.answer(question: 'status'),
+                throwsA(isA<ModelGatewayException>()),
+              );
+            });
+
+            test('HTTP gateway rejects insecure non-loopback origins', () {
+              expect(
+                () => HttpModelGateway(
+                  baseUri: Uri.parse('http://example.invalid/'),
+                  tokenProvider: const StaticRuntimeTokenProvider(null),
+                  allowInsecureLoopback: true,
+                ),
+                throwsArgumentError,
+              );
+            });
+
+            test('missing token performs zero network requests', () async {
+              final transport = _RecordingDio();
+              final gateway = _gateway(
+                transport,
+                const StaticRuntimeTokenProvider(null),
+              );
+              await expectLater(
+                gateway.answer(question: 'private question'),
+                _gatewayCode('model_gateway_unauthenticated'),
+              );
+              expect(transport.requests, 0);
+            });
+
+            test('token provider failure performs zero network requests', () async {
+              final transport = _RecordingDio();
+              final gateway = _gateway(transport, _ThrowingTokenProvider());
+              await expectLater(
+                gateway.answer(question: 'private question'),
+                _gatewayCode('model_gateway_unauthenticated'),
+              );
+              expect(transport.requests, 0);
+            });
+
+            test('token rotation before send fails closed', () async {
+              final transport = _RecordingDio();
+              final provider = _SequenceTokenProvider(<String?>[
+                'first-token-123456789',
+                'second-token-123456789',
+              ]);
+              final gateway = _gateway(transport, provider);
+              await expectLater(
+                gateway.answer(question: 'private question'),
+                _gatewayCode('model_gateway_authority_changed'),
+              );
+              expect(provider.reads, 2);
+              expect(transport.requests, 0);
+            });
+
+            test('authenticated request uses a closed wire profile', () async {
+              final transport = _RecordingDio(
+                body: '{"answer":" accepted "}',
+              );
+              final gateway = _gateway(
+                transport,
+                const StaticRuntimeTokenProvider('stable-token-123456789'),
+              );
+              expect(
+                await gateway.answer(question: ' status ', taskId: 'task-1'),
+                'accepted',
+              );
+              expect(transport.requests, 1);
+              final options = transport.lastOptions!;
+              expect(options.uri.toString(), 'https://gateway.example/v1/chat');
+              expect(options.followRedirects, isFalse);
+              expect(options.maxRedirects, 0);
+              expect(options.responseType, ResponseType.bytes);
+              expect(
+                options.headers['authorization'],
+                'Bearer stable-token-123456789',
+              );
+              expect(options.headers['accept'], 'application/json');
+            });
+
+            test('duplicate JSON response members fail closed', () async {
+              final transport = _RecordingDio(
+                body: '{"answer":"first","answer":"second"}',
+              );
+              final gateway = _gateway(
+                transport,
+                const StaticRuntimeTokenProvider('stable-token-123456789'),
+              );
+              await expectLater(
+                gateway.answer(question: 'status'),
+                _gatewayCode('model_gateway_response_json_invalid'),
+              );
+            });
+
+            test('unknown response fields fail the closed shape', () async {
+              final transport = _RecordingDio(
+                body: '{"answer":"ok","provider":"untrusted"}',
+              );
+              final gateway = _gateway(
+                transport,
+                const StaticRuntimeTokenProvider('stable-token-123456789'),
+              );
+              await expectLater(
+                gateway.answer(question: 'status'),
+                _gatewayCode('model_gateway_response_shape_invalid'),
+              );
+            });
+
+            test('content type and length are enforced', () async {
+              final wrongType = _RecordingDio(contentType: 'text/plain');
+              await expectLater(
+                _gateway(
+                  wrongType,
+                  const StaticRuntimeTokenProvider(
+                    'stable-token-123456789',
+                  ),
+                ).answer(question: 'status'),
+                _gatewayCode('model_gateway_response_content_type_invalid'),
+              );
+              final wrongLength = _RecordingDio(declaredLength: 999);
+              await expectLater(
+                _gateway(
+                  wrongLength,
+                  const StaticRuntimeTokenProvider(
+                    'stable-token-123456789',
+                  ),
+                ).answer(question: 'status'),
+                _gatewayCode('model_gateway_response_size_invalid'),
+              );
+            });
+
+            test('oversized response is rejected', () async {
+              final transport = _RecordingDio(
+                body: jsonEncode(<String, String>{
+                  'answer': List<String>.filled(64 * 1024, 'x').join(),
+                }),
+              );
+              final gateway = _gateway(
+                transport,
+                const StaticRuntimeTokenProvider('stable-token-123456789'),
+              );
+              await expectLater(
+                gateway.answer(question: 'status'),
+                _gatewayCode('model_gateway_response_size_invalid'),
+              );
+            });
+
+            test('redirect response cannot become an answer', () async {
+              final transport = _RecordingDio(statusCode: 302);
+              final gateway = _gateway(
+                transport,
+                const StaticRuntimeTokenProvider('stable-token-123456789'),
+              );
+              await expectLater(
+                gateway.answer(question: 'status'),
+                _gatewayCode('gateway_http_302'),
+              );
+            });
+
+            test('unsupported context fails before token and network use', () async {
+              final transport = _RecordingDio();
+              final provider = _SequenceTokenProvider(<String?>[
+                'stable-token-123456789',
+              ]);
+              final gateway = _gateway(transport, provider);
+              await expectLater(
+                gateway.answer(
+                  question: 'status',
+                  context: <String, Object?>{'when': DateTime.utc(2026)},
+                ),
+                _gatewayCode('model_request_invalid'),
+              );
+              expect(provider.reads, 0);
+              expect(transport.requests, 0);
+            });
+
+            test('speech bootstrap remains authority bound', () {
+              final bootstrap = SpeechBootstrap.fromMap(
+                <String, Object?>{
+                  'bootstrap_id': 'bootstrap-1',
+                  'session_id': 'session-1',
+                  'generation': 9,
+                  'pair_identity': 'Pair_7',
+                  'locale': 'en-US',
+                  'endpoint': 'https://speech.example/v1/asr',
+                  'bearer_token': 'ephemeral-token-123456789',
+                  'provider': 'speech-provider',
+                  'expires_at': 200,
+                  'maximum_audio_bytes': 6400,
+                },
+                expectedSessionId: 'session-1',
+                expectedGeneration: 9,
+                expectedPairIdentity: 'Pair_7',
+                expectedLocale: 'en-US',
+                nowEpochSeconds: 100,
+              );
+              expect(bootstrap.endpoint.scheme, 'https');
+              expect(bootstrap.generation, 9);
+            });
+          }
+          ''', encoding="utf-8")
+
+          app_path = root / "services/model_gateway/app.py"
+          app = app_path.read_text(encoding="utf-8")
+          app = exact(
+              app,
+              '''def deterministic_answer(request: ChatRequest) -> dict[str, Any]:
+              """Return a non-production deterministic response without logging content."""
+              return {
+                  "answer": f"Hepta development gateway received {len(request.question)} characters.",
+                  "provider": "deterministic-development",
+                  "task_id": request.task_id,
+              }
+          ''',
+              '''def deterministic_answer(request: ChatRequest) -> dict[str, Any]:
+              """Return the same closed response shape consumed by the mobile client."""
+              return {
+                  "answer": f"Hepta development gateway received {len(request.question)} characters."
+              }
+          ''',
+              "development gateway response",
+          )
+          app = exact(
+              app,
+              '''class RequestError(ValueError):
+              """A stable client-visible request validation error."""
+
+              def __init__(self, code: str, status: HTTPStatus = HTTPStatus.BAD_REQUEST):
+                  super().__init__(code)
+                  self.code = code
+                  self.status = status
+
+
+          @dataclass(frozen=True)
+          ''',
+              '''class RequestError(ValueError):
+              """A stable client-visible request validation error."""
+
+              def __init__(self, code: str, status: HTTPStatus = HTTPStatus.BAD_REQUEST):
+                  super().__init__(code)
+                  self.code = code
+                  self.status = status
+
+
+          def _reject_json_constant(_value: str) -> None:
+              raise RequestError("invalid_json")
+
+
+          def _closed_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+              result: dict[str, Any] = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise RequestError("duplicate_json_member")
+                  result[key] = value
+              return result
+
+
+          @dataclass(frozen=True)
+          ''',
+              "development strict JSON helpers",
+          )
+          app = exact(
+              app,
+              '            document = json.loads(self.rfile.read(length).decode("utf-8"))\n',
+              '''            document = json.loads(
+                  self.rfile.read(length).decode("utf-8"),
+                  object_pairs_hook=_closed_json_object,
+                  parse_constant=_reject_json_constant,
+              )
+          ''',
+              "development strict JSON parse",
+          )
+          app_path.write_text(app, encoding="utf-8")
+
+          test_app_path = root / "services/model_gateway/test_app.py"
+          test_app = test_app_path.read_text(encoding="utf-8")
+          test_app = exact(
+              test_app,
+              '        self.assertEqual(deterministic_answer(request)["provider"], "deterministic-development")\n',
+              '''        self.assertEqual(
+                  deterministic_answer(request),
+                  {"answer": "Hepta development gateway received 6 characters."},
+              )
+          ''',
+              "development response test",
+          )
+          test_app = exact(
+              test_app,
+              '    def test_unknown_field_fails_closed(self) -> None:\n',
+              '''    def test_closed_response_omits_provider_and_task_metadata(self) -> None:
+              request = validate_chat_request(
+                  {"question": "status", "task_id": "task-1", "context": {}}
+              )
+              self.assertEqual(set(deterministic_answer(request)), {"answer"})
+
+              def test_unknown_field_fails_closed(self) -> None:
+          ''',
+              "closed response test",
+          )
+          test_app_path.write_text(test_app, encoding="utf-8")
+
+          doc_path = root / "docs/development/DURABLE_MODEL_GATEWAY.md"
+          doc = doc_path.read_text(encoding="utf-8")
+          doc = exact(
+              doc,
+              "Status: incremental HG-0087/model source candidate; aggregate and slice OPEN.\n",
+              "Status: HG-0087/model repository source closed; production deployment and external acceptance remain blocked.\n",
+              "model documentation status",
+          )
+          section = '''## Mobile wire admission and privacy boundary
+
+          `HttpModelGateway` validates question, task and bounded JSON context before
+          credential access. It obtains two consecutive bearer-token snapshots and
+          requires one unchanged valid authority value before invoking HTTP. Missing,
+          malformed, failing or rotating token providers stop before question or context
+          bytes can leave the device merely to receive a later HTTP 401.
+
+          The request is limited to 64 KiB, context to 32 KiB and question to 8,000
+          characters. Redirects are disabled. The client accepts only HTTP 200 with one
+          `application/json` content type, verifies any declared content length, bounds
+          the response to 64 KiB and parses strict UTF-8 JSON with duplicate-member
+          rejection. The response shape is exactly `{"answer": <non-empty string>}`.
+          Unknown response fields and error-body text are not admitted into the answer.
+
+          These controls establish a source-level fail-before-egress boundary. They do
+          not prove production identity, token issuance, provider tenancy, retention,
+          regional processing, billing, accuracy or live revocation latency.
+
+          '''
+          doc = exact(
+              doc,
+              "\n## State and concurrency\n",
+              "\n" + section + "## State and concurrency\n",
+              "mobile wire documentation",
+          )
+          stale = (
+              "HG-0087/model remains OPEN for authenticated ingress/mobile/session integration,\n"
+              "real provider tenancy and retention/billing/abuse qualification, remote cancellation\n"
+              "and authoritative recovery, service isolation, encrypted metadata custody,\n"
+              "production observability and independent acceptance. Other slices and all\n"
+              "external/product gates remain unchanged. Keep PR #101 Draft, no self-approval,\n"
+              "merge, deployment, release or protection bypass."
+          )
+          current = (
+              "HG-0087/model is closed only at the repository-source layer. Authenticated\n"
+              "production ingress, real provider tenancy, retention/billing/abuse qualification,\n"
+              "remote cancellation and authoritative recovery, service isolation, encrypted\n"
+              "metadata custody, production observability and independent acceptance remain\n"
+              "external deployment gates. No source result authorizes self-approval, merge,\n"
+              "deployment, release or protection bypass."
+          )
+          doc = exact(doc, stale, current, "model external boundary")
+          doc_path.write_text(doc, encoding="utf-8")
+
+          (root / ".github/workflows/model-wire-hardening-once.yml").unlink()
+          PY
+      - name: Format and run model-boundary tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart format lib/runtime/model_gateway.dart test/runtime/model_gateway_test.dart
+          python3 -m unittest services.model_gateway.test_app -v
+          flutter test test/runtime/model_gateway_test.dart
+          flutter analyze --no-fatal-infos
+          git diff --check
+      - name: Publish exact tested source successor
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e .github/workflows/model-wire-hardening-once.yml
+          git config user.name hepta-source-closure-bot
+          git config user.email actions@users.noreply.github.com
+          git add -A
+          git diff --cached --quiet && { echo 'no source changes produced' >&2; exit 1; }
+          git commit -m 'security: fail model requests before unauthenticated egress'
+          git push origin "HEAD:${TARGET_BRANCH}"
