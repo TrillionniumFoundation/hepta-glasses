@@ -18,7 +18,17 @@ class LiveQualificationBindingTests(unittest.TestCase):
         run_id = pin["workflow_run_id"]
         artifact_id = pin["artifact_id"]
         review_id = pin["code_owner_review_id"]
+        self.successor_head = "1" * 40
+        self.successor_tree = "2" * 40
         self.paths = {
+            "successor_pull": (
+                f"/repos/{truth.EXPECTED_REPOSITORY}/pulls/"
+                f"{truth.EXPECTED_SUCCESSOR_PULL_REQUEST}"
+            ),
+            "successor_commit": (
+                f"/repos/{truth.EXPECTED_REPOSITORY}/commits/"
+                f"{self.successor_head}"
+            ),
             "commit": f"/repos/{truth.EXPECTED_REPOSITORY}/commits/{commit}",
             "pull": f"/repos/{truth.EXPECTED_REPOSITORY}/pulls/{pin['pull_request']}",
             "run": f"/repos/{truth.EXPECTED_REPOSITORY}/actions/runs/{run_id}",
@@ -77,6 +87,23 @@ class LiveQualificationBindingTests(unittest.TestCase):
                 }
             )
         self.payloads = {
+            self.paths["successor_pull"]: {
+                "number": truth.EXPECTED_SUCCESSOR_PULL_REQUEST,
+                "state": "open",
+                "merged_at": None,
+                "head": {
+                    "ref": truth.EXPECTED_SUCCESSOR_BRANCH,
+                    "sha": self.successor_head,
+                    "repo": {"full_name": truth.EXPECTED_REPOSITORY},
+                },
+                "base": {
+                    "ref": truth.EXPECTED_SUCCESSOR_BASE_BRANCH,
+                },
+            },
+            self.paths["successor_commit"]: {
+                "sha": self.successor_head,
+                "commit": {"tree": {"sha": self.successor_tree}},
+            },
             self.paths["commit"]: {
                 "sha": commit,
                 "commit": {"tree": {"sha": tree}},
@@ -151,7 +178,10 @@ class LiveQualificationBindingTests(unittest.TestCase):
         with (
             mock.patch.dict(
                 os.environ,
-                {"GITHUB_REPOSITORY": truth.EXPECTED_REPOSITORY},
+                {
+                    "GITHUB_REPOSITORY": truth.EXPECTED_REPOSITORY,
+                    "SOURCE_HEAD_SHA": self.successor_head,
+                },
                 clear=False,
             ),
             mock.patch.object(
@@ -173,6 +203,32 @@ class LiveQualificationBindingTests(unittest.TestCase):
         self.assertEqual(result["jobs"], 7)
         self.assertEqual(result["reviewer"], "Tomasrgbsf")
         self.assertTrue(result["stable_double_reads"])
+        self.assertEqual(
+            result["current_successor"]["head"],
+            self.successor_head,
+        )
+        self.assertEqual(
+            result["current_successor"]["tree"],
+            self.successor_tree,
+        )
+
+    def test_successor_branch_substitution_is_rejected(self) -> None:
+        self.payloads[self.paths["successor_pull"]]["head"]["ref"] = (
+            "wrong-successor-branch"
+        )
+        with self.assertRaisesRegex(
+            truth.DocumentationTruthError, "head branch drifted"
+        ):
+            self.verify()
+
+    def test_successor_tree_malformed_sha_is_rejected(self) -> None:
+        self.payloads[self.paths["successor_commit"]]["commit"]["tree"][
+            "sha"
+        ] = "not-a-sha"
+        with self.assertRaisesRegex(
+            truth.DocumentationTruthError, "current successor tree"
+        ):
+            self.verify()
 
     def test_commit_tree_substitution_is_rejected(self) -> None:
         self.payloads[self.paths["commit"]]["commit"]["tree"]["sha"] = "0" * 40

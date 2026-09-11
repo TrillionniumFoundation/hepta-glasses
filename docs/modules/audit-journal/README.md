@@ -1,6 +1,6 @@
 # `audit-journal` module engineering handoff
 
-Canonical registry digest: `0e4fcf88e4cb64aca4ef939a0610def5db47ba8b51036a7c09ee8c3c6df2b678`
+Canonical registry digest: `b094a7ab6af2f4b1ca3f2cc9a86eaffec9748ed575c79d4c19c2069bccdf7cc7`
 
 Owner: `runtime-security`
 
@@ -22,7 +22,7 @@ Implementation authority is limited to the source roots listed below. Anything o
 
 - `lib/runtime/audit_journal.dart`
 - `lib/runtime/audit_checkpoint_authenticator.dart`
-- `android/app/src/main/kotlin/com/example/demo_ai_even/security/AuditCheckpointSigner.kt`
+- `android/app/src/main/kotlin/org/trillionnium/heptaglasses/security/AuditCheckpointSigner.kt`
 - `ios/Runner/AuditCheckpointSigner.swift`
 - `lib/runtime/privacy_safe_log.dart`
 

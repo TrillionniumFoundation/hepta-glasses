@@ -1,6 +1,6 @@
 # `latest-head-ci-custody` module engineering handoff
 
-Canonical registry digest: `dd65170c1f3264144d49a39eec4601f5245e6f2922ceaf51057f63cdb1eafb36`
+Canonical registry digest: `a80b6f85faa75a58d8331634d5cfb56922a735c3d5fcb094ef18bc6f559c71e4`
 
 Owner: `quality-gates`
 
@@ -22,6 +22,7 @@ Implementation authority is limited to the source roots listed below. Anything o
 
 - `.github/workflows/ci.yml`
 - `tools/validate_production_authority.py`
+- `tools/ios_ci.py`
 
 ## 2. Public interfaces and contracts
 
@@ -54,6 +55,7 @@ The registered executable verification surfaces are:
 
 - `services/qualification/test_ci_latest_head_custody.py`
 - `tools/validate_production_authority.py`
+- `services/qualification/test_ios_ci.py`
 
 Tests prove only their declared environment and assertions. Operational acceptance additionally requires bounded logs, privacy-safe traces, stable error classes, relevant SLO measurements, rollback/recovery procedures, and exact candidate identity. Module owners must record negative-path evidence, not only successful examples.
 

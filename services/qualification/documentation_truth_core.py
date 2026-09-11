@@ -33,6 +33,12 @@ from typing import Any, Mapping
 ROOT = Path(__file__).resolve().parents[2]
 EXPECTED_PLAN_REVISION = "2026-09-01-g8"
 EXPECTED_REPOSITORY = "TrillionniumFoundation/hepta-glasses"
+EXPECTED_PROJECT_STATE_SCHEMA = 6
+EXPECTED_SUCCESSOR_PULL_REQUEST = 125
+EXPECTED_SUCCESSOR_BRANCH = "codex/hepta-identity-migration-20260910"
+EXPECTED_SUCCESSOR_BASE_BRANCH = "codex/hepta-main-convergence-20260909-v2"
+EXPECTED_SUCCESSOR_IDENTITY_RULE = "live_pull_request_head_and_tree"
+EXPECTED_MODULE_REGISTRY = "docs/modules/modules.json"
 EXPECTED_REQUIRED_JOBS = (
     "repository-contracts",
     "flutter",
@@ -143,6 +149,7 @@ GATE_KEYS = {
     "status",
 }
 SOURCE_AUTHORITY_KEYS = {
+    "base_branch",
     "branch",
     "identity_rule",
     "pull_request",
@@ -159,6 +166,8 @@ STALE_SOURCE_PHRASES = (
     "HG-0087/model remains OPEN",
     "HG-0087/skills remains OPEN",
     "final unchanged head still requires a fresh complete seven-lane result",
+    "The live head and Git tree of open PR #114 identify the active successor source object",
+    "so PR #114 is the live successor",
 )
 PROHIBITED_PROMOTION_PATTERNS = (
     re.compile(
@@ -395,8 +404,11 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     remediation = read_object(root, "docs/REMEDIATION_GAP_LEDGER.json")
 
     require_exact_keys(project, PROJECT_KEYS, label="PROJECT_STATE")
-    if project.get("schema_version") != 5:
-        fail("PROJECT_STATE schema_version must be 5")
+    if project.get("schema_version") != EXPECTED_PROJECT_STATE_SCHEMA:
+        fail(
+            "PROJECT_STATE schema_version must be "
+            f"{EXPECTED_PROJECT_STATE_SCHEMA}"
+        )
     if project.get("plan_revision") != EXPECTED_PLAN_REVISION:
         fail("PROJECT_STATE plan revision drifted")
     if project.get("program_increment") != "G8":
@@ -422,6 +434,8 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         "services/qualification/documentation_truth.py"
     ):
         fail("PROJECT_STATE does not register documentation truth")
+    if gate.get("module_registry") != EXPECTED_MODULE_REGISTRY:
+        fail("PROJECT_STATE does not point to the canonical module registry")
     if tuple(gate.get("required_checks", ())) != EXPECTED_REQUIRED_JOBS:
         fail("PROJECT_STATE required check set drifted")
     status = gate.get("status")
@@ -438,6 +452,18 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     require_exact_keys(source_authority, SOURCE_AUTHORITY_KEYS, label="source_authority")
     if source_authority.get("repository") != EXPECTED_REPOSITORY:
         fail("source authority repository drifted")
+    if source_authority.get("pull_request") != EXPECTED_SUCCESSOR_PULL_REQUEST:
+        fail("source authority pull request drifted")
+    if source_authority.get("branch") != EXPECTED_SUCCESSOR_BRANCH:
+        fail("source authority head branch drifted")
+    if source_authority.get("base_branch") != EXPECTED_SUCCESSOR_BASE_BRANCH:
+        fail("source authority base branch drifted")
+    if source_authority.get("identity_rule") != EXPECTED_SUCCESSOR_IDENTITY_RULE:
+        fail("source authority identity rule drifted")
+    if source_authority.get("required_artifact") != (
+        "hepta-source-evidence-<exact-head-sha>"
+    ):
+        fail("source authority Artifact pattern drifted")
     if source_authority.get("self_attested_sha_is_authoritative") is not False:
         fail("source authority permits self-attestation")
     if source_authority.get("historical_artifact_does_not_attest_later_push") is not True:
@@ -500,6 +526,13 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         require_phrase(text, "HG-0087 is `CLOSED_SOURCE`", document=relative)
         require_phrase(text, PINNED_BASELINE["commit"], document=relative)
         require_phrase(text, PINNED_BASELINE["artifact_zip_sha256"], document=relative)
+        require_phrase(
+            text,
+            f"open PR #{EXPECTED_SUCCESSOR_PULL_REQUEST}",
+            document=relative,
+        )
+        require_phrase(text, EXPECTED_SUCCESSOR_BRANCH, document=relative)
+        require_phrase(text, EXPECTED_SUCCESSOR_BASE_BRANCH, document=relative)
         for phrase in STALE_SOURCE_PHRASES:
             if phrase in text:
                 fail(f"{relative} contains stale source-status phrase: {phrase}")
@@ -538,6 +571,10 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         "last_qualified_commit": PINNED_BASELINE["commit"],
         "successor_maturity": EXPECTED_SUCCESSOR["maturity"],
         "required_jobs": len(EXPECTED_REQUIRED_JOBS),
+        "successor_pull_request": EXPECTED_SUCCESSOR_PULL_REQUEST,
+        "successor_branch": EXPECTED_SUCCESSOR_BRANCH,
+        "successor_base_branch": EXPECTED_SUCCESSOR_BASE_BRANCH,
+        "module_registry": EXPECTED_MODULE_REGISTRY,
     }
 
 
@@ -759,6 +796,40 @@ def verify_github_baseline(token: str | None = None) -> dict[str, Any]:
     if os.environ.get("GITHUB_REPOSITORY", EXPECTED_REPOSITORY) != EXPECTED_REPOSITORY:
         fail("live qualified-baseline verification ran in the wrong repository")
 
+    successor_pull = _stable_api_object(
+        f"/repos/{EXPECTED_REPOSITORY}/pulls/{EXPECTED_SUCCESSOR_PULL_REQUEST}",
+        token=auth,
+    )
+    if successor_pull.get("number") != EXPECTED_SUCCESSOR_PULL_REQUEST:
+        fail("current successor pull-request identity drifted")
+    if successor_pull.get("state") != "open" or successor_pull.get("merged_at") is not None:
+        fail("current successor pull request is not open and unmerged")
+    if _require_path(successor_pull, ("head", "ref"), label="successor pull") != EXPECTED_SUCCESSOR_BRANCH:
+        fail("current successor head branch drifted")
+    if _require_path(successor_pull, ("base", "ref"), label="successor pull") != EXPECTED_SUCCESSOR_BASE_BRANCH:
+        fail("current successor base branch drifted")
+    if _require_path(successor_pull, ("head", "repo", "full_name"), label="successor pull") != EXPECTED_REPOSITORY:
+        fail("current successor head repository drifted")
+    successor_head = require_sha(
+        _require_path(successor_pull, ("head", "sha"), label="successor pull"),
+        label="current successor head",
+        width=40,
+    )
+    expected_execution_head = os.environ.get("SOURCE_HEAD_SHA")
+    if expected_execution_head and successor_head != expected_execution_head:
+        fail("current successor live head differs from the executing source head")
+    successor_commit = _stable_api_object(
+        f"/repos/{EXPECTED_REPOSITORY}/commits/{successor_head}",
+        token=auth,
+    )
+    if successor_commit.get("sha") != successor_head:
+        fail("current successor commit identity drifted")
+    successor_tree = require_sha(
+        _require_path(successor_commit, ("commit", "tree", "sha"), label="successor commit"),
+        label="current successor tree",
+        width=40,
+    )
+
     owner_repo = EXPECTED_REPOSITORY
     commit_sha = PINNED_BASELINE["commit"]
     pr_number = PINNED_BASELINE["pull_request"]
@@ -952,6 +1023,13 @@ def verify_github_baseline(token: str | None = None) -> dict[str, Any]:
         "review_id": review_id,
         "reviewer": reviewer,
         "stable_double_reads": True,
+        "current_successor": {
+            "pull_request": EXPECTED_SUCCESSOR_PULL_REQUEST,
+            "branch": EXPECTED_SUCCESSOR_BRANCH,
+            "base_branch": EXPECTED_SUCCESSOR_BASE_BRANCH,
+            "head": successor_head,
+            "tree": successor_tree,
+        },
     }
 
 

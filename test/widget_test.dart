@@ -1,6 +1,6 @@
-import 'package:demo_ai_even/main.dart' as application;
-import 'package:demo_ai_even/runtime/contracts.dart';
-import 'package:demo_ai_even/runtime/display_composer.dart';
+import 'package:hepta_glasses/main.dart' as application;
+import 'package:hepta_glasses/runtime/contracts.dart';
+import 'package:hepta_glasses/runtime/display_composer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -101,7 +101,7 @@
       "source_roots": [
         "lib/runtime/audit_journal.dart",
         "lib/runtime/audit_checkpoint_authenticator.dart",
-        "android/app/src/main/kotlin/com/example/demo_ai_even/security/AuditCheckpointSigner.kt",
+        "android/app/src/main/kotlin/org/trillionnium/heptaglasses/security/AuditCheckpointSigner.kt",
         "ios/Runner/AuditCheckpointSigner.swift"
       ],
       "documentation": [
@@ -130,7 +130,7 @@
         "lib/runtime/device_hal.dart",
         "lib/runtime/dual_leg_coordinator.dart",
         "lib/services/ble.dart",
-        "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth",
+        "android/app/src/main/kotlin/org/trillionnium/heptaglasses/bluetooth",
         "ios/Runner/BluetoothManager.swift"
       ],
       "documentation": [
@@ -143,7 +143,7 @@
         "test/runtime/even_g1_transport_authority_test.dart",
         "test/runtime/dual_leg_coordinator_test.dart",
         "ios/RunnerTests/RunnerTests.swift",
-        "android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt"
+        "android/app/src/test/kotlin/org/trillionnium/heptaglasses/model/BlePairDeviceTest.kt"
       ],
       "contracts": [
         "contracts/g1-ble-protocol-v1.json",
@@ -225,7 +225,7 @@
         "docs/G1_BLE_CONNECTION.md"
       ],
       "tests": [
-        "android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt",
+        "android/app/src/test/kotlin/org/trillionnium/heptaglasses/model/BlePairDeviceTest.kt",
         "test/runtime/heartbeat_retry_contract_test.dart"
       ],
       "contracts": [

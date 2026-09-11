@@ -1,9 +1,9 @@
-package com.example.demo_ai_even.bluetooth
+package org.trillionnium.heptaglasses.bluetooth
 
-import com.example.demo_ai_even.MainActivity
-import com.example.demo_ai_even.model.BlePairDevice
-import com.example.demo_ai_even.security.AuditCheckpointSigner
-import com.example.demo_ai_even.speech.SpeechTicket
+import org.trillionnium.heptaglasses.MainActivity
+import org.trillionnium.heptaglasses.model.BlePairDevice
+import org.trillionnium.heptaglasses.security.AuditCheckpointSigner
+import org.trillionnium.heptaglasses.speech.SpeechTicket
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.EventChannel.EventSink

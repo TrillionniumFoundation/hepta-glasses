@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:demo_ai_even/services/ble.dart';
+import 'package:hepta_glasses/services/ble.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

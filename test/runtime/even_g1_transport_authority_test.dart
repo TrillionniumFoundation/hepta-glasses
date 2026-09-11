@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:demo_ai_even/adapters/even_g1/even_g1_transport.dart';
-import 'package:demo_ai_even/runtime/device_hal.dart';
-import 'package:demo_ai_even/services/ble.dart';
+import 'package:hepta_glasses/adapters/even_g1/even_g1_transport.dart';
+import 'package:hepta_glasses/runtime/device_hal.dart';
+import 'package:hepta_glasses/services/ble.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final class _FakeConnectionSource implements BleConnectionSource {

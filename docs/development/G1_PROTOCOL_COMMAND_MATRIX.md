@@ -1,16 +1,16 @@
 # G1 typed command, wire, effect and readback matrix
 
-Status: source contract; vendor semantics and physical qualification remain external.  
-Machine contract: `contracts/g1-command-matrix-v1.json` (`schema_version=2`).  
-Validator entry point: `services/qualification/g1_command_matrix.py`.  
-Validation implementation: `services/qualification/g1_command_matrix_impl.py`.  
+Status: source contract; vendor semantics and physical qualification remain external.
+Machine contract: `contracts/g1-command-matrix-v1.json` (`schema_version=3`).
+Single validator/CLI authority: `services/qualification/g1_command_matrix.py`.
+Pure validation library: `services/qualification/g1_command_matrix_impl.py` (no CLI, no repository-specific digest globals).
 Regression: `services/qualification/test_g1_command_matrix.py`.
 
 ## 1. Normative boundary
 
 The JSON contract is normative. This document explains its closed types and claim ceiling; it does not override byte fields, bounds, response predicates or effect dispositions in the machine record.
 
-Schema version 2 replaces the former prose-only command descriptions with a closed profile for every command or event:
+Schema version 3 retains the closed command profile introduced in version 2 and strengthens the evidence binding. Every command or event records:
 
 - command identity, direction, operation class, target and aggregation;
 - first/subsequent frame bounds, payload offsets, payload bounds and encoding;
@@ -20,9 +20,12 @@ Schema version 2 replaces the former prose-only command descriptions with a clos
 - pre-write, post-write, malformed-response, negative-response and partial-progress dispositions;
 - automatic/manual retry authority;
 - readback kind, scope and whether it is authoritative for mutated state;
-- exact source bindings, tests, external gates and executable producer/consumer examples.
+- exact source bindings, test selectors, external gates and executable producer/consumer examples;
+- SHA-256 identity for each reviewed source and test blob;
+- a unique declared type scope plus token sequences and expected occurrence counts for every source claim;
+- the concrete Dart/XCTest selector or executable tied to the canonical CI job.
 
-Unknown fields, duplicate JSON keys, duplicate command bytes, missing source fragments, coordinated bound drift and count-preserving profile swaps fail closed.
+Unknown fields, duplicate JSON keys, duplicate command bytes, blob substitution, path swaps, comments or strings used as code decoys, statically false branches, missing/renamed tests, coordinated bound drift and count-preserving profile swaps fail closed.
 
 ## 2. Authority and correlation
 
@@ -71,7 +74,7 @@ Android readiness is ordered as:
 gatt connected
 -> services and characteristics discovered
 -> notification descriptor accepted
--> MTU at least 203
+-> MTU at least 205 (202-byte value plus the 3-byte ATT notification header)
 -> [0xF4,0x01] initialization write accepted
 ```
 
@@ -128,23 +131,31 @@ Nine closed source bindings connect the machine profile to the current implement
 8. effect aggregation and uncertainty state machine;
 9. command-specific response predicates.
 
-Each binding fixes its path and required implementation fragments. A path swap that preserves the binding count still fails, as does removing a single required fragment. All named test files must be regular repository files without symlink traversal.
+Each binding fixes the repository path and complete SHA-256 of the reviewed file, selects one uniquely declared class/type scope, and records exact lexical token sequences with required occurrence counts. Comments are discarded, string literals remain indivisible tokens, and a matching sequence inside a statically false `if`/`while` branch is rejected. A path swap, altered blob, duplicate type declaration, missing sequence, duplicate decoy, or dead-branch substitution therefore fails closed.
 
-## 8. Change protocol
+Tests are not accepted by path existence alone. Every command binds the complete test-file digest, framework, canonical CI job and one or more exact discovered test selectors. Dart `test`/`testWidgets`, Swift `test…` methods and the executable native-sanitizer entry point are checked separately. Renaming the real test while leaving its name in a comment or string fails. The iOS binding additionally depends on the workflow selecting `RunnerTests` explicitly.
+
+## 8. Validator authority and import-order safety
+
+`g1_command_matrix.py` is the only executable validation entry point and the only file that pins the reviewed whole-matrix and per-command profile digests. It creates a fresh `ValidationSubject` for each invocation and passes it to the implementation library. The library exposes parsing and validation functions only; it has no `main`, `__main__`, `validate()` shortcut or `EXPECTED_*` repository truth. It never rewrites module globals.
+
+Regression tests execute the file CLI, module CLI, implementation-first import order and facade-first import order in independent Python processes and require byte-equivalent JSON results. This prevents import order, a direct implementation invocation or mutable digest synchronization from becoming a competing validator authority.
+
+## 9. Change protocol
 
 A command/profile change must update, in one reviewed subject:
 
 1. the typed JSON profile and its golden vectors;
 2. producer and consumer source;
 3. response/effect and retry tests;
-4. exact source-binding fragments;
+4. exact source-blob digests, type scopes, token claims, test-blob digests and discovered selectors;
 5. this document and compatibility notes;
-6. the profile and whole-matrix canonical digests in the stable validator entry point;
+6. the profile and whole-matrix canonical digests in the single stable validator entry point;
 7. all seven canonical exact-head jobs.
 
 Changing a digest without independently comparing the complete typed profile, source and tests is not acceptance. The digest is an anti-drift lock, not a substitute for review.
 
-## 9. Evidence ceiling
+## 10. Evidence ceiling
 
 This source contract does not establish:
 

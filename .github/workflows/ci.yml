@@ -2,6 +2,8 @@ name: hepta-glasses-ci
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'
   pull_request:
   push:
     branches:
@@ -40,7 +42,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 services/qualification/documentation_truth.py --verify-github
-      - name: Verify Dependabot values against immutable GitHub docs
+      - name: Verify committed Dependabot contract without network
+        run: python3 tools/native/dependency_update_policy.py --check-dependabot-contract
+      - name: Refresh Dependabot values against immutable GitHub docs
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 tools/native/dependency_update_policy.py --verify-dependabot-official
@@ -161,16 +166,32 @@ jobs:
           ! grep -E '(HEPTA_ALLOW_DEVELOPMENT_AUTHORITY|DevelopmentMutationAuthorityProvider|explicit-development-build-flag|development_build_flag|dev-lease-|development-user|development-g1-pair|TestMutationAuthorityProvider|test-only-authority|test-lease-)' \
             /tmp/hepta-ios-release.strings
       - name: Run iOS native tests
+        shell: bash
         run: |
-          DEVICE_ID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next(device["udid"] for runtime in sorted(devices, reverse=True) for device in devices[runtime] if device.get("isAvailable") and device.get("name", "").startswith("iPhone")))')"
+          set -euo pipefail
+          python3 tools/ios_ci.py validate-inventory --root .
+          destination="$(
+            xcrun simctl list devices available -j \
+              | python3 tools/ios_ci.py select-destination
+          )"
+          DEVICE_ID="${destination##*=}"
           xcrun simctl boot "$DEVICE_ID" || true
           xcrun simctl bootstatus "$DEVICE_ID" -b
+          result_bundle="build/ios/RunnerTests.xcresult"
+          rm -rf "$result_bundle"
           xcodebuild test \
             -workspace ios/Runner.xcworkspace \
             -scheme Runner \
             -configuration Debug \
-            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -destination "$destination" \
+            -only-testing:RunnerTests \
+            -resultBundlePath "$result_bundle" \
             CODE_SIGNING_ALLOWED=NO
+          xcrun xcresulttool get test-results summary \
+            --path "$result_bundle" \
+            --format json > /tmp/hepta-ios-test-summary.json
+          python3 tools/ios_ci.py validate-result \
+            --input /tmp/hepta-ios-test-summary.json
       - name: Prove iOS qualification is read-only
         run: git diff --exit-code
 

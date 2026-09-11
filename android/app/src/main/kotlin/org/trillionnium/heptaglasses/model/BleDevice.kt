@@ -1,4 +1,4 @@
-package com.example.demo_ai_even.model
+package org.trillionnium.heptaglasses.model
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothGatt
@@ -7,8 +7,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import com.example.demo_ai_even.bluetooth.BleManager
-import com.example.demo_ai_even.bluetooth.BoundedWriteQueue
+import org.trillionnium.heptaglasses.bluetooth.BleManager
+import org.trillionnium.heptaglasses.bluetooth.BoundedWriteQueue
 
 @SuppressLint("MissingPermission")
 data class BleDevice(
@@ -107,7 +107,7 @@ data class BleDevice(
                     characteristic,
                     data,
                     BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE,
-                ) == BluetoothGatt.GATT_SUCCESS
+                ) == android.bluetooth.BluetoothStatusCodes.SUCCESS
             } else {
                 @Suppress("DEPRECATION")
                 characteristic.writeType =

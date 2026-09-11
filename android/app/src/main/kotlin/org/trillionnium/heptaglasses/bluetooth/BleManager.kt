@@ -1,4 +1,4 @@
-package com.example.demo_ai_even.bluetooth
+package org.trillionnium.heptaglasses.bluetooth
 
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -15,11 +15,11 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
-import com.example.demo_ai_even.cpp.Cpp
-import com.example.demo_ai_even.model.BleDevice
-import com.example.demo_ai_even.model.BlePairDevice
-import com.example.demo_ai_even.speech.AndroidSpeechSession
-import com.example.demo_ai_even.speech.SpeechTicket
+import org.trillionnium.heptaglasses.cpp.Cpp
+import org.trillionnium.heptaglasses.model.BleDevice
+import org.trillionnium.heptaglasses.model.BlePairDevice
+import org.trillionnium.heptaglasses.speech.AndroidSpeechSession
+import org.trillionnium.heptaglasses.speech.SpeechTicket
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +27,17 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.lang.ref.WeakReference
 import java.util.UUID
+
+internal object BleMtuContract {
+    // ATT Handle Value Notification consumes three MTU bytes for opcode+handle.
+    const val ATT_NOTIFICATION_HEADER_BYTES = 3
+    const val MICROPHONE_EVENT_BYTES = 202
+    const val REQUIRED_MTU = 205
+
+    fun admits(mtu: Int): Boolean =
+        mtu >= ATT_NOTIFICATION_HEADER_BYTES + MICROPHONE_EVENT_BYTES &&
+            mtu >= REQUIRED_MTU
+}
 
 @SuppressLint("MissingPermission")
 class BleManager private constructor() {
@@ -40,7 +51,6 @@ class BleManager private constructor() {
             "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
         private const val CLIENT_CONFIGURATION_UUID =
             "00002902-0000-1000-8000-00805f9b34fb"
-        private const val REQUIRED_MTU = 203
         private const val REQUESTED_MTU = 251
         private const val UNSELECTED_PAIR = "unselected"
 
@@ -349,7 +359,7 @@ class BleManager private constructor() {
                     gatt.writeDescriptor(
                         descriptor,
                         BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE,
-                    ) == BluetoothGatt.GATT_SUCCESS
+                    ) == android.bluetooth.BluetoothStatusCodes.SUCCESS
                 } else {
                     @Suppress("DEPRECATION")
                     descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
@@ -390,7 +400,7 @@ class BleManager private constructor() {
             ) {
                 if (!current(gatt)) return
                 if (status != BluetoothGatt.GATT_SUCCESS ||
-                    mtu < REQUIRED_MTU ||
+                    !BleMtuContract.admits(mtu) ||
                     !notificationReadyAddresses.contains(gatt.device.address)
                 ) {
                     handleDisconnected(gatt, "mtu_contract_failed_${status}_$mtu")

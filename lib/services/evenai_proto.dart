@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:demo_ai_even/utils/utils.dart';
+import 'package:hepta_glasses/utils/utils.dart';
 
 class EvenaiProto {
   static List<Uint8List> evenaiMultiPackListV2(

@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
-import 'package:demo_ai_even/ble_manager.dart';
-import 'package:demo_ai_even/runtime/device_hal.dart';
-import 'package:demo_ai_even/services/ble.dart';
+import 'package:hepta_glasses/ble_manager.dart';
+import 'package:hepta_glasses/runtime/device_hal.dart';
+import 'package:hepta_glasses/services/ble.dart';
 
 typedef BleRequestSender = Future<BleReceive> Function(
   Uint8List bytes, {

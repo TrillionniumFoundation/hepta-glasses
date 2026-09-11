@@ -1,4 +1,4 @@
-package com.example.demo_ai_even.bluetooth
+package org.trillionnium.heptaglasses.bluetooth
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals

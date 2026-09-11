@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 from services.qualification import g1_command_matrix as matrix
+from services.qualification import g1_command_matrix_impl as implementation
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -27,20 +32,181 @@ class G1CommandMatrixTests(unittest.TestCase):
         assert isinstance(value, dict)
         return value
 
+    @staticmethod
+    def source_binding(
+        document: dict[str, object], identifier: str
+    ) -> dict[str, object]:
+        bindings = document["source_bindings"]
+        assert isinstance(bindings, list)
+        value = next(
+            item
+            for item in bindings
+            if isinstance(item, dict) and item.get("id") == identifier
+        )
+        assert isinstance(value, dict)
+        return value
+
+    @staticmethod
+    def _sha256(path: Path) -> str:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    @classmethod
+    def subject_for(cls, document: dict[str, object]) -> matrix.ValidationSubject:
+        commands = document["commands"]
+        assert isinstance(commands, list)
+        typed = [item for item in commands if isinstance(item, dict)]
+        identities = {
+            str(item["id"]): {
+                field: str(item[field])
+                for field in (
+                    "command",
+                    "direction",
+                    "operation_kind",
+                    "target",
+                    "aggregation",
+                )
+            }
+            for item in typed
+        }
+        profiles = {
+            str(item["id"]): matrix.canonical_digest(item) for item in typed
+        }
+        return matrix.ValidationSubject(
+            expected_matrix_sha256=matrix.canonical_digest(document),
+            expected_command_identities=identities,
+            expected_profile_sha256=profiles,
+        )
+
+    @classmethod
+    def materialize_subject(
+        cls,
+        root: Path,
+        document: dict[str, object],
+    ) -> None:
+        references = {
+            str(matrix.BASE_CONTRACT),
+            ".github/workflows/ci.yml",
+        }
+        bindings = document["source_bindings"]
+        commands = document["commands"]
+        assert isinstance(bindings, list)
+        assert isinstance(commands, list)
+        for binding in bindings:
+            assert isinstance(binding, dict)
+            references.add(str(binding["path"]))
+        for command in commands:
+            assert isinstance(command, dict)
+            tests = command["tests"]
+            assert isinstance(tests, list)
+            for reference in tests:
+                assert isinstance(reference, dict)
+                references.add(str(reference["path"]))
+        for relative in sorted(references):
+            source = ROOT / relative
+            destination = root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+
     def test_complete_typed_matrix_matches_base_contract_and_source(self) -> None:
         result = matrix.validate(ROOT)
         self.assertIs(result["ok"], True)
-        self.assertEqual(result["schema_version"], 2)
+        self.assertEqual(result["schema_version"], 3)
         self.assertEqual(result["commands"], 12)
         self.assertEqual(result["typed_profiles"], 12)
         self.assertEqual(result["mutating_commands"], 9)
         self.assertEqual(result["source_bindings"], 9)
         self.assertEqual(result["source_references"], 36)
         self.assertEqual(result["test_references"], 24)
+        self.assertEqual(result["test_selectors"], 28)
         self.assertEqual(result["producer_examples"], 13)
         self.assertEqual(result["consumer_examples"], 14)
         self.assertIs(result["vendor_confirmation_required"], True)
         self.assertIs(result["physical_qualification_required"], True)
+
+    def test_fixed_audio_notification_requires_att_mtu_205(self) -> None:
+        document = self.document()
+        initializers = document["platform_initialization"]
+        assert isinstance(initializers, list)
+        android = next(
+            item
+            for item in initializers
+            if isinstance(item, dict) and item.get("platform") == "android"
+        )
+        self.assertIn("mtu_at_least_205", android["admission_steps"])
+        base_contract = matrix.strict_json(ROOT / matrix.BASE_CONTRACT)
+        self.assertEqual(
+            base_contract["transport"]["android_minimum_ready_mtu"],
+            205,
+        )
+        self.assertNotIn(
+            "mtu_at_least_203",
+            base_contract["readiness"]["android"],
+        )
+
+    def test_implementation_is_a_library_not_a_second_validator_authority(self) -> None:
+        self.assertFalse(hasattr(implementation, "validate"))
+        self.assertFalse(hasattr(implementation, "main"))
+        self.assertFalse(
+            any(name.startswith("EXPECTED_") for name in vars(implementation))
+        )
+        source = Path(implementation.__file__).read_text(encoding="utf-8")
+        self.assertNotIn('if __name__ == "__main__"', source)
+        self.assertNotIn("if __name__ == '__main__'", source)
+
+    def test_facade_validation_does_not_mutate_implementation_globals(self) -> None:
+        before = {
+            name: id(value)
+            for name, value in vars(implementation).items()
+            if name.startswith("EXPECTED_")
+        }
+        first = matrix.validate(ROOT)
+        second = matrix.validate(ROOT)
+        after = {
+            name: id(value)
+            for name, value in vars(implementation).items()
+            if name.startswith("EXPECTED_")
+        }
+        self.assertEqual(before, {})
+        self.assertEqual(after, {})
+        self.assertEqual(first, second)
+
+    def test_cli_and_import_order_are_process_equivalent(self) -> None:
+        commands = [
+            [sys.executable, "services/qualification/g1_command_matrix.py"],
+            [sys.executable, "-m", "services.qualification.g1_command_matrix"],
+        ]
+        outputs = []
+        for command in commands:
+            completed = subprocess.run(
+                command,
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            outputs.append(json.loads(completed.stdout))
+        self.assertEqual(outputs[0], outputs[1])
+
+        scripts = [
+            "from services.qualification import g1_command_matrix_impl; "
+            "from services.qualification import g1_command_matrix as m; "
+            "import json; print(json.dumps(m.validate(), sort_keys=True))",
+            "from services.qualification import g1_command_matrix as m; "
+            "from services.qualification import g1_command_matrix_impl; "
+            "import json; print(json.dumps(m.validate(), sort_keys=True))",
+        ]
+        import_outputs = []
+        for script in scripts:
+            completed = subprocess.run(
+                [sys.executable, "-c", script],
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            import_outputs.append(json.loads(completed.stdout))
+        self.assertEqual(import_outputs[0], import_outputs[1])
+        self.assertEqual(import_outputs[0], outputs[0])
 
     def test_duplicate_command_byte_fails_closed(self) -> None:
         document = copy.deepcopy(self.document())
@@ -240,40 +406,142 @@ class G1CommandMatrixTests(unittest.TestCase):
 
     def test_source_binding_count_preserving_path_swap_fails_closed(self) -> None:
         document = copy.deepcopy(self.document())
-        bindings = document["source_bindings"]
-        assert isinstance(bindings, list)
-        first = next(
-            item
-            for item in bindings
-            if isinstance(item, dict) and item.get("id") == "proto-command-producers"
-        )
-        second = next(
-            item
-            for item in bindings
-            if isinstance(item, dict) and item.get("id") == "display-packet-producer"
-        )
-        assert isinstance(first, dict)
-        assert isinstance(second, dict)
+        first = self.source_binding(document, "proto-command-producers")
+        second = self.source_binding(document, "display-packet-producer")
         first["path"], second["path"] = second["path"], first["path"]
         with self.assertRaisesRegex(
             matrix.G1CommandMatrixError,
-            "source fragment is absent|source binding",
+            "source blob digest mismatch|type scope",
         ):
             matrix.validate_document(ROOT, document)
 
-    def test_missing_live_source_fragment_fails_closed(self) -> None:
-        document = self.document()
-        original = matrix.EXPECTED_SOURCE_BINDINGS
-        altered = copy.deepcopy(original)
-        altered["proto-command-producers"]["required_fragments"].append(
-            "HEPTA_FRAGMENT_THAT_IS_DELIBERATELY_ABSENT"
-        )
-        with mock.patch.object(matrix, "EXPECTED_SOURCE_BINDINGS", altered):
+    def test_source_binding_hidden_in_comment_cannot_pass(self) -> None:
+        document = copy.deepcopy(self.document())
+        binding = self.source_binding(document, "display-packet-producer")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.materialize_subject(root, document)
+            path = root / str(binding["path"])
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(text.count("int len = 191,"), 1)
+            path.write_text(
+                text.replace(
+                    "int len = 191,",
+                    "int len = 190, // int len = 191,",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            binding["blob_sha256"] = self._sha256(path)
             with self.assertRaisesRegex(
                 matrix.G1CommandMatrixError,
-                "source binding drifted|source fragment is absent",
+                "token sequence occurrence mismatch",
             ):
-                matrix.validate_document(ROOT, document)
+                implementation.validate_document(
+                    root,
+                    document,
+                    subject=self.subject_for(document),
+                )
+
+    def test_source_binding_hidden_in_string_cannot_pass(self) -> None:
+        document = copy.deepcopy(self.document())
+        binding = self.source_binding(document, "proto-command-producers")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.materialize_subject(root, document)
+            path = root / str(binding["path"])
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(text.count("const length = 6;"), 1)
+            path.write_text(
+                text.replace(
+                    "const length = 6;",
+                    "const length = 7;\n"
+                    "    const decoy = 'const length = 6;';",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            binding["blob_sha256"] = self._sha256(path)
+            with self.assertRaisesRegex(
+                matrix.G1CommandMatrixError,
+                "token sequence occurrence mismatch",
+            ):
+                implementation.validate_document(
+                    root,
+                    document,
+                    subject=self.subject_for(document),
+                )
+
+    def test_source_binding_inside_static_dead_branch_cannot_pass(self) -> None:
+        document = copy.deepcopy(self.document())
+        binding = self.source_binding(document, "proto-command-producers")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.materialize_subject(root, document)
+            path = root / str(binding["path"])
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(text.count("const length = 6;"), 1)
+            path.write_text(
+                text.replace(
+                    "const length = 6;",
+                    "if (false) {\n"
+                    "      const length = 6;\n"
+                    "    }\n"
+                    "    const length = 7;",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            binding["blob_sha256"] = self._sha256(path)
+            with self.assertRaisesRegex(
+                matrix.G1CommandMatrixError,
+                "statically dead branch",
+            ):
+                implementation.validate_document(
+                    root,
+                    document,
+                    subject=self.subject_for(document),
+                )
+
+    def test_test_binding_comment_decoy_cannot_pass(self) -> None:
+        document = copy.deepcopy(self.document())
+        command = self.command(document, "display_text_and_ai")
+        tests = command["tests"]
+        assert isinstance(tests, list)
+        reference = next(
+            item
+            for item in tests
+            if isinstance(item, dict)
+            and item.get("path") == "test/runtime/packet_codec_test.dart"
+        )
+        assert isinstance(reference, dict)
+        selector = "shared positive vectors fragment and reassemble exactly"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.materialize_subject(root, document)
+            path = root / str(reference["path"])
+            text = path.read_text(encoding="utf-8")
+            needle = f"test('{selector}'"
+            self.assertEqual(text.count(needle), 1)
+            path.write_text(
+                text.replace(
+                    needle,
+                    "test('decoy-renamed-contract-test'",
+                    1,
+                )
+                + f"\n// test('{selector}', () {{}});\n",
+                encoding="utf-8",
+            )
+            reference["blob_sha256"] = self._sha256(path)
+            with self.assertRaisesRegex(
+                matrix.G1CommandMatrixError,
+                "selector is not uniquely discovered",
+            ):
+                implementation.validate_document(
+                    root,
+                    document,
+                    subject=self.subject_for(document),
+                )
 
     def test_unknown_typed_field_fails_closed(self) -> None:
         document = copy.deepcopy(self.document())
@@ -289,7 +557,7 @@ class G1CommandMatrixTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "duplicate.json"
             path.write_text(
-                '{"schema_version":2,"schema_version":1}',
+                '{"schema_version":3,"schema_version":1}',
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(

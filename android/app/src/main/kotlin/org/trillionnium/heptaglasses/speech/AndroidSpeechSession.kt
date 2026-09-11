@@ -1,8 +1,8 @@
-package com.example.demo_ai_even.speech
+package org.trillionnium.heptaglasses.speech
 
 import android.os.Handler
 import android.os.Looper
-import com.example.demo_ai_even.bluetooth.BleChannelHelper
+import org.trillionnium.heptaglasses.bluetooth.BleChannelHelper
 import java.util.concurrent.Executors
 
 /**

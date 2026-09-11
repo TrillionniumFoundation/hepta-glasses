@@ -1,4 +1,4 @@
-package com.example.demo_ai_even.model
+package org.trillionnium.heptaglasses.model
 
 import android.bluetooth.BluetoothGatt
 

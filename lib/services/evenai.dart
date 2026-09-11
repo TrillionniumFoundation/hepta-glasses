@@ -1,15 +1,15 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:demo_ai_even/ble_manager.dart';
-import 'package:demo_ai_even/controllers/evenai_model_controller.dart';
-import 'package:demo_ai_even/runtime/assistant_session.dart';
-import 'package:demo_ai_even/runtime/contracts.dart';
-import 'package:demo_ai_even/runtime/hepta_runtime.dart';
-import 'package:demo_ai_even/runtime/model_gateway.dart';
-import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
-import 'package:demo_ai_even/services/ble.dart';
-import 'package:demo_ai_even/services/proto.dart';
+import 'package:hepta_glasses/ble_manager.dart';
+import 'package:hepta_glasses/controllers/evenai_model_controller.dart';
+import 'package:hepta_glasses/runtime/assistant_session.dart';
+import 'package:hepta_glasses/runtime/contracts.dart';
+import 'package:hepta_glasses/runtime/hepta_runtime.dart';
+import 'package:hepta_glasses/runtime/model_gateway.dart';
+import 'package:hepta_glasses/runtime/privacy_safe_log.dart';
+import 'package:hepta_glasses/services/ble.dart';
+import 'package:hepta_glasses/services/proto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

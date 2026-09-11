@@ -124,10 +124,13 @@ class FullGapClosureControlTests(unittest.TestCase):
         prohibited = (
             "The live head and tree of Draft PR #101 identify the active adoption candidate",
             "The last independently qualified baseline is Draft PR #101",
+            "The live head and Git tree of open PR #114 identify the active successor source object",
         )
         for relative in ("README.md", "docs/CURRENT_STATE.md"):
             text = self.read(relative)
-            self.assertIn("open PR #114", text)
+            self.assertIn("open PR #125", text)
+            self.assertIn("codex/hepta-identity-migration-20260910", text)
+            self.assertIn("codex/hepta-main-convergence-20260909-v2", text)
             self.assertIn("last independently qualified historical baseline", text)
             self.assertIn("35f01329262d6a137bfa3c7e95302a397ed32676", text)
             self.assertIn("baa9c218a779adb4713e5985d4109b20db70087e93fca34f2a9ba08e157af897", text)
@@ -147,10 +150,17 @@ class FullGapClosureControlTests(unittest.TestCase):
         assert isinstance(authority, dict)
         self.assertEqual(last["pull_request"], 101)
         self.assertEqual(last["commit"], "35f01329262d6a137bfa3c7e95302a397ed32676")
-        self.assertEqual(authority["pull_request"], 114)
+        self.assertEqual(project["schema_version"], 6)
+        self.assertEqual(authority["pull_request"], 125)
+        self.assertEqual(authority["branch"], "codex/hepta-identity-migration-20260910")
+        self.assertEqual(authority["base_branch"], "codex/hepta-main-convergence-20260909-v2")
         self.assertEqual(
-            authority["branch"],
-            "codex/hepta-main-convergence-20260909-v2",
+            authority["identity_rule"],
+            "live_pull_request_head_and_tree",
+        )
+        self.assertEqual(
+            project["repository_actionable_gate"]["module_registry"],
+            "docs/modules/modules.json",
         )
         self.assertEqual(successor["maturity"], "source_implemented")
         for field in (
@@ -190,6 +200,8 @@ class FullGapClosureControlTests(unittest.TestCase):
         self.assertEqual(observed, EXPECTED_OPEN_ISSUES)
         self.assertEqual(len(rows), len(EXPECTED_OPEN_ISSUES))
         self.assertIn("coordination surface", board)
+        self.assertIn("open PR #125", board)
+        self.assertIn("codex/hepta-identity-migration-20260910", board)
         self.assertIn("never replaces GitHub API state", board)
         self.assertIn("does not provide Repository Administration permission", board)
         self.assertIn(

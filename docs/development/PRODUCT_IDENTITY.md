@@ -1,25 +1,50 @@
 # Mobile product identity
 
-Status: canonical user-visible mobile identity and explicit compatibility boundary.
+"
+    "Status: canonical release-facing and internal source identity.
 
-## Canonical release-facing identity
+"
+    "## Canonical identity
 
-The product name presented to users is **Hepta Glasses**.
+"
+    "The product name is **Hepta Glasses**. The Dart package is `hepta_glasses`. "
+    "Android source packages, Gradle namespace and installed application ID are "
+    "`org.trillionnium.heptaglasses`. JNI registrations use the same package path. "
+    "iOS presents `Hepta Glasses`, uses `hepta_glasses` as its bundle name and binds "
+    "all Runner application configurations to `org.trillionnium.heptaglasses`; test "
+    "bundles use the corresponding `.RunnerTests` suffix.
 
-Android installs use application ID `org.trillionnium.heptaglasses` and the launcher label `Hepta Glasses`. The application ID is an upgrade, signing, store and account identity; changing it requires an explicit migration and release-authority review.
+"
+    "## Atomic migration invariants
 
-iOS presents `Hepta Glasses` as `CFBundleDisplayName` and uses `hepta_glasses` as the non-localized bundle name. `CFBundleIdentifier` remains sourced from `PRODUCT_BUNDLE_IDENTIFIER`; the final identifier, provisioning profile, entitlement application identifier and signing certificate must agree before a distributable binary can qualify.
+"
+    "The migration moves every Android main, unit-test and available instrumentation "
+    "package tree together; rewrites all Dart package imports, Kotlin declarations, "
+    "repository path references, JNI symbols and source-bound protocol references; "
+    "and recomputes the canonical G1 matrix digest after those path changes. A partial "
+    "rename is forbidden because it can split generated resources, MethodChannel "
+    "registration, native bindings, tests or evidence ownership.
 
-Permission copy names the product, describes the immediate capability and avoids implying that Bluetooth, photo access or speech recognition runs continuously.
+"
+    "Application data continuity is anchored by the unchanged Android application ID "
+    "and iOS bundle identifier. The source rename therefore does not authorize a new "
+    "store identity or a data-container migration.
 
-## Compatibility namespaces
+"
+    "## Validation
 
-The inherited Dart package and Kotlin/Swift source namespaces are implementation compatibility identifiers, not installed-product authority. They may retain legacy `demo_ai_even` or `com.example.demo_ai_even` names until an atomic migration updates every import, package declaration, generated binding, test path and native registration in one reviewed change.
+"
+    "`services/qualification/test_mobile_product_identity.py` checks package identity, "
+    "directory layout, Kotlin declarations, JNI symbols, Apple build settings and the "
+    "absence of inherited demo identifiers across active source, contract, test and "
+    "documentation surfaces. Canonical Flutter, Android, iOS and native CI must pass on "
+    "the unchanged final head.
 
-A partial internal rename is prohibited because it can silently break Flutter imports, Android manifest resolution, generated `R`/`BuildConfig` references, MethodChannel registration or native tests. The migration must preserve application data/upgrade behavior and be independently qualified on both platforms.
+"
+    "## Authority boundary
 
-## Validation
-
-`services/qualification/test_mobile_product_identity.py` verifies the current release-facing names, the Android application ID, the Android launcher label, the iOS display and bundle names, and the absence of the old demo title from mobile release surfaces.
-
-This test does not close signing, provisioning, store registration, physical-device qualification or the future internal namespace migration. Those require their own exact candidate and authority evidence.
+"
+    "This source migration does not close production signing, provisioning, credential, "
+    "store-registration, physical-device, vendor-firmware, pilot, rollout or release "
+    "authority. Those remain external evidence gates.
+"

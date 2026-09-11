@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:demo_ai_even/runtime/ble_request_slot.dart';
+import 'package:hepta_glasses/runtime/ble_request_slot.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

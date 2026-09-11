@@ -1,6 +1,6 @@
-import 'package:demo_ai_even/runtime/authenticated_service_tokens.dart';
-import 'package:demo_ai_even/runtime/model_gateway.dart';
-import 'package:demo_ai_even/runtime/mutation_authority.dart';
+import 'package:hepta_glasses/runtime/authenticated_service_tokens.dart';
+import 'package:hepta_glasses/runtime/model_gateway.dart';
+import 'package:hepta_glasses/runtime/mutation_authority.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final class MutableRuntimeTokenProvider implements RuntimeTokenProvider {

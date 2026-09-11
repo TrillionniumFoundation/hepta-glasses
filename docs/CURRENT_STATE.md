@@ -1,15 +1,15 @@
 # Hepta Glasses OS current state
 
-Last updated: 2026-09-09  
+Last updated: 2026-09-10
 Canonical plan revision: `2026-09-01-g8`
 
 ## Source authority
 
 The canonical G8 plan remains the base contract. G9, G10, G11 terminal-closure controls and the active remediation layer add authenticated evidence custody, complete-closure semantics, production-reference components and source hardening.
 
-The live head and Git tree of open PR #114 identify the active successor source object. PR #114 targets `main` from `codex/hepta-main-convergence-20260909-v2`. It is out of Draft but has no eligible exact-head Code Owner `APPROVED` review, no complete Administration-capable `main` protection readback and no protected adoption. The current successor therefore remains `source_implemented` and unqualified for product release.
+The live head and Git tree of open PR #125 identify the active successor source object. PR #125 targets `codex/hepta-main-convergence-20260909-v2` from `codex/hepta-identity-migration-20260910`. The live GitHub pull-request and commit readback, rather than a copied SHA in prose, determines the current source identity. Until one unchanged final head completes seven-job CI, fresh Artifact inspection and an eligible exact-head approval, the successor remains `source_implemented` and unqualified for product release.
 
-The immediately preceding PR #114 object at commit `317ee1141ceac6df7d711aeaaca27b22d735e48d`, tree `51e673238d30b81ef8eb64b93eef14fc7bf850cb`, completed the seven canonical jobs and produced artifact `10098668276`, ZIP SHA-256 `6eac5358c5b0f1555043ac99250e583d5baeb7a89a2133365d72ad5bead7037c`. It received bounded artifact-integrity comments but no eligible approval. Any later commit supersedes that exact-head evidence; no result transfers to the successor.
+The prior PR #114 object at commit `317ee1141ceac6df7d711aeaaca27b22d735e48d`, tree `51e673238d30b81ef8eb64b93eef14fc7bf850cb`, completed the seven canonical jobs and produced artifact `10098668276`, ZIP SHA-256 `6eac5358c5b0f1555043ac99250e583d5baeb7a89a2133365d72ad5bead7037c`. It is historical predecessor evidence only. It received bounded artifact-integrity comments but no eligible approval, and no result transfers to PR #125 or a later source head.
 
 `main` remains the older protected baseline until the complete policy is applied and independently read back, and the final candidate is adopted through the ordinary protected route.
 

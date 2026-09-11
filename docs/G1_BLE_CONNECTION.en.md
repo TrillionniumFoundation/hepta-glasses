@@ -46,7 +46,7 @@ The machine-readable source contract is `contracts/g1-ble-protocol-v1.json`.
 
 Each Android GATT callback captures a connection generation and verifies that its `BluetoothGatt` is still selected for the current pair. A stale callback closes its old GATT rather than mutating the new session.
 
-A leg becomes ready only after service/characteristic discovery, notification descriptor acceptance, MTU of at least 203, and native acceptance of initialization bytes `[0xF4, 0x01]`. Normal writes use a bounded serialized queue. Before accepting bytes, native code verifies Flutter's `expectedGeneration` and `expectedPairIdentity` against current authority.
+A leg becomes ready only after service/characteristic discovery, notification descriptor acceptance, MTU of at least 205 (202 value bytes plus the three-byte ATT notification header), and native acceptance of initialization bytes `[0xF4, 0x01]`. Normal writes use a bounded serialized queue. Before accepting bytes, native code verifies Flutter's `expectedGeneration` and `expectedPairIdentity` against current authority.
 
 Decoded background work rechecks both generation and pair identity before publishing data to Flutter.
 

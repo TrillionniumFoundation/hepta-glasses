@@ -1,7 +1,7 @@
-import 'package:demo_ai_even/ble_manager.dart';
-import 'package:demo_ai_even/runtime/contracts.dart';
-import 'package:demo_ai_even/runtime/hepta_runtime.dart';
-import 'package:demo_ai_even/views/features/notification/notify_model.dart';
+import 'package:hepta_glasses/ble_manager.dart';
+import 'package:hepta_glasses/runtime/contracts.dart';
+import 'package:hepta_glasses/runtime/hepta_runtime.dart';
+import 'package:hepta_glasses/views/features/notification/notify_model.dart';
 import 'package:flutter/material.dart';
 
 class NotificationPage extends StatefulWidget {

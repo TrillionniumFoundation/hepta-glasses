@@ -1,6 +1,6 @@
-import 'package:demo_ai_even/runtime/clock.dart';
-import 'package:demo_ai_even/runtime/contracts.dart';
-import 'package:demo_ai_even/runtime/mutation_authority.dart';
+import 'package:hepta_glasses/runtime/clock.dart';
+import 'package:hepta_glasses/runtime/contracts.dart';
+import 'package:hepta_glasses/runtime/mutation_authority.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/test_mutation_authority.dart';

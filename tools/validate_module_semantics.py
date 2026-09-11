@@ -3,8 +3,9 @@
 
 This validator is deliberately stronger than path-existence and minimum-length
 checks. It binds every generated page to the complete canonical module record,
-requires eight engineering dimensions, verifies every source/document/test/
-contract reference, and rejects compatibility-layer drift. It still does not
+binds eleven canonical semantic dimensions to eight compact generated
+handoff sections, verifies every source/document/test/contract reference, and
+rejects compatibility-layer drift. It still does not
 replace human module-owner or independent assurance review.
 """
 from __future__ import annotations
@@ -41,6 +42,20 @@ REQUIRED_HEADINGS = (
     "## 7. Security, privacy, and evidence ceiling",
     "## 8. Ownership and change protocol",
 )
+CANONICAL_SEMANTIC_HEADINGS = (
+    "### 1.1 Purpose, responsibility and non-goals",
+    "### 1.2 Component and source map",
+    "### 1.3 Public interfaces and contracts",
+    "### 1.4 State machine and invariants",
+    "### 1.5 Concurrency and atomicity",
+    "### 1.6 Failure, retry, reconciliation and recovery",
+    "### 1.7 Configuration, compatibility, migration and rollback",
+    "### 1.8 Operations, observability and SLOs",
+    "### 1.9 Security, privacy and abuse cases",
+    "### 1.10 Verification and acceptance",
+    "### 1.11 Ownership and change protocol",
+)
+STANDARD = Path("docs/development/MODULE_DOCUMENTATION_COMPLETENESS_STANDARD.md")
 MINIMUM_PAGE_CHARACTERS = 2_000
 
 
@@ -217,6 +232,15 @@ def _validate_record(root: Path, module: dict[str, Any], seen: set[str]) -> None
 
 def validate(root: Path = ROOT) -> dict[str, Any]:
     root = root.resolve()
+    standard_path = root / STANDARD
+    if standard_path.is_symlink() or not standard_path.is_file():
+        fail("module documentation completeness standard is missing or linked")
+    standard_text = standard_path.read_text(encoding="utf-8")
+    semantic_positions = [
+        standard_text.find(heading) for heading in CANONICAL_SEMANTIC_HEADINGS
+    ]
+    if any(position < 0 for position in semantic_positions) or semantic_positions != sorted(semantic_positions):
+        fail("canonical eleven module semantic dimensions drifted")
     registry = load_canonical(root)
     allowed_top = {
         "schema_version",
@@ -265,7 +289,8 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         "modules": len(modules),
         "registry_digest": registry_digest,
         "compatibility_pointer": str(COMPATIBILITY),
-        "semantic_dimensions": len(REQUIRED_HEADINGS),
+        "semantic_dimensions": len(CANONICAL_SEMANTIC_HEADINGS),
+        "generated_handoff_sections": len(REQUIRED_HEADINGS),
     }
 
 

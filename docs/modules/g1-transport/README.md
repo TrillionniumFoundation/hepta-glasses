@@ -1,6 +1,6 @@
 # `g1-transport` module engineering handoff
 
-Canonical registry digest: `3182d1f41a0b4628389f7bd726af4920ab3531f798ce5f1e8a7997df288fea9b`
+Canonical registry digest: `2acc5e7fb26bb62ac81ce91bf5ac5e2033a6e3a8a9abca1f98d70b829932bb79`
 
 Owner: `device`
 
@@ -26,7 +26,7 @@ Implementation authority is limited to the source roots listed below. Anything o
 - `lib/runtime/device_hal.dart`
 - `lib/runtime/dual_leg_coordinator.dart`
 - `lib/services/ble.dart`
-- `android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth`
+- `android/app/src/main/kotlin/org/trillionnium/heptaglasses/bluetooth`
 - `ios/Runner/BluetoothManager.swift`
 
 ## 2. Public interfaces and contracts
@@ -63,7 +63,7 @@ The registered executable verification surfaces are:
 - `test/runtime/even_g1_transport_authority_test.dart`
 - `test/runtime/dual_leg_coordinator_test.dart`
 - `ios/RunnerTests/RunnerTests.swift`
-- `android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt`
+- `android/app/src/test/kotlin/org/trillionnium/heptaglasses/model/BlePairDeviceTest.kt`
 
 Tests prove only their declared environment and assertions. Operational acceptance additionally requires bounded logs, privacy-safe traces, stable error classes, relevant SLO measurements, rollback/recovery procedures, and exact candidate identity. Module owners must record negative-path evidence, not only successful examples.
 

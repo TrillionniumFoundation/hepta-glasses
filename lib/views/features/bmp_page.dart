@@ -1,6 +1,6 @@
-import 'package:demo_ai_even/ble_manager.dart';
-import 'package:demo_ai_even/runtime/contracts.dart';
-import 'package:demo_ai_even/services/features_services.dart';
+import 'package:hepta_glasses/ble_manager.dart';
+import 'package:hepta_glasses/runtime/contracts.dart';
+import 'package:hepta_glasses/services/features_services.dart';
 import 'package:flutter/material.dart';
 
 class BmpPage extends StatefulWidget {

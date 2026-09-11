@@ -1,13 +1,13 @@
 import 'dart:io';
 
-import 'package:demo_ai_even/controllers/bmp_update_manager.dart';
-import 'package:demo_ai_even/runtime/audit_checkpoint_authenticator.dart';
-import 'package:demo_ai_even/runtime/audit_journal.dart';
-import 'package:demo_ai_even/runtime/device_effect_result.dart';
-import 'package:demo_ai_even/runtime/hepta_runtime.dart';
-import 'package:demo_ai_even/runtime/mutation_authority.dart';
-import 'package:demo_ai_even/services/proto.dart';
-import 'package:demo_ai_even/utils/utils.dart';
+import 'package:hepta_glasses/controllers/bmp_update_manager.dart';
+import 'package:hepta_glasses/runtime/audit_checkpoint_authenticator.dart';
+import 'package:hepta_glasses/runtime/audit_journal.dart';
+import 'package:hepta_glasses/runtime/device_effect_result.dart';
+import 'package:hepta_glasses/runtime/hepta_runtime.dart';
+import 'package:hepta_glasses/runtime/mutation_authority.dart';
+import 'package:hepta_glasses/services/proto.dart';
+import 'package:hepta_glasses/utils/utils.dart';
 
 /// The single mobile composition root for deterministic runtime authority.
 ///

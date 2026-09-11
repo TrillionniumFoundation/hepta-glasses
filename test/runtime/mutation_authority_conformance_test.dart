@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:demo_ai_even/runtime/canonical_json.dart';
-import 'package:demo_ai_even/runtime/contracts.dart';
-import 'package:demo_ai_even/runtime/mutation_authority.dart';
+import 'package:hepta_glasses/runtime/canonical_json.dart';
+import 'package:hepta_glasses/runtime/contracts.dart';
+import 'package:hepta_glasses/runtime/mutation_authority.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Map<String, Object?> _stringMap(Object? value) =>

@@ -1,6 +1,6 @@
-import 'package:demo_ai_even/controllers/evenai_model_controller.dart';
-import 'package:demo_ai_even/services/evenai.dart';
-import 'package:demo_ai_even/views/even_list_page.dart';
+import 'package:hepta_glasses/controllers/evenai_model_controller.dart';
+import 'package:hepta_glasses/services/evenai.dart';
+import 'package:hepta_glasses/views/even_list_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';

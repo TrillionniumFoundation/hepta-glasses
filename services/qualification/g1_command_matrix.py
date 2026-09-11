@@ -1,13 +1,13 @@
-"""Stable entry point for the typed G1 command matrix validator.
+"""Single authoritative entry point for the typed G1 command matrix.
 
-The implementation is retained in ``g1_command_matrix_impl`` so the typed
-contract digest can be reviewed independently from the generic closed-shape,
-wire-vector and source-binding validation machinery.  The facade deliberately
-synchronizes the few immutable subject digests before every call; this also
-preserves the hostile tests that temporarily replace EXPECTED_SOURCE_BINDINGS.
+Repository-specific digests and command identities live only here.  The
+implementation module is a pure library and receives an explicit validation
+subject; imports never mutate shared module state and no second validator CLI
+exists.
 """
 from __future__ import annotations
 
+import copy
 import json
 import sys
 from pathlib import Path
@@ -19,36 +19,94 @@ if str(_ROOT) not in sys.path:
 
 from services.qualification import g1_command_matrix_impl as _impl
 
-EXPECTED_MATRIX_SHA256 = "900deb5e601bcce7a6ac0241d3e4bab37dce8659a6d40f9fb3bfa4e47e9fec17"
-EXPECTED_PROFILE_SHA256 = {
-    "bitmap_crc": "d8b30592c04ce8f0c59f835570172b099ea15d4d5fb69e47abcec7e514baaedb",
-    "bitmap_finish": "1c842279ad7f6426b16b00cd704abc26e85604c4139bf88624613b803a0507b5",
-    "bitmap_packet": "26f99341059b2d5e2c96305f35b932bd947722595e5868ed8d751f810afa484d",
-    "display_text_and_ai": "cebca2396be7f0191f56be6881bc176109ed4b5ddb7d20b2a70f5a8064deb8f8",
-    "exit_mode": "eb99cbc88378df2e65be1ae7d2dc27359529fcb309864a4df05c77a7669958cd",
-    "heartbeat": "24c4c037ce94821fdaca743d962bc0065f78ac3f5e72eb0941fe4dbb9a05961e",
-    "microphone_data": "06b70494f7e3a9f14bb091e22bff7aebffd4346ba6662fbc0b26e08c5bd2dea5",
-    "microphone_on": "c9afee97e64e5567aa837e473976ba81e4da32b410cd822fac4cf3236bf920f4",
-    "notification": "8bbebaf47c7c56ffc006062e5c7643f9858e5043d2c5548377f51632c5867e6a",
-    "notification_whitelist": "82217fdde7eb9ac110e9b20a89da3ceaf34d97d9edd252fd2263591ccdb727cd",
-    "serial_number_read": "2351779011cdd202d982b365093bbfcd9ccbca1924c5d33704db0ae2214c3537",
-    "touch_and_assistant_event": "e50e44989b13d6489bc6f90585a7476428434381f4ed624d2ceba09fca51bb0c",
-}
+EXPECTED_MATRIX_SHA256 = '6779c7cc417c193cf631c8e7ff3dea56571693e5bbf4a7597305f27d27987369'
+EXPECTED_COMMAND_IDENTITIES = {'bitmap_crc': {'aggregation': 'staged_single_leg_transfer',
+                'command': '0x16',
+                'direction': 'phone_to_glasses_request',
+                'operation_kind': 'mutating_command',
+                'target': 'active_bitmap_leg'},
+ 'bitmap_finish': {'aggregation': 'staged_single_leg_transfer',
+                   'command': '0x20',
+                   'direction': 'phone_to_glasses_request',
+                   'operation_kind': 'mutating_command',
+                   'target': 'active_bitmap_leg'},
+ 'bitmap_packet': {'aggregation': 'staged_single_leg_transfer',
+                   'command': '0x15',
+                   'direction': 'phone_to_glasses_request',
+                   'operation_kind': 'mutating_command',
+                   'target': 'active_bitmap_leg'},
+ 'display_text_and_ai': {'aggregation': 'pair_all_legs_required',
+                         'command': '0x4E',
+                         'direction': 'phone_to_glasses_request',
+                         'operation_kind': 'mutating_command',
+                         'target': 'pair_left_then_right'},
+ 'exit_mode': {'aggregation': 'pair_all_legs_required',
+               'command': '0x18',
+               'direction': 'phone_to_glasses_request',
+               'operation_kind': 'mutating_command',
+               'target': 'pair_left_then_right'},
+ 'heartbeat': {'aggregation': 'pair_all_legs_required',
+               'command': '0x25',
+               'direction': 'phone_to_glasses_request',
+               'operation_kind': 'mutating_command',
+               'target': 'pair_left_then_right'},
+ 'microphone_data': {'aggregation': 'stream_append',
+                     'command': '0xF1',
+                     'direction': 'glasses_to_phone_event',
+                     'operation_kind': 'stream_event',
+                     'target': 'right_leg_only'},
+ 'microphone_on': {'aggregation': 'single_leg',
+                   'command': '0x0E',
+                   'direction': 'phone_to_glasses_request',
+                   'operation_kind': 'mutating_command',
+                   'target': 'selected_leg_default_right'},
+ 'notification': {'aggregation': 'single_leg_fragmented',
+                  'command': '0x4B',
+                  'direction': 'phone_to_glasses_request',
+                  'operation_kind': 'mutating_command',
+                  'target': 'left_leg'},
+ 'notification_whitelist': {'aggregation': 'single_leg_fragmented',
+                            'command': '0x04',
+                            'direction': 'phone_to_glasses_request',
+                            'operation_kind': 'mutating_command',
+                            'target': 'left_leg'},
+ 'serial_number_read': {'aggregation': 'single_leg',
+                        'command': '0x34',
+                        'direction': 'phone_to_glasses_request',
+                        'operation_kind': 'read_query',
+                        'target': 'selected_leg'},
+ 'touch_and_assistant_event': {'aggregation': 'event_dispatch',
+                               'command': '0xF5',
+                               'direction': 'glasses_to_phone_event',
+                               'operation_kind': 'control_event',
+                               'target': 'originating_leg'}}
+EXPECTED_PROFILE_SHA256 = {'bitmap_crc': 'f1499f2d864182a6a51be0ac2247feff653d32c373d6a7623f95c35b44d66f1b',
+ 'bitmap_finish': '4344202c777cd4f0e3e5245b23cf15e0f0626d405926ce8ecc687bccccc018f5',
+ 'bitmap_packet': '3966ee8c064118a3ed2355c2525a91cd6db672b2bb5e0907dd219a3b61b250bb',
+ 'display_text_and_ai': 'cba7d6b2579334357dc7805916b96b5bed0e6475fd0d9638fb12a221b4467935',
+ 'exit_mode': '504a0d46b88f0d759e9491eae1c1b2b1815e8c582ec288b6faeb9800a631ec89',
+ 'heartbeat': '35d1e75ead41af6e751901413bbc25c53eefcc6913898449094acd8b89b18537',
+ 'microphone_data': 'bdb8ceabfa76f81ba3bee455e4fa83c89bd7d6303ec4c43ae655047fc0a96bdb',
+ 'microphone_on': 'ed19cb335fbd84072e92f1604798ee1bcf89211218a10857f8d99c0e825758c9',
+ 'notification': '337f30fdf845c0d30b739374cf41017fa445c359095a0c08e01097806aa29a7c',
+ 'notification_whitelist': 'fc7baf772f9f2cd03f86513825c86e99f19997367fbcc47ece94a0cd57e46a3a',
+ 'serial_number_read': '6ffe1c68bc00a0c80e5a0e7dc2a319b69b73dcae4721472aa28ce097ef034e1f',
+ 'touch_and_assistant_event': '907a1d762a5e6bb11fb8f992ea4ff7edfb04b5e3d088f2cf2e47ad386de63b45'}
 
 ROOT = _impl.ROOT
 MATRIX = _impl.MATRIX
 BASE_CONTRACT = _impl.BASE_CONTRACT
 G1CommandMatrixError = _impl.G1CommandMatrixError
-EXPECTED_SOURCE_BINDINGS = _impl.EXPECTED_SOURCE_BINDINGS
-EXPECTED_COMMAND_IDENTITIES = _impl.EXPECTED_COMMAND_IDENTITIES
+ValidationSubject = _impl.ValidationSubject
 
 
-def _synchronize_subject() -> None:
-    """Bind the generic implementation to this exact reviewed matrix subject."""
-    _impl.EXPECTED_MATRIX_SHA256 = EXPECTED_MATRIX_SHA256
-    _impl.EXPECTED_PROFILE_SHA256 = EXPECTED_PROFILE_SHA256
-    _impl.EXPECTED_SOURCE_BINDINGS = EXPECTED_SOURCE_BINDINGS
-    _impl.EXPECTED_SOURCE_BINDING_IDS = sorted(EXPECTED_SOURCE_BINDINGS)
+def _subject() -> ValidationSubject:
+    """Return an invocation-local subject without mutating implementation state."""
+    return ValidationSubject(
+        expected_matrix_sha256=EXPECTED_MATRIX_SHA256,
+        expected_command_identities=copy.deepcopy(EXPECTED_COMMAND_IDENTITIES),
+        expected_profile_sha256=copy.deepcopy(EXPECTED_PROFILE_SHA256),
+    )
 
 
 def strict_json(path: Path) -> dict[str, Any]:
@@ -60,8 +118,7 @@ def canonical_digest(value: Mapping[str, Any]) -> str:
 
 
 def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]:
-    _synchronize_subject()
-    return _impl.validate_document(root, document)
+    return _impl.validate_document(root, document, subject=_subject())
 
 
 def validate(root: Path = ROOT) -> dict[str, Any]:

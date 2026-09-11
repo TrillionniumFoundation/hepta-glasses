@@ -31,6 +31,19 @@ class RequestError(ValueError):
         self.status = status
 
 
+def _reject_json_constant(_value: str) -> None:
+    raise RequestError("invalid_json")
+
+
+def _closed_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise RequestError("duplicate_json_member")
+        result[key] = value
+    return result
+
+
 @dataclass(frozen=True)
 class ChatRequest:
     question: str
@@ -88,11 +101,9 @@ def validate_chat_request(document: Any) -> ChatRequest:
 
 
 def deterministic_answer(request: ChatRequest) -> dict[str, Any]:
-    """Return a non-production deterministic response without logging content."""
+    """Return the same closed response shape consumed by the mobile client."""
     return {
-        "answer": f"Hepta development gateway received {len(request.question)} characters.",
-        "provider": "deterministic-development",
-        "task_id": request.task_id,
+        "answer": f"Hepta development gateway received {len(request.question)} characters."
     }
 
 
@@ -127,7 +138,11 @@ class GatewayHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            document = json.loads(self.rfile.read(length).decode("utf-8"))
+            document = json.loads(
+        self.rfile.read(length).decode("utf-8"),
+        object_pairs_hook=_closed_json_object,
+        parse_constant=_reject_json_constant,
+    )
             request = validate_chat_request(document)
             response = deterministic_answer(request)
         except UnicodeDecodeError:

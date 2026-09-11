@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:demo_ai_even/ble_manager.dart';
-import 'package:demo_ai_even/services/text_service.dart';
+import 'package:hepta_glasses/ble_manager.dart';
+import 'package:hepta_glasses/services/text_service.dart';
 import 'package:flutter/material.dart';
 
 class TextPage extends StatefulWidget {

@@ -1,5 +1,5 @@
-import 'package:demo_ai_even/ble_manager.dart';
-import 'package:demo_ai_even/services/ble.dart';
+import 'package:hepta_glasses/ble_manager.dart';
+import 'package:hepta_glasses/services/ble.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 

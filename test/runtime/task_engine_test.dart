@@ -1,7 +1,7 @@
-import 'package:demo_ai_even/runtime/audit_journal.dart';
-import 'package:demo_ai_even/runtime/clock.dart';
-import 'package:demo_ai_even/runtime/contracts.dart';
-import 'package:demo_ai_even/runtime/task_engine.dart';
+import 'package:hepta_glasses/runtime/audit_journal.dart';
+import 'package:hepta_glasses/runtime/clock.dart';
+import 'package:hepta_glasses/runtime/contracts.dart';
+import 'package:hepta_glasses/runtime/task_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

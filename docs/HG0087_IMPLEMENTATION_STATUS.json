@@ -203,7 +203,7 @@
       "tests": [
         "services/model_gateway/test_speech_custody.py",
         "services/model_gateway/test_speech_ingress.py",
-        "android/app/src/test/kotlin/com/example/demo_ai_even/speech/AndroidPcmAsrTest.kt",
+        "android/app/src/test/kotlin/org/trillionnium/heptaglasses/speech/AndroidPcmAsrTest.kt",
         "test/runtime/model_gateway_test.dart",
         "test/runtime/ios_speech_finalization_contract_test.dart",
         "ios/RunnerTests/RunnerTests.swift"
@@ -217,7 +217,7 @@
       "source_evidence": [
         "services/model_gateway/speech.py",
         "services/model_gateway/speech_ingress.py",
-        "android/app/src/main/kotlin/com/example/demo_ai_even/speech/AndroidPcmAsr.kt"
+        "android/app/src/main/kotlin/org/trillionnium/heptaglasses/speech/AndroidPcmAsr.kt"
       ],
       "operations": [
         "docs/operations/SPEECH_BOOTSTRAP_RUNBOOK.md"

@@ -336,8 +336,18 @@ class ServerProviderBoundaryTests(unittest.TestCase):
 
     def test_canonical_job_matrix_is_unchanged(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
-        self.assertEqual(set(__import__("re").findall(r"^  ([a-z][a-z-]+):$", workflow, __import__("re").M))
-                         - {"workflow-dispatch", "pull-request", "push"}, repository.EXPECTED_CHECKS)
+        self.assertEqual(workflow.count("\njobs:\n"), 1)
+        jobs = workflow.split("\njobs:\n", 1)[1]
+        self.assertEqual(
+            set(
+                __import__("re").findall(
+                    r"^  ([a-z][a-z-]+):$",
+                    jobs,
+                    __import__("re").M,
+                )
+            ),
+            repository.EXPECTED_CHECKS,
+        )
         with patch.object(repository, "ROOT", ROOT):
             repository.validate_exact_head_workflow()
 

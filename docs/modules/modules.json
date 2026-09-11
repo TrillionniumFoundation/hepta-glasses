@@ -138,7 +138,7 @@
       "source_roots": [
         "lib/runtime/audit_journal.dart",
         "lib/runtime/audit_checkpoint_authenticator.dart",
-        "android/app/src/main/kotlin/com/example/demo_ai_even/security/AuditCheckpointSigner.kt",
+        "android/app/src/main/kotlin/org/trillionnium/heptaglasses/security/AuditCheckpointSigner.kt",
         "ios/Runner/AuditCheckpointSigner.swift",
         "lib/runtime/privacy_safe_log.dart"
       ],
@@ -173,7 +173,7 @@
         "lib/runtime/device_hal.dart",
         "lib/runtime/dual_leg_coordinator.dart",
         "lib/services/ble.dart",
-        "android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth",
+        "android/app/src/main/kotlin/org/trillionnium/heptaglasses/bluetooth",
         "ios/Runner/BluetoothManager.swift"
       ],
       "documentation": [
@@ -187,7 +187,7 @@
         "test/runtime/even_g1_transport_authority_test.dart",
         "test/runtime/dual_leg_coordinator_test.dart",
         "ios/RunnerTests/RunnerTests.swift",
-        "android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt"
+        "android/app/src/test/kotlin/org/trillionnium/heptaglasses/model/BlePairDeviceTest.kt"
       ],
       "contracts": [
         "contracts/g1-ble-protocol-v1.json",
@@ -218,7 +218,8 @@
         "docs/MODULE_DEVELOPMENT_GUIDE.md#g1-protocol-features",
         "docs/G1_BLE_CONNECTION.md",
         "docs/development/MODULE_HANDOFF.md#g1-protocol-features",
-        "docs/development/CRITICAL_TEST_DEPTH.md"
+        "docs/development/CRITICAL_TEST_DEPTH.md",
+        "docs/development/G1_PROTOCOL_COMMAND_MATRIX.md"
       ],
       "tests": [
         "test/runtime/bmp_update_manager_test.dart",
@@ -226,11 +227,13 @@
         "test/runtime/tool_effect_semantics_test.dart",
         "test/runtime/packet_codec_test.dart",
         "test/runtime/packet_codec_contract_support.dart",
-        "test/runtime/packet_codec_generated_support.dart"
+        "test/runtime/packet_codec_generated_support.dart",
+        "services/qualification/test_g1_command_matrix.py"
       ],
       "contracts": [
         "contracts/g1-ble-protocol-v1.json",
-        "contracts/conformance/g1-packet-v1.json"
+        "contracts/conformance/g1-packet-v1.json",
+        "contracts/g1-command-matrix-v1.json"
       ],
       "external_gates": [
         "firmware command confirmation, readback support and physical display/notification qualification"
@@ -298,7 +301,7 @@
         "docs/development/MODULE_HANDOFF.md#android-native"
       ],
       "tests": [
-        "android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt",
+        "android/app/src/test/kotlin/org/trillionnium/heptaglasses/model/BlePairDeviceTest.kt",
         "test/runtime/heartbeat_retry_contract_test.dart"
       ],
       "contracts": [
@@ -329,7 +332,8 @@
       ],
       "tests": [
         "ios/RunnerTests/RunnerTests.swift",
-        "test/runtime/ios_speech_finalization_contract_test.dart"
+        "test/runtime/ios_speech_finalization_contract_test.dart",
+        "services/qualification/test_ios_ci.py"
       ],
       "contracts": [
         "contracts/g1-ble-protocol-v1.json",
@@ -951,7 +955,8 @@
       "evidence_ceiling": "CI custody cannot guarantee administrator protection settings, independent approval, physical/deployed evidence or merge authorization.",
       "source_roots": [
         ".github/workflows/ci.yml",
-        "tools/validate_production_authority.py"
+        "tools/validate_production_authority.py",
+        "tools/ios_ci.py"
       ],
       "documentation": [
         "docs/adr/ADR-0005-latest-head-ci-concurrency.md",
@@ -960,7 +965,8 @@
       ],
       "tests": [
         "services/qualification/test_ci_latest_head_custody.py",
-        "tools/validate_production_authority.py"
+        "tools/validate_production_authority.py",
+        "services/qualification/test_ios_ci.py"
       ],
       "contracts": [
         "contracts/release-gates-v1.json",

@@ -1,6 +1,6 @@
 # Durable model gateway and foreground Responses adapter
 
-Status: incremental HG-0087/model source candidate; aggregate and slice OPEN.
+Status: HG-0087/model repository source closed; production deployment and external acceptance remain blocked.
 Owner: ai-platform. Primary source: `services/model_gateway/production.py` and
 `services/model_gateway/responses_provider.py`. Contract:
 `contracts/durable-model-gateway-v2.json`. Operations:
@@ -39,6 +39,25 @@ IDs or externally signed receipts. The answer digest is also a hash. Metadata
 including hashes can still be identifying or susceptible to dictionary attacks;
 it needs access control and operational encryption. A receipt is not evidence
 that the model answer is correct or that an independent authority accepted it.
+
+## Mobile wire admission and privacy boundary
+
+`HttpModelGateway` validates question, task and bounded JSON context before
+credential access. It obtains two consecutive bearer-token snapshots and
+requires one unchanged valid authority value before invoking HTTP. Missing,
+malformed, failing or rotating token providers stop before question or context
+bytes can leave the device merely to receive a later HTTP 401.
+
+The request is limited to 64 KiB, context to 32 KiB and question to 8,000
+characters. Redirects are disabled. The client accepts only HTTP 200 with one
+`application/json` content type, verifies any declared content length, bounds
+the response to 64 KiB and parses strict UTF-8 JSON with duplicate-member
+rejection. The response shape is exactly `{"answer": <non-empty string>}`.
+Unknown response fields and error-body text are not admitted into the answer.
+
+These controls establish a source-level fail-before-egress boundary. They do
+not prove production identity, token issuance, provider tenancy, retention,
+regional processing, billing, accuracy or live revocation latency.
 
 ## State and concurrency
 
@@ -184,12 +203,12 @@ The local event table is diagnostic, not an externally witnessed log.
 The gateway requires trusted local SQLite storage; the concrete adapter requires
 Python HTTP/TLS and system trust roots. It is not a multi-region database, signed
 mobile enrollment flow, platform attestation verifier or provider qualification.
-HG-0087/model remains OPEN for authenticated ingress/mobile/session integration,
-real provider tenancy and retention/billing/abuse qualification, remote cancellation
-and authoritative recovery, service isolation, encrypted metadata custody,
-production observability and independent acceptance. Other slices and all
-external/product gates remain unchanged. Keep PR #101 Draft, no self-approval,
-merge, deployment, release or protection bypass.
+HG-0087/model is closed only at the repository-source layer. Authenticated
+production ingress, real provider tenancy, retention/billing/abuse qualification,
+remote cancellation and authoritative recovery, service isolation, encrypted
+metadata custody, production observability and independent acceptance remain
+external deployment gates. No source result authorizes self-approval, merge,
+deployment, release or protection bypass.
 
 ### Primary implementation references (checked 2026-09-05)
 

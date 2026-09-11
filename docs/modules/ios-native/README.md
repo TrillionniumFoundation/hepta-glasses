@@ -1,6 +1,6 @@
 # `ios-native` module engineering handoff
 
-Canonical registry digest: `4f3b1d3fe1591f56800ccd0e4118546324734734a26ca89f78f4f4ff6e8d80e6`
+Canonical registry digest: `a5dfc1065fcb6d6f6eedc6a0d0c3a985ce3a4991363eb346c5ffa35c6e619cd7`
 
 Owner: `ios`
 
@@ -55,6 +55,7 @@ The registered executable verification surfaces are:
 
 - `ios/RunnerTests/RunnerTests.swift`
 - `test/runtime/ios_speech_finalization_contract_test.dart`
+- `services/qualification/test_ios_ci.py`
 
 Tests prove only their declared environment and assertions. Operational acceptance additionally requires bounded logs, privacy-safe traces, stable error classes, relevant SLO measurements, rollback/recovery procedures, and exact candidate identity. Module owners must record negative-path evidence, not only successful examples.
 

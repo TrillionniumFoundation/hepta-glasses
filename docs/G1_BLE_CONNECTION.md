@@ -64,7 +64,7 @@ G1 Left BLE + G1 Right BLE
 1. 校验蓝牙和运行时权限并扫描。
 2. 对左右设备分别 `connectGatt(autoConnect=false)`。
 3. 发现 UART service、读特征、写特征和 CCCD；缺失任一项即失败关闭。
-4. CCCD 写成功后请求 MTU 251；实际 MTU 必须至少为 203。
+4. CCCD 写成功后请求 MTU 251；固定 202 字节通知还需 3 字节 ATT opcode/handle 开销，因此实际 MTU 必须至少为 205。
 5. 初始化写入 `[0xF4, 0x01]` 被原生 API 接受后，该腿才标记 ready。
 6. 左右腿都 ready 后才上报 `glassesConnected`。
 
@@ -229,8 +229,8 @@ Flutter 停止 pair heartbeat，按 side 失败关闭 pending 请求，并发布
 - `lib/services/ble.dart`
 - `lib/services/proto.dart`
 - `lib/services/evenai.dart`
-- `android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt`
-- `android/app/src/main/kotlin/com/example/demo_ai_even/model/BleDevice.kt`
+- `android/app/src/main/kotlin/org/trillionnium/heptaglasses/bluetooth/BleManager.kt`
+- `android/app/src/main/kotlin/org/trillionnium/heptaglasses/model/BleDevice.kt`
 - `ios/Runner/BluetoothManager.swift`
 - `ios/Runner/SpeechStreamRecognizer.swift`
 - `contracts/g1-ble-protocol-v1.json`

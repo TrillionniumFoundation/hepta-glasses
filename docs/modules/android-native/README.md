@@ -1,6 +1,6 @@
 # `android-native` module engineering handoff
 
-Canonical registry digest: `8a742345f911ccda8f0068fa833fc1217fa573695c996f3366331820b8dc249a`
+Canonical registry digest: `b13cfb6e16ca9bf35370741dd0f7a2371cd2175677e2df54201878e651486ef9`
 
 Owner: `android`
 
@@ -55,7 +55,7 @@ Configuration and migration are source objects. Dependency, toolchain, schema, p
 
 The registered executable verification surfaces are:
 
-- `android/app/src/test/kotlin/com/example/demo_ai_even/model/BlePairDeviceTest.kt`
+- `android/app/src/test/kotlin/org/trillionnium/heptaglasses/model/BlePairDeviceTest.kt`
 - `test/runtime/heartbeat_retry_contract_test.dart`
 
 Tests prove only their declared environment and assertions. Operational acceptance additionally requires bounded logs, privacy-safe traces, stable error classes, relevant SLO measurements, rollback/recovery procedures, and exact candidate identity. Module owners must record negative-path evidence, not only successful examples.

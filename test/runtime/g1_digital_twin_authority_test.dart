@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
-import 'package:demo_ai_even/runtime/device_hal.dart';
-import 'package:demo_ai_even/simulator/g1_digital_twin.dart';
+import 'package:hepta_glasses/runtime/device_hal.dart';
+import 'package:hepta_glasses/simulator/g1_digital_twin.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

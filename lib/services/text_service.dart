@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:demo_ai_even/runtime/contracts.dart';
-import 'package:demo_ai_even/runtime/hepta_runtime.dart';
-import 'package:demo_ai_even/services/evenai.dart';
+import 'package:hepta_glasses/runtime/contracts.dart';
+import 'package:hepta_glasses/runtime/hepta_runtime.dart';
+import 'package:hepta_glasses/services/evenai.dart';
 
 class TextService {
   TextService._();

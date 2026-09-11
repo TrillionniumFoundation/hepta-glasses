@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:demo_ai_even/runtime/canonical_json.dart';
+import 'package:hepta_glasses/runtime/canonical_json.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

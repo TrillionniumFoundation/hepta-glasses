@@ -1,10 +1,10 @@
-package com.example.demo_ai_even
+package org.trillionnium.heptaglasses
 
 import android.os.Bundle
 import android.util.Log
-import com.example.demo_ai_even.bluetooth.BleChannelHelper
-import com.example.demo_ai_even.bluetooth.BleManager
-import com.example.demo_ai_even.cpp.Cpp
+import org.trillionnium.heptaglasses.bluetooth.BleChannelHelper
+import org.trillionnium.heptaglasses.bluetooth.BleManager
+import org.trillionnium.heptaglasses.cpp.Cpp
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel

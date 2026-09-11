@@ -261,7 +261,7 @@ Swift | `swift` | yes
                 "step": "Install locked CocoaPods dependencies",
                 "command": "cd ios && pod install --deployment",
                 "git_blob_sha1": (
-                    "7624aaf9cafa5bfef6b55f91d714bf50bb5c92ee"
+                    "acba2d45c574a60342d2bd2af8444bc277d9a9e8"
                 ),
             },
         )

@@ -41,7 +41,7 @@ The local platform glue is separately bound:
 | File | Import blob | Current blob | Status |
 |---|---|---|---|
 | `android/app/src/main/cpp/CMakeLists.txt` | `394b4dafe5580accb2f68534c5c0efe485dc8bf8` | same | unchanged |
-| `android/app/src/main/cpp/liblc3.cpp` | `fd34bf16a328bcfddaa0bed68c02bcd61608fa3d` | `0a3f0d44951ed98d3f8a861ebc2927afc3a97dda` | local integration delta |
+| `android/app/src/main/cpp/liblc3.cpp` | `fd34bf16a328bcfddaa0bed68c02bcd61608fa3d` | `64e2db84e12ba87eddf8eeef8c0e74c0cebc2f78` | local integration delta |
 | `ios/Runner/PcmConverter.h` | `cfb6d66245fd0d21cd07d3364867759e14faf6ec` | `032f2cdaad48de92b07210eede61f9e12a6aa895` | local integration delta |
 | `ios/Runner/PcmConverter.m` | `00745d79760f747cf8b29c2886c34fa5aa6d2865` | `cae05470c2313980fc535a0b2d6ca4c1e40e6c4f` | local integration delta |
 | `ios/Runner/Runner-Bridging-Header.h` | `4754a9fdc22deba7de475615aa89c1d185cafee9` | same | unchanged |
