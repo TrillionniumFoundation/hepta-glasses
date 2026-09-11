@@ -1,0 +1,120 @@
+name: hepta-p0-publisher-once
+
+on:
+  push:
+    branches:
+      - codex/hepta-p0-publisher-20260911
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hepta-p0-publisher-once
+  cancel-in-progress: false
+
+jobs:
+  publish-clean-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BASE_SHA: 73c8b2f7204b7aa726f2e1d8932dc7cd22ddf648
+      EXPECTED_TREE: 057c9ca71ee8011d2c42cf9e6f83e40f6982c80c
+      READY_BRANCH: codex/hepta-p0-ready-20260911
+      HELPER_BRANCH: codex/hepta-p0-publisher-20260911
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify and reconstruct the content-addressed patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "$HELPER_BRANCH"
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          printf '%s  %s\n' \
+            654bfa954a8b3a286ce529c8cf22a08f939957c906ea90ade08599b5a5de1f9c .publisher/p0.patch.b64.00 \
+            06e1b94aaf9be3ce35e07bf9438d4c1e43a854c2ffeee9830f5a71e6cd4f6c4e .publisher/p0.patch.b64.01 \
+            a2d9ce562b7413acb9c2a69178c52942646522f3f691b2e13d9737b6d1de1c18 .publisher/p0.patch.b64.02 \
+            b68dd405926a631c808aee44a1b1b2fc8cbe47cfd9e8db4d040ee5f2423ca801 .publisher/p0.patch.b64.03 \
+            7deb3dab03886335cad0d168a770e2f5ae427a96e5fcfbea5def852bfaa4a212 .publisher/p0.patch.b64.04 \
+            891122b132d2fb6a3bcd90fbe2e27dec6611b4a55f742d3fc0079dfd10c3d49d .publisher/p0.patch.b64.05 \
+            | sha256sum -c -
+          cat .publisher/p0.patch.b64.* > /tmp/p0.patch.gz.b64
+          base64 --decode /tmp/p0.patch.gz.b64 > /tmp/p0.patch.gz
+          printf '%s  %s\n' \
+            29d0abdca67af88f40b9bc098b791cee14cb9ea79ee97cad115e0c52402b7949 /tmp/p0.patch.gz \
+            | sha256sum -c -
+          gzip --decompress --stdout /tmp/p0.patch.gz > /tmp/p0.patch
+          printf '%s  %s\n' \
+            57573774a3f5a8febc176264bf5923023b6b575f68ee9cfbf8cce7b96dd023cd /tmp/p0.patch \
+            | sha256sum -c -
+      - name: Apply and verify the clean P0 source object
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --detach "$BASE_SHA"
+          git apply --index /tmp/p0.patch
+          expected="$(cat <<'EOF' | LC_ALL=C sort
+          .github/workflows/ci.yml
+          contracts/g1-command-matrix-v1.json
+          docs/development/G1_PROTOCOL_COMMAND_MATRIX.md
+          docs/modules/g1-protocol-features/README.md
+          docs/modules/ios-native/README.md
+          docs/modules/latest-head-ci-custody/README.md
+          docs/modules/modules.json
+          services/qualification/g1_command_matrix.py
+          services/qualification/g1_command_matrix_impl.py
+          services/qualification/test_dependency_automation.py
+          services/qualification/test_g1_command_matrix.py
+          services/qualification/test_ios_ci.py
+          tools/ios_ci.py
+          tools/native/dependency_update_policy.py
+          EOF
+          )"
+          actual="$(git diff --cached --name-only | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+          git diff --cached --check
+          test "$(git write-tree)" = "$EXPECTED_TREE"
+          test ! -e .publisher
+          test ! -e .github/workflows/hepta-p0-publisher-once.yml
+      - name: Run repository-actionable P0 validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/validate_repository.py
+          python3 tools/validate_repository_metadata.py
+          python3 tools/validate_production_authority.py
+          python3 tools/native/dependency_update_policy.py --check-dependabot-contract
+          python3 tools/generate_module_docs.py --check
+          python3 tools/validate_module_semantics.py
+          python3 -m unittest \
+            services.qualification.test_ios_ci \
+            services.qualification.test_g1_command_matrix \
+            services.qualification.test_dependency_automation \
+            services.qualification.test_module_semantic_docs \
+            services.qualification.test_source_coverage \
+            services.qualification.test_ci_latest_head_custody
+          python3 -m unittest discover -s adapters -p 'test_*.py'
+          python3 -m compileall -q services adapters tools
+          test "$(git write-tree)" = "$EXPECTED_TREE"
+      - name: Publish one clean linear commit to the ready branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin "refs/heads/$READY_BRANCH" >/dev/null 2>&1; then
+            echo "Ready branch already exists; refusing to overwrite it" >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(p0): close iOS CI and G1 validation blockers" \
+            -m "Use structured simulator selection with non-empty XCTest proof; make the G1 matrix validator a single immutable authority; bind source and tests by exact content, scopes, selectors and CI jobs with hostile decoy coverage."
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_TREE"
+          git push origin "HEAD:refs/heads/$READY_BRANCH"
+      - name: Retire the transient publisher branch
+        if: success()
+        shell: bash
+        run: |
+          git push origin --delete "$HELPER_BRANCH" || true
