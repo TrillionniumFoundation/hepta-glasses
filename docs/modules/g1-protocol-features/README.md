@@ -1,6 +1,6 @@
 # `g1-protocol-features` module engineering handoff
 
-Canonical registry digest: `48121f6689c4154ad716299a1c3066347eb97867feb5917e89a0d17d907dca5c`
+Canonical registry digest: `fa476f74ab73fe2c851e7484b10708c63dce467d4d4ba92827db0c7b6fcac44c`
 
 Owner: `device-runtime`
 
@@ -34,6 +34,7 @@ The primary engineering description is `docs/MODULE_DEVELOPMENT_GUIDE.md#g1-prot
 
 - `contracts/g1-ble-protocol-v1.json`
 - `contracts/conformance/g1-packet-v1.json`
+- `contracts/g1-command-matrix-v1.json`
 
 The following documentation forms the reviewed human interface. A contract, schema, command, channel, API, storage layout, or externally visible behavior change must update every affected reference in the same candidate:
 
@@ -41,6 +42,7 @@ The following documentation forms the reviewed human interface. A contract, sche
 - `docs/G1_BLE_CONNECTION.md`
 - `docs/development/MODULE_HANDOFF.md#g1-protocol-features`
 - `docs/development/CRITICAL_TEST_DEPTH.md`
+- `docs/development/G1_PROTOCOL_COMMAND_MATRIX.md`
 
 ## 3. State, concurrency, and cancellation
 
@@ -64,6 +66,7 @@ The registered executable verification surfaces are:
 - `test/runtime/packet_codec_test.dart`
 - `test/runtime/packet_codec_contract_support.dart`
 - `test/runtime/packet_codec_generated_support.dart`
+- `services/qualification/test_g1_command_matrix.py`
 
 Tests prove only their declared environment and assertions. Operational acceptance additionally requires bounded logs, privacy-safe traces, stable error classes, relevant SLO measurements, rollback/recovery procedures, and exact candidate identity. Module owners must record negative-path evidence, not only successful examples.
 

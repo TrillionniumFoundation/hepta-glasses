@@ -169,41 +169,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          DEVICE_ID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; print(next((device["udid"] for runtime in sorted(devices, reverse=True) for device in devices[runtime] if device.get("isAvailable") and device.get("name", "").startswith("iPhone")), ""))')"
-          destination=""
-          if [ -n "$DEVICE_ID" ]; then
-            xcrun simctl boot "$DEVICE_ID" || true
-            xcrun simctl bootstatus "$DEVICE_ID" -b || true
-            for attempt in 1 2 3 4 5 6; do
-              xcodebuild -showdestinations \
-                -workspace ios/Runner.xcworkspace \
-                -scheme Runner > /tmp/hepta-ios-destinations.txt
-              if grep -Fq "id:$DEVICE_ID" /tmp/hepta-ios-destinations.txt; then
-                destination="platform=iOS Simulator,id=$DEVICE_ID"
-                break
-              fi
-              sleep 10
-            done
-          fi
-          if [ -z "$destination" ]; then
-            xcodebuild -showdestinations \
-              -workspace ios/Runner.xcworkspace \
-              -scheme Runner > /tmp/hepta-ios-destinations.txt
-            if grep -Fq "variant:Designed for [iPad,iPhone]" \
-              /tmp/hepta-ios-destinations.txt; then
-              destination="platform=macOS,arch=arm64,variant=Designed for [iPad,iPhone]"
-            else
-              cat /tmp/hepta-ios-destinations.txt >&2
-              echo "No executable Apple test destination is available" >&2
-              exit 1
-            fi
-          fi
+          python3 tools/ios_ci.py validate-inventory --root .
+          destination="$(
+            xcrun simctl list devices available -j \
+              | python3 tools/ios_ci.py select-destination
+          )"
+          DEVICE_ID="${destination##*=}"
+          xcrun simctl boot "$DEVICE_ID" || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          result_bundle="build/ios/RunnerTests.xcresult"
+          rm -rf "$result_bundle"
           xcodebuild test \
             -workspace ios/Runner.xcworkspace \
             -scheme Runner \
             -configuration Debug \
             -destination "$destination" \
+            -only-testing:RunnerTests \
+            -resultBundlePath "$result_bundle" \
             CODE_SIGNING_ALLOWED=NO
+          xcrun xcresulttool get test-results summary \
+            --path "$result_bundle" \
+            --format json > /tmp/hepta-ios-test-summary.json
+          python3 tools/ios_ci.py validate-result \
+            --input /tmp/hepta-ios-test-summary.json
       - name: Prove iOS qualification is read-only
         run: git diff --exit-code
 

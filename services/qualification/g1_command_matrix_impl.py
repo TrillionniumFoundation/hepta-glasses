@@ -3,17 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import stat
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping
 ROOT = Path(__file__).resolve().parents[2]
 MATRIX = Path('contracts/g1-command-matrix-v1.json')
 BASE_CONTRACT = Path('contracts/g1-ble-protocol-v1.json')
 HEX_BYTE = re.compile('^0x[0-9A-F]{2}$')
-EXPECTED_MATRIX_SHA256 = '3142b741fb1ba9f94064a22c31e3cb0db5276b4aa47791f7951aa28b02b99450'
-EXPECTED_COMMAND_IDENTITIES = {'bitmap_crc': {'aggregation': 'staged_single_leg_transfer', 'command': '0x16', 'direction': 'phone_to_glasses_request', 'operation_kind': 'mutating_command', 'target': 'active_bitmap_leg'}, 'bitmap_finish': {'aggregation': 'staged_single_leg_transfer', 'command': '0x20', 'direction': 'phone_to_glasses_request', 'operation_kind': 'mutating_command', 'target': 'active_bitmap_leg'}, 'bitmap_packet': {'aggregation': 'staged_single_leg_transfer', 'command': '0x15', 'direction': 'phone_to_glasses_request', 'operation_kind': 'mutating_command', 'target': 'active_bitmap_leg'}, 'display_text_and_ai': {'aggregation': 'pair_all_legs_required', 'command': '0x4E', 'direction': 'phone_to_glasses_request', 'operation_kind': 'mutating_command', 'target': 'pair_left_then_right'}, 'exit_mode': {'aggregation': 'pair_all_legs_required', 'command': '0x18', 'direction': 'phone_to_glasses_request', 'operation_kind': 'mutating_command', 'target': 'pair_left_then_right'}, 'heartbeat': {'aggregation': 'pair_all_legs_required', 'command': '0x25', 'direction': 'phone_to_glasses_request', 'operation_kind': 'mutating_command', 'target': 'pair_left_then_right'}, 'microphone_data': {'aggregation': 'stream_append', 'command': '0xF1', 'direction': 'glasses_to_phone_event', 'operation_kind': 'stream_event', 'target': 'right_leg_only'}, 'microphone_on': {'aggregation': 'single_leg', 'command': '0x0E', 'direction': 'phone_to_glasses_request', 'operation_kind': 'mutating_command', 'target': 'selected_leg_default_right'}, 'notification': {'aggregation': 'single_leg_fragmented', 'command': '0x4B', 'direction': 'phone_to_glasses_request', 'operation_kind': 'mutating_command', 'target': 'left_leg'}, 'notification_whitelist': {'aggregation': 'single_leg_fragmented', 'command': '0x04', 'direction': 'phone_to_glasses_request', 'operation_kind': 'mutating_command', 'target': 'left_leg'}, 'serial_number_read': {'aggregation': 'single_leg', 'command': '0x34', 'direction': 'phone_to_glasses_request', 'operation_kind': 'read_query', 'target': 'selected_leg'}, 'touch_and_assistant_event': {'aggregation': 'event_dispatch', 'command': '0xF5', 'direction': 'glasses_to_phone_event', 'operation_kind': 'control_event', 'target': 'originating_leg'}}
-EXPECTED_PROFILE_SHA256 = {'bitmap_crc': 'a2b26241084d81b60505df7942ef3e24c2299ba0deb0fcbeb7a489c1df884b86', 'bitmap_finish': '58b62ed2f01d99cb68b4ceac66434b1590bf106fdfe355ffbceff5af50b82462', 'bitmap_packet': '6bdd4ee3d9e4a332948dd51bdf8a44286a9272038fb3157e97ca6fdd75bbdea9', 'display_text_and_ai': '6a54c270eb184a46d2be2c27ee4d8d67c3a1ec7a77313a1d33e7289dc8e0611d', 'exit_mode': '8f13708b834379524dc08ef94edbdef1844581912c741d3fd67a8844c5718ae8', 'heartbeat': 'f770f55d97d8cbb8361647203506b1e648bde3d59b9c1690a2af891fa4e073ea', 'microphone_data': 'e8b0db8625460a73de36d83588d502aadd26ebdcfa84fe1551f88779851c5f70', 'microphone_on': '6c5c136f1870f8298755d589db044b35313f0e2929bc40adb9aa9c2f6d487397', 'notification': '9016d6774f414f789c90d7a2cd2306c2be2cc2a66bc27b808d9dd2c06d4ecefe', 'notification_whitelist': '66586833d1a8be478407824c16a215b8555d5b2c9daa3ec8f0aefc00c9bc79cf', 'serial_number_read': '7ee42e7ad6e59e41bf29ced949b14a3a029bd60ae8fc31b185d6723c5a08bfc2', 'touch_and_assistant_event': 'c49638d59d9f00cc25b23ff32be85d55018f89ba9e1ece4cb0f4ffc63ba3ca36'}
-EXPECTED_SOURCE_BINDINGS = {'android-audio-frame': {'path': 'android/app/src/main/kotlin/org/trillionnium/heptaglasses/bluetooth/BleManager.kt', 'required_fragments': ['const val REQUIRED_MTU = 205', 'private const val REQUESTED_MTU = 251', 'byteArrayOf(0xf4.toByte(), 0x01)', 'frame[0] == 0xF1.toByte()', 'side != "R" || frame.size != 202', 'frame.copyOfRange(2, 202)']}, 'bitmap-producer-consumer': {'path': 'lib/controllers/bmp_update_manager.dart', 'required_fragments': ['packetPayloadLength = 194', 'maximumPacketCount = 256', '<int>[0x00, 0x1c, 0x00, 0x00]', 'const <int>[0x20, 0x0d, 0x0e]', 'response.data.length >= 2', 'response.data[1] == 0xc9', 'response.data.length >= 6', 'response.data[5] == 0xc9', 'return DeviceEffectResult.indeterminate(']}, 'ble-correlation-and-events': {'path': 'lib/ble_manager.dart', 'required_fragments': ['if (command == 0xF5 && response.data.length > 1)', 'case 0:', 'case 1:', 'case 23:', 'case 24:', 'BleRequestKey(', 'generation: generation,', 'side: response.lr,', 'command: command,']}, 'ble-correlation-and-timeout': {'path': 'lib/ble_manager.dart', 'required_fragments': ["'ack_timeout_after_native_write'", 'effectMayHaveOccurred: true', 'response.effectMayHaveOccurred', "'retry_budget_exhausted_before_write'"]}, 'display-packet-producer': {'path': 'lib/services/evenai_proto.dart', 'required_fragments': ['int len = 191', 'byteData.setInt16(0, pos, Endian.big);', 'currentPageNumber,', 'maxPageNumber,']}, 'ios-audio-frame': {'path': 'ios/Runner/BluetoothManager.swift', 'required_fragments': ['Data([0x4d, 0x01])', 'guard data.count == 202 else { return }', 'data.subdata(in: 2..<data.count)', 'guard compressed.count == 200 else { return }', 'guard pcm.count == 3_200 else { return }']}, 'proto-command-producers': {'path': 'lib/services/proto.dart', 'required_fragments': ['Uint8List.fromList(<int>[0x0E, 0x01])', 'EvenaiProto.evenaiMultiPackListV2(', 'const length = 6;', 'Uint8List.fromList(<int>[0x18])', 'Uint8List.fromList(<int>[0x34])', 'count: 180,', 'const payloadBytes = 176;', 'if (packetCount > 255)']}, 'proto-effect-state-machine': {'path': 'lib/services/proto.dart', 'required_fragments': ['if (response.effectMayHaveOccurred) {', "'ack_missing_after_native_write'", 'if (response.isTimeout) {', "'request_rejected_before_write'", "'negative_or_malformed_ack_after_write'", "'dual_leg_partial_effect_indeterminate'", "'packet_sequence_partial_effect_indeterminate'"]}, 'proto-status-predicates': {'path': 'lib/services/proto.dart', 'required_fragments': ['data.length > 1 && (data[1] == 0xc9 || data[1] == 0xcb)', 'response.data.length > 5', 'response.data[0] == 0x25', 'response.data[4] == 0x04']}}
-EXPECTED_SOURCE_BINDING_IDS = sorted(EXPECTED_SOURCE_BINDINGS)
 BASE_COMMAND_KEYS = {'microphone_on': 'microphone', 'microphone_data': 'microphone_data', 'touch_and_assistant_event': 'touch_and_assistant_event', 'display_text_and_ai': 'display_text_and_ai', 'bitmap_packet': 'bitmap_packet', 'bitmap_finish': 'bitmap_finish', 'bitmap_crc': 'bitmap_crc', 'heartbeat': 'heartbeat', 'exit_mode': 'exit_mode', 'notification_whitelist': 'notification_whitelist', 'notification': 'notification'}
 TOP_FIELDS = {'schema_version', 'contract_id', 'status', 'transport', 'platform_initialization', 'response_status', 'assistant_events', 'source_bindings', 'commands', 'cross_platform_invariants', 'external_gates'}
 COMMAND_FIELDS = {'id', 'command', 'direction', 'operation_kind', 'target', 'aggregation', 'frame', 'response', 'effect', 'readback', 'source_binding_ids', 'tests', 'external_gates', 'producer_examples', 'consumer_examples'}
@@ -24,12 +21,34 @@ CHECK_FIELDS = {'kind', 'offset', 'values'}
 EFFECT_FIELDS = {'pre_write_rejection', 'post_write_timeout', 'malformed_response', 'negative_response', 'partial_progress', 'automatic_retry', 'manual_retry'}
 READBACK_FIELDS = {'kind', 'authoritative_for_mutated_state', 'scope'}
 EXAMPLE_FIELDS = {'name', 'position', 'bytes'}
-SOURCE_BINDING_FIELDS = {'id', 'path', 'required_fragments'}
+SOURCE_BINDING_FIELDS = {'id', 'path', 'blob_sha256', 'scopes'}
+SOURCE_SCOPE_FIELDS = {'kind', 'name', 'checks'}
+SOURCE_CHECK_FIELDS = {'id', 'tokens', 'occurrences'}
+TEST_REFERENCE_FIELDS = {'path', 'blob_sha256', 'framework', 'selectors', 'ci_job'}
+SOURCE_SCOPE_KINDS = {'type'}
+TEST_FRAMEWORKS = {'dart_test', 'swift_xctest', 'workflow_executable'}
+TEST_CI_JOBS = {'flutter', 'ios-native', 'native-sanitizers'}
 REQUEST_DIRECTIONS = {'phone_to_glasses_request'}
 EVENT_DIRECTIONS = {'glasses_to_phone_event'}
 REQUEST_OPERATIONS = {'mutating_command', 'read_query'}
 EVENT_OPERATIONS = {'stream_event', 'control_event'}
 CHECK_KINDS = {'byte_equals', 'byte_in'}
+
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationSubject:
+    """Explicit immutable-by-reference subject for one validation invocation.
+
+    The implementation module contains no repository-specific digest or source
+    binding authority.  The single public facade constructs this value and
+    passes it explicitly, so import order cannot change validation semantics.
+    """
+
+    expected_matrix_sha256: str
+    expected_command_identities: Mapping[str, Mapping[str, str]]
+    expected_profile_sha256: Mapping[str, str]
+
 
 class G1CommandMatrixError(ValueError):
     """Stable G1 command-matrix validation failure."""
@@ -95,6 +114,12 @@ def string_list(value: Any, label: str, *, non_empty: bool=True) -> list[str]:
             fail(f'{label} contains duplicate {text!r}')
         result.append(text)
     return result
+
+def string_sequence(value: Any, label: str, *, non_empty: bool=True) -> list[str]:
+    """Validate an ordered string sequence while allowing repeated tokens."""
+    if not isinstance(value, list) or (non_empty and not value):
+        fail(f'{label} must be a string sequence')
+    return [string(item, f'{label}[{index}]') for index, item in enumerate(value)]
 
 def repository_file(root: Path, value: Any, label: str) -> Path:
     relative = string(value, label)
@@ -302,7 +327,8 @@ def validate_command(command: Mapping[str, Any], label: str) -> None:
         fail(f'{label} readback authority must be boolean')
     string(readback['scope'], f'{label}.readback.scope')
     string_list(command['source_binding_ids'], f'{label}.source_binding_ids')
-    string_list(command['tests'], f'{label}.tests')
+    if not isinstance(command['tests'], list) or not command['tests']:
+        fail(f'{label}.tests must be a non-empty test-binding list')
     string_list(command['external_gates'], f'{label}.external_gates')
     producers = command['producer_examples']
     consumers = command['consumer_examples']
@@ -332,6 +358,204 @@ def validate_command(command: Mapping[str, Any], label: str) -> None:
                 fail(f'{label} event example has the wrong position')
             validate_frame_example(frame, example, f'{label}.consumer_examples[{index}]')
 
+@dataclass(frozen=True, slots=True)
+class LexToken:
+    value: str
+    start: int
+    end: int
+
+
+def _string_token(content: str) -> str:
+    return 'STRING:' + content
+
+
+def lex_source(text: str) -> list[LexToken]:
+    """Tokenize Dart/Kotlin/Swift source while discarding comments.
+
+    String literals are emitted as one token containing only their literal
+    payload.  Consequently a whole code fragment hidden inside a comment or
+    string cannot satisfy a multi-token source binding.
+    """
+    result: list[LexToken] = []
+    index = 0
+    length = len(text)
+    multi = ('===', '!==', '>>>', '<<=', '>>=', '=>', '>=', '<=', '==', '!=',
+             '&&', '||', '??', '?.', '..<', '...', '++', '--', '+=', '-=', '*=',
+             '/=', '%=', '::', '->', '<<', '>>')
+    while index < length:
+        char = text[index]
+        if char.isspace():
+            index += 1
+            continue
+        if text.startswith('//', index):
+            newline = text.find('\n', index + 2)
+            index = length if newline < 0 else newline + 1
+            continue
+        if text.startswith('/*', index):
+            depth = 1
+            cursor = index + 2
+            while cursor < length and depth:
+                if text.startswith('/*', cursor):
+                    depth += 1
+                    cursor += 2
+                elif text.startswith('*/', cursor):
+                    depth -= 1
+                    cursor += 2
+                else:
+                    cursor += 1
+            if depth:
+                fail('unterminated block comment in bound source')
+            index = cursor
+            continue
+
+        raw_prefix = (
+            char in {'r', 'R'}
+            and index + 1 < length
+            and text[index + 1] in {'\'', '"'}
+            and (index == 0 or not (text[index - 1].isalnum() or text[index - 1] in {'_', '$'}))
+        )
+        quote_index = index + 1 if raw_prefix else index
+        if text[quote_index] in {'\'', '"'}:
+            quote = text[quote_index]
+            triple = text.startswith(quote * 3, quote_index)
+            delimiter = quote * (3 if triple else 1)
+            cursor = quote_index + len(delimiter)
+            content_start = cursor
+            escaped = False
+            while cursor < length:
+                if not raw_prefix and not triple and escaped:
+                    escaped = False
+                    cursor += 1
+                    continue
+                if not raw_prefix and not triple and text[cursor] == '\\':
+                    escaped = True
+                    cursor += 1
+                    continue
+                if text.startswith(delimiter, cursor):
+                    content = text[content_start:cursor]
+                    end_index = cursor + len(delimiter)
+                    result.append(LexToken(_string_token(content), index, end_index))
+                    index = end_index
+                    break
+                cursor += 1
+            else:
+                fail('unterminated string literal in bound source')
+            continue
+
+        if char.isalpha() or char in {'_', '$'}:
+            cursor = index + 1
+            while cursor < length and (
+                text[cursor].isalnum() or text[cursor] in {'_', '$'}
+            ):
+                cursor += 1
+            result.append(LexToken(text[index:cursor], index, cursor))
+            index = cursor
+            continue
+        if char.isdigit():
+            cursor = index + 1
+            while cursor < length and (
+                text[cursor].isalnum() or text[cursor] in {'_', '.'}
+            ):
+                cursor += 1
+            result.append(LexToken(text[index:cursor], index, cursor))
+            index = cursor
+            continue
+        operator = next((value for value in multi if text.startswith(value, index)), None)
+        if operator is not None:
+            result.append(LexToken(operator, index, index + len(operator)))
+            index += len(operator)
+            continue
+        result.append(LexToken(char, index, index + 1))
+        index += 1
+    return result
+
+
+def token_values(text: str) -> list[str]:
+    return [token.value for token in lex_source(text)]
+
+
+def _matching_brace(tokens: list[LexToken], opening: int) -> int:
+    depth = 0
+    for index in range(opening, len(tokens)):
+        if tokens[index].value == '{':
+            depth += 1
+        elif tokens[index].value == '}':
+            depth -= 1
+            if depth == 0:
+                return index
+    fail('unterminated source scope')
+
+
+def _type_scope(tokens: list[LexToken], name: str) -> tuple[int, int]:
+    declaration_kinds = {'class', 'object', 'struct', 'enum', 'extension', 'mixin', 'protocol'}
+    candidates: list[tuple[int, int]] = []
+    for index, token in enumerate(tokens):
+        if token.value != name:
+            continue
+        if index == 0 or tokens[index - 1].value not in declaration_kinds:
+            continue
+        opening = next(
+            (cursor for cursor in range(index + 1, min(len(tokens), index + 40))
+             if tokens[cursor].value == '{'),
+            None,
+        )
+        if opening is None:
+            continue
+        candidates.append((opening, _matching_brace(tokens, opening)))
+    if len(candidates) != 1:
+        fail(f'type scope {name!r} is not uniquely declared')
+    return candidates[0]
+
+
+def _subsequence_positions(values: list[str], expected: list[str]) -> list[int]:
+    if not expected or len(expected) > len(values):
+        return []
+    width = len(expected)
+    return [
+        index
+        for index in range(0, len(values) - width + 1)
+        if values[index:index + width] == expected
+    ]
+
+
+def _static_false_ancestors(values: list[str]) -> list[set[int]]:
+    ancestors: list[set[int]] = []
+    stack: list[tuple[int, bool]] = []
+    for index, value in enumerate(values):
+        ancestors.append({opening for opening, dead in stack if dead})
+        if value == '{':
+            prefix = values[max(0, index - 5):index]
+            dead = any(
+                prefix[-len(pattern):] == pattern
+                for pattern in (
+                    ['if', '(', 'false', ')'],
+                    ['if', '(', '0', ')'],
+                    ['while', '(', 'false', ')'],
+                    ['while', '(', '0', ')'],
+                )
+                if len(prefix) >= len(pattern)
+            )
+            stack.append((index, dead or any(parent_dead for _, parent_dead in stack)))
+        elif value == '}':
+            if not stack:
+                fail('unbalanced closing brace in bound source')
+            stack.pop()
+    if stack:
+        fail('unbalanced opening brace in bound source')
+    return ancestors
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _hex_digest(value: Any, label: str) -> str:
+    digest = string(value, label)
+    if re.fullmatch(r'[0-9a-f]{64}', digest) is None:
+        fail(f'{label} must be a lowercase SHA-256 digest')
+    return digest
+
+
 def validate_source_bindings(root: Path, value: Any) -> dict[str, Mapping[str, Any]]:
     if not isinstance(value, list):
         fail('source_bindings must be a list')
@@ -343,23 +567,151 @@ def validate_source_bindings(root: Path, value: Any) -> dict[str, Mapping[str, A
         identifier = string(binding['id'], f'source_bindings[{index}].id')
         if identifier in result:
             fail(f'duplicate source binding id: {identifier}')
-        expected = EXPECTED_SOURCE_BINDINGS.get(identifier)
-        if expected is None or binding != {'id': identifier, **expected}:
-            fail(f'{identifier} source binding drifted')
         path = repository_file(root, binding['path'], f'{identifier}.path')
-        fragments = string_list(binding['required_fragments'], f'{identifier}.required_fragments')
+        expected_blob = _hex_digest(binding['blob_sha256'], f'{identifier}.blob_sha256')
+        if _sha256(path) != expected_blob:
+            fail(f'{identifier} source blob digest mismatch')
         source = path.read_text(encoding='utf-8')
-        for fragment in fragments:
-            if fragment not in source:
-                fail(f'{identifier} source fragment is absent: {fragment!r}')
+        tokens = lex_source(source)
+        values = [token.value for token in tokens]
+        scopes = binding['scopes']
+        if not isinstance(scopes, list) or not scopes:
+            fail(f'{identifier}.scopes must be a non-empty list')
+        seen_scopes: set[tuple[str, str]] = set()
+        seen_checks: set[str] = set()
+        for scope_index, scope in enumerate(scopes):
+            label = f'{identifier}.scopes[{scope_index}]'
+            if not isinstance(scope, dict):
+                fail(f'{label} must be an object')
+            closed_shape(scope, SOURCE_SCOPE_FIELDS, label)
+            kind = string(scope['kind'], f'{label}.kind')
+            name = string(scope['name'], f'{label}.name')
+            if kind not in SOURCE_SCOPE_KINDS:
+                fail(f'{label}.kind is unsupported')
+            scope_identity = (kind, name)
+            if scope_identity in seen_scopes:
+                fail(f'{identifier} contains duplicate source scope {scope_identity!r}')
+            seen_scopes.add(scope_identity)
+            opening, closing = _type_scope(tokens, name)
+            scope_values = values[opening + 1:closing]
+            dead_ancestors = _static_false_ancestors(scope_values)
+            checks = scope['checks']
+            if not isinstance(checks, list) or not checks:
+                fail(f'{label}.checks must be a non-empty list')
+            for check_index, check in enumerate(checks):
+                check_label = f'{label}.checks[{check_index}]'
+                if not isinstance(check, dict):
+                    fail(f'{check_label} must be an object')
+                closed_shape(check, SOURCE_CHECK_FIELDS, check_label)
+                check_id = string(check['id'], f'{check_label}.id')
+                if check_id in seen_checks:
+                    fail(f'{identifier} contains duplicate check id {check_id!r}')
+                seen_checks.add(check_id)
+                expected_tokens = string_sequence(check['tokens'], f'{check_label}.tokens')
+                occurrences = check['occurrences']
+                if isinstance(occurrences, bool) or not isinstance(occurrences, int) or occurrences < 1:
+                    fail(f'{check_label}.occurrences must be a positive integer')
+                positions = _subsequence_positions(scope_values, expected_tokens)
+                if len(positions) != occurrences:
+                    fail(
+                        f'{identifier}.{check_id} token sequence occurrence mismatch: '
+                        f'{len(positions)} != {occurrences}'
+                    )
+                for position in positions:
+                    if position < len(dead_ancestors) and dead_ancestors[position]:
+                        fail(f'{identifier}.{check_id} exists only in a statically dead branch')
         result[identifier] = binding
-    if sorted(result) != EXPECTED_SOURCE_BINDING_IDS:
-        fail(f'source binding set drifted: {sorted(result)!r}')
     return result
 
-def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]:
+
+def _discover_dart_tests(text: str) -> list[str]:
+    values = [token.value for token in lex_source(text)]
+    result: list[str] = []
+    for index in range(len(values) - 2):
+        if values[index] not in {'test', 'testWidgets'} or values[index + 1] != '(':
+            continue
+        token = values[index + 2]
+        if not token.startswith('STRING:'):
+            fail('Dart test declaration does not start with a literal selector')
+        selector = token[len('STRING:'):]
+        if selector in result:
+            fail(f'duplicate Dart test selector: {selector}')
+        result.append(selector)
+    return result
+
+
+def _discover_swift_tests(text: str) -> list[str]:
+    values = [token.value for token in lex_source(text)]
+    result: list[str] = []
+    for index in range(len(values) - 2):
+        if values[index] != 'func':
+            continue
+        selector = values[index + 1]
+        if selector.startswith('test') and values[index + 2] == '(':
+            if selector in result:
+                fail(f'duplicate Swift test selector: {selector}')
+            result.append(selector)
+    return result
+
+
+def validate_test_references(
+    root: Path,
+    value: Any,
+    *,
+    label: str,
+) -> tuple[int, int]:
+    if not isinstance(value, list) or not value:
+        fail(f'{label}.tests must be a non-empty list')
+    workflow = (root / '.github/workflows/ci.yml').read_text(encoding='utf-8')
+    seen: set[tuple[str, str]] = set()
+    selectors_total = 0
+    for index, reference in enumerate(value):
+        current = f'{label}.tests[{index}]'
+        if not isinstance(reference, dict):
+            fail(f'{current} must be an object')
+        closed_shape(reference, TEST_REFERENCE_FIELDS, current)
+        path_text = string(reference['path'], f'{current}.path')
+        path = repository_file(root, path_text, f'{current}.path')
+        if _sha256(path) != _hex_digest(reference['blob_sha256'], f'{current}.blob_sha256'):
+            fail(f'{current} test blob digest mismatch')
+        framework = string(reference['framework'], f'{current}.framework')
+        ci_job = string(reference['ci_job'], f'{current}.ci_job')
+        if framework not in TEST_FRAMEWORKS or ci_job not in TEST_CI_JOBS:
+            fail(f'{current} framework or CI job is unsupported')
+        selectors = string_list(reference['selectors'], f'{current}.selectors')
+        text = path.read_text(encoding='utf-8')
+        if framework == 'dart_test':
+            if ci_job != 'flutter' or 'flutter test' not in workflow:
+                fail(f'{current} is not bound to the Flutter test job')
+            discovered = _discover_dart_tests(text)
+        elif framework == 'swift_xctest':
+            if ci_job != 'ios-native' or '-only-testing:RunnerTests' not in workflow:
+                fail(f'{current} is not bound to the iOS native test job')
+            discovered = _discover_swift_tests(text)
+        else:
+            if ci_job != 'native-sanitizers' or path_text not in workflow:
+                fail(f'{current} executable is not bound to native-sanitizers')
+            if stat.S_IMODE(path.stat().st_mode) & stat.S_IXUSR == 0:
+                fail(f'{current} executable lacks owner execute permission')
+            discovered = [path_text]
+        for selector in selectors:
+            identity = (path_text, selector)
+            if identity in seen:
+                fail(f'{label} contains duplicate test selector binding {identity!r}')
+            seen.add(identity)
+            if discovered.count(selector) != 1:
+                fail(f'{current} selector is not uniquely discovered: {selector!r}')
+        selectors_total += len(selectors)
+    return len(value), selectors_total
+
+def validate_document(
+    root: Path,
+    document: Mapping[str, Any],
+    *,
+    subject: ValidationSubject,
+) -> dict[str, Any]:
     closed_shape(document, TOP_FIELDS, str(MATRIX))
-    if document['schema_version'] != 2:
+    if document['schema_version'] != 3:
         fail('unsupported G1 command matrix schema')
     if document['contract_id'] != 'hepta-g1-command-matrix-v1':
         fail('G1 command matrix contract identity drifted')
@@ -415,21 +767,22 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
         fail('assistant events disagree with base G1 contract')
     bindings = validate_source_bindings(root, document['source_bindings'])
     commands = command_map(document)
-    if set(commands) != set(EXPECTED_COMMAND_IDENTITIES):
+    if set(commands) != set(subject.expected_command_identities):
         fail(f'G1 command set drifted: {sorted(commands)!r}')
     base_commands = base.get('commands')
     if not isinstance(base_commands, dict):
         fail('base command map is malformed')
     used_bindings: set[str] = set()
     test_references = 0
+    test_selectors = 0
     source_references = 0
-    for identifier, expected_identity in EXPECTED_COMMAND_IDENTITIES.items():
+    for identifier, expected_identity in subject.expected_command_identities.items():
         command = commands[identifier]
         validate_command(command, identifier)
         identity = {name: command[name] for name in ('command', 'direction', 'operation_kind', 'target', 'aggregation')}
         if identity != expected_identity:
             fail(f'{identifier} typed command identity drifted')
-        if canonical_digest(command) != EXPECTED_PROFILE_SHA256[identifier]:
+        if canonical_digest(command) != subject.expected_profile_sha256[identifier]:
             fail(f'{identifier} typed command profile drifted')
         base_key = BASE_COMMAND_KEYS.get(identifier)
         if base_key is not None and base_commands.get(base_key) != command['command']:
@@ -438,10 +791,14 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
             if binding_id not in bindings:
                 fail(f'{identifier} names an unknown source binding')
             used_bindings.add(binding_id)
-        for test in command['tests']:
-            repository_file(root, test, f'{identifier}.test')
+        reference_count, selector_count = validate_test_references(
+            root,
+            command['tests'],
+            label=identifier,
+        )
         source_references += len(command['source_binding_ids'])
-        test_references += len(command['tests'])
+        test_references += reference_count
+        test_selectors += selector_count
     used_bindings.update((record['source_binding_id'] for record in initializers))
     if used_bindings != set(bindings):
         fail('source binding coverage is incomplete')
@@ -456,21 +813,6 @@ def validate_document(root: Path, document: Mapping[str, Any]) -> dict[str, Any]
     position = next((field for field in display['fields'] if field['name'] == 'position'))
     if position['encoding'] != 'i16_be' or framing.get('position_endian') != 'big':
         fail('display position endian disagrees with base G1 contract')
-    if canonical_digest(document) != EXPECTED_MATRIX_SHA256:
+    if canonical_digest(document) != subject.expected_matrix_sha256:
         fail('typed G1 matrix canonical digest drifted')
-    return {'ok': True, 'schema_version': 2, 'commands': len(commands), 'mutating_commands': sum((command['operation_kind'] == 'mutating_command' for command in commands.values())), 'typed_profiles': len(commands), 'source_bindings': len(bindings), 'source_references': source_references, 'test_references': test_references, 'producer_examples': sum((len(command['producer_examples']) for command in commands.values())), 'consumer_examples': sum((len(command['consumer_examples']) for command in commands.values())), 'vendor_confirmation_required': True, 'physical_qualification_required': True}
-
-def validate(root: Path=ROOT) -> dict[str, Any]:
-    root = root.resolve()
-    return validate_document(root, strict_json(root / MATRIX))
-
-def main() -> int:
-    try:
-        result = validate(ROOT)
-    except (G1CommandMatrixError, KeyError, OSError, TypeError, ValueError) as error:
-        print(json.dumps({'ok': False, 'error': str(error)}))
-        return 1
-    print(json.dumps(result, sort_keys=True))
-    return 0
-if __name__ == '__main__':
-    raise SystemExit(main())
+    return {'ok': True, 'schema_version': 3, 'commands': len(commands), 'mutating_commands': sum((command['operation_kind'] == 'mutating_command' for command in commands.values())), 'typed_profiles': len(commands), 'source_bindings': len(bindings), 'source_references': source_references, 'test_references': test_references, 'test_selectors': test_selectors, 'producer_examples': sum((len(command['producer_examples']) for command in commands.values())), 'consumer_examples': sum((len(command['consumer_examples']) for command in commands.values())), 'vendor_confirmation_required': True, 'physical_qualification_required': True}

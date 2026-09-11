@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "contract_id": "hepta-g1-command-matrix-v1",
   "status": "source_contract_vendor_and_physical_confirmation_required",
   "transport": {
@@ -78,111 +78,811 @@
     {
       "id": "android-audio-frame",
       "path": "android/app/src/main/kotlin/org/trillionnium/heptaglasses/bluetooth/BleManager.kt",
-      "required_fragments": [
-        "const val REQUIRED_MTU = 205",
-        "private const val REQUESTED_MTU = 251",
-        "byteArrayOf(0xf4.toByte(), 0x01)",
-        "frame[0] == 0xF1.toByte()",
-        "side != \"R\" || frame.size != 202",
-        "frame.copyOfRange(2, 202)"
+      "blob_sha256": "f15ef3d1f6fa26962e8c17b88061ac2ae30fc9e271faa22097815f050611a034",
+      "scopes": [
+        {
+          "kind": "type",
+          "name": "BleMtuContract",
+          "checks": [
+            {
+              "id": "const-val-required-mtu-205",
+              "tokens": [
+                "const",
+                "val",
+                "REQUIRED_MTU",
+                "=",
+                "205"
+              ],
+              "occurrences": 1
+            }
+          ]
+        },
+        {
+          "kind": "type",
+          "name": "BleManager",
+          "checks": [
+            {
+              "id": "private-const-val-requested-mtu-251",
+              "tokens": [
+                "private",
+                "const",
+                "val",
+                "REQUESTED_MTU",
+                "=",
+                "251"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "bytearrayof-0xf4-tobyte-0x01",
+              "tokens": [
+                "byteArrayOf",
+                "(",
+                "0xf4.toByte",
+                "(",
+                ")",
+                ",",
+                "0x01",
+                ")"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "frame-0-0xf1-tobyte",
+              "tokens": [
+                "frame",
+                "[",
+                "0",
+                "]",
+                "==",
+                "0xF1.toByte",
+                "(",
+                ")"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "side-r-frame-size-202",
+              "tokens": [
+                "side",
+                "!=",
+                "STRING:R",
+                "||",
+                "frame",
+                ".",
+                "size",
+                "!=",
+                "202"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "frame-copyofrange-2-202",
+              "tokens": [
+                "frame",
+                ".",
+                "copyOfRange",
+                "(",
+                "2",
+                ",",
+                "202",
+                ")"
+              ],
+              "occurrences": 1
+            }
+          ]
+        }
       ]
     },
     {
       "id": "bitmap-producer-consumer",
       "path": "lib/controllers/bmp_update_manager.dart",
-      "required_fragments": [
-        "packetPayloadLength = 194",
-        "maximumPacketCount = 256",
-        "<int>[0x00, 0x1c, 0x00, 0x00]",
-        "const <int>[0x20, 0x0d, 0x0e]",
-        "response.data.length >= 2",
-        "response.data[1] == 0xc9",
-        "response.data.length >= 6",
-        "response.data[5] == 0xc9",
-        "return DeviceEffectResult.indeterminate("
+      "blob_sha256": "ad4e22bfe7328f9f8bf36e15c382ed60c2a9590f7153b5f0d8bbe6a26780a37e",
+      "scopes": [
+        {
+          "kind": "type",
+          "name": "BmpUpdateManager",
+          "checks": [
+            {
+              "id": "packetpayloadlength-194",
+              "tokens": [
+                "packetPayloadLength",
+                "=",
+                "194"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "maximumpacketcount-256",
+              "tokens": [
+                "maximumPacketCount",
+                "=",
+                "256"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "int-0x00-0x1c-0x00-0x00",
+              "tokens": [
+                "<",
+                "int",
+                ">",
+                "[",
+                "0x00",
+                ",",
+                "0x1c",
+                ",",
+                "0x00",
+                ",",
+                "0x00",
+                "]"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "const-int-0x20-0x0d-0x0e",
+              "tokens": [
+                "const",
+                "<",
+                "int",
+                ">",
+                "[",
+                "0x20",
+                ",",
+                "0x0d",
+                ",",
+                "0x0e",
+                "]"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "response-data-length-2",
+              "tokens": [
+                "response",
+                ".",
+                "data",
+                ".",
+                "length",
+                ">=",
+                "2"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "response-data-1-0xc9",
+              "tokens": [
+                "response",
+                ".",
+                "data",
+                "[",
+                "1",
+                "]",
+                "==",
+                "0xc9"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "response-data-length-6",
+              "tokens": [
+                "response",
+                ".",
+                "data",
+                ".",
+                "length",
+                ">=",
+                "6"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "response-data-5-0xc9",
+              "tokens": [
+                "response",
+                ".",
+                "data",
+                "[",
+                "5",
+                "]",
+                "==",
+                "0xc9"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "return-deviceeffectresult-indeterminate",
+              "tokens": [
+                "return",
+                "DeviceEffectResult",
+                ".",
+                "indeterminate",
+                "("
+              ],
+              "occurrences": 3
+            }
+          ]
+        }
       ]
     },
     {
       "id": "ble-correlation-and-events",
       "path": "lib/ble_manager.dart",
-      "required_fragments": [
-        "if (command == 0xF5 && response.data.length > 1)",
-        "case 0:",
-        "case 1:",
-        "case 23:",
-        "case 24:",
-        "BleRequestKey(",
-        "generation: generation,",
-        "side: response.lr,",
-        "command: command,"
+      "blob_sha256": "52cd6dc93864c4e8cdd8364339732c6d72eae8c8d74bce453ae30c0826383b43",
+      "scopes": [
+        {
+          "kind": "type",
+          "name": "BleManager",
+          "checks": [
+            {
+              "id": "if-command-0xf5-response-data-length-1",
+              "tokens": [
+                "if",
+                "(",
+                "command",
+                "==",
+                "0xF5",
+                "&&",
+                "response",
+                ".",
+                "data",
+                ".",
+                "length",
+                ">",
+                "1",
+                ")"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "case-0",
+              "tokens": [
+                "case",
+                "0",
+                ":"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "case-1",
+              "tokens": [
+                "case",
+                "1",
+                ":"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "case-23",
+              "tokens": [
+                "case",
+                "23",
+                ":"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "case-24",
+              "tokens": [
+                "case",
+                "24",
+                ":"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "blerequestkey",
+              "tokens": [
+                "BleRequestKey",
+                "("
+              ],
+              "occurrences": 2
+            },
+            {
+              "id": "generation-generation",
+              "tokens": [
+                "generation",
+                ":",
+                "generation",
+                ","
+              ],
+              "occurrences": 15
+            },
+            {
+              "id": "side-response-lr",
+              "tokens": [
+                "side",
+                ":",
+                "response",
+                ".",
+                "lr",
+                ","
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "command-command",
+              "tokens": [
+                "command",
+                ":",
+                "command",
+                ","
+              ],
+              "occurrences": 1
+            }
+          ]
+        }
       ]
     },
     {
       "id": "ble-correlation-and-timeout",
       "path": "lib/ble_manager.dart",
-      "required_fragments": [
-        "'ack_timeout_after_native_write'",
-        "effectMayHaveOccurred: true",
-        "response.effectMayHaveOccurred",
-        "'retry_budget_exhausted_before_write'"
+      "blob_sha256": "52cd6dc93864c4e8cdd8364339732c6d72eae8c8d74bce453ae30c0826383b43",
+      "scopes": [
+        {
+          "kind": "type",
+          "name": "BleManager",
+          "checks": [
+            {
+              "id": "ack-timeout-after-native-write",
+              "tokens": [
+                "STRING:ack_timeout_after_native_write"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "effectmayhaveoccurred-true",
+              "tokens": [
+                "effectMayHaveOccurred",
+                ":",
+                "true"
+              ],
+              "occurrences": 9
+            },
+            {
+              "id": "response-effectmayhaveoccurred",
+              "tokens": [
+                "response",
+                ".",
+                "effectMayHaveOccurred"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "retry-budget-exhausted-before-write",
+              "tokens": [
+                "STRING:retry_budget_exhausted_before_write"
+              ],
+              "occurrences": 1
+            }
+          ]
+        }
       ]
     },
     {
       "id": "display-packet-producer",
       "path": "lib/services/evenai_proto.dart",
-      "required_fragments": [
-        "int len = 191",
-        "byteData.setInt16(0, pos, Endian.big);",
-        "currentPageNumber,",
-        "maxPageNumber,"
+      "blob_sha256": "ff8cb0b8aab77371b769e76bc4b92310a4b7ead7bb47f7ba686898c1bdf2d310",
+      "scopes": [
+        {
+          "kind": "type",
+          "name": "EvenaiProto",
+          "checks": [
+            {
+              "id": "int-len-191",
+              "tokens": [
+                "int",
+                "len",
+                "=",
+                "191"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "bytedata-setint16-0-pos-endian-big",
+              "tokens": [
+                "byteData",
+                ".",
+                "setInt16",
+                "(",
+                "0",
+                ",",
+                "pos",
+                ",",
+                "Endian",
+                ".",
+                "big",
+                ")",
+                ";"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "currentpagenumber",
+              "tokens": [
+                "currentPageNumber",
+                ","
+              ],
+              "occurrences": 2
+            },
+            {
+              "id": "maxpagenumber",
+              "tokens": [
+                "maxPageNumber",
+                ","
+              ],
+              "occurrences": 2
+            }
+          ]
+        }
       ]
     },
     {
       "id": "ios-audio-frame",
       "path": "ios/Runner/BluetoothManager.swift",
-      "required_fragments": [
-        "Data([0x4d, 0x01])",
-        "guard data.count == 202 else { return }",
-        "data.subdata(in: 2..<data.count)",
-        "guard compressed.count == 200 else { return }",
-        "guard pcm.count == 3_200 else { return }"
+      "blob_sha256": "b421c209516ec0d7458912bf83fca9bfa1c034d96c182b4123d3ae209f62eb6b",
+      "scopes": [
+        {
+          "kind": "type",
+          "name": "BluetoothManager",
+          "checks": [
+            {
+              "id": "data-0x4d-0x01",
+              "tokens": [
+                "Data",
+                "(",
+                "[",
+                "0x4d",
+                ",",
+                "0x01",
+                "]",
+                ")"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "guard-data-count-202-else-return",
+              "tokens": [
+                "guard",
+                "data",
+                ".",
+                "count",
+                "==",
+                "202",
+                "else",
+                "{",
+                "return",
+                "}"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "data-subdata-in-2-data-count",
+              "tokens": [
+                "data",
+                ".",
+                "subdata",
+                "(",
+                "in",
+                ":",
+                "2..",
+                "<",
+                "data",
+                ".",
+                "count",
+                ")"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "guard-compressed-count-200-else-return",
+              "tokens": [
+                "guard",
+                "compressed",
+                ".",
+                "count",
+                "==",
+                "200",
+                "else",
+                "{",
+                "return",
+                "}"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "guard-pcm-count-3-200-else-return",
+              "tokens": [
+                "guard",
+                "pcm",
+                ".",
+                "count",
+                "==",
+                "3_200",
+                "else",
+                "{",
+                "return",
+                "}"
+              ],
+              "occurrences": 1
+            }
+          ]
+        }
       ]
     },
     {
       "id": "proto-command-producers",
       "path": "lib/services/proto.dart",
-      "required_fragments": [
-        "Uint8List.fromList(<int>[0x0E, 0x01])",
-        "EvenaiProto.evenaiMultiPackListV2(",
-        "const length = 6;",
-        "Uint8List.fromList(<int>[0x18])",
-        "Uint8List.fromList(<int>[0x34])",
-        "count: 180,",
-        "const payloadBytes = 176;",
-        "if (packetCount > 255)"
+      "blob_sha256": "7aa77305764017d550a3f1951533b1ce85130b9200e476a722befc37f0a3f88b",
+      "scopes": [
+        {
+          "kind": "type",
+          "name": "Proto",
+          "checks": [
+            {
+              "id": "uint8list-fromlist-int-0x0e-0x01",
+              "tokens": [
+                "Uint8List",
+                ".",
+                "fromList",
+                "(",
+                "<",
+                "int",
+                ">",
+                "[",
+                "0x0E",
+                ",",
+                "0x01",
+                "]",
+                ")"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "evenaiproto-evenaimultipacklistv2",
+              "tokens": [
+                "EvenaiProto",
+                ".",
+                "evenaiMultiPackListV2",
+                "("
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "const-length-6",
+              "tokens": [
+                "const",
+                "length",
+                "=",
+                "6",
+                ";"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "uint8list-fromlist-int-0x18",
+              "tokens": [
+                "Uint8List",
+                ".",
+                "fromList",
+                "(",
+                "<",
+                "int",
+                ">",
+                "[",
+                "0x18",
+                "]",
+                ")"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "uint8list-fromlist-int-0x34",
+              "tokens": [
+                "Uint8List",
+                ".",
+                "fromList",
+                "(",
+                "<",
+                "int",
+                ">",
+                "[",
+                "0x34",
+                "]",
+                ")"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "count-180",
+              "tokens": [
+                "count",
+                ":",
+                "180",
+                ","
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "const-payloadbytes-176",
+              "tokens": [
+                "const",
+                "payloadBytes",
+                "=",
+                "176",
+                ";"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "if-packetcount-255",
+              "tokens": [
+                "if",
+                "(",
+                "packetCount",
+                ">",
+                "255",
+                ")"
+              ],
+              "occurrences": 2
+            }
+          ]
+        }
       ]
     },
     {
       "id": "proto-effect-state-machine",
       "path": "lib/services/proto.dart",
-      "required_fragments": [
-        "if (response.effectMayHaveOccurred) {",
-        "'ack_missing_after_native_write'",
-        "if (response.isTimeout) {",
-        "'request_rejected_before_write'",
-        "'negative_or_malformed_ack_after_write'",
-        "'dual_leg_partial_effect_indeterminate'",
-        "'packet_sequence_partial_effect_indeterminate'"
+      "blob_sha256": "7aa77305764017d550a3f1951533b1ce85130b9200e476a722befc37f0a3f88b",
+      "scopes": [
+        {
+          "kind": "type",
+          "name": "Proto",
+          "checks": [
+            {
+              "id": "if-response-effectmayhaveoccurred",
+              "tokens": [
+                "if",
+                "(",
+                "response",
+                ".",
+                "effectMayHaveOccurred",
+                ")",
+                "{"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "ack-missing-after-native-write",
+              "tokens": [
+                "STRING:ack_missing_after_native_write"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "if-response-istimeout",
+              "tokens": [
+                "if",
+                "(",
+                "response",
+                ".",
+                "isTimeout",
+                ")",
+                "{"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "request-rejected-before-write",
+              "tokens": [
+                "STRING:request_rejected_before_write"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "negative-or-malformed-ack-after-write",
+              "tokens": [
+                "STRING:negative_or_malformed_ack_after_write"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "dual-leg-partial-effect-indeterminate",
+              "tokens": [
+                "STRING:dual_leg_partial_effect_indeterminate"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "packet-sequence-partial-effect-indeterminate",
+              "tokens": [
+                "STRING:packet_sequence_partial_effect_indeterminate"
+              ],
+              "occurrences": 1
+            }
+          ]
+        }
       ]
     },
     {
       "id": "proto-status-predicates",
       "path": "lib/services/proto.dart",
-      "required_fragments": [
-        "data.length > 1 && (data[1] == 0xc9 || data[1] == 0xcb)",
-        "response.data.length > 5",
-        "response.data[0] == 0x25",
-        "response.data[4] == 0x04"
+      "blob_sha256": "7aa77305764017d550a3f1951533b1ce85130b9200e476a722befc37f0a3f88b",
+      "scopes": [
+        {
+          "kind": "type",
+          "name": "Proto",
+          "checks": [
+            {
+              "id": "data-length-1-data-1-0xc9-data-1-0xcb",
+              "tokens": [
+                "data",
+                ".",
+                "length",
+                ">",
+                "1",
+                "&&",
+                "(",
+                "data",
+                "[",
+                "1",
+                "]",
+                "==",
+                "0xc9",
+                "||",
+                "data",
+                "[",
+                "1",
+                "]",
+                "==",
+                "0xcb",
+                ")"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "response-data-length-5",
+              "tokens": [
+                "response",
+                ".",
+                "data",
+                ".",
+                "length",
+                ">",
+                "5"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "response-data-0-0x25",
+              "tokens": [
+                "response",
+                ".",
+                "data",
+                "[",
+                "0",
+                "]",
+                "==",
+                "0x25"
+              ],
+              "occurrences": 1
+            },
+            {
+              "id": "response-data-4-0x04",
+              "tokens": [
+                "response",
+                ".",
+                "data",
+                "[",
+                "4",
+                "]",
+                "==",
+                "0x04"
+              ],
+              "occurrences": 1
+            }
+          ]
+        }
       ]
     }
   ],
@@ -268,8 +968,25 @@
         "proto-status-predicates"
       ],
       "tests": [
-        "test/runtime/microphone_retry_contract_test.dart",
-        "test/runtime/ble_manager_authority_test.dart"
+        {
+          "path": "test/runtime/microphone_retry_contract_test.dart",
+          "blob_sha256": "747aa0a9caea29c7f767d765293b0397abc351b2e48b27f805c83c7e034c0b0f",
+          "framework": "dart_test",
+          "selectors": [
+            "microphone retries only a proven pre-write-safe failure",
+            "microphone attempt identity is carried into mutation authority"
+          ],
+          "ci_job": "flutter"
+        },
+        {
+          "path": "test/runtime/ble_manager_authority_test.dart",
+          "blob_sha256": "f0178a67895f8cc85328464fa29c22fcfb832295aaa7cb1f7010116577f49b71",
+          "framework": "dart_test",
+          "selectors": [
+            "left disconnect cannot release an uncertain right-leg write"
+          ],
+          "ci_job": "flutter"
+        }
       ],
       "external_gates": [
         "vendor command confirmation",
@@ -385,8 +1102,26 @@
         "ble-correlation-and-events"
       ],
       "tests": [
-        "ios/RunnerTests/RunnerTests.swift",
-        "tools/run_native_sanitizers.sh"
+        {
+          "path": "ios/RunnerTests/RunnerTests.swift",
+          "blob_sha256": "5b64251e76d29b409340115a6365abb2b69e15a74a594c90b6061d51130a3b8f",
+          "framework": "swift_xctest",
+          "selectors": [
+            "testPcmConverterRejectsTruncatedFrame",
+            "testPcmConverterRejectsOversizedPayload",
+            "testPcmConverterRejectsNonIntegralFrameCount"
+          ],
+          "ci_job": "ios-native"
+        },
+        {
+          "path": "tools/run_native_sanitizers.sh",
+          "blob_sha256": "a55b5e07156885a5fc5bf5e8229a38981f4f6b02ca5b07f2c9044c17065ff0ea",
+          "framework": "workflow_executable",
+          "selectors": [
+            "tools/run_native_sanitizers.sh"
+          ],
+          "ci_job": "native-sanitizers"
+        }
       ],
       "external_gates": [
         "firmware framing confirmation",
@@ -685,8 +1420,24 @@
         "proto-effect-state-machine"
       ],
       "tests": [
-        "test/runtime/ble_receive_test.dart",
-        "test/runtime/assistant_session_test.dart"
+        {
+          "path": "test/runtime/ble_receive_test.dart",
+          "blob_sha256": "79177f10c5f2007d81ad80fcc5b47d73acdd2a5afb400a14f9f6e003493ae277",
+          "framework": "dart_test",
+          "selectors": [
+            "BLE response parses exact connection authority and bytes"
+          ],
+          "ci_job": "flutter"
+        },
+        {
+          "path": "test/runtime/assistant_session_test.dart",
+          "blob_sha256": "b6c9cb1285f9aa9259af7fbb775db9a6ace2715c162ce46d5e0352360e2a7884",
+          "framework": "dart_test",
+          "selectors": [
+            "new session generation cancels the prior session and fences callbacks"
+          ],
+          "ci_job": "flutter"
+        }
       ],
       "external_gates": [
         "vendor event enumeration",
@@ -848,8 +1599,24 @@
         "proto-effect-state-machine"
       ],
       "tests": [
-        "test/runtime/packet_codec_test.dart",
-        "test/runtime/tool_effect_semantics_test.dart"
+        {
+          "path": "test/runtime/packet_codec_test.dart",
+          "blob_sha256": "cc918c1dcc66eeb2e41ebe4abd92ffe4478cc61d057ccf0d109211d2e49e9ac0",
+          "framework": "dart_test",
+          "selectors": [
+            "shared positive vectors fragment and reassemble exactly"
+          ],
+          "ci_job": "flutter"
+        },
+        {
+          "path": "test/runtime/tool_effect_semantics_test.dart",
+          "blob_sha256": "5c2e6ccf9575c0dd85acbff84f26f892928551c1a551e8233b721d4f06111981",
+          "framework": "dart_test",
+          "selectors": [
+            "uncertain effect requires reconciliation and is never retry-safe"
+          ],
+          "ci_job": "flutter"
+        }
       ],
       "external_gates": [
         "vendor field semantics",
@@ -1003,8 +1770,24 @@
         "proto-effect-state-machine"
       ],
       "tests": [
-        "test/runtime/bmp_update_manager_test.dart",
-        "test/runtime/tool_effect_semantics_test.dart"
+        {
+          "path": "test/runtime/bmp_update_manager_test.dart",
+          "blob_sha256": "87417fc57517fe9f29254dc819bc93ab7fc4158f1bb2d09176334e753098e610",
+          "framework": "dart_test",
+          "selectors": [
+            "BMP transfer frames packets and validates both acknowledgements"
+          ],
+          "ci_job": "flutter"
+        },
+        {
+          "path": "test/runtime/tool_effect_semantics_test.dart",
+          "blob_sha256": "5c2e6ccf9575c0dd85acbff84f26f892928551c1a551e8233b721d4f06111981",
+          "framework": "dart_test",
+          "selectors": [
+            "pre-write rejection is failed but retry-safe and not indeterminate"
+          ],
+          "ci_job": "flutter"
+        }
       ],
       "external_gates": [
         "vendor storage address and sequencing confirmation",
@@ -1126,8 +1909,24 @@
         "proto-effect-state-machine"
       ],
       "tests": [
-        "test/runtime/bmp_update_manager_test.dart",
-        "test/runtime/tool_effect_semantics_test.dart"
+        {
+          "path": "test/runtime/bmp_update_manager_test.dart",
+          "blob_sha256": "87417fc57517fe9f29254dc819bc93ab7fc4158f1bb2d09176334e753098e610",
+          "framework": "dart_test",
+          "selectors": [
+            "BMP transfer does not replay an indeterminate finish command"
+          ],
+          "ci_job": "flutter"
+        },
+        {
+          "path": "test/runtime/tool_effect_semantics_test.dart",
+          "blob_sha256": "5c2e6ccf9575c0dd85acbff84f26f892928551c1a551e8233b721d4f06111981",
+          "framework": "dart_test",
+          "selectors": [
+            "uncertain effect requires reconciliation and is never retry-safe"
+          ],
+          "ci_job": "flutter"
+        }
       ],
       "external_gates": [
         "vendor finish command confirmation",
@@ -1242,8 +2041,24 @@
         "proto-effect-state-machine"
       ],
       "tests": [
-        "test/runtime/bmp_update_manager_test.dart",
-        "test/runtime/tool_effect_semantics_test.dart"
+        {
+          "path": "test/runtime/bmp_update_manager_test.dart",
+          "blob_sha256": "87417fc57517fe9f29254dc819bc93ab7fc4158f1bb2d09176334e753098e610",
+          "framework": "dart_test",
+          "selectors": [
+            "BMP CRC acknowledgement requires the complete response shape"
+          ],
+          "ci_job": "flutter"
+        },
+        {
+          "path": "test/runtime/tool_effect_semantics_test.dart",
+          "blob_sha256": "5c2e6ccf9575c0dd85acbff84f26f892928551c1a551e8233b721d4f06111981",
+          "framework": "dart_test",
+          "selectors": [
+            "typed certainty survives metadata-only journal recovery"
+          ],
+          "ci_job": "flutter"
+        }
       ],
       "external_gates": [
         "vendor CRC polynomial and input confirmation",
@@ -1400,8 +2215,25 @@
         "ble-correlation-and-timeout"
       ],
       "tests": [
-        "test/runtime/heartbeat_retry_contract_test.dart",
-        "test/runtime/ble_request_slot_test.dart"
+        {
+          "path": "test/runtime/heartbeat_retry_contract_test.dart",
+          "blob_sha256": "6dcf8315dcdd81d49eebebe87e69f8b5344b14cd5ebc1d0237de91ec3313924a",
+          "framework": "dart_test",
+          "selectors": [
+            "heartbeat retry loop is gated by retrySafe",
+            "heartbeat outcome distinguishes uncertain and safe failure"
+          ],
+          "ci_job": "flutter"
+        },
+        {
+          "path": "test/runtime/ble_request_slot_test.dart",
+          "blob_sha256": "34d5e8c1b72a7d7de872ab5d3383d420e88a3de3a81750fd4506b403255f9464",
+          "framework": "dart_test",
+          "selectors": [
+            "quarantine blocks reuse until the late response is observed"
+          ],
+          "ci_job": "flutter"
+        }
       ],
       "external_gates": [
         "vendor heartbeat semantics",
@@ -1508,8 +2340,24 @@
         "proto-status-predicates"
       ],
       "tests": [
-        "test/runtime/tool_effect_semantics_test.dart",
-        "test/runtime/dual_leg_coordinator_test.dart"
+        {
+          "path": "test/runtime/tool_effect_semantics_test.dart",
+          "blob_sha256": "5c2e6ccf9575c0dd85acbff84f26f892928551c1a551e8233b721d4f06111981",
+          "framework": "dart_test",
+          "selectors": [
+            "uncertain effect requires reconciliation and is never retry-safe"
+          ],
+          "ci_job": "flutter"
+        },
+        {
+          "path": "test/runtime/dual_leg_coordinator_test.dart",
+          "blob_sha256": "c01209c536dea4732521f8a542e063096ba09e44ba886751d7ba0ae24dcd425c",
+          "framework": "dart_test",
+          "selectors": [
+            "ack loss after write is indeterminate and never blindly retried"
+          ],
+          "ci_job": "flutter"
+        }
       ],
       "external_gates": [
         "vendor mode enumeration",
@@ -1634,8 +2482,24 @@
         "proto-status-predicates"
       ],
       "tests": [
-        "test/runtime/tool_effect_semantics_test.dart",
-        "test/runtime/packet_codec_test.dart"
+        {
+          "path": "test/runtime/tool_effect_semantics_test.dart",
+          "blob_sha256": "5c2e6ccf9575c0dd85acbff84f26f892928551c1a551e8233b721d4f06111981",
+          "framework": "dart_test",
+          "selectors": [
+            "pre-write rejection is failed but retry-safe and not indeterminate"
+          ],
+          "ci_job": "flutter"
+        },
+        {
+          "path": "test/runtime/packet_codec_test.dart",
+          "blob_sha256": "cc918c1dcc66eeb2e41ebe4abd92ffe4478cc61d057ccf0d109211d2e49e9ac0",
+          "framework": "dart_test",
+          "selectors": [
+            "frame and metadata construction boundaries remain closed"
+          ],
+          "ci_job": "flutter"
+        }
       ],
       "external_gates": [
         "vendor whitelist schema persistence confirmation",
@@ -1789,8 +2653,24 @@
         "proto-status-predicates"
       ],
       "tests": [
-        "test/runtime/tool_effect_semantics_test.dart",
-        "test/runtime/packet_codec_test.dart"
+        {
+          "path": "test/runtime/tool_effect_semantics_test.dart",
+          "blob_sha256": "5c2e6ccf9575c0dd85acbff84f26f892928551c1a551e8233b721d4f06111981",
+          "framework": "dart_test",
+          "selectors": [
+            "uncertain effect requires reconciliation and is never retry-safe"
+          ],
+          "ci_job": "flutter"
+        },
+        {
+          "path": "test/runtime/packet_codec_test.dart",
+          "blob_sha256": "cc918c1dcc66eeb2e41ebe4abd92ffe4478cc61d057ccf0d109211d2e49e9ac0",
+          "framework": "dart_test",
+          "selectors": [
+            "shared negative vectors reach their exact rejection branches"
+          ],
+          "ci_job": "flutter"
+        }
       ],
       "external_gates": [
         "vendor notification JSON and display behavior",
@@ -1891,8 +2771,24 @@
         "proto-effect-state-machine"
       ],
       "tests": [
-        "test/runtime/ble_receive_test.dart",
-        "test/runtime/ble_manager_authority_test.dart"
+        {
+          "path": "test/runtime/ble_receive_test.dart",
+          "blob_sha256": "79177f10c5f2007d81ad80fcc5b47d73acdd2a5afb400a14f9f6e003493ae277",
+          "framework": "dart_test",
+          "selectors": [
+            "BLE response parses exact connection authority and bytes"
+          ],
+          "ci_job": "flutter"
+        },
+        {
+          "path": "test/runtime/ble_manager_authority_test.dart",
+          "blob_sha256": "f0178a67895f8cc85328464fa29c22fcfb832295aaa7cb1f7010116577f49b71",
+          "framework": "dart_test",
+          "selectors": [
+            "unscoped or mismatched responses cannot complete a current slot"
+          ],
+          "ci_job": "flutter"
+        }
       ],
       "external_gates": [
         "vendor serial response layout confirmation",
