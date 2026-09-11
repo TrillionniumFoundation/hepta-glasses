@@ -7,123 +7,127 @@ class EvenAIListPage extends StatefulWidget {
   const EvenAIListPage({super.key});
 
   @override
-  _EvenAIListPageState createState() => _EvenAIListPageState();
+  State<EvenAIListPage> createState() => _EvenAIListPageState();
 }
 
 class _EvenAIListPageState extends State<EvenAIListPage> {
-  late EvenaiModelController controller;
+  late final EvenaiModelController controller;
 
   @override
   void initState() {
     super.initState();
     controller = Get.find<EvenaiModelController>();
-
-    print("controller.items--------${controller.items.length}");
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-        title: const Text('History',
-            style: TextStyle(fontSize: 20)),
-    ),
-    body: Obx(() {
-      if (controller.items.isEmpty && !EvenAI.isEvenAISyncing.value) {
-        return const Center(
+        appBar: AppBar(
+          title: const Text('History', style: TextStyle(fontSize: 20)),
+        ),
+        body: Obx(
+          () => Column(
+            children: <Widget>[
+              SwitchListTile(
+                key: const ValueKey<String>('history-consent-switch'),
+                title: const Text('Save assistant history'),
+                subtitle: Text(
+                  controller.historyEnabled.value
+                      ? 'Enabled for this app process only. Turning it off '
+                          'immediately clears all saved questions and answers.'
+                      : 'Off by default. Questions and answers are not retained.',
+                ),
+                value: controller.historyEnabled.value,
+                onChanged: controller.setHistoryEnabled,
+              ),
+              const Divider(height: 1),
+              Expanded(child: _buildHistoryBody()),
+            ],
+          ),
+        ),
+      );
+
+  Widget _buildHistoryBody() {
+    if (!controller.historyEnabled.value) {
+      return const Center(
+        key: ValueKey<String>('history-disabled'),
+        child: Padding(
+          padding: EdgeInsets.all(24),
           child: Text(
-            "Press and hold left TouchBar to engage Even AI.",
+            'Assistant history is off. Enable it above to retain questions '
+            'and answers temporarily in this app process.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+    if (controller.items.isEmpty && !EvenAI.isEvenAISyncing.value) {
+      return const Center(
+        key: ValueKey<String>('history-enabled-empty'),
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'History is enabled. Press and hold the left TouchBar to engage '
+            'Even AI.',
             style: TextStyle(color: Colors.grey),
             textAlign: TextAlign.center,
           ),
-        );
-      } else {
-
-          return Padding(
-              padding: EdgeInsets.only(left: 16, right: 16, top: 4),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: controller.items.length,
-                      itemBuilder: (context, index) {
-                      return GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                if (controller.selectedIndex.value ==
-                                    index) {
-                                  controller.deselectItem();
-                                } else {
-                                  controller.selectItem(index);
-                                }
-                              });
-                            },
-                            child: controller.selectedIndex.value == index
-                                    ? buildItemDetail(index)
-                                    : buildItem(index),
-                          );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-      }
-    }),
-  );
-
-
-  Widget buildItem(int index) {
-    final item = controller.items[index];
-    return  Expanded(
-              child: Container(
-                alignment: Alignment.centerLeft,
-                decoration: BoxDecoration(
-                  color: Color(0xFFFEF991).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                margin: EdgeInsets.only(top: 8, bottom: 8),
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    item.title,
-                    style: TextStyle(fontSize: 20),
-                  ),
-                ),
-              ),
-            );
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      itemCount: controller.items.length,
+      itemBuilder: (BuildContext context, int index) => Obx(
+        () {
+          final selected = controller.selectedIndex.value == index;
+          return GestureDetector(
+            key: ValueKey<String>('history-item-$index'),
+            onTap: () {
+              if (selected) {
+                controller.deselectItem();
+              } else {
+                controller.selectItem(index);
+              }
+            },
+            child: selected ? _buildItemDetail(index) : _buildItem(index),
+          );
+        },
+      ),
+    );
   }
 
-  Widget buildItemDetail(int index) {
+  Widget _buildItem(int index) {
     final item = controller.items[index];
+    return Container(
+      alignment: Alignment.centerLeft,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF991).withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(5),
+      ),
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(16),
+      child: Text(item.title, style: const TextStyle(fontSize: 20)),
+    );
+  }
 
-    return  Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Color(0xFFFEF991).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                margin: EdgeInsets.only(top: 8, bottom: 8),
-                child: Column(
-                  children: [
-                    Container(
-                      alignment: Alignment.centerLeft,
-                      padding: EdgeInsets.all(16),
-                      child: Text(item.title,
-                               style: TextStyle(fontSize: 20),
-                          ),
-                    ),
-                    Container(
-                      alignment: Alignment.centerLeft,
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        item.content,
-                        style: TextStyle(fontSize: 15),
-                      ),
-                    ),
-                    SizedBox(height: 16)
-                  ],
-                ),
-              ),
-            );
+  Widget _buildItemDetail(int index) {
+    final item = controller.items[index];
+    return Container(
+      key: ValueKey<String>('history-detail-$index'),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF991).withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(5),
+      ),
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(item.title, style: const TextStyle(fontSize: 20)),
+          const SizedBox(height: 12),
+          Text(item.content, style: const TextStyle(fontSize: 15)),
+        ],
+      ),
+    );
   }
 }

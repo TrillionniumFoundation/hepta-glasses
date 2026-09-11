@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hepta.invalid/schemas/device-qualification-report-v1.json",
+  "title": "DeviceQualificationReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scenario_id",
+    "platform",
+    "passed",
+    "checks",
+    "metrics",
+    "trace_digest",
+    "event_count"
+  ],
+  "properties": {
+    "scenario_id": {"type": "string", "minLength": 1},
+    "platform": {"enum": ["android", "ios"]},
+    "passed": {"type": "boolean"},
+    "checks": {"type": "object", "minProperties": 1},
+    "metrics": {"type": "object", "minProperties": 1},
+    "trace_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "event_count": {"type": "integer", "minimum": 2}
+  }
+}

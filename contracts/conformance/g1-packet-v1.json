@@ -1,0 +1,191 @@
+{
+  "contract_id": "hepta-g1-packet-conformance-v2",
+  "schema_version": 2,
+  "header": {
+    "command_offset": 0,
+    "frame_count_offset": 1,
+    "sequence_offset": 2,
+    "fixed_bytes": 3
+  },
+  "vectors": [
+    {
+      "id": "empty-payload",
+      "command": 0,
+      "max_packet_bytes": 4,
+      "metadata_hex": "",
+      "payload_hex": "",
+      "frames_hex": [
+        "000100"
+      ]
+    },
+    {
+      "id": "single-frame-with-metadata",
+      "command": 78,
+      "max_packet_bytes": 8,
+      "metadata_hex": "07",
+      "payload_hex": "00010203",
+      "frames_hex": [
+        "4e01000700010203"
+      ]
+    },
+    {
+      "id": "five-binary-frames",
+      "command": 165,
+      "max_packet_bytes": 7,
+      "metadata_hex": "f00d",
+      "payload_hex": "00010203040506070809",
+      "frames_hex": [
+        "a50500f00d0001",
+        "a50501f00d0203",
+        "a50502f00d0405",
+        "a50503f00d0607",
+        "a50504f00d0809"
+      ]
+    },
+    {
+      "id": "utf8-is-opaque-bytes",
+      "command": 255,
+      "max_packet_bytes": 9,
+      "metadata_hex": "010203",
+      "payload_hex": "6865707461ceb2",
+      "frames_hex": [
+        "ff0300010203686570",
+        "ff03010102037461ce",
+        "ff0302010203b2"
+      ]
+    }
+  ],
+  "negative_vectors": [
+    {
+      "id": "empty-frame-set",
+      "frames_hex": [],
+      "metadata_length": 0,
+      "expected_command": null,
+      "expected_error": "At least one frame is required."
+    },
+    {
+      "id": "short-first-frame",
+      "frames_hex": [
+        "4e0100"
+      ],
+      "metadata_length": 1,
+      "expected_command": null,
+      "expected_error": "Frame is shorter than its header."
+    },
+    {
+      "id": "zero-declared-frame-count",
+      "frames_hex": [
+        "4e0000"
+      ],
+      "metadata_length": 0,
+      "expected_command": null,
+      "expected_error": "Frame count does not match header."
+    },
+    {
+      "id": "declared-count-does-not-match-cardinality",
+      "frames_hex": [
+        "4e0200"
+      ],
+      "metadata_length": 0,
+      "expected_command": null,
+      "expected_error": "Frame count does not match header."
+    },
+    {
+      "id": "expected-command-mismatch",
+      "frames_hex": [
+        "4e0100aa"
+      ],
+      "metadata_length": 0,
+      "expected_command": 79,
+      "expected_error": "Unexpected command."
+    },
+    {
+      "id": "inconsistent-frame-command",
+      "frames_hex": [
+        "4e0200aa",
+        "4f0201bb"
+      ],
+      "metadata_length": 0,
+      "expected_command": null,
+      "expected_error": "Inconsistent frame header."
+    },
+    {
+      "id": "inconsistent-frame-total",
+      "frames_hex": [
+        "4e0200aa",
+        "4e0301bb"
+      ],
+      "metadata_length": 0,
+      "expected_command": null,
+      "expected_error": "Inconsistent frame header."
+    },
+    {
+      "id": "inconsistent-metadata",
+      "frames_hex": [
+        "4e020007aa",
+        "4e020108bb"
+      ],
+      "metadata_length": 1,
+      "expected_command": null,
+      "expected_error": "Inconsistent frame metadata."
+    },
+    {
+      "id": "sequence-outside-range-same-cardinality",
+      "frames_hex": [
+        "4e0200aa",
+        "4e0202bb"
+      ],
+      "metadata_length": 0,
+      "expected_command": null,
+      "expected_error": "Frame sequence is outside declared range."
+    },
+    {
+      "id": "duplicate-sequence-same-cardinality",
+      "frames_hex": [
+        "4e0300aa",
+        "4e0301bb",
+        "4e0301cc"
+      ],
+      "metadata_length": 0,
+      "expected_command": null,
+      "expected_error": "Duplicate frame sequence."
+    }
+  ],
+  "generated_families": [
+    {
+      "id": "round-trip",
+      "seed": 12648430,
+      "cases": 128
+    },
+    {
+      "id": "zero-declared-frame-count",
+      "seed": 60417409,
+      "cases": 64
+    },
+    {
+      "id": "sequence-outside-range-same-cardinality",
+      "seed": 2882343476,
+      "cases": 64
+    },
+    {
+      "id": "duplicate-sequence-same-cardinality",
+      "seed": 3735928559,
+      "cases": 64
+    },
+    {
+      "id": "metadata-drift",
+      "seed": 195936478,
+      "cases": 64
+    },
+    {
+      "id": "command-drift",
+      "seed": 4277009102,
+      "cases": 64
+    },
+    {
+      "id": "total-drift",
+      "seed": 305419896,
+      "cases": 64
+    }
+  ]
+}

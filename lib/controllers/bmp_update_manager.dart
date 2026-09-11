@@ -3,135 +3,259 @@ import 'dart:typed_data';
 
 import 'package:crclib/catalog.dart';
 import 'package:demo_ai_even/ble_manager.dart';
+import 'package:demo_ai_even/runtime/device_effect_result.dart';
+import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
+import 'package:demo_ai_even/services/ble.dart';
 import 'package:demo_ai_even/utils/utils.dart';
 
-class BmpUpdateManager {
-  
-  static bool isTransfering = false;
+typedef BmpPacketSender = Future<bool> Function(Uint8List packet, String side);
+typedef BmpRequester = Future<BleReceive> Function(
+  Uint8List packet,
+  String side,
+  int timeoutMs,
+);
+typedef BmpDelay = Future<void> Function(Duration duration);
 
-  Future<bool> updateBmp(String lr, Uint8List image, {int? seq}) async {
+final class BmpUpdateManager {
+  BmpUpdateManager({
+    BmpPacketSender? sendPacket,
+    BmpRequester? request,
+    BmpDelay? delay,
+  })  : _sendPacket = sendPacket ?? _defaultSendPacket,
+        _request = request ?? _defaultRequest,
+        _delay = delay ?? _defaultDelay;
 
-    // check if has error sending package
-    bool isOldSendPackError(int? currentSeq) {
-      bool oldSendError = (seq == null && currentSeq != null);
-      if (oldSendError) {
-        print("BmpUpdate -> updateBmp: old pack send error, seq = $currentSeq");
-      }
-      return oldSendError;
-    }
+  static const int packetPayloadLength = 194;
+  static const int maximumPacketCount = 256;
+  static const int maximumImageBytes = packetPayloadLength * maximumPacketCount;
+  static const List<int> _storageAddress = <int>[0x00, 0x1c, 0x00, 0x00];
 
-    const int packLen = 194; //198;
-    List<Uint8List> multiPacks = [];
-    for (int i = 0; i < image.length; i += packLen) { 
-      int end = (i + packLen < image.length) ? i + packLen : image.length;
-      final singlePack = image.sublist(i, end);
-      multiPacks.add(singlePack);
-    }
+  final BmpPacketSender _sendPacket;
+  final BmpRequester _request;
+  final BmpDelay _delay;
 
-    print("BmpUpdate -> updateBmp: start sending ${multiPacks.length} packs");
+  Future<bool> updateBmp(String side, Uint8List image, {int? seq}) async =>
+      (await updateBmpEffect(side, image, seq: seq)).committed;
 
-    for (int index = 0; index < multiPacks.length; index++) { 
-      if (isOldSendPackError(seq)) return false;
-      if (seq != null && index < seq) continue;
-
-      
-      final pack = multiPacks[index];  
-      // address in glasses [0x00, 0x1c, 0x00, 0x00] , taken in the first package
-      Uint8List data = index == 0 ? Utils.addPrefixToUint8List([0x15, index & 0xff, 0x00, 0x1c, 0x00, 0x00],  pack) : Utils.addPrefixToUint8List([0x15, index & 0xff], pack);
-      print("${DateTime.now()} updateBmp----data---*${data.length}---*$data----------");
-
-      await BleManager.sendData(
-          data,
-          lr: lr);
-
-      if (Platform.isIOS) {
-        await Future.delayed(Duration(milliseconds: 8)); // 4 6 10 14  30
-      } else {
-        await Future.delayed(Duration(milliseconds: 5));  // 5
-      }
-
-      var offset = index * packLen;
-      if (offset > image.length - packLen) {
-        offset = image.length - pack.length;
-      }
-      _onProgressCall(lr, offset, index, image.length);
-    }
-    // await Future.delayed(Duration(seconds: 2)); // todo
-    if (isOldSendPackError(seq)) return false;
-
-    const maxRetryTime = 10;
-    int currentRetryTime = 0;
-    Future<bool> finishUpdate() async {
-      print("${DateTime.now()} finishUpdate----currentRetryTime-----$currentRetryTime-----maxRetryTime-----$maxRetryTime--");
-      if (currentRetryTime >= maxRetryTime) {
-        return false;
-      }
-      
-      // notice the finish sending
-      var ret = await BleManager.request(
-        Uint8List.fromList([0x20, 0x0d, 0x0e]),
-        lr: lr,
-        timeoutMs: 3000,
+  Future<DeviceEffectResult> updateBmpEffect(
+    String side,
+    Uint8List image, {
+    int? seq,
+  }) async {
+    final externalId = 'bitmap:$side';
+    if (!_isValidSide(side)) {
+      return DeviceEffectResult.rejectedBeforeWrite(
+        code: 'bitmap_side_invalid',
+        externalId: externalId,
       );
-      print("${DateTime.now()} finishUpdate---lr---$lr--ret----${ret.data}-----");
-      if (ret.isTimeout) {
-        currentRetryTime++;
-        await Future.delayed(Duration(seconds: 1));
-        return finishUpdate();
+    }
+    if (image.isEmpty || image.length > maximumImageBytes) {
+      return DeviceEffectResult.rejectedBeforeWrite(
+        code: 'bitmap_size_invalid',
+        externalId: externalId,
+        details: <String, Object?>{'image_bytes': image.length},
+      );
+    }
+
+    final packets = _splitPackets(image);
+    final startSequence = seq ?? 0;
+    if (startSequence < 0 || startSequence >= packets.length) {
+      return DeviceEffectResult.rejectedBeforeWrite(
+        code: 'bitmap_start_sequence_invalid',
+        externalId: externalId,
+        details: <String, Object?>{
+          'start_sequence': startSequence,
+          'packet_count': packets.length,
+        },
+      );
+    }
+
+    var acceptedPackets = 0;
+    for (var index = startSequence; index < packets.length; index++) {
+      final packet = buildDataPacket(index, packets[index]);
+      final accepted = await _sendPacket(packet, side);
+      if (!accepted) {
+        PrivacySafeLog.event(
+          'bmp_packet_rejected',
+          fields: <String, Object?>{
+            'side': side,
+            'sequence': index,
+            'packet_count': packets.length,
+            'accepted_packets': acceptedPackets,
+          },
+        );
+        if (acceptedPackets == 0) {
+          return DeviceEffectResult.rejectedBeforeWrite(
+            code: 'bitmap_packet_not_accepted',
+            externalId: '$externalId:$index',
+            details: <String, Object?>{
+              'sequence': index,
+              'packet_count': packets.length,
+            },
+          );
+        }
+        return DeviceEffectResult.indeterminate(
+          code: 'bitmap_partial_packet_transfer',
+          externalId: '$externalId:$index',
+          details: <String, Object?>{
+            'sequence': index,
+            'accepted_packets': acceptedPackets,
+            'packet_count': packets.length,
+          },
+        );
       }
-      return ret.data[1].toInt() == 0xc9;
+      acceptedPackets++;
+      _reportProgress(side, index + 1, packets.length);
+      if (index + 1 < packets.length) {
+        await _delay(Duration(milliseconds: Platform.isIOS ? 8 : 5));
+      }
     }
 
-    print("${DateTime.now()} updateBmp-------------over------");
-    
-    var isSuccess = await finishUpdate();
-
-    print("${DateTime.now()} finishUpdate--isSuccess----*$isSuccess-");
-    if (!isSuccess) {
-      print("finishUpdate result error lr: $lr");
-      
-      return false;
-    } else {
-      print("finishUpdate result success lr: $lr");
+    final finished = await _request(
+      Uint8List.fromList(const <int>[0x20, 0x0d, 0x0e]),
+      side,
+      3000,
+    );
+    if (!isSuccessfulStatusResponse(finished, expectedCommand: 0x20)) {
+      PrivacySafeLog.event(
+        'bmp_finish_not_acknowledged',
+        fields: <String, Object?>{
+          'side': side,
+          'indeterminate': true,
+          'error_code': finished.errorCode,
+        },
+      );
+      return DeviceEffectResult.indeterminate(
+        code: finished.errorCode ?? 'bitmap_finish_not_acknowledged',
+        externalId: '$externalId:finish',
+        details: <String, Object?>{
+          'accepted_packets': acceptedPackets,
+          'packet_count': packets.length,
+        },
+      );
     }
 
-    // take address in the first package
-    Uint8List result = prependAddress(image);
-    var crc32 = Crc32Xz().convert(result); 
-    var val = crc32.toBigInt().toInt();
-    var crc = Uint8List.fromList([
-      val >> 8 * 3 & 0xff,
-      val >> 8 * 2 & 0xff,
-      val >> 8 & 0xff,
-      val & 0xff,
+    final crcResponse = await _request(buildCrcCommand(image), side, 1000);
+    final crcAccepted = isSuccessfulCrcResponse(crcResponse);
+    if (!crcAccepted) {
+      PrivacySafeLog.event(
+        'bmp_crc_not_acknowledged',
+        fields: <String, Object?>{
+          'side': side,
+          'indeterminate': true,
+          'error_code': crcResponse.errorCode,
+        },
+      );
+      return DeviceEffectResult.indeterminate(
+        code: crcResponse.errorCode ?? 'bitmap_crc_not_acknowledged',
+        externalId: '$externalId:crc',
+        details: <String, Object?>{
+          'accepted_packets': acceptedPackets,
+          'packet_count': packets.length,
+        },
+      );
+    }
+    return DeviceEffectResult.committed(
+      code: 'bitmap_crc_verified',
+      externalId: '$externalId:crc',
+      details: <String, Object?>{
+        'packet_count': packets.length,
+        'image_bytes': image.length,
+      },
+    );
+  }
+
+  static Uint8List buildDataPacket(int sequence, Uint8List payload) {
+    if (sequence < 0 || sequence >= maximumPacketCount) {
+      throw RangeError.range(sequence, 0, maximumPacketCount - 1, 'sequence');
+    }
+    if (payload.isEmpty || payload.length > packetPayloadLength) {
+      throw ArgumentError.value(
+        payload.length,
+        'payload',
+        'must contain 1 to $packetPayloadLength bytes',
+      );
+    }
+    final prefix = sequence == 0
+        ? <int>[0x15, sequence, ..._storageAddress]
+        : <int>[0x15, sequence];
+    return Utils.addPrefixToUint8List(prefix, payload);
+  }
+
+  static Uint8List buildCrcCommand(Uint8List image) {
+    if (image.isEmpty || image.length > maximumImageBytes) {
+      throw ArgumentError.value(
+        image.length,
+        'image',
+        'must contain 1 to $maximumImageBytes bytes',
+      );
+    }
+    final crcInput = Uint8List(_storageAddress.length + image.length)
+      ..setRange(0, _storageAddress.length, _storageAddress)
+      ..setRange(
+        _storageAddress.length,
+        _storageAddress.length + image.length,
+        image,
+      );
+    final value = Crc32Xz().convert(crcInput).toBigInt().toInt();
+    return Uint8List.fromList(<int>[
+      0x16,
+      value >> 24 & 0xff,
+      value >> 16 & 0xff,
+      value >> 8 & 0xff,
+      value & 0xff,
     ]);
-    
-    final ret = await BleManager.request(
-        Utils.addPrefixToUint8List([0x16], crc),
-        lr: lr);
+  }
 
-    print("${DateTime.now()} Crc32Xz---lr---$lr---ret--------${ret.data}------crc----$crc--");
+  static bool isSuccessfulStatusResponse(
+    BleReceive response, {
+    required int expectedCommand,
+  }) =>
+      !response.isTimeout &&
+      response.data.length >= 2 &&
+      response.data[0] == expectedCommand &&
+      response.data[1] == 0xc9;
 
-    if (ret.data.length > 4 && ret.data[5] != 0xc9) {
-      print("CRC checks failed...");
-      return false;
+  static bool isSuccessfulCrcResponse(BleReceive response) =>
+      !response.isTimeout &&
+      response.data.length >= 6 &&
+      response.data[0] == 0x16 &&
+      response.data[5] == 0xc9;
+
+  static List<Uint8List> _splitPackets(Uint8List image) {
+    final packets = <Uint8List>[];
+    for (var offset = 0; offset < image.length; offset += packetPayloadLength) {
+      final end = offset + packetPayloadLength < image.length
+          ? offset + packetPayloadLength
+          : image.length;
+      packets.add(Uint8List.fromList(image.sublist(offset, end)));
     }
-
-    return true;
+    return packets;
   }
 
-  void _onProgressCall(String lr, int offset, int index, int total) {
-    double progress = (offset / total) * 100;
-    print("${DateTime.now()} BmpUpdate -> Progress: $lr ${progress.toStringAsFixed(2)}%, index: $index");
+  static bool _isValidSide(String side) => side == 'L' || side == 'R';
+
+  void _reportProgress(String side, int sent, int total) {
+    PrivacySafeLog.event(
+      'bmp_transfer_progress',
+      fields: <String, Object?>{
+        'side': side,
+        'sent_packets': sent,
+        'packet_count': total,
+      },
+    );
   }
 
+  static Future<bool> _defaultSendPacket(Uint8List packet, String side) =>
+      BleManager.sendData(packet, lr: side);
 
-  Uint8List prependAddress(Uint8List image) {
+  static Future<BleReceive> _defaultRequest(
+    Uint8List packet,
+    String side,
+    int timeoutMs,
+  ) =>
+      BleManager.request(packet, lr: side, timeoutMs: timeoutMs);
 
-    List<int> addressBytes = [0x00, 0x1c, 0x00, 0x00];
-    Uint8List newImage = Uint8List(addressBytes.length + image.length);
-    newImage.setRange(0, addressBytes.length, addressBytes);
-    newImage.setRange(addressBytes.length, newImage.length, image);
-    return newImage;
-  }
+  static Future<void> _defaultDelay(Duration duration) =>
+      Future<void>.delayed(duration);
 }

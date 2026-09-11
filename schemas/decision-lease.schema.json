@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hepta.invalid/schemas/decision-lease-v1.json",
+  "title": "DecisionLease",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lease_id",
+    "subject",
+    "device_id",
+    "task_id",
+    "allowed_actions",
+    "argument_constraints",
+    "issued_at",
+    "expires_at",
+    "single_use",
+    "policy_hash"
+  ],
+  "properties": {
+    "lease_id": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "device_id": {
+      "type": "string"
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "allowed_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "argument_constraints": {
+      "type": "object"
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "single_use": {
+      "type": "boolean"
+    },
+    "policy_hash": {
+      "type": "string"
+    },
+    "approval_proof": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

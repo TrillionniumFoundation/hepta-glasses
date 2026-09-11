@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:demo_ai_even/ble_manager.dart';
 import 'package:demo_ai_even/services/text_service.dart';
 import 'package:flutter/material.dart';
@@ -6,82 +8,104 @@ class TextPage extends StatefulWidget {
   const TextPage({super.key});
 
   @override
-  _TextPageState createState() => _TextPageState();
+  State<TextPage> createState() => _TextPageState();
 }
 
 class _TextPageState extends State<TextPage> {
+  late final TextEditingController _controller;
+  bool _sending = false;
 
-  late TextEditingController tfController;
+  static const String _testContent = '''Welcome to G1.
 
-  String testContent = '''Welcome to G1.
+You're holding eyewear designed to blend aesthetics, wearability and useful functionality.
 
-    You're holding the first eyewear ever designed to blend stunning aesthetics, amazing wearability and useful functionality.
+Technology should remain available without taking control away from the wearer.
 
-    At Even Realities we continuously explore the human relationship with technology. And our breakthrough is a pair of glasses that are unique, clever and capable but are still everyday glasses. The ones you'll reach for every morning and want to wear all day.
-
-    No longer is being connected or focused on real life a choice. It's a seamless blend. A merging of worlds, with you in control.
-
-    So you can see what matters. When it matters.''';
+See what matters, when it matters.''';
 
   @override
   void initState() {
-    tfController = TextEditingController(text: testContent); 
     super.initState();
+    _controller = TextEditingController(text: _testContent);
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Text Transfer'),
-    ),
-    body: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            height: 300,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(5),
-            ),
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(8),
-            child: TextField(
-              decoration: const InputDecoration.collapsed(hintText: ""),
-              controller: tfController,
-              onChanged: (newNotify) => setState(() {}),
-              maxLines: null,
-            ),
-          ),
-          GestureDetector(
-            onTap: !BleManager.get().isConnected && tfController.text.isNotEmpty
-              ? null
-              : () async {
-                String content = tfController.text;
-                TextService.get.startSendText(content);
-              },
-            child: Container(
-              height: 60,
+  Widget build(BuildContext context) {
+    final enabled = BleManager.get().isConnected &&
+        _controller.text.trim().isNotEmpty &&
+        !_sending;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Text Transfer')),
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          children: <Widget>[
+            Container(
+              width: double.infinity,
+              height: 300,
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(5),
               ),
-              alignment: Alignment.center,
-              child: Text(
-                "Send to Glasses",
-                style: TextStyle(
-                  color: BleManager.get().isConnected && tfController.text.isNotEmpty 
-                    ? Colors.black
-                    : Colors.grey,
-                  fontSize: 16,
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(8),
+              child: TextField(
+                decoration: const InputDecoration.collapsed(hintText: ''),
+                controller: _controller,
+                onChanged: (_) => setState(() {}),
+                maxLines: null,
+              ),
+            ),
+            GestureDetector(
+              onTap: enabled ? _send : null,
+              child: Container(
+                height: 60,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  _sending ? 'Sending…' : 'Send to Glasses',
+                  style: TextStyle(
+                    color: enabled || _sending ? Colors.black : Colors.grey,
+                    fontSize: 16,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
+
+  Future<void> _send() async {
+    setState(() => _sending = true);
+    try {
+      final success = await TextService.get.startSendText(_controller.text);
+      if (mounted && !success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Text transfer was not confirmed.')),
+        );
+      }
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Text transfer failed safely.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    unawaited(TextService.get.stopTextSendingByOS());
+    _controller.dispose();
+    super.dispose();
+  }
 }

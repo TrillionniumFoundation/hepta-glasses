@@ -1,6 +1,5 @@
-
+import 'package:demo_ai_even/runtime/privacy_safe_log.dart';
 import 'package:flutter/services.dart';
-
 
 class Utils {
   Utils._();
@@ -34,8 +33,11 @@ class Utils {
     try {
       final ByteData data = await rootBundle.load(imageUrl);
       return data.buffer.asUint8List();
-    } catch (e) {
-      print("Error loading BMP file: $e");
+    } on Object catch (error) {
+      PrivacySafeLog.event(
+        'bmp_asset_load_failed',
+        fields: <String, Object?>{'error_type': error.runtimeType.toString()},
+      );
       return Uint8List(0);
     }
   }

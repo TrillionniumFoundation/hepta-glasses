@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "plan_revision": "2026-09-02-g9-authenticated-1",
+  "extends_ledger": "docs/GAP_LEDGER.yaml",
+  "source_summary": {
+    "repository_actionable_open": 0,
+    "closed_source": 3,
+    "inherited_authority_owned_blocked": 12
+  },
+  "gaps": [
+    {
+      "id": "HG-0073",
+      "title": "External authority evidence is cryptographically non-self-issuable",
+      "owner": "release-security",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        "contracts/external-evidence-envelope-v1.json",
+        "schemas/external-evidence-envelope.schema.json",
+        "schemas/external-authority-trust-registry.schema.json",
+        "tools/external_evidence/core.py",
+        "tools/external_evidence/trust.py",
+        "tools/external_evidence/submission.py",
+        "tools/external_evidence/acceptance.py",
+        "tools/validate_external_evidence.py",
+        "tools/sign_external_evidence.py",
+        "services/qualification/test_external_evidence_adversarial.py",
+        "services/qualification/test_external_evidence_json_safety.py",
+        "services/qualification/test_external_evidence_key_alias.py",
+        "services/qualification/test_external_evidence_key_type.py",
+        "services/qualification/test_external_evidence_review_order.py",
+        "services/qualification/test_external_evidence_signature_time.py",
+        "services/qualification/test_external_evidence_signing.py",
+        "docs/development/G9_TERMINAL_EXTERNAL_CLOSURE.md",
+        "docs/adr/ADR-0004-external-evidence-authentication.md"
+      ],
+      "close_criteria": "A repository writer cannot manufacture accepted closure: every submission and decision is verified under a current, non-revoked, narrowly scoped Ed25519 key from an externally pinned trust registry; the pinned PEM is re-encoded and required to contain the id-Ed25519 SubjectPublicKeyInfo algorithm and a 32-byte public key; normalized SPKI reuse is forbidden across key IDs, identities, organizations and PEM encodings; issuer attestation.signed_at and reviewer signed_at are included in their canonical signature preimages, and every reviewer time must follow every submitted evidence attestation; duplicate JSON object members and silently normalized authority fields are rejected; candidate, claims, artifact digests, limitations, evidence-set digest and reviewed gaps are signed; key-type confusion, public-key aliases, signature-time mutation, pre-evidence review, parser differentials, issuer/reviewer aliases and synthetic physical evidence fail closed."
+    },
+    {
+      "id": "HG-0074",
+      "title": "Only the latest pull-request or branch CI run retains execution custody",
+      "owner": "quality-gates",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        ".github/workflows/ci.yml",
+        "tools/validate_production_authority.py",
+        "services/qualification/test_ci_latest_head_custody.py",
+        "docs/adr/ADR-0005-latest-head-ci-concurrency.md"
+      ],
+      "close_criteria": "Workflow concurrency is keyed by pull-request number or branch identity with cancel-in-progress enabled, never by commit SHA; every canonical job independently checks out and verifies the exact SOURCE_HEAD_SHA; a new push cancels the previous run for that PR without weakening exact-head artifact identity or granting CI source-write authority."
+    },
+    {
+      "id": "HG-0075",
+      "title": "External evidence filesystem reads, signing inputs, and custody writes are TOCTOU-safe",
+      "owner": "release-security",
+      "status": "CLOSED_SOURCE",
+      "evidence": [
+        "tools/external_evidence/snapshot_io.py",
+        "tools/external_evidence/signing_io.py",
+        "tools/external_evidence/signing.py",
+        "tools/external_evidence/__init__.py",
+        "tools/sign_external_evidence.py",
+        "services/qualification/test_external_evidence_snapshot.py",
+        "services/qualification/test_external_evidence_scoped_snapshot.py",
+        "services/qualification/test_external_evidence_filesystem_hardening.py",
+        "services/qualification/test_external_evidence_signing.py",
+        "services/qualification/test_external_evidence_signer_custody.py",
+        "services/qualification/test_external_evidence_signing_boundaries.py",
+        "docs/adr/ADR-0006-external-evidence-filesystem-custody.md",
+        "docs/adr/ADR-0007-evidence-object-identity-and-bounded-custody.md",
+        "docs/development/G9_FILESYSTEM_CUSTODY_HARDENING.md",
+        "evidence/external/README.md"
+      ],
+      "close_criteria": "One top-level validation uses one aggregate-bounded immutable byte view keyed by normalized lexical absolute path; artifact and key URIs must use one canonical POSIX spelling; every existing input is bound to the captured device, inode and object type of each ancestor directory and the final regular file, so symbolic-link retargeting, ordinary-directory replacement, same-name file replacement, repeated reads and pre-first-consumer races fail closed; PEM hashing, Ed25519 verification and normalized DER-SPKI uniqueness consume the same pinned public-key bytes; private-key type checking and signing consume one stable private-key snapshot; the input bundle must reside below the same declared custody root that receives its outputs, and the private key must remain outside that root; detached signatures and authority-bearing bundle successors use distinct canonical URIs with descriptor-relative no-follow exclusive-create semantics; in-place authority-bundle mutation is rejected because portable rename does not provide an atomic expected-inode compare-and-swap; every successful operation leaves the input unchanged, creates a new mode-0600 successor, and re-reads each visible output before reporting success; transaction memory amplification, unsupported secure APIs, overwrite, dangling links, partial writes, output redirection and path aliases have hostile deterministic tests."
+    }
+  ],
+  "inherited_authority_owned_gap_ids": [
+    "HG-0010",
+    "HG-0011",
+    "HG-0012",
+    "HG-0013",
+    "HG-0014",
+    "HG-0015",
+    "HG-0016",
+    "HG-0017",
+    "HG-0018",
+    "HG-0021",
+    "HG-0022",
+    "HG-0044"
+  ]
+}

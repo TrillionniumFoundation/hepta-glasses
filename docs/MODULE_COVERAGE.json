@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "extends_registry": "docs/modules/modules.json",
+  "scope": "Compatibility entry point only. The single active registry is docs/modules/modules.json; historical layered registries are not active truth.",
+  "module_extensions": []
+}

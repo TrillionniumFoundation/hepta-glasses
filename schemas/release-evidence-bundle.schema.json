@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hepta.invalid/schemas/release-evidence-bundle-v2.json",
+  "title": "ReleaseEvidenceBundle",
+  "description": "Source evidence plus repository-relative inputs for authenticated G10 product-evidence validation. Legacy status objects are non-authoritative when present.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source"],
+  "properties": {
+    "source": {
+      "type": "object",
+      "required": [
+        "commit",
+        "tree",
+        "ci_checks",
+        "sbom",
+        "provenance",
+        "contracts_version"
+      ]
+    },
+    "external_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundle", "artifact_root", "trust_registry"],
+      "properties": {
+        "bundle": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+        },
+        "artifact_root": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+        },
+        "trust_registry": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+        }
+      }
+    },
+    "branch_protection": {
+      "type": "object",
+      "description": "Legacy descriptive projection only; never product authority."
+    },
+    "device_qualification": {
+      "type": "array",
+      "description": "Legacy descriptive projection only; authenticated artifacts belong in external_evidence."
+    },
+    "production": {
+      "type": "object",
+      "description": "Legacy descriptive projection only; never product authority."
+    },
+    "reviews": {
+      "type": "object",
+      "description": "Legacy descriptive projection only; never product authority."
+    },
+    "drills": {
+      "type": "object",
+      "description": "Legacy descriptive projection only; never product authority."
+    },
+    "signing": {
+      "type": "object",
+      "description": "Legacy descriptive projection only; never product authority."
+    },
+    "pilot": {
+      "type": "object",
+      "description": "Legacy descriptive projection only; never product authority."
+    }
+  }
+}

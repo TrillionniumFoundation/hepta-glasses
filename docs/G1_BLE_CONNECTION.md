@@ -1,165 +1,237 @@
-# EvenDemoApp — G1 蓝牙连接流程说明
+# Hepta Glasses — G1 双 BLE 连接、效果权威与协议实现
 
 > English: [G1_BLE_CONNECTION.en.md](G1_BLE_CONNECTION.en.md)
+>
+> 状态：`2026-09-01-g8` 当前源码规范。硬件、固件、性能和兼容性结论仍需物理 G1 的 E5 证据。
 
-> **分析依据**：参考仓库内 BLE 分层与文档化习惯（与 `even-ble-logic` 技能中 G2/R1 的「App → 协议 → 原生 GATT」思路一致）。本工程为 **G1 演示应用**，双端均为 **Flutter MethodChannel + 平台原生 BLE**，**未**接入 `flutter_ezw_ble` / `even_connect`。
+## 1. 产品与权威边界
 
----
+G1 左腿和右腿是两个独立 BLE 外设。手机端 Flutter 运行时负责业务编排、请求关联、重试语义、幂等域和不确定效果隔离；Android/iOS 原生层负责扫描、GATT 就绪、有界写队列、通知和 LC3 解码。
 
-## 1. 架构总览
+模型、Skill、MCP、Codex 和 UI 都不能直接取得设备写权限。最终 BLE 效果权威属于移动端执行边界。仓库不包含 G1 固件、Bootloader、Secure Boot 或签名 OTA 权限。
 
+## 2. 分层
+
+```text
+Flutter UI / Assistant
+        |
+        v
+Hepta Runtime / Tool Gateway / Policy
+        |
+        v
+EvenG1Transport
+  authority = pair + generation + side + caller key + payload digest
+        |
+        v
+BleManager
+  response owner = generation + side + command
+  quarantine   = generation + side + command
+        |
+        v
+MethodChannel("method.bluetooth")
+        |
+        +-- Android BleManager.kt / generation-captured GATT callback
+        |
+        +-- iOS BluetoothManager.swift
+              immutable PeripheralAttemptToken + delegate proxy
+        |
+        v
+G1 Left BLE + G1 Right BLE
 ```
-lib/ble_manager.dart (Dart)
-  └─ MethodChannel("method.bluetooth")
-       ├─ Android: BleChannelHelper / BleMethodChannel → BleManager.kt
-       └─ iOS:     AppDelegate.swift → BluetoothManager.swift
 
-数据下行: Dart invokeMethod("send", { data, lr? }) → 原生写 GATT 特征值
-数据上行: Android EventChannel("eventBleReceive") / iOS blueInfoSink → Dart
-状态回调: 原生 methodChannel.invokeMethod → Dart setMethodCallHandler
-```
+下行使用 `method.bluetooth`；二进制上行使用 `eventBleReceive`；iOS 语音识别结果使用 `eventSpeechRecognize`。原生状态通过 `glassesConnecting`、`glassesConnected`、`glassesDisconnected` 和 `foundPairedGlasses` 回调 Flutter。
 
-| 通道名 | 方向 | 用途 |
-|--------|------|------|
-| `method.bluetooth` | 双向 | `startScan` / `stopScan` / `connectToGlasses` / `disconnectFromGlasses` / `send` 等 |
-| `eventBleReceive` | 原生 → Dart | 二进制通知与业务数据（含 `lr`、`data`、`type`） |
+## 3. 广播、成对与 pair identity
 
-Dart 侧入口：`lib/ble_manager.dart` 中的 `BleManager`。
+设备名必须符合四段式名称，例如 `G1_45_L_xxx` 与 `G1_45_R_xxx`。同一 channel 同时出现左右腿后才形成 `Pair_<channel>`。
 
----
+`pairIdentity` 是设备效果权威的一部分。它不是用户可见昵称，而是当前成对选择的最小稳定标识。源码中的 channel identity 仍需物理设备和供应商文档确认其跨恢复、换机和固件升级语义；生产设计可进一步升级为受设备证明约束的 pair identity。
 
-## 2. G1 设备模型与广播命名
+左右腿保留独立连接、就绪、请求 owner、隔离和 receipt。单腿成功不是 pair 成功。
 
-G1 为 **左右耳各一颗 BLE 外设**，通过 **信道号（channel）** 成对：
-
-- 命名示例（Android 注释）：`G1_45_L_92333`、`G1_45_R_xxxx`（左 `_L_`，右 `_R_`）。
-- Android 扫描过滤条件（逻辑摘要）：
-  - 广播名非空；
-  - 名称匹配 `G` + 数字（如 `G1`）；
-  - 按下划线分段后 **段数为 4**（与示例格式一致）；
-  - 同一 `channel` 下凑齐 **左 + 右** 两颗后，才向 Flutter 上报「已发现成对眼镜」。
-
-成对后在 Flutter 列表中的字典包含：`leftDeviceName`、`rightDeviceName`、`channelNumber`。
-
-**连接入参**：Flutter 调用 `connectToGlasses` 时传入的 `deviceName` 一般为 `Pair_{channelNumber}`。Android 侧在 `BleMethodChannel.connectToGlasses` 中会 **去掉 `Pair_` 前缀**，仅把信道号交给 `BleManager.connectToGlass`。
-
----
-
-## 3. GATT 服务与特征（Nordic UART 风格）
-
-Android 与 iOS 使用 **同一套 UART Service UUID**（与 `ServiceIdentifiers.swift` / `BleManager.kt` 常量一致）：
+## 4. GATT 合同
 
 | 角色 | UUID |
-|------|------|
-| Service | `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` |
-| TX（手机写入） | `6E400002-B5A3-F393-E0A9-E50E24DCCA9E` |
-| RX（手机订阅通知） | `6E400003-B5A3-F393-E0A9-E50E24DCCA9E` |
+|---|---|
+| UART Service | `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` |
+| 手机写入 | `6E400002-B5A3-F393-E0A9-E50E24DCCA9E` |
+| 手机订阅通知 | `6E400003-B5A3-F393-E0A9-E50E24DCCA9E` |
 
-Android 在 `onServicesDiscovered` 中：对 RX 开启 `setCharacteristicNotification`，并写入 CCCD（`00002902-...`）启用通知；随后 `requestMtu(251)`、`createBond()`，并在单耳流程末尾向 **双耳** 发送首包 `0xF4 0x01`；**仅当左右 `isConnect` 均为 true** 时调用 `glassesConnected`。
+机器可读协议位于 `contracts/g1-ble-protocol-v1.json`。该合同同时规定 callback owner、幂等身份、native pre-write assertion、重连 barrier 和 quarantine 释放条件。
 
-iOS 在 `didDiscoverCharacteristicsFor` 中：区分左右 `CBPeripheral`，保存 `leftWChar`/`rightWChar`、`leftRChar`/`rightRChar`，对 RX `setNotifyValue(true)`，并分别向左右写入 `0x4d 0x01`（与 Android 首包字节不同，属平台实现差异）。
+## 5. Android 就绪与回调状态机
 
----
+1. 校验蓝牙和运行时权限并扫描。
+2. 对左右设备分别 `connectGatt(autoConnect=false)`。
+3. 发现 UART service、读特征、写特征和 CCCD；缺失任一项即失败关闭。
+4. CCCD 写成功后请求 MTU 251；实际 MTU 必须至少为 203。
+5. 初始化写入 `[0xF4, 0x01]` 被原生 API 接受后，该腿才标记 ready。
+6. 左右腿都 ready 后才上报 `glassesConnected`。
 
-## 4. Flutter（Dart）连接与状态流程
+每个 GATT callback 实例捕获连接 generation，并验证自身仍是当前 pair 中的选中 GATT；旧回调会关闭旧 GATT，不得修改新会话。普通写入进入容量 128 的串行队列；队列满、GATT 未就绪、expected generation 不一致、expected pair 不一致或原生拒绝均在写前失败关闭。
 
-1. **扫描**：`BleManager.startScan()` → `invokeMethod('startScan')`。
-2. **发现成对设备**：原生 `invokeMethod('foundPairedGlasses', {...})` → `_onPairedGlassesFound`，按 `channelNumber` 去重后加入 `pairedGlasses`。
-3. **连接**：`connectToGlasses(deviceName)` → `invokeMethod('connectToGlasses', {'deviceName': deviceName})`，本地将 `connectionStatus` 置为 `Connecting...`。
-4. **已连接**：`glassesConnected` → `_onGlassesConnected`：更新 `isConnected`、展示左右名称，并 `startSendBeatHeart()`（定时调用 `Proto.sendHeartBeat()`）。
-5. **断开**：`glassesDisconnected`（若原生实现调用）→ `_onGlassesDisconnected`。
-6. **接收数据**：订阅 `EventChannel('eventBleReceive')`，在 `_handleReceivedData` 中解析指令（如 `0xF5` 触控/EvenAI 事件等）。
+解码后的回调再次验证 generation 和 pair identity，防止后台 LC3 工作跨会话发布。
 
----
+## 6. iOS immutable connection-attempt 状态机
 
-## 5. Android 详细流程（`BleManager.kt`）
+### 6.1 Attempt token
 
-### 5.1 初始化
+每一腿的每次连接都有不可变 token：
 
-`BleManager.initBluetooth(Activity)`：保存 `Activity` 弱引用，获取系统 `BluetoothManager` / `Adapter`。
+```text
+PeripheralAttemptToken {
+  peripheralID,
+  side,
+  generation,
+  attemptNonce
+}
+```
 
-### 5.2 扫描
+`ConnectionAttemptAuthority` 对每个 peripheral identity 只保留一个 current token。service discovery、characteristic discovery、notification state、value update 和 write-ready 回调都由该 attempt 专属的 delegate proxy 转发；任何回调必须先同时满足：
 
-- `startScan`：校验蓝牙开启与权限后，`bluetoothLeScanner.startScan`。
-- `ScanCallback.onScanResult`：解析设备名、去重、按 channel 聚类；左右齐全时 `BleChannelHelper.bleMC.flutterFoundPairedGlasses(BlePairDevice(...))`。
-- `stopScan`：`stopScan(scanCallback)`。
+```text
+token is current
+&& token.generation == current generation
+&& token.peripheralID == callback peripheral
+&& callback peripheral === selected peripheral for token.side
+```
 
-### 5.3 连接
+未识别 peripheral 没有 side，不允许使用“不是左腿即右腿”的 fallback。
 
-- `connectToGlass(deviceChannel)`：在 `bleDevices`（或当前 `connectedDevice`）中按 `_{channel}_L_` / `_{channel}_R_` 查找左右 `BleDevice`；找不到则 `PeripheralNotFound`。
-- 对左右 `BluetoothDevice` 各调用 `connectGatt(..., autoConnect=false, callback)`。
-- 共享一个 `BluetoothGattCallback` 实例处理双耳。
+### 6.2 Retired-peripheral barrier
 
-### 5.4 GATT 回调要点
+`CBCentralManager` 的 connect/fail/disconnect callback 不携带调用方 generation。为防止同一个 `CBPeripheral` 对象的旧 terminal callback 清理新 attempt，取消中的 peripheral identity 会进入 `RetiredConnectionBarrier`。
 
-- `onConnectionStateChange`：`STATE_CONNECTED` → `discoverServices()`。
-- `onServicesDiscovered`：绑定对应侧的 `BluetoothGatt`、打开 RX 通知、写 CCCD、保存 Write 特征、`requestMtu(251)`、`createBond()`、标记该侧已连接、发 `0xF4 0x01`；若 `BlePairDevice.isBothConnected()`，在主线程 `flutterGlassesConnected`。
-- `onCharacteristicChanged`：区分左右地址；对 `0xF1` 开头且长度为 202 的包走 LC3→PCM（`Cpp.decodeLC3`）；其余通过 `BleChannelHelper.bleReceive` 发往 Dart。
+同一 peripheral 不能分配给下一 generation，直到旧 attempt 的 `didFailToConnect` 或 `didDisconnectPeripheral` 被 barrier 消费。激活新 attempt 还会推迟到下一主队列 turn，使同一批次中的额外旧回调在没有 current token 的窗口内被拒绝。
 
-### 5.5 断开
+### 6.3 就绪
 
-当前 `disconnectFromGlasses` 仅日志 + `result.success`，**未**在片段中展示真正 `disconnect`/`close` GATT 逻辑（若产品化需补全）。
+1. 扫描并按 channel 形成左右 pair。
+2. 为左右腿创建 token 与 delegate proxy，再连接外设。
+3. 发现 UART service 和读写特征。
+4. RX 通知确认启用后才将该腿加入 ready 集合。
+5. 初始化写入 `[0x4D, 0x01]` 通过有界写路径。
+6. 两腿 current token 都 ready 后才上报 pair ready。
 
----
+两平台初始化字节不同，必须由供应商固件合同或物理 trace 最终确认，不能仅由源码推定。
 
-## 6. iOS 详细流程（`BluetoothManager.swift` + `AppDelegate.swift`）
+## 7. 复合幂等身份
 
-### 6.1 通道注册
+公开传输层的 receipt、in-flight coalescing 和 payload claim 使用以下完整身份：
 
-`AppDelegate` 创建 `FlutterMethodChannel(name: "method.bluetooth", ...)`，将 `BluetoothManager` 与 channel 绑定，并注册 `eventBleReceive` / `eventSpeechRecognize` 的 `FlutterStreamHandler`，把 `eventBleReceive` 的 sink 赋给 `BluetoothManager.blueInfoSink`。
+```text
+(pairIdentity,
+ connectionGeneration,
+ side,
+ callerIdempotencyKey,
+ SHA256(deviceBytes))
+```
 
-### 6.2 扫描与配对表
+因此：
 
-`centralManager.scanForPeripherals(withServices: nil)`。`didDiscover` 中按名称里的 `_L_` / `_R_` 填入 `pairedDevices["Pair_\(channelNumber)"]`；左右都非空时 `invokeMethod("foundPairedGlasses", ...)`。
+- 左腿使用 caller key `K` 不会抑制右腿的 `K`；
+- generation N 的 `K` 不会抑制重连后 generation N+1 的 `K`；
+- Pair_A 的 `K` 不会抑制 Pair_B 的 `K`；
+- 同一完整 scope 中 `K` 对应不同 payload 会立即失败关闭；
+- 同一完整 identity 的并发请求只共享同一个 in-flight owner；
+- receipt 容量耗尽时拒绝新的 authority，而不是驱逐当前 generation 的旧 receipt 后冒险重复效果。
 
-### 6.3 连接
+Flutter 在异步调用开始时捕获 pair/generation，调用 native 前重新检查，并把 `expectedPairIdentity`、`expectedGeneration` 传入 Android/iOS。原生层在真正接受字节前再次比较当前权威。
 
-`connectToDevice(deviceName:)`：`stopScan`，从 `pairedDevices[deviceName]` 取左右 `CBPeripheral`，`centralManager.connect` 双耳，并记录 `currentConnectingDeviceName`。
+## 8. 请求关联与不确定效果隔离
 
-### 6.4 连接完成时机（与 Android 重要差异）
+ACK owner 与 late-response quarantine 的键为：
 
-`didConnect` 中：为已连接外设设置 `delegate` 并 `discoverServices([UARTServiceUUID])`；当 `connectedDevices[deviceName]` **左右槽位都已有 peripheral** 时，立即 `invokeMethod("glassesConnected", ...)` 并清空 `currentConnectingDeviceName`。
+```text
+(connectionGeneration, side L/R, commandByte)
+```
 
-即 iOS 的 **`glassesConnected` 发生在「中央已连上两颗外设」阶段**，**不等待** Service/Characteristic 发现与订阅完成；Android 则在 **双耳 GATT 服务发现与通知启用完成后** 才上报。集成与联调时需注意该差异。
+同一键同时只能有一个 owner。原生接受写入后若 ACK 超时，结果为 `indeterminate/effectMayHaveOccurred`，键进入 quarantine；系统不能把超时当成确定失败并自动重放。
 
-### 6.5 断线重连
+Quarantine 只能由以下事件释放：
 
-`didDisconnectPeripheral` 中若收到断开，会 **再次 `central.connect(peripheral)`**（自动重连倾向），与 Android 当前空实现的断开行为不同。
+1. 对应 generation/side/command 的迟到响应被观察；
+2. 权威 reconciliation 确认该 exact leg/command 的状态；
+3. 对应 connection generation 被明确退休并进入新的 authority namespace；
+4. 进程终止性 dispose/test reset。
 
-### 6.6 数据接收
+单腿断连只会失败或隔离该腿当前 pending owner。它不会清除另一腿已经存在的 quarantine。例如右腿写入 ACK 超时后，即使左腿断连，右腿同一命令仍保持不可重放。
 
-`didUpdateValueFor` → `getCommandValue`：若为 `BLE_REQ_TRANSFER_MIC_DATA` 则走语音识别 PCM 流；否则组装字典调用 `blueInfoSink` 推给 Dart。
+## 9. 失败结果语义
 
----
+| 结果 | 是否可能已产生效果 | 自动重试 |
+|---|---:|---:|
+| expected authority 不匹配 | 否 | 可在重新获取 authority 后重试 |
+| side 未 ready / native 明确未接受 | 否 | 可按预算重试 |
+| ACK 超时 | 是 | 禁止，必须 reconcile |
+| native 调用异常且接受状态未知 | 是 | 禁止，必须 reconcile |
+| negative ACK | 取决于协议；当前按源码结果处理 | 仅按命令合同 |
+| success/continue ACK | 是，已接受 | 返回 receipt，不重复写 |
 
-## 7. 连接建立后的 Dart 行为摘要
+上层不得把这些状态压扁为一个无法区分“写前拒绝”和“效果未知”的普通布尔值。
 
-- **心跳**：连接成功后每 8 秒尝试 `Proto.sendHeartBeat()`，失败可短暂重试（见 `BleManager.startSendBeatHeart`）。
-- **请求-响应**：`BleManager.request` / `requestRetry` 通过 MethodChannel 发 `send`，并用首字节命令字 + `lr` 拼 key 在 `_handleReceivedData` 里完成 `Completer`。
+## 10. 语音路径
 
----
+- iOS：LC3 200 字节帧解码为 3200 字节 PCM，进入系统 on-device Speech；只有 framework-final transcript 才作为最终文本，超时 partial 会被丢弃。旧 attempt token 的语音帧不得进入当前识别会话。
+- Android：LC3 解码路径存在，但生产 PCM-to-ASR adapter 尚未配置；`startEvenAI` 明确失败关闭，不能宣称 Android 语音助手可用。
 
-## 8. 已知实现注意点（便于后续维护）
+## 11. 关键命令
 
-1. **Android / iOS「已连接」判定时机不一致**（见 §6.4），可能导致 Flutter 侧认为已连接时，某一侧尚未完成订阅或写通道就绪。
-2. **Android `disconnectFromGlasses`** 未完整释放 GATT。
-3. **`BleManager.isBothConnected()`** 在 Dart 中恒为 `true`（TODO），依赖原生真实连接状态时需谨慎。
-4. **首包指令**：Android `0xF4 0x01` vs iOS `0x4d 0x01`，若与固件协议强绑定需与硬件文档对齐。
+| 功能 | 命令 |
+|---|---|
+| 打开麦克风 | `0x0E` |
+| 麦克风数据 | `0xF1` |
+| TouchBar / Assistant 事件 | `0xF5` |
+| AI 与文本显示 | `0x4E` |
+| BMP 数据 / 结束 / CRC | `0x15` / `0x20` / `0x16` |
+| 心跳 | `0x25` |
+| 退出模式 | `0x18` |
+| 通知 / 白名单 | `0x4B` / `0x04` |
 
----
+成功状态为 `0xC9`；部分多包路径接受 `0xCB` 继续状态。字段、包长和值域以机器合同为准。
 
-## 9. 关键源码索引
+## 12. 敌对测试矩阵
 
-| 模块 | 路径 |
-|------|------|
-| Dart BLE 门面 | `lib/ble_manager.dart` |
-| Android BLE 核心 | `android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt` |
-| Android Channel | `android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleChannelHelper.kt` |
-| Android 设备模型 | `android/app/src/main/kotlin/com/example/demo_ai_even/model/BleDevice.kt`, `BlePairDevice.kt` |
-| iOS BLE 核心 | `ios/Runner/BluetoothManager.swift` |
-| iOS UUID 常量 | `ios/Runner/ServiceIdentifiers.swift` |
-| iOS Channel 注册 | `ios/Runner/AppDelegate.swift` |
+| 测试 | 证明目标 |
+|---|---|
+| generation N token 在 N+1 后到达 | 不得拥有或修改 N+1 |
+| 未选择 peripheral 回调 | 不得 fall through 为右腿 |
+| 同 peripheral 快速重连 | 旧 terminal callback 消费前不得启动新 attempt |
+| 同 caller key 跨左右腿 | 必须执行两次独立的 side-authorized 写入 |
+| 同 caller key 跨 generation | 新 generation 必须拥有独立 authority |
+| 同 caller key 跨 pair | 新 pair 必须拥有独立 authority |
+| 同 scope key 改 payload | 必须失败关闭 |
+| 右腿 uncertain、左腿断连 | 右腿 quarantine 必须保留 |
 
----
+测试入口：
 
-*文档基于 EvenDemoApp 仓库当前源码梳理；若固件或 Channel 协议有更新，请同步修订 §2–§3 与首包字节说明。*
+- `test/runtime/even_g1_transport_authority_test.dart`
+- `test/runtime/ble_request_slot_test.dart`
+- `test/runtime/ble_manager_authority_test.dart`
+- `ios/RunnerTests/RunnerTests.swift`
+
+## 13. 断开与资源释放
+
+Android 调用 `disconnect()`、`close()`，清空对应写队列和特征引用。iOS 首先退休 token、解除 delegate、清理对应 side，再取消连接；取消中的 peripheral 保留 barrier，直到 terminal callback 被消费。
+
+Flutter 停止 pair heartbeat，按 side 失败关闭 pending 请求，并发布左右腿快照。只有 generation retirement 才能清除该旧 generation 的 quarantine；普通单腿 disconnect 不清除 surviving side。
+
+## 14. 尚未由源码关闭的结论
+
+以下仍需要外部证据：真实 G1 丢包/重连、迟到 callback 分布、延迟、功耗、温度和 soak；固件版本兼容；初始化命令权威说明；pair identity 稳定性；Android ASR；iOS locale/设备覆盖；供应商固件、Bootloader、Secure Boot、OTA、恢复和回滚权限。
+
+## 15. 源码索引
+
+- `lib/adapters/even_g1/even_g1_transport.dart`
+- `lib/ble_manager.dart`
+- `lib/runtime/ble_request_slot.dart`
+- `lib/runtime/device_hal.dart`
+- `lib/services/ble.dart`
+- `lib/services/proto.dart`
+- `lib/services/evenai.dart`
+- `android/app/src/main/kotlin/com/example/demo_ai_even/bluetooth/BleManager.kt`
+- `android/app/src/main/kotlin/com/example/demo_ai_even/model/BleDevice.kt`
+- `ios/Runner/BluetoothManager.swift`
+- `ios/Runner/SpeechStreamRecognizer.swift`
+- `contracts/g1-ble-protocol-v1.json`
+- `docs/PLATFORM_CAPABILITIES.json`

@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "contract_id": "google-calendar-capability-v1",
+  "parent_gap": "HG-0087",
+  "owner": "capabilities",
+  "implementation": "services/control_plane/google_calendar.py",
+  "tests": [
+    "services/control_plane/test_google_calendar.py"
+  ],
+  "capability": {
+    "name": "calendar.event.create",
+    "risk": "R2",
+    "mutating": true,
+    "required_fields": [
+      "title",
+      "start_at",
+      "end_at"
+    ],
+    "additional_fields": false,
+    "maximum_title_characters": 256,
+    "maximum_title_utf8_bytes": 1024,
+    "maximum_duration_seconds": 86400
+  },
+  "profile": {
+    "calendar": "explicit owned calendar ID; no primary alias",
+    "scope": "https://www.googleapis.com/auth/calendar.events.owned",
+    "provider_binding": [
+      "profile",
+      "subject",
+      "account",
+      "calendar",
+      "scope"
+    ],
+    "event_type": "default",
+    "visibility": "private",
+    "transparency": "opaque",
+    "attendees": [],
+    "reminders": {
+      "useDefault": false
+    },
+    "recurrence": false,
+    "attachments": false,
+    "conference": false,
+    "send_updates": "none",
+    "zero_notifications_guaranteed": false
+  },
+  "authority": {
+    "ingress": "external authenticated service and cryptographic single-use lease verification",
+    "oauth": "external trusted vault; operation/request/purpose bound short-lived access grants; no client JSON proof",
+    "final_hook": "gateway callback after OAuth/TLS checks live operation, consumed lease expiry, request deadline and revocation",
+    "registration": "declared provider_id and capability_spec must match",
+    "direct_legacy_execute": "reject",
+    "revocation_is_remote_rollback": false
+  },
+  "transport": {
+    "host": "www.googleapis.com",
+    "port": 443,
+    "tls": "system certificate and hostname validation",
+    "default_timeout_seconds": 5,
+    "maximum_timeout_seconds": 60,
+    "maximum_response_bytes": 65536,
+    "retry_post": false,
+    "redirect": false,
+    "environment_proxy": false,
+    "error_body_reflection": false,
+    "raw_payload_persistence": false
+  },
+  "recovery": {
+    "event_id": "h + SHA-256(profile,provider,random-operation-ID)",
+    "readback": "GET exact event ID and validate full supported fields",
+    "unknown_statuses": [
+      "404",
+      "409",
+      "410",
+      "401",
+      "403",
+      "429",
+      "5xx"
+    ],
+    "automatic_redispatch": false,
+    "claims_terminal_nonapplication": false,
+    "fixed_id_is_exactly_once_guarantee": false,
+    "external_properties_are_signatures": false,
+    "fresh_read_authority_after_mutation_expiry": true,
+    "partial_attendee_views_accepted": false,
+    "invalid_timezone_offset_normalization": false
+  },
+  "not_implemented": [
+    "OAuth consent/code exchange/refresh-token vault",
+    "authenticated ingress and mobile integration",
+    "encrypted payload outbox and recovery custody",
+    "provider ownership/tenancy/retention qualification",
+    "remote compensation or cancellation",
+    "process isolation and production observability",
+    "independent acceptance"
+  ],
+  "claim_ceiling": "Source candidate and local tests; not full HG-0087/capabilities closure or E5-E7.",
+  "source_boundary": "contracts/server-provider-boundary-v1.json"
+}
