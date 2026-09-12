@@ -14,15 +14,13 @@ final class _RecordingDio {
     String contentType = 'application/json; charset=utf-8',
     int? declaredLength,
     bool includeLength = true,
-    Duration chunkDelay = Duration.zero,
-    bool neverComplete = false,
+    this.chunkDelay = Duration.zero,
+    this.neverComplete = false,
   })  : responseChunks = chunks ?? <List<int>>[utf8.encode(body)],
         responseStatusCode = statusCode,
         responseContentType = contentType,
         declaredLength = declaredLength,
-        includeLength = includeLength,
-        chunkDelay = chunkDelay,
-        neverComplete = neverComplete {
+        includeLength = includeLength {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (
