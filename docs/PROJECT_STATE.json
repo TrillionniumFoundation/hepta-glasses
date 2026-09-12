@@ -106,10 +106,10 @@
   },
   "schema_version": 6,
   "source_authority": {
-    "base_branch": "codex/hepta-identity-migration-20260910",
-    "branch": "codex/hepta-priority-execution-20260912",
+    "base_branch": "main",
+    "branch": "integration/hepta-main-convergence-20260912",
     "identity_rule": "live_pull_request_head_and_tree",
-    "pull_request": 126,
+    "pull_request": 127,
     "repository": "TrillionniumFoundation/hepta-glasses",
     "required_artifact": "hepta-source-evidence-<exact-head-sha>",
     "self_attested_sha_is_authoritative": false,

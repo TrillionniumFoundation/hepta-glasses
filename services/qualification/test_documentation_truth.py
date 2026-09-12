@@ -26,9 +26,9 @@ class DocumentationTruthRepositoryTests(unittest.TestCase):
         self.assertEqual(result["required_jobs"], 7)
         self.assertEqual(result["successor_maturity"], "source_implemented")
         self.assertEqual(result["last_qualified_commit"], PINNED_BASELINE["commit"])
-        self.assertEqual(result["successor_pull_request"], 126)
-        self.assertEqual(result["successor_branch"], "codex/hepta-priority-execution-20260912")
-        self.assertEqual(result["successor_base_branch"], "codex/hepta-identity-migration-20260910")
+        self.assertEqual(result["successor_pull_request"], 127)
+        self.assertEqual(result["successor_branch"], "integration/hepta-main-convergence-20260912")
+        self.assertEqual(result["successor_base_branch"], "main")
         self.assertEqual(result["module_registry"], "docs/modules/modules.json")
 
 

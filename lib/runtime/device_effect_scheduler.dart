@@ -178,16 +178,21 @@ final class DeviceEffectScheduler {
       throw ArgumentError.value(timeout, 'timeout', 'must be positive');
     }
     _closed = true;
-    final idle = _idle;
-    if (idle != null && !idle.isCompleted) {
-      await idle.future.timeout(timeout,
-          onTimeout: () => throw TimeoutException(
-              'Device effect scheduler did not become idle.', timeout));
+    final idle = _idleCompleter?.future;
+    if (idle == null) {
+      return;
+    }
+    try {
+      await idle.timeout(timeout);
+    } on TimeoutException {
+      throw StateError('Device effect scheduler did not become idle.');
     }
   }
 
   Future<void> _drain() async {
-    if (_draining) return;
+    if (_draining) {
+      return;
+    }
     _draining = true;
     try {
       while (_queue.isNotEmpty) {
@@ -208,9 +213,11 @@ final class DeviceEffectScheduler {
       if (_queue.isNotEmpty && _indeterminateOperation == null) {
         unawaited(_drain());
       } else {
-        final idle = _idle;
-        _idle = null;
-        if (idle != null && !idle.isCompleted) idle.complete();
+        final idle = _idleCompleter;
+        _idleCompleter = null;
+        if (idle != null && !idle.isCompleted) {
+          idle.complete();
+        }
       }
     }
   }

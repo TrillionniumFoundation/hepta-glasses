@@ -3,7 +3,7 @@ import 'package:hepta_glasses/services/evenai.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-class EvenAIListPage extends StatelessWidget {
+class EvenAIListPage extends StatefulWidget {
   const EvenAIListPage({super.key});
 
   @override

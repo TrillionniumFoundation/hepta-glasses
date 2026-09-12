@@ -1,4 +1,4 @@
-"""Inert local regressions for the PR #126 successor pointer.
+"""Inert local regressions for the PR #127 successor pointer.
 
 These verify the current-pointer admission boundary, not real GitHub evidence.
 No fixture can satisfy the independently qualified historical baseline.
@@ -25,10 +25,10 @@ class PrioritySuccessorTests(unittest.TestCase):
         self.head = "1" * 40
         self.tree = "2" * 40
         self.pull = {
-            "number": 126, "state": "open", "merged_at": None,
-            "head": {"ref": "codex/hepta-priority-execution-20260912", "sha": self.head,
+            "number": 127, "state": "open", "merged_at": None,
+            "head": {"ref": "integration/hepta-main-convergence-20260912", "sha": self.head,
                      "repo": {"full_name": truth.EXPECTED_REPOSITORY}},
-            "base": {"ref": "codex/hepta-identity-migration-20260910"},
+            "base": {"ref": "main"},
         }
         self.commit = {"sha": self.head, "commit": {"tree": {"sha": self.tree}}}
         self.observed = []
@@ -36,7 +36,7 @@ class PrioritySuccessorTests(unittest.TestCase):
     def read(self, path: str, *, token: str):
         self.observed.append(path)
         prefix = f"/repos/{truth.EXPECTED_REPOSITORY}"
-        if path == prefix + "/pulls/126":
+        if path == prefix + "/pulls/127":
             return copy.deepcopy(self.pull)
         if path == prefix + "/commits/" + self.head:
             return copy.deepcopy(self.commit)
@@ -57,8 +57,8 @@ class PrioritySuccessorTests(unittest.TestCase):
     def test_canonical_constants_and_machine_pointer_agree(self) -> None:
         project = json.loads((ROOT / "docs/PROJECT_STATE.json").read_text())
         authority = project["source_authority"]
-        self.assertEqual(truth.EXPECTED_SUCCESSOR_PULL_REQUEST, 126)
-        self.assertEqual(authority["pull_request"], 126)
+        self.assertEqual(truth.EXPECTED_SUCCESSOR_PULL_REQUEST, 127)
+        self.assertEqual(authority["pull_request"], 127)
         self.assertEqual(authority["branch"], truth.EXPECTED_SUCCESSOR_BRANCH)
         self.assertEqual(authority["base_branch"], truth.EXPECTED_SUCCESSOR_BASE_BRANCH)
         self.assertFalse(authority["self_attested_sha_is_authoritative"])
@@ -69,7 +69,7 @@ class PrioritySuccessorTests(unittest.TestCase):
     def test_current_prose_names_the_same_candidate(self) -> None:
         for path in ("README.md", "docs/CURRENT_STATE.md"):
             text = (ROOT / path).read_text()
-            self.assertIn("open PR #126", text)
+            self.assertIn("open PR #127", text)
             self.assertIn(truth.EXPECTED_SUCCESSOR_BRANCH, text)
             self.assertIn(truth.EXPECTED_SUCCESSOR_BASE_BRANCH, text)
             self.assertIn(truth.PINNED_BASELINE["artifact_zip_sha256"], text)
@@ -86,7 +86,7 @@ class PrioritySuccessorTests(unittest.TestCase):
         self.assertEqual(len(self.observed), 1)
 
     def test_predecessor_head_branch_is_rejected(self) -> None:
-        self.pull["head"]["ref"] = "codex/hepta-identity-migration-20260910"
+        self.pull["head"]["ref"] = "main"
         with self.assertRaisesRegex(truth.DocumentationTruthError, "head branch"):
             self.verify()
 

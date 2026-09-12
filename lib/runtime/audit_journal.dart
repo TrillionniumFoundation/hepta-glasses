@@ -79,8 +79,8 @@ final class AuditEntry {
           (key, value) => MapEntry(key.toString(), value as Object?),
         ),
       ),
-      previousHash: json['previous_hash']! as String,
-      hash: json['hash']! as String,
+      previousHash: previousHash,
+      hash: hash,
     );
   }
 }
@@ -332,7 +332,8 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
   /// Exposed for deterministic performance-contract tests.
   int get fastAppendCount => _fastAppendCount;
 
-  Future<void> _tail = Future<void>.value();
+  static File lockFileFor(File file) => File('${file.path}.lock');
+  static File checkpointFileFor(File file) => File('${file.path}.head.json');
 
   Future<T> _exclusive<T>(Future<T> Function() operation) {
     final completer = Completer<T>();
@@ -341,7 +342,7 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
     late final Future<void> queued;
     queued = previous.then<void>((_) async {
       try {
-        completer.complete(await operation());
+        completer.complete(await _withFileLock(operation));
       } on Object catch (error, stackTrace) {
         _trustedHeads.remove(key);
         completer.completeError(error, stackTrace);
@@ -431,71 +432,7 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
           );
         }
 
-            final sequence = entries.length + 1;
-            final previousHash = entries.isEmpty ? '' : entries.last.hash;
-            final timestamp = _clock.now().toUtc();
-            final immutablePayload = Map<String, Object?>.unmodifiable(payload);
-            final hash = AuditEntry.calculateHash(
-              sequence: sequence,
-              timestamp: timestamp,
-              eventType: eventType,
-              payload: immutablePayload,
-              previousHash: previousHash,
-            );
-            final entry = AuditEntry(
-              sequence: sequence,
-              timestamp: timestamp,
-              eventType: eventType,
-              payload: immutablePayload,
-              previousHash: previousHash,
-              hash: hash,
-            );
-            final encoded = utf8.encode('${canonicalJson(entry.toJson())}\n');
-            if (encoded.length > maxEntryBytes) {
-              throw StateError(
-                'Audit entry exceeds the configured byte limit.',
-              );
-            }
-
-            final currentLength = await handle.length();
-            if (currentLength + encoded.length > maxBytes) {
-              throw StateError(
-                'Audit journal reached its configured byte limit.',
-              );
-            }
-            await handle.setPosition(currentLength);
-            await handle.writeFrom(encoded);
-            await handle.flush();
-            return entry;
-          }));
-
-  @override
-  Future<List<AuditEntry>> readAll() =>
-      _exclusive(() => _withLockedHandle((handle) async {
-            final entries = await _readAllFromHandle(handle);
-            await verifyEntries(entries);
-            return List<AuditEntry>.unmodifiable(entries);
-          }));
-
-  @override
-  Future<void> verify() => _exclusive(() => _withLockedHandle((handle) async {
-        await verifyEntries(await _readAllFromHandle(handle));
-      }));
-
-  Future<T> _withLockedHandle<T>(
-    Future<T> Function(RandomAccessFile handle) operation,
-  ) async {
-    await file.parent.create(recursive: true);
-    final markerToken = await _acquireMarker();
-    RandomAccessFile? handle;
-    var fileLocked = false;
-    try {
-      handle = await file.open(mode: FileMode.append);
-      await handle.lock(FileLock.blockingExclusive);
-      fileLocked = true;
-      return await operation(handle);
-    } finally {
-      if (handle != null) {
+        final handle = await file.open(mode: FileMode.append);
         try {
           await handle.writeFrom(encoded);
           await handle.flush();
@@ -932,26 +869,12 @@ final class JsonlAuditJournal with _AuditVerification implements AuditJournal {
       flush: true,
     );
     try {
-      await _lockFile.rename(stale.path);
-      await stale.delete();
-      return true;
+      await temporary.rename(checkpointFile.path);
     } on FileSystemException {
-      return false;
-    }
-  }
-
-  Future<void> _releaseMarker(String token) async {
-    try {
-      if (!await _lockFile.exists()) {
-        return;
+      if (await checkpointFile.exists()) {
+        await checkpointFile.delete();
       }
-      final stored = (await _lockFile.readAsString()).trim();
-      if (stored == token) {
-        await _lockFile.delete();
-      }
-    } on FileSystemException {
-      // The journal write has already been flushed. A stale marker is safe:
-      // the bounded takeover path will recover it without altering evidence.
+      await temporary.rename(checkpointFile.path);
     }
     _trustedHeads[file.absolute.path] = checkpoint;
   }

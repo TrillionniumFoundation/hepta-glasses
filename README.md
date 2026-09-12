@@ -6,9 +6,9 @@ The product boundary is explicit: this repository is **not** vendor-authorized G
 
 ## Authoritative status
 
-The live head and Git tree of open PR #126 identify the active successor source object. PR #126 targets `codex/hepta-identity-migration-20260910` from `codex/hepta-priority-execution-20260912`. The live GitHub pull-request and commit readback—not a copied SHA in prose—determines the current source identity. The active successor remains `source_implemented`, not `ci_qualified`, `released`, or production-authorized, until one unchanged final head completes all seven jobs, yields a freshly inspected source Artifact, and receives an eligible non-author/non-latest-pusher approval.
+The live head and Git tree of open PR #127 identify the active successor source object. PR #127 targets `main` from `integration/hepta-main-convergence-20260912`. The live GitHub pull-request and commit readback—not a copied SHA in prose—determines the current source identity. The active successor remains `source_implemented`, not `ci_qualified`, `released`, or production-authorized, until one unchanged final head completes all seven jobs, yields a freshly inspected source Artifact, and receives an eligible non-author/non-latest-pusher approval.
 
-The prior PR #114 object at commit `317ee1141ceac6df7d711aeaaca27b22d735e48d`, tree `51e673238d30b81ef8eb64b93eef14fc7bf850cb`, completed all seven jobs and produced source artifact `10098668276` with ZIP SHA-256 `6eac5358c5b0f1555043ac99250e583d5baeb7a89a2133365d72ad5bead7037c`. It is historical predecessor evidence only: it received artifact-integrity comments but no eligible `APPROVED` review, and neither its CI nor its Artifact attests PR #125, PR #126 or any later head.
+The prior PR #114 object at commit `317ee1141ceac6df7d711aeaaca27b22d735e48d`, tree `51e673238d30b81ef8eb64b93eef14fc7bf850cb`, completed all seven jobs and produced source artifact `10098668276` with ZIP SHA-256 `6eac5358c5b0f1555043ac99250e583d5baeb7a89a2133365d72ad5bead7037c`. It is historical predecessor evidence only: it received artifact-integrity comments but no eligible `APPROVED` review, and neither its CI nor its Artifact attests PR #125, PR #126 and PR #127 or any later head.
 
 The last independently qualified historical baseline remains PR #101 at:
 
@@ -133,4 +133,4 @@ There is no release-gate override. Mocks, simulators, screenshots, repository-ge
 
 ## P0–P3 successor execution
 
-PR #126 is the separately reviewed successor above PR #125; neither parent branch nor `main` is updated by this declaration. The work package is `docs/development/PRIORITY_EXECUTION_2026-09-12.md` and its operations handoff is `docs/operations/PRIORITY_EXECUTION_RUNBOOK.md`. The existing HG-0087 source status is not acceptance of this new delta, module semantic completeness, production integration or the operational deepening backlog. All successor qualification flags remain false.
+PR #127 is the protected convergence successor above PR #126; neither parent branch nor `main` is updated by this declaration. The work package is `docs/development/PRIORITY_EXECUTION_2026-09-12.md` and its operations handoff is `docs/operations/PRIORITY_EXECUTION_RUNBOOK.md`. The existing HG-0087 source status is not acceptance of this new delta, module semantic completeness, production integration or the operational deepening backlog. All successor qualification flags remain false.

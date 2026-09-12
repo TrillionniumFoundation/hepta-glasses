@@ -224,7 +224,6 @@ final class BluetoothManager: NSObject, CBCentralManagerDelegate {
     }
 
     func connectToDevice(deviceName: String, result: @escaping FlutterResult) {
-        reconnectSuppressed = false
         centralManager.stopScan()
         guard let pair = pairedDevices[deviceName] else {
             result(

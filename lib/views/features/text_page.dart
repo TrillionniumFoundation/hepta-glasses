@@ -30,12 +30,6 @@ See what matters, when it matters.''';
   }
 
   @override
-  void dispose() {
-    tfController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final enabled = BleManager.get().isConnected &&
         _controller.text.trim().isNotEmpty &&

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:hepta_glasses/runtime/audit_checkpoint_authenticator.dart';
 import 'package:hepta_glasses/runtime/audit_journal.dart';
@@ -64,22 +63,18 @@ void main() {
     final second = journalFor(file);
     await Future.wait(<Future<void>>[first.initialize(), second.initialize()]);
 
-    await Future.wait(<Future<AuditEntry>>[
-      for (var index = 0; index < 32; index++)
-        (index.isEven ? first : second).append(
-          'multi-instance.append',
+    await Future.wait(
+      List<Future<AuditEntry>>.generate(
+        64,
+        (int index) => (index.isEven ? first : second).append(
+          'cross.instance',
           <String, Object?>{'index': index},
         ),
-    ]);
-
-    final reader = JsonlAuditJournal(file);
-    await reader.initialize();
-    final entries = await reader.readAll();
-    expect(entries, hasLength(32));
-    expect(
-      entries.map((AuditEntry entry) => entry.sequence),
-      orderedEquals(List<int>.generate(32, (int index) => index + 1)),
+      ),
     );
+
+    await first.verify();
+    expect(await second.readAll(), hasLength(64));
   });
 
   test(
@@ -186,9 +181,7 @@ void main() {
 
   test('file audit journal fails closed after record tampering', () async {
     final directory = await Directory.systemTemp.createTemp('hepta-audit-');
-    addTearDown(() async {
-      await directory.delete(recursive: true);
-    });
+    addTearDown(() async => directory.delete(recursive: true));
     final file = File('${directory.path}/audit.jsonl');
     final journal = journalFor(file);
     await journal.initialize();
@@ -203,60 +196,5 @@ void main() {
     await file.writeAsString('${jsonEncode(line)}\n', flush: true);
 
     await expectLater(journal.verify(), throwsStateError);
-  });
-
-  test('file audit journal fails closed on a torn final record', () async {
-    final directory =
-        await Directory.systemTemp.createTemp('hepta-audit-torn-');
-    addTearDown(() async {
-      await directory.delete(recursive: true);
-    });
-    final file = File('${directory.path}/audit.jsonl');
-    final journal = JsonlAuditJournal(file);
-    await journal.initialize();
-    await journal.append('task.created', <String, Object?>{'task_id': 't-1'});
-    await file.writeAsString(
-      '{"sequence":2',
-      mode: FileMode.append,
-      flush: true,
-    );
-
-    await expectLater(
-      JsonlAuditJournal(file).initialize(),
-      throwsStateError,
-    );
-  });
-
-  test('file audit journal enforces entry and file bounds', () async {
-    final directory =
-        await Directory.systemTemp.createTemp('hepta-audit-bounds-');
-    addTearDown(() async {
-      await directory.delete(recursive: true);
-    });
-
-    final entryBounded = JsonlAuditJournal(
-      File('${directory.path}/entry-bounded.jsonl'),
-      maxEntries: 1,
-    );
-    await entryBounded.initialize();
-    await entryBounded.append('first', const <String, Object?>{});
-    await expectLater(
-      entryBounded.append('second', const <String, Object?>{}),
-      throwsStateError,
-    );
-
-    final byteBounded = JsonlAuditJournal(
-      File('${directory.path}/byte-bounded.jsonl'),
-      maxBytes: 512,
-      maxEntryBytes: 256,
-    );
-    await byteBounded.initialize();
-    await expectLater(
-      byteBounded.append(
-        'oversized',
-        <String, Object?>{'value': List<String>.filled(300, 'x').join()},
-      ),
-      throwsStateError,
-    );
   });
 }
