@@ -34,9 +34,9 @@ ROOT = Path(__file__).resolve().parents[2]
 EXPECTED_PLAN_REVISION = "2026-09-01-g8"
 EXPECTED_REPOSITORY = "TrillionniumFoundation/hepta-glasses"
 EXPECTED_PROJECT_STATE_SCHEMA = 6
-EXPECTED_SUCCESSOR_PULL_REQUEST = 125
-EXPECTED_SUCCESSOR_BRANCH = "codex/hepta-identity-migration-20260910"
-EXPECTED_SUCCESSOR_BASE_BRANCH = "codex/hepta-main-convergence-20260909-v2"
+EXPECTED_SUCCESSOR_PULL_REQUEST = 126
+EXPECTED_SUCCESSOR_BRANCH = "codex/hepta-priority-execution-20260912"
+EXPECTED_SUCCESSOR_BASE_BRANCH = "codex/hepta-identity-migration-20260910"
 EXPECTED_SUCCESSOR_IDENTITY_RULE = "live_pull_request_head_and_tree"
 EXPECTED_MODULE_REGISTRY = "docs/modules/modules.json"
 EXPECTED_REQUIRED_JOBS = (
@@ -187,7 +187,6 @@ SHA64 = re.compile(r"^[0-9a-f]{64}$")
 MAX_JSON_BYTES = 16 * 1024 * 1024
 MAX_API_BYTES = 32 * 1024 * 1024
 MAX_ARTIFACT_BYTES = 8 * 1024 * 1024
-
 
 class DocumentationTruthError(AssertionError):
     """Stable project-truth validation failure."""

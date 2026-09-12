@@ -109,9 +109,9 @@ partially applied and revoked locally. Unknown effects expose a bounded recovery
 or support path rather than a generic retry button. Permission-denied screens
 need a direct settings/retry action that rechecks authority; accessibility labels
 must announce uncertainty and the affected side without reading private content
-into diagnostics. Locale/device support must be explicit. Android's missing
-production PCM-to-ASR adapter remains disabled, not silently substituted with a
-fixture. iOS framework finality does not establish every locale/device pairing.
+into diagnostics. Locale/device support must be explicit. Android's ticket-bound PCM-to-ASR source path remains fail closed without its
+live authenticated bootstrap and qualified speech tenant; it must not be
+substituted with a fixture. iOS framework finality does not establish every locale/device pairing.
 
 ### Module-by-module residual work
 
@@ -127,7 +127,7 @@ are work assignments, not accepted module-review records.
 | g1-transport | platform sequence diagrams, firmware capability matrix, physical queue/reconnect/readback evidence |
 | g1-protocol-features | review existing schema-v3 matrix; vendor confirmation and real device coverage |
 | assistant-speech | LC3/PCM/ASR finality, locale matrix, interruption/background behavior, privacy and latency measurement |
-| android-native | actual PCM-to-ASR adapter, permission/OEM lifecycle, signing and attestation integration |
+| android-native | qualify existing ticket-bound PCM-to-ASR source with real bootstrap/tenant, permission/OEM lifecycle, signing and attestation integration |
 | ios-native | resolve native-test failure and qualify OS/device/locale/interruption behavior |
 | digital-twin | explicit scenario/fidelity matrix and mapping to physical qualification limitations |
 | model-gateway-service | real authenticated ingress/tenant composition, bounded operations and independent provider qualification |
@@ -214,3 +214,7 @@ exact-head jobs, artifact inspection and eligible independent review are complet
 
 The repository's fixed source contracts and observed toolchain remain the
 acceptance subject; a documentation link alone is not execution evidence.
+
+## Successor identity correction after the first CI run
+
+The first run of this work on PR #126 was rejected because the inherited current-successor pointer still named PR #125. This successor updates the three expected PR/head-branch/base-branch identifiers, the machine pointer, current-state prose and repository regression expectations together. All verification functions and the independently qualified PR #101 tuple remain unchanged. The live head comparison is retained; no environment override, ignored failure, inherited approval or historical Artifact transfer is introduced. The additional pointer tests use inert API fixtures and prove only the local acceptance/rejection boundary, not live baseline qualification. A separate follow-up repairs the two Flutter fixture initializing-formal lint diagnostics without changing test assertions.

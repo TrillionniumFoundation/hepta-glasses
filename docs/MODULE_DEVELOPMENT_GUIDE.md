@@ -185,7 +185,7 @@ Start/stop events are debounced. Recording, speech-finalization, model, and pagi
 
 ### Privacy and platform truth
 
-Raw audio and partial transcripts are active-session memory only. Transcript/answer history is disabled by default, direct-user opt-in only, process-memory only, and immediately deleted on opt-out. Android currently has LC3 decoding but no production PCM-to-ASR adapter, so voice activation fails closed. Production provider retention, abuse controls, live receipts, iOS locale/device coverage, and physical latency/privacy evidence remain external.
+Raw audio and partial transcripts are active-session memory only. Transcript/answer history is disabled by default, direct-user opt-in only, process-memory only, and immediately deleted on opt-out. Android has LC3 decoding and a ticket-bound PCM-to-ASR source path; production activation remains fail closed without live authenticated bootstrap, a configured speech tenant, current-generation PCM, provider finality and cancellation/revocation integration. Production provider retention, abuse controls, live receipts, iOS locale/device coverage, and physical latency/privacy evidence remain external.
 
 <a id="android-native"></a>
 
