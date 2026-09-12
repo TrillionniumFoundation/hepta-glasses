@@ -14,15 +14,13 @@ final class _RecordingDio {
     String contentType = 'application/json; charset=utf-8',
     int? declaredLength,
     bool includeLength = true,
-    Duration chunkDelay = Duration.zero,
-    bool neverComplete = false,
+    this.chunkDelay = Duration.zero,
+    this.neverComplete = false,
   })  : responseChunks = chunks ?? <List<int>>[utf8.encode(body)],
         responseStatusCode = statusCode,
         responseContentType = contentType,
         declaredLength = declaredLength,
-        includeLength = includeLength,
-        chunkDelay = chunkDelay,
-        neverComplete = neverComplete {
+        includeLength = includeLength {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (
@@ -323,6 +321,25 @@ void main() {
       _gatewayCode('model_gateway_response_timeout'),
     );
     expect(transport.streamCancellations, greaterThanOrEqualTo(1));
+  });
+
+  test('complete JSON on an unterminated stream still times out', () async {
+    final transport = _RecordingDio(
+      includeLength: false,
+      neverComplete: true,
+    );
+    await expectLater(
+      _gateway(
+        transport,
+        const StaticRuntimeTokenProvider('stable-token-123456789'),
+        responseDeadline: const Duration(milliseconds: 50),
+      ).answer(question: 'status'),
+      _gatewayCode('model_gateway_response_timeout'),
+    );
+    expect(transport.requests, 1);
+    expect(transport.streamListeners, 1);
+    expect(transport.chunksEmitted, 1);
+    expect(transport.streamCancellations, 1);
   });
 
   test('cancellation during response immediately cancels stream', () async {

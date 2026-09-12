@@ -125,12 +125,13 @@ class FullGapClosureControlTests(unittest.TestCase):
             "The live head and tree of Draft PR #101 identify the active adoption candidate",
             "The last independently qualified baseline is Draft PR #101",
             "The live head and Git tree of open PR #114 identify the active successor source object",
+            "The live head and Git tree of open PR #125 identify the active successor source object",
         )
         for relative in ("README.md", "docs/CURRENT_STATE.md"):
             text = self.read(relative)
-            self.assertIn("open PR #125", text)
+            self.assertIn("open PR #126", text)
+            self.assertIn("codex/hepta-priority-execution-20260912", text)
             self.assertIn("codex/hepta-identity-migration-20260910", text)
-            self.assertIn("codex/hepta-main-convergence-20260909-v2", text)
             self.assertIn("last independently qualified historical baseline", text)
             self.assertIn("35f01329262d6a137bfa3c7e95302a397ed32676", text)
             self.assertIn("baa9c218a779adb4713e5985d4109b20db70087e93fca34f2a9ba08e157af897", text)
@@ -151,9 +152,9 @@ class FullGapClosureControlTests(unittest.TestCase):
         self.assertEqual(last["pull_request"], 101)
         self.assertEqual(last["commit"], "35f01329262d6a137bfa3c7e95302a397ed32676")
         self.assertEqual(project["schema_version"], 6)
-        self.assertEqual(authority["pull_request"], 125)
-        self.assertEqual(authority["branch"], "codex/hepta-identity-migration-20260910")
-        self.assertEqual(authority["base_branch"], "codex/hepta-main-convergence-20260909-v2")
+        self.assertEqual(authority["pull_request"], 126)
+        self.assertEqual(authority["branch"], "codex/hepta-priority-execution-20260912")
+        self.assertEqual(authority["base_branch"], "codex/hepta-identity-migration-20260910")
         self.assertEqual(
             authority["identity_rule"],
             "live_pull_request_head_and_tree",

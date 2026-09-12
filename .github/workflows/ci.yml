@@ -73,11 +73,11 @@ jobs:
           flutter-version: '3.47.2'
           channel: stable
           cache: false
-      - run: flutter pub get
+      - run: flutter pub get --enforce-lockfile
       - name: Enforce committed Dart formatting
         run: dart format --output=none --set-exit-if-changed lib test
       - name: Treat analyzer warnings as failures
-        run: flutter analyze --no-fatal-infos
+        run: flutter analyze --fatal-infos --fatal-warnings
       - run: flutter test
       - name: Prove Flutter qualification is read-only
         run: git diff --exit-code
@@ -105,7 +105,7 @@ jobs:
           flutter-version: '3.47.2'
           channel: stable
           cache: false
-      - run: flutter pub get
+      - run: flutter pub get --enforce-lockfile
       - run: flutter build apk --debug
       - name: Build Android release graph
         run: |
@@ -149,7 +149,7 @@ jobs:
           flutter-version: '3.47.2'
           channel: stable
           cache: false
-      - run: flutter pub get
+      - run: flutter pub get --enforce-lockfile
       - name: Install locked CocoaPods dependencies
         run: |
           cd ios
@@ -176,7 +176,17 @@ jobs:
           )"
           DEVICE_ID="${destination##*=}"
           xcrun simctl boot "$DEVICE_ID" || true
-          xcrun simctl bootstatus "$DEVICE_ID" -b
+          python3 - "$DEVICE_ID" <<'PYBOOT'
+          import subprocess
+          import sys
+          try:
+              subprocess.run(
+                  ["xcrun", "simctl", "bootstatus", sys.argv[1], "-b"],
+                  check=True, timeout=300,
+              )
+          except (subprocess.SubprocessError, OSError):
+              raise SystemExit("iOS simulator readiness failed or exceeded 300 seconds")
+          PYBOOT
           result_bundle="build/ios/RunnerTests.xcresult"
           rm -rf "$result_bundle"
           xcodebuild test \
@@ -185,13 +195,16 @@ jobs:
             -configuration Debug \
             -destination "$destination" \
             -only-testing:RunnerTests \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 120 \
+            -maximum-test-execution-time-allowance 180 \
             -resultBundlePath "$result_bundle" \
             CODE_SIGNING_ALLOWED=NO
           xcrun xcresulttool get test-results summary \
             --path "$result_bundle" \
             --format json > /tmp/hepta-ios-test-summary.json
           python3 tools/ios_ci.py validate-result \
-            --input /tmp/hepta-ios-test-summary.json
+            --input /tmp/hepta-ios-test-summary.json --root .
       - name: Prove iOS qualification is read-only
         run: git diff --exit-code
 
