@@ -323,6 +323,25 @@ void main() {
     expect(transport.streamCancellations, greaterThanOrEqualTo(1));
   });
 
+  test('complete JSON on an unterminated stream still times out', () async {
+    final transport = _RecordingDio(
+      includeLength: false,
+      neverComplete: true,
+    );
+    await expectLater(
+      _gateway(
+        transport,
+        const StaticRuntimeTokenProvider('stable-token-123456789'),
+        responseDeadline: const Duration(milliseconds: 50),
+      ).answer(question: 'status'),
+      _gatewayCode('model_gateway_response_timeout'),
+    );
+    expect(transport.requests, 1);
+    expect(transport.streamListeners, 1);
+    expect(transport.chunksEmitted, 1);
+    expect(transport.streamCancellations, 1);
+  });
+
   test('cancellation during response immediately cancels stream', () async {
     final transport = _RecordingDio(
       chunkDelay: const Duration(milliseconds: 100),
