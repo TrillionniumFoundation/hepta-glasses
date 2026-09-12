@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crclib/catalog.dart';
@@ -16,23 +18,32 @@ typedef BmpRequester = Future<BleReceive> Function(
 );
 typedef BmpDelay = Future<void> Function(Duration duration);
 
-final class BmpUpdateManager {
-  BmpUpdateManager({
-    BmpPacketSender? sendPacket,
-    BmpRequester? request,
-    BmpDelay? delay,
-  })  : _sendPacket = sendPacket ?? _defaultSendPacket,
-        _request = request ?? _defaultRequest,
-        _delay = delay ?? _defaultDelay;
-
-  static const int packetPayloadLength = 194;
+  static const int packetPayloadBytes = 194;
   static const int maximumPacketCount = 256;
   static const int maximumImageBytes = packetPayloadLength * maximumPacketCount;
   static const List<int> _storageAddress = <int>[0x00, 0x1c, 0x00, 0x00];
 
-  final BmpPacketSender _sendPacket;
-  final BmpRequester _request;
-  final BmpDelay _delay;
+  static List<Uint8List> buildPackets(Uint8List image) {
+    if (image.isEmpty || image.length > maximumImageBytes) {
+      throw ArgumentError.value(image.length, 'image',
+          'BMP payload must be between 1 and $maximumImageBytes bytes');
+    }
+    final packets = <Uint8List>[];
+    for (var offset = 0; offset < image.length; offset += packetPayloadBytes) {
+      final end = min(offset + packetPayloadBytes, image.length);
+      final sequence = packets.length;
+      if (sequence >= maximumPacketCount) {
+        throw StateError(
+            'BMP packet sequence exceeds one-byte protocol range.');
+      }
+      final payload = image.sublist(offset, end);
+      final prefix = sequence == 0
+          ? <int>[0x15, sequence, ...storageAddress]
+          : <int>[0x15, sequence];
+      packets.add(Utils.addPrefixToUint8List(prefix, payload));
+    }
+    return List<Uint8List>.unmodifiable(packets);
+  }
 
   Future<bool> updateBmp(String side, Uint8List image, {int? seq}) async =>
       (await updateBmpEffect(side, image, seq: seq)).committed;
@@ -56,8 +67,6 @@ final class BmpUpdateManager {
         details: <String, Object?>{'image_bytes': image.length},
       );
     }
-
-    final packets = _splitPackets(image);
     final startSequence = seq ?? 0;
     if (startSequence < 0 || startSequence >= packets.length) {
       return DeviceEffectResult.rejectedBeforeWrite(

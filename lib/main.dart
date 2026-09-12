@@ -15,6 +15,7 @@ Future<void> main() async {
   MutationAuthorityBootstrap.configureFromEnvironment();
   BleManager.get();
 
+  late final String supportPath;
   try {
     final supportPath = await BleManager.invokeMethod<String>(
       'getApplicationSupportPath',
@@ -32,7 +33,8 @@ Future<void> main() async {
       'runtime_startup_failed',
       fields: <String, Object?>{'error_type': error.runtimeType.toString()},
     );
-    runApp(const FailClosedStartupApp());
+  } on Object {
+    runApp(const _FailClosedStartupApp());
     return;
   }
 
@@ -67,12 +69,14 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-        title: 'Hepta Glasses',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-          useMaterial3: true,
-        ),
-        home: const HomePage(),
-      );
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Hepta Glasses',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+      ),
+      home: const HomePage(),
+    );
+  }
 }
