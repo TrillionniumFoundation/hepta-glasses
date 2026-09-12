@@ -1,10 +1,10 @@
 # Hepta Glasses module development guide
 
-Status: canonical repository-side module guide for plan revision `2026-09-01-g8`.
+Status: shared repository-side engineering overview. The active module registry and its `primary_document` fields determine the current module specifications; G8/G9/G10 records retain historical lineage only.
 
 This document explains how the current source is partitioned, where authority lives, which contracts are normative, how concurrency and failure are handled, and what evidence is still external. It complements the architecture, threat, privacy, capability, BLE, operations, and release documents; it does not promote source evidence into physical-device or production-release evidence.
 
-`docs/MODULES.json` is the machine-readable ownership and coverage index. Every entry points to one or more sections below. `tools/validate_repository_metadata.py` verifies that source roots, documentation references, tests, contracts, Gap Ledger evidence, and resume packages exist on the exact source tree.
+`docs/modules/modules.json` is the single active machine-readable ownership and coverage index. `docs/MODULES.json` is historical lineage and `docs/MODULE_COVERAGE.json` is a compatibility pointer, not another active registry. The generated [module index](modules/README.md) links to each current primary specification. `tools/validate_repository_metadata.py` verifies that source roots, documentation references, tests, contracts, Gap Ledger evidence, and resume packages exist on the exact source tree.
 
 ## Shared engineering rules
 
@@ -15,6 +15,8 @@ This document explains how the current source is partitioned, where authority li
 5. Raw audio, credentials, secrets, and sensitive content do not enter long-term memory, source, or ordinary audit payloads.
 6. Source tests and digital twins establish E1-E3 only. Exact-head CI establishes E4 only. Physical devices, deployed infrastructure, independent assurance, signing, pilot, rollout, and store approval require E5-E7.
 7. A module change must update its contracts, tests, documentation section, Gap Ledger rows, and Evidence Index when any claimed invariant or evidence ceiling changes.
+
+<a id="mobile-shell"></a>
 
 <!-- module:mobile-shell -->
 ## Mobile shell
@@ -41,6 +43,8 @@ No provider key, refresh token, release key, transcript body, notification body,
 
 Run Flutter formatting, analyzer, unit/widget tests, Android/iOS builds, and startup-failure tests. A shell change must preserve the single composition root, fail-closed startup, accessibility labels, cancellation, and typed receipt handling. Release packaging, signing, store metadata, accessibility review, and a real device matrix remain external.
 
+<a id="edge-runtime"></a>
+
 <!-- module:edge-runtime -->
 ## Edge runtime
 
@@ -66,6 +70,8 @@ The runtime receives an external `MutationAuthorityProvider`; it cannot synthesi
 
 State transitions require positive, negative, cancellation, timeout, replay, and crash-window tests. A new effect requires a typed spec, exact argument validation, policy tier, durable preparation, typed adapter, reconciliation behavior, tests, and documentation. Production authority and physical-effect evidence remain external.
 
+<a id="policy-tool-gateway"></a>
+
 <!-- module:policy-tool-gateway -->
 ## Policy, leases, and Tool Gateway
 
@@ -89,6 +95,8 @@ Recovery verifies the journal, rebuilds fingerprints and receipts, restores cons
 
 R4 is denied in the consumer profile. Untrusted content cannot supply authority; an exact user confirmation digest is required where allowed. Tests must cover malformed requests, unknown tools, lease drift/expiry/reuse, concurrent duplicates, prompt injection, handler timeout, terminal audit failure, recovery, and reconciliation.
 
+<a id="audit-journal"></a>
+
 <!-- module:audit-journal -->
 ## Durable audit journal and checkpoint authentication
 
@@ -109,6 +117,8 @@ Writes are serialized process-wide per path and protected by an OS file lock. Da
 ### Privacy, operations, and tests
 
 Audit payloads contain no prompts, transcripts, credentials, notification bodies, locations, or raw audio. Production must define retention, export authorization, rotation, capacity alerts, backup exclusion, migration, and incident handling. Tests cover concurrent writers, corruption, equal-length tampering, torn tails, checkpoint drift, legacy migration, bounded capacity, and fast-path/full-verification counters.
+
+<a id="g1-transport"></a>
 
 <!-- module:g1-transport -->
 ## G1 transport and dual-leg BLE authority
@@ -135,6 +145,8 @@ Authority mismatch or explicit native rejection before write is retryable only a
 
 Hostile tests cover stale callbacks, unknown peripherals, cross-side/generation/pair key reuse, payload drift, unscoped responses, opposite-leg disconnect, queue limits, and reconnect barriers. Physical protocol compatibility, loss, latency, power, thermal, soak, pair stability, and firmware authority remain E5/upstream gates. `docs/G1_BLE_CONNECTION.md` is the detailed protocol document.
 
+<a id="g1-protocol-features"></a>
+
 <!-- module:g1-protocol-features -->
 ## G1 protocol and device feature delivery
 
@@ -153,6 +165,8 @@ A multi-packet partial write is indeterminate. A left-leg success followed by ri
 ### Security and tests
 
 Asset paths are allowlisted, notification/whitelist inputs are bounded, and all device mutations pass the runtime. Tests cover invalid packet bounds, malformed finish/CRC responses, paging cancellation, microphone retry safety, heartbeat retry safety, dual-leg partial application, and receipt conversion. Vendor command authority and physical display/notification behavior remain external.
+
+<a id="assistant-speech"></a>
 
 <!-- module:assistant-speech -->
 ## Assistant, speech, and mobile model gateway
@@ -173,6 +187,8 @@ Start/stop events are debounced. Recording, speech-finalization, model, and pagi
 
 Raw audio and partial transcripts are active-session memory only. Transcript/answer history is disabled by default, direct-user opt-in only, process-memory only, and immediately deleted on opt-out. Android currently has LC3 decoding but no production PCM-to-ASR adapter, so voice activation fails closed. Production provider retention, abuse controls, live receipts, iOS locale/device coverage, and physical latency/privacy evidence remain external.
 
+<a id="android-native"></a>
+
 <!-- module:android-native -->
 ## Android native integration
 
@@ -189,6 +205,8 @@ Decoded background work rechecks authority before emitting events. MethodChannel
 ### Build, security, and tests
 
 The Android build uses a fixed application ID, no release debug-signing fallback, native CMake inputs, and unit tests. Keystore key material never enters Dart. Required tests cover pair parsing, generation ownership, readiness, queue bounds, authority mismatch, LC3 bounds, sanitizer execution, and checkpoint signing. Production signing, Play Integrity, Android ASR, physical G1 qualification, OEM/device coverage, power, and thermal evidence remain external.
+
+<a id="ios-native"></a>
 
 <!-- module:ios-native -->
 ## iOS native integration
@@ -209,6 +227,8 @@ Only a framework-final transcript is emitted as final; bounded partials are disc
 
 XCTest covers stale callbacks, unknown ownership, retired barriers, side isolation, and native processing. Simulator build success is E3, not physical evidence. App Attest/DeviceCheck, signing, real G1 traces, locale/device matrix, battery, thermal, and store review remain external.
 
+<a id="digital-twin"></a>
+
 <!-- module:digital-twin -->
 ## G1 digital twin and fault injection
 
@@ -228,8 +248,12 @@ Pre-write timeouts are retry-safe and do not create a write. Injected acknowledg
 
 Tests directly exercise cross-side, cross-generation, cross-pair, payload-drift, replay, pre-write timeout, acknowledgement loss, and single-leg degradation. The twin supplies E2 evidence only; protocol compatibility, timing distributions, RF loss, firmware behavior, power, thermal, and soak require physical G1 evidence.
 
+<a id="model-gateway-service"></a>
+
 <!-- module:model-gateway-service -->
 ## Development model gateway service
+
+> Current primary specification: [development/DURABLE_MODEL_GATEWAY.md](development/DURABLE_MODEL_GATEWAY.md). The reference-profile summary below does not supersede that durable implementation, its API or its remaining deployment gates.
 
 ### Responsibility and boundary
 
@@ -243,8 +267,12 @@ The bundled Python service proves that the mobile application calls a Hepta-owne
 
 A production replacement must preserve the mobile API boundary while adding workload identity, KMS-managed provider references, tenant isolation, quotas, retention policy, abuse controls, redacted observability, provider timeout/cancellation mapping, authoritative request receipts, rollout, and revoke. The deterministic service may be used in local tests only.
 
+<a id="identity-control-plane"></a>
+
 <!-- module:identity-control-plane -->
 ## Identity control plane
+
+> Current primary specification: [development/DURABLE_IDENTITY.md](development/DURABLE_IDENTITY.md). The reference-profile summary below does not supersede that durable implementation, its API or its remaining deployment gates.
 
 ### Responsibility
 
@@ -258,8 +286,12 @@ Reference stores are protected by process locks but are in-memory. Device reacti
 
 Production must replace process memory and raw HMAC keys with a durable replicated registry, KMS/HSM signing or standards-based identity service, platform attestation verification, revocation propagation, service identity, audit export, recovery workflow, backup/restore, and operational SLOs. No mobile or repository path may contain permanent signing material.
 
+<a id="realtime-control-plane"></a>
+
 <!-- module:realtime-control-plane -->
 ## Realtime control plane
+
+> Current primary specification: [development/REALTIME_ADMISSION.md](development/REALTIME_ADMISSION.md). The reference-profile summary below does not supersede that durable implementation, its API or its remaining deployment gates.
 
 ### Responsibility
 
@@ -273,8 +305,12 @@ Ticket activation and consumed-token recording occur under one lock so concurren
 
 The reference broker is in-memory and provider-neutral. Production requires durable or reconstructible session state, a server-side provider exchange, credential vault, OAuth registration where applicable, network policy, quotas, telemetry, cancellation propagation, timeout reconciliation, multi-region behavior, revoke drills, and authoritative receipts. Provider keys never cross into the phone bundle.
 
+<a id="capability-control-plane"></a>
+
 <!-- module:capability-control-plane -->
 ## Capability control plane and adapters
+
+> Current primary specification: [development/DURABLE_CAPABILITIES.md](development/DURABLE_CAPABILITIES.md). The reference-profile summary below does not supersede that durable implementation, its API or its remaining deployment gates.
 
 ### Responsibility
 
@@ -292,8 +328,12 @@ Notification, document, webpage, transcript, model, Skill, or tool content is un
 
 The in-memory reminder adapter is a deterministic stand-in. Each production capability requires provider registration, scoped consent, vault-backed credential handle, typed adapter, authoritative receipt, revoke, timeout reconciliation, audit export, rate limits, observability, and integration tests against the real provider.
 
+<a id="skills-registry"></a>
+
 <!-- module:skills-registry -->
 ## Skills registry
+
+> Current primary specification: [development/SIGNED_SKILLS.md](development/SIGNED_SKILLS.md). The reference-profile summary below does not supersede that durable implementation, its API or its remaining deployment gates.
 
 ### Responsibility
 
@@ -301,7 +341,7 @@ The Skills registry validates publisher allowlists, key IDs, manifest signatures
 
 ### Trust and package custody
 
-Source uses a deterministic HMAC trust store for tests. Production must use asymmetric publisher roots or an equivalent verifier so runtime verification does not possess publisher signing authority. The package digest is computed from actual bytes; a signed manifest cannot authorize substituted package content. R4 packages are denied.
+The legacy reference profile uses a deterministic HMAC trust store for tests; the current signed registry uses the separately specified Ed25519 profile. Production must use asymmetric publisher roots or an equivalent verifier so runtime verification does not possess publisher signing authority. The package digest is computed from actual bytes; a signed manifest cannot authorize substituted package content. R4 packages are denied.
 
 ### Upgrade and revoke
 
@@ -311,8 +351,12 @@ Added capability, data class, or domain requires explicit re-consent. A revoked 
 
 Add signed distribution metadata, encrypted content-addressed storage, malware review, sandbox execution, egress enforcement, dependency SBOM, staged rollout, kill switch, revoke propagation, audit, and independent review.
 
+<a id="memory"></a>
+
 <!-- module:memory -->
 ## Memory and assistant-history retention
+
+> Current primary specification: [development/DURABLE_MEMORY.md](development/DURABLE_MEMORY.md). The reference-profile summary below does not supersede that durable implementation, its API or its remaining deployment gates.
 
 ### Responsibility
 
@@ -324,7 +368,9 @@ Raw audio, credentials, and secrets are forbidden. Rendering content does not au
 
 ### Production requirements
 
-Persistent memory is unavailable until encrypted storage, per-subject keys, rotation, backup exclusion, migration, regional retention, export/delete UI, account deletion, abuse controls, subprocessor inventory, and witnessed deletion drills exist. Search and export authorization must remain subject- and purpose-bound.
+Production persistent memory remains unavailable until the durable source is composed with approved encrypted storage, per-subject keys, rotation, backup exclusion, migration, regional retention, export/delete UI, account deletion, abuse controls, subprocessor inventory, and witnessed deletion drills exist. Search and export authorization must remain subject- and purpose-bound.
+
+<a id="codex-worker"></a>
 
 <!-- module:codex-worker -->
 ## Codex specialist worker
@@ -341,6 +387,8 @@ A worker may diagnose, plan, generate patches, and run tests. It has no BLE hand
 
 Dry-run tests do not prove a deployed worker. Production requires an immutable image, short-lived workload identity, cgroup/resource quotas, read-only root, seccomp or equivalent isolation, controlled egress proxy, secret broker, task queue, artifact custody, tenant separation, compromise containment, observability, and independent review.
 
+<a id="mcp-adapter"></a>
+
 <!-- module:mcp-adapter -->
 ## MCP development adapter
 
@@ -356,8 +404,12 @@ The adapter contains no provider credential, OAuth handle, BLE handle, shell, ac
 
 Any future mutating MCP tool requires a new reviewed profile, exact schema, identity, capability registration, risk tier, lease, audit, receipt, reconciliation, and tests. A descriptive annotation alone is never sufficient authority.
 
+<a id="qualification-release"></a>
+
 <!-- module:qualification-release -->
 ## Qualification, evidence, and release gates
+
+Operator-only capacity diagnostics and P0–P3 drill/qualification handoff are specified in [PRIORITY_EXECUTION_RUNBOOK.md](operations/PRIORITY_EXECUTION_RUNBOOK.md). The observer is `services/qualification/model_capacity.py`; it does not change gateway admission or release authority.
 
 ### Responsibility
 
@@ -373,6 +425,8 @@ Physical reports require exact app build, platform/device, G1 firmware/serial id
 
 There is no override. Product release additionally requires protected-main evidence, independent latest-head review, physical Android/iOS reports, production KMS/HSM and attestation, provider receipts, credential incident closure, independent assurance, binary signing/SBOM/attestation, pilot telemetry, kill-switch, rollback, staged rollout, and store approval.
 
+<a id="contracts-compatibility"></a>
+
 <!-- module:contracts-compatibility -->
 ## Contracts and compatibility
 
@@ -387,6 +441,8 @@ A breaking field, authority identity, state transition, risk tier, data class, e
 ### Change checklist
 
 Update producer, consumer, schema, composed contract, deterministic fixtures, negative tests, module guide, Gap Ledger, Evidence Index, release template, and compatibility notes in one change. The metadata validator ensures referenced paths exist; semantic review remains independent.
+
+<a id="repository-governance"></a>
 
 <!-- module:repository-governance -->
 ## Repository governance, CI, and source authority
@@ -405,6 +461,8 @@ The canonical workflow runs repository contracts and service tests, Flutter form
 
 The source contract cannot prove that GitHub applies it. All seven checks, strict mode, administrator enforcement, CODEOWNER and last-push approval, stale-review dismissal, conversation resolution, linear history, and no force-push/deletion must be observed through the GitHub API. The implementing identity never self-approves, bypasses, auto-merges, or self-merges.
 
+<a id="native-dependencies"></a>
+
 <!-- module:native-dependencies -->
 ## Vendored native dependencies
 
@@ -419,3 +477,8 @@ Every vendored component requires supplier, license, version or truthful unknown
 ### Change checklist and external gates
 
 Upgrades must preserve bitstream/PCM expectations, JNI/Objective-C ownership, allocation and error checks, platform build locks, sanitizer execution, and license notices. Production additionally requires supplier/version confirmation, independent license review, vulnerability response ownership, binary provenance, and release-candidate validation.
+
+
+## Current cross-module execution and review
+
+The P0–P3 work sequence, per-module residual scope and acceptance handoffs are in [PRIORITY_EXECUTION_2026-09-12.md](development/PRIORITY_EXECUTION_2026-09-12.md). It is an execution supplement, not a replacement module registry or release authorization. Primary fragment links use unique explicit standalone HTML anchors; the module validator checks those targets rather than discarding fragments. Navigation consistency does not certify the eleven semantic dimensions or independent module review.

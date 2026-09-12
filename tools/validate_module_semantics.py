@@ -30,6 +30,11 @@ from tools.generate_module_docs import (  # noqa: E402
     module_digest,
 )
 
+from services.qualification.module_document_links import (  # noqa: E402
+    ModuleLinkError,
+    validate_primary_fragment,
+)
+
 MODULE_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 PLACEHOLDER = re.compile(r"\b(?:TBD|TODO|TO-DO|COMING SOON|PLACEHOLDER)\b", re.I)
 REQUIRED_HEADINGS = (
@@ -195,7 +200,11 @@ def _validate_record(root: Path, module: dict[str, Any], seen: set[str]) -> None
         module["primary_document"],
         label=f"{identifier}.primary_document",
     )
-    _reference(root, primary, allow_directory=False)
+    primary_path = _reference(root, primary, allow_directory=False)
+    try:
+        validate_primary_fragment(primary_path, primary)
+    except ModuleLinkError as error:
+        fail(f"{identifier} primary document: {error}")
     if primary not in references["documentation"]:
         fail(f"{identifier} primary document is absent from documentation inventory")
 

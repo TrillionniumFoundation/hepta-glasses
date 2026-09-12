@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import io
 import json
 import subprocess
 import sys
@@ -144,9 +145,93 @@ class IosCiTests(unittest.TestCase):
         self.assertIn("tools/ios_ci.py select-destination", workflow)
         self.assertIn("-only-testing:RunnerTests", workflow)
         self.assertIn("tools/ios_ci.py validate-result", workflow)
+        self.assertIn("--input /tmp/hepta-ios-test-summary.json --root .", workflow)
+        self.assertIn("-test-timeouts-enabled YES", workflow)
+        self.assertIn("-maximum-test-execution-time-allowance 180", workflow)
+        self.assertEqual(workflow.count("flutter pub get --enforce-lockfile"), 3)
+        self.assertIn("flutter analyze --fatal-infos --fatal-warnings", workflow)
         self.assertNotIn("xcodebuild -showdestinations", workflow)
         self.assertNotIn("Designed for [iPad,iPhone]", workflow)
         self.assertNotIn('grep -Fq "id:$DEVICE_ID"', workflow)
+
+
+class StrictIosResultTests(unittest.TestCase):
+    def good(self):
+        return dict(totalTestCount=7, passedTests=7, failedTests=0, skippedTests=0)
+
+    def test_complete_explicit_counts_pass(self):
+        self.assertTrue(ios_ci.validate_xcresult_summary(self.good(), expected_count=7)['ok'])
+
+    def test_all_skipped_is_not_success(self):
+        with self.assertRaisesRegex(ios_ci.IosCiError, 'skipped'):
+            ios_ci.validate_xcresult_summary(dict(totalTestCount=7, passedTests=0, failedTests=0, skippedTests=7))
+
+    def test_partial_skip_is_not_success(self):
+        with self.assertRaisesRegex(ios_ci.IosCiError, 'skipped'):
+            ios_ci.validate_xcresult_summary(dict(totalTestCount=7, passedTests=6, failedTests=0, skippedTests=1))
+
+    def test_every_count_is_required(self):
+        for key in self.good():
+            with self.subTest(key=key):
+                doc=self.good(); del doc[key]
+                with self.assertRaises(ios_ci.IosCiError):
+                    ios_ci.validate_xcresult_summary(doc)
+
+    def test_invalid_integer_types_and_negative_counts(self):
+        for key in self.good():
+            for value in (None, True, False, '0', 0.0, -1):
+                with self.subTest(key=key, value=value):
+                    doc=self.good(); doc[key]=value
+                    with self.assertRaises(ios_ci.IosCiError):
+                        ios_ci.validate_xcresult_summary(doc)
+
+    def test_nested_count_cannot_replace_missing_root_count(self):
+        doc=self.good(); doc['child']={'passedTests':doc.pop('passedTests')}
+        with self.assertRaises(ios_ci.IosCiError):
+            ios_ci.validate_xcresult_summary(doc)
+
+    def test_zero_failures_does_not_infer_passes(self):
+        with self.assertRaises(ios_ci.IosCiError):
+            ios_ci.validate_xcresult_summary(dict(totalTestCount=7,failedTests=0))
+
+    def test_zero_and_partial_runs_fail(self):
+        for total, passed in ((0,0),(7,6),(7,8)):
+            with self.subTest(total=total,passed=passed):
+                with self.assertRaises(ios_ci.IosCiError):
+                    ios_ci.validate_xcresult_summary(dict(totalTestCount=total,passedTests=passed,failedTests=0,skippedTests=0))
+
+    def test_failed_run_fails(self):
+        doc=self.good();doc['failedTests']=1;doc['passedTests']=6
+        with self.assertRaisesRegex(ios_ci.IosCiError, 'failed tests'):
+            ios_ci.validate_xcresult_summary(doc)
+
+    def test_source_inventory_mismatch_fails(self):
+        for count in (1,8,True,0,-1):
+            with self.subTest(count=count):
+                with self.assertRaises(ios_ci.IosCiError):
+                    ios_ci.validate_xcresult_summary(self.good(),expected_count=count)
+
+    def test_duplicate_json_key_fails(self):
+        with self.assertRaises(ios_ci.IosCiError):
+            ios_ci.load_json(io.StringIO('{"failedTests":1,"failedTests":0}'))
+
+    def test_oversized_json_fails(self):
+        with self.assertRaises(ios_ci.IosCiError):
+            ios_ci.load_json(io.StringIO(' ' * (ios_ci.MAX_JSON_CHARACTERS+1)))
+
+    def test_deep_json_fails_with_stable_error(self):
+        with self.assertRaises(ios_ci.IosCiError):
+            ios_ci.load_json(io.StringIO('['*2000+'0'+']'*2000))
+
+    def test_missing_devices_is_stable_failure(self):
+        with self.assertRaises(ios_ci.IosCiError):
+            ios_ci.select_available_iphone({'unrelated': []})
+
+    def test_non_ios_runtime_cannot_supply_iphone(self):
+        with self.assertRaises(ios_ci.IosCiError):
+            ios_ci.select_available_iphone({'devices': {'com.apple.CoreSimulator.SimRuntime.tvOS-99-1':[
+                {'name':'iPhone pretend','udid':'11111111-1111-1111-1111-111111111111','isAvailable':True,'state':'Booted'}]}})
+
 
 
 if __name__ == "__main__":

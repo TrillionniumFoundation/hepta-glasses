@@ -22,6 +22,7 @@ UDID = re.compile(
     r"[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
 )
 RUNTIME_VERSION = re.compile(r"(?:^|[.-])iOS[-.]?(\d+)(?:[-.](\d+))?(?:[-.](\d+))?$")
+MAX_JSON_CHARACTERS = 2 * 1024 * 1024
 SWIFT_TEST = re.compile(r"\bfunc\s+(test[A-Za-z0-9_]*)\s*\(")
 
 
@@ -54,16 +55,43 @@ def _unique_object(pairs: Iterable[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def _check_json_depth(text: str) -> None:
+    # Bound nesting before decoding; brackets inside JSON strings do not count.
+    depth = 0
+    quoted = False
+    escaped = False
+    for character in text:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                quoted = False
+        elif character == '"':
+            quoted = True
+        elif character in "[{":
+            depth += 1
+            if depth > 64:
+                fail("CI JSON exceeds the nesting limit")
+        elif character in "]}":
+            depth -= 1
+
+
 def load_json(stream: TextIO) -> Any:
     try:
-        return json.load(
-            stream,
+        text = stream.read(MAX_JSON_CHARACTERS + 1)
+        if len(text) > MAX_JSON_CHARACTERS:
+            fail("CI JSON exceeds the input limit")
+        _check_json_depth(text)
+        return json.loads(
+            text,
             object_pairs_hook=_unique_object,
             parse_constant=lambda value: fail(f"non-finite JSON number: {value}"),
         )
     except IosCiError:
         raise
-    except (UnicodeError, json.JSONDecodeError) as error:
+    except (UnicodeError, json.JSONDecodeError, RecursionError) as error:
         fail(f"invalid JSON: {error}")
 
 
@@ -77,7 +105,7 @@ def _runtime_key(identifier: str) -> tuple[int, int, int, str]:
 
 
 def select_available_iphone(document: Any) -> Simulator:
-    if not isinstance(document, Mapping) or set(document) < {"devices"}:
+    if not isinstance(document, Mapping) or "devices" not in document:
         fail("simctl document lacks devices")
     devices = document["devices"]
     if not isinstance(devices, Mapping):
@@ -87,6 +115,8 @@ def select_available_iphone(document: Any) -> Simulator:
     for runtime, entries in devices.items():
         if not isinstance(runtime, str) or not isinstance(entries, list):
             fail("simctl runtime inventory is malformed")
+        if _runtime_key(runtime)[0] < 0:
+            continue  # A device name cannot make a non-iOS runtime eligible.
         for entry in entries:
             if not isinstance(entry, Mapping):
                 fail("simctl device entry is malformed")
@@ -164,44 +194,37 @@ def validate_test_inventory(root: Path) -> dict[str, Any]:
     }
 
 
-def _numbers_for_key(value: Any, key: str) -> list[int]:
-    values: list[int] = []
-    if isinstance(value, Mapping):
-        for current_key, current_value in value.items():
-            if current_key == key and isinstance(current_value, int) and not isinstance(
-                current_value, bool
-            ):
-                values.append(current_value)
-            values.extend(_numbers_for_key(current_value, key))
-    elif isinstance(value, list):
-        for item in value:
-            values.extend(_numbers_for_key(item, key))
-    return values
+def validate_xcresult_summary(
+    document: Any, *, expected_count: int | None = None
+) -> dict[str, int | bool]:
+    """Validate explicit top-level counts; never infer passing or skipped tests.
 
-
-def validate_xcresult_summary(document: Any) -> dict[str, int | bool]:
+    This checks the narrow xcresult summary profile, not the authenticity of a
+    caller-supplied JSON file or the behavior of each test. The canonical CI lane
+    obtains the summary directly from its xcresult and supplies the source count.
+    Additional xcresult metadata is allowed; nested counts are not substitutes.
+    """
     if not isinstance(document, Mapping):
         fail("xcresult summary must be an object")
-
-    total_values = _numbers_for_key(document, "totalTestCount")
-    passed_values = _numbers_for_key(document, "passedTests")
-    failed_values = _numbers_for_key(document, "failedTests")
-    skipped_values = _numbers_for_key(document, "skippedTests")
-    if len(total_values) != 1 or len(failed_values) != 1:
-        fail("xcresult summary has ambiguous test counts")
-
-    total = total_values[0]
-    failed = failed_values[0]
-    passed = passed_values[0] if len(passed_values) == 1 else total - failed
-    skipped = skipped_values[0] if len(skipped_values) == 1 else 0
+    keys = ("totalTestCount", "passedTests", "failedTests", "skippedTests")
+    if any(key not in document or type(document[key]) is not int for key in keys):
+        fail("xcresult summary requires explicit integer test counts")
+    total, passed, failed, skipped = (document[key] for key in keys)
     if min(total, passed, failed, skipped) < 0:
         fail("xcresult summary contains a negative test count")
-    if total <= 0:
+    if total == 0:
         fail("iOS native test run executed zero tests")
     if failed != 0:
         fail(f"iOS native test run has {failed} failed tests")
-    if passed + failed + skipped != total:
+    if skipped != 0:
+        fail(f"iOS native test run has {skipped} skipped tests")
+    if passed != total:
         fail("xcresult summary counts do not reconcile")
+    if expected_count is not None:
+        if type(expected_count) is not int or expected_count <= 0:
+            fail("expected source test count must be a positive integer")
+        if total != expected_count:
+            fail("xcresult test count differs from the current source inventory")
     return {
         "ok": True,
         "total": total,
@@ -229,6 +252,7 @@ def main(argv: list[str] | None = None) -> int:
 
     result = subparsers.add_parser("validate-result")
     result.add_argument("--input", required=True)
+    result.add_argument("--root", help="Compare with this checkout's RunnerTests inventory")
 
     args = parser.parse_args(argv)
     try:
@@ -245,7 +269,13 @@ def main(argv: list[str] | None = None) -> int:
         else:
             stream = _open_input(args.input)
             try:
-                summary = validate_xcresult_summary(load_json(stream))
+                expected = (
+                    validate_test_inventory(Path(args.root))["test_count"]
+                    if args.root is not None else None
+                )
+                summary = validate_xcresult_summary(
+                    load_json(stream), expected_count=expected
+                )
             finally:
                 if stream is not sys.stdin:
                     stream.close()
