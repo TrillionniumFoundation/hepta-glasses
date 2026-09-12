@@ -1,0 +1,433 @@
+{
+  "schema_version": 1,
+  "program_id": "hepta-glasses-external-closure-v1",
+  "candidate_identity_rule": "Every accepted packet binds the live convergence pull-request head commit, Git tree, canonical workflow run, exact-head source Artifact, and any applicable binary, provider, firmware, device, registry, and review identities. Any movement reopens the affected gate.",
+  "claim_ceiling": "This program proves source-side preparation and enumerates authentic closure transactions. It does not close an Administration, provider, KMS/HSM, attestation, physical-device, firmware-vendor, independent-assurance, signing, pilot, rollout, rollback, store, or release gate without evidence issued and accepted by the named external authority.",
+  "terminal_blocking_statuses": [
+    "BLOCKED_ADMIN_SETTING",
+    "BLOCKED_EXTERNAL",
+    "BLOCKED_UPSTREAM"
+  ],
+  "gates": [
+    {
+      "id": "main-protection-and-adoption",
+      "gap_ids": ["HG-0017", "HG-0089"],
+      "issue_numbers": [84, 102],
+      "authority_class": "repository_administrator_and_independent_api_observer",
+      "status": "BLOCKED_ADMIN_SETTING",
+      "owner": "Repository administrator plus a distinct governance observer",
+      "source_preparation": [
+        "contracts/main-branch-protection-v1.json",
+        "tools/repository_governance.py",
+        "docs/operations/REPOSITORY_GOVERNANCE_RUNBOOK.md"
+      ],
+      "evidence_required": [
+        "Administration-authorized apply receipt for every canonical protection field",
+        "Distinct complete sanitized API readback showing all seven exact required checks with strict=true",
+        "Ordinary protected merge receipt and fresh exact-main seven-job CI plus Artifact verification"
+      ],
+      "acceptance": [
+        "Every field in contracts/main-branch-protection-v1.json matches the live readback",
+        "No bypass actor, direct ref update, force push, review dismissal, or temporary relaxation was used",
+        "The adopted main commit and tree receive new exact-main evidence"
+      ],
+      "prohibited_substitutes": [
+        "protected=true alone",
+        "screenshots without a complete API payload",
+        "repository-role admin without an Administration-capable API credential",
+        "administrator bypass or direct main ref movement"
+      ],
+      "reopens_on": [
+        "protection or ruleset movement",
+        "required-check identity movement",
+        "source, base, review, or main movement"
+      ]
+    },
+    {
+      "id": "out-of-band-authority-registry",
+      "gap_ids": ["G10-TRUST-REGISTRY"],
+      "issue_numbers": [96],
+      "authority_class": "independent_trust_registry_controller",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "Independent release-security or assurance controller",
+      "source_preparation": [
+        "schemas/external-authority-trust-registry.schema.json",
+        "tools/validate_external_evidence.py",
+        "evidence/external/README.md"
+      ],
+      "evidence_required": [
+        "Out-of-band authoritative registry digest and revision history",
+        "Narrow Ed25519 authority seats with identity verification and proof of private-key possession",
+        "Witnessed rotation, revocation, expiry, substitution, and cross-class negative drills"
+      ],
+      "acceptance": [
+        "The registry digest is distributed outside repository and evidence-bundle custody",
+        "No private key enters source, Actions, issues, pull requests, logs, or evidence packages",
+        "Complete external evidence validates under the independently pinned registry"
+      ],
+      "prohibited_substitutes": [
+        "repository-generated trust root",
+        "pin derived from the submitted bundle",
+        "one key reused for incompatible authority classes",
+        "self-review or self-issued independence assertion"
+      ],
+      "reopens_on": [
+        "registry revision, key, scope, status, or pin movement",
+        "loss of proof-of-possession or controller independence"
+      ]
+    },
+    {
+      "id": "authenticated-independent-review",
+      "gap_ids": ["HG-0044"],
+      "issue_numbers": [85],
+      "authority_class": "independent_code_reviewer_and_external_acceptance_reviewer",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "Eligible non-pusher Code Owner plus distinct external acceptance reviewer",
+      "source_preparation": [
+        "docs/development/G10_AUTHORITY_QUORUM_AND_REVIEW_INTEGRITY.md",
+        "tools/validate_external_evidence.py",
+        "contracts/external-evidence-envelope-v1.json"
+      ],
+      "evidence_required": [
+        "Fresh exact-head GitHub approval by an eligible non-pusher",
+        "Externally signed review statement binding head, tree, run, Artifact, review ID, and resolved conversations",
+        "Distinct later acceptance bound to the final reviewer roster and acceptance context"
+      ],
+      "acceptance": [
+        "Reviewer eligibility and independence satisfy the authority contract",
+        "No source or base movement occurred after approval",
+        "The signed package validates under the out-of-band registry"
+      ],
+      "prohibited_substitutes": [
+        "stale approval",
+        "author or latest-pusher approval",
+        "unsigned issue comment",
+        "repository-generated reviewer key"
+      ],
+      "reopens_on": [
+        "source, base, workflow, Artifact, conversation, or reviewer-set movement"
+      ]
+    },
+    {
+      "id": "provider-credential-incident",
+      "gap_ids": ["HG-0013"],
+      "issue_numbers": [86],
+      "authority_class": "credential_provider_and_security_incident_owner",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "Affected credential provider and named security incident owner",
+      "source_preparation": [
+        "docs/operations/CREDENTIAL_INCIDENT_RUNBOOK.md",
+        "contracts/external-evidence-envelope-v1.json",
+        "docs/THREAT_MODEL.md"
+      ],
+      "evidence_required": [
+        "Provider-side historical credential revocation receipt and authoritative timestamp",
+        "Negative-use proof that the old credential is unusable",
+        "Replacement opaque KID/reference, scoped policy, incident timeline, and closure approval"
+      ],
+      "acceptance": [
+        "The provider and incident owner sign the class-scoped claims",
+        "No raw credential or replacement secret is disclosed",
+        "Mobile and source artifacts contain no permanent provider credential"
+      ],
+      "prohibited_substitutes": [
+        "deleting a key from source",
+        "rotating a local environment variable",
+        "masked dashboard screenshot",
+        "assertion that the key is unused"
+      ],
+      "reopens_on": [
+        "credential, tenant, scope, provider, environment, or incident finding movement"
+      ]
+    },
+    {
+      "id": "production-model-provider",
+      "gap_ids": ["HG-0014"],
+      "issue_numbers": [87],
+      "authority_class": "production_model_tenant_owner_and_cloud_security",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "AI platform owner and cloud security owner",
+      "source_preparation": [
+        "docs/development/DURABLE_MODEL_GATEWAY.md",
+        "docs/operations/DURABLE_MODEL_GATEWAY_RUNBOOK.md",
+        "services/model_gateway/production.py"
+      ],
+      "evidence_required": [
+        "Production tenant, deployment, model, region, quota, retention, and training-use policy exports",
+        "KMS or secret-manager reference and redacted live success, rejection, timeout, cancel, quota, and revoke receipts",
+        "Independent confirmation that permanent provider secrets are absent from mobile binaries"
+      ],
+      "acceptance": [
+        "Live receipts bind to the declared tenant, deployment, candidate, and policy",
+        "Cancellation, deadline, rate, abuse, retention, and failure-closed controls are exercised",
+        "Artifact digests and owner approvals validate under the external registry"
+      ],
+      "prohibited_substitutes": [
+        "loopback gateway",
+        "mock or test tenant",
+        "source unit tests",
+        "synthetic provider receipt"
+      ],
+      "reopens_on": [
+        "tenant, model, region, credential, quota, retention, deployment, or provider movement"
+      ]
+    },
+    {
+      "id": "production-identity-kms-attestation",
+      "gap_ids": ["HG-0015"],
+      "issue_numbers": [88],
+      "authority_class": "kms_hsm_owner_platform_attestation_owner_and_cloud_security",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "KMS/HSM administrator, Android and Apple attestation owners, and cloud security",
+      "source_preparation": [
+        "docs/development/DURABLE_IDENTITY.md",
+        "docs/operations/IDENTITY_AUTHORITY_RUNBOOK.md",
+        "contracts/identity-authority-v1.json"
+      ],
+      "evidence_required": [
+        "Production KMS/HSM key metadata, non-export policy, opaque KIDs, and deployment identity",
+        "Android and Apple attestation receipts bound to nonce, package or bundle, signer, device, freshness, and verdict policy",
+        "Rotation, revocation, replay, lost-device containment, and recovery drill receipts"
+      ],
+      "acceptance": [
+        "Private material remains non-exportable and outside source/mobile custody",
+        "Attestation receipts bind to the exact production applications and candidate",
+        "Independent assurance accepts rotation, revoke, replay, loss, and recovery behavior"
+      ],
+      "prohibited_substitutes": [
+        "development HMAC key",
+        "software-only mock KMS",
+        "simulator attestation",
+        "local certificate or screenshot without issuer receipt"
+      ],
+      "reopens_on": [
+        "key, policy, region, application identity, signer, attestation policy, or recovery movement"
+      ]
+    },
+    {
+      "id": "production-realtime-oauth",
+      "gap_ids": ["HG-0021"],
+      "issue_numbers": [89],
+      "authority_class": "realtime_provider_tenant_owner_and_oauth_registration_owner",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "Realtime platform and OAuth registration owners",
+      "source_preparation": [
+        "docs/development/REALTIME_ADMISSION.md",
+        "docs/operations/REALTIME_ADMISSION_RUNBOOK.md",
+        "contracts/realtime-admission-v1.json"
+      ],
+      "evidence_required": [
+        "Production realtime tenant and exact Android/iOS OAuth registration exports",
+        "Scope and redirect review plus one-time bootstrap, replay, stale, wrong-device, wrong-scope, and expiry receipts",
+        "Provider timeout reconciliation, user/provider revoke, and session termination receipts"
+      ],
+      "acceptance": [
+        "Mobile receives only bounded short-lived authority",
+        "Single consumption is atomic under concurrency",
+        "Every receipt binds to the declared tenant, applications, scopes, candidate, and provider"
+      ],
+      "prohibited_substitutes": [
+        "localhost redirect",
+        "loopback or test tenant",
+        "successful socket without authoritative receipts",
+        "OAuth console screenshot"
+      ],
+      "reopens_on": [
+        "tenant, redirect, scope, provider, bootstrap, revoke, or application identity movement"
+      ]
+    },
+    {
+      "id": "production-capability-adapters",
+      "gap_ids": ["HG-0022"],
+      "issue_numbers": [90],
+      "authority_class": "capability_provider_owner_and_privacy_owner",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "Capability platform, provider integration, and privacy owners",
+      "source_preparation": [
+        "docs/development/DURABLE_CAPABILITIES.md",
+        "docs/operations/DURABLE_CAPABILITY_RUNBOOK.md",
+        "docs/CAPABILITY_MODEL.md"
+      ],
+      "evidence_required": [
+        "Per-enabled-adapter application registration, minimum scopes, consent, opaque credential handle, and policy records",
+        "Live success, rejection, duplicate, timeout, reconciliation, revoke, retention, export, deletion, and redaction receipts",
+        "Provider-authoritative external IDs and privacy-owner approval"
+      ],
+      "acceptance": [
+        "Single-use mutation authority is consumed before the first external effect",
+        "Indeterminate effects reconcile through authoritative provider reads",
+        "Disabled adapters remain unavailable and enabled adapters satisfy purpose limitation"
+      ],
+      "prohibited_substitutes": [
+        "mock or sandbox provider",
+        "generic HTTP 200",
+        "locally generated receipt ID",
+        "declaring an enabled adapter not applicable"
+      ],
+      "reopens_on": [
+        "adapter enablement, provider, scope, consent, credential, retention, or policy movement"
+      ]
+    },
+    {
+      "id": "physical-g1-qualification",
+      "gap_ids": ["HG-0010"],
+      "issue_numbers": [91],
+      "authority_class": "physical_device_lab_and_mobile_release_owner",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "Independent or controlled device lab plus Android/iOS release owners",
+      "source_preparation": [
+        "docs/operations/DEVICE_QUALIFICATION_RUNBOOK.md",
+        "contracts/qualification-slo-v1.json",
+        "tools/qualify_device_trace.py"
+      ],
+      "evidence_required": [
+        "Signed Android and iOS test-build digests and declared handset, OS, G1 hardware, firmware, RF, locale, and instrumentation matrix",
+        "Raw acquisition-order synthetic=false traces and derived protocol, latency, reliability, power, thermal, cancellation, recovery, and soak reports",
+        "Lab signature, operator identity, SLO evaluation, and independent acceptance"
+      ],
+      "acceptance": [
+        "Both platforms pass the canonical physical evaluator and minimum sample floors",
+        "Fault observation and recovery are demonstrated rather than labeled",
+        "Reports bind to the exact binaries, devices, firmware, scenario, and lab authority"
+      ],
+      "prohibited_substitutes": [
+        "simulator or emulator",
+        "digital twin or mocked BLE",
+        "packet replay without physical radios",
+        "unsigned screenshot or single-device sample represented as a matrix"
+      ],
+      "reopens_on": [
+        "binary, signer, handset, OS, G1 hardware, firmware, RF, scenario, lab, or SLO movement"
+      ]
+    },
+    {
+      "id": "production-speech-qualification",
+      "gap_ids": ["HG-0018"],
+      "issue_numbers": [92],
+      "authority_class": "speech_provider_owner_mobile_audio_owner_and_physical_device_lab",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "Production speech provider, mobile audio owner, and physical lab",
+      "source_preparation": [
+        "docs/development/SPEECH_BOOTSTRAP_CUSTODY.md",
+        "docs/operations/SPEECH_BOOTSTRAP_RUNBOOK.md",
+        "docs/PLATFORM_CAPABILITIES.json"
+      ],
+      "evidence_required": [
+        "Production Android PCM-to-ASR deployment and provider/KMS references",
+        "Physical Android/iOS device, OS, locale, G1 firmware, latency, finality, cancellation, interruption, and privacy reports",
+        "Provider retention, training-use, regional processing, delete, abuse, and observability controls"
+      ],
+      "acceptance": [
+        "Only provider/framework-final text can become final application output",
+        "Barge-in and cancellation fence stale transcript, model, and display publication",
+        "Raw audio and partial transcripts remain bounded to the active session"
+      ],
+      "prohibited_substitutes": [
+        "LC3 decode alone",
+        "Android capture without production ASR",
+        "iOS simulator speech",
+        "synthetic audio-only or partial-transcript tests"
+      ],
+      "reopens_on": [
+        "speech provider, tenant, audio format, locale, OS, device, firmware, retention, or binary movement"
+      ]
+    },
+    {
+      "id": "independent-assurance",
+      "gap_ids": ["HG-0011"],
+      "issue_numbers": [93],
+      "authority_class": "independent_security_privacy_legal_accessibility_and_safety_assurance",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "Independent assurance leads separate from implementation and evidence production",
+      "source_preparation": [
+        "docs/operations/PRIVACY_SECURITY_REVIEW_CHECKLIST.md",
+        "docs/THREAT_MODEL.md",
+        "docs/PRIVACY_MODEL.md"
+      ],
+      "evidence_required": [
+        "Independent security, privacy, legal, accessibility, and safety reports bound to the same candidate and binaries",
+        "Reviewer qualification and independence declarations, executed test plans, findings, retests, and residual-risk decisions",
+        "Detached signatures or verifiable review receipts and final cross-discipline acceptance"
+      ],
+      "acceptance": [
+        "All required disciplines approve the same unchanged candidate",
+        "High and critical findings are resolved and other residual risks are accepted by authorized owners",
+        "Reviewers are not source pushers or evidence issuers for the approved area"
+      ],
+      "prohibited_substitutes": [
+        "implementation-team self-review",
+        "internal sign-off represented as independent",
+        "unexecuted checklist",
+        "generic compliance certificate or approval of different digests"
+      ],
+      "reopens_on": [
+        "candidate, binary, provider, firmware, threat model, material finding, reviewer, or acceptance movement"
+      ]
+    },
+    {
+      "id": "vendor-firmware-authority",
+      "gap_ids": ["HG-0016"],
+      "issue_numbers": [94],
+      "authority_class": "firmware_vendor_or_vendor_delegated_authority",
+      "status": "BLOCKED_UPSTREAM",
+      "owner": "Even G1 firmware vendor or explicitly delegated firmware authority",
+      "source_preparation": [
+        "docs/PRODUCT_BOUNDARY.md",
+        "docs/G1_BLE_CONNECTION.md",
+        "contracts/g1-ble-protocol-v1.json"
+      ],
+      "evidence_required": [
+        "Vendor grant defining products, hardware revisions, firmware branches, roles, scope, and validity",
+        "Reproducible firmware build, secure-boot chain, HSM/KMS signing custody, OTA, anti-rollback, recovery, and compatibility records",
+        "Witnessed authorized-image, tamper rejection, interrupted OTA, recovery, rollback, and key retirement drills"
+      ],
+      "acceptance": [
+        "Issuer authority is verifiably vendor-authorized",
+        "Lifecycle drills pass on the declared physical hardware",
+        "Independent assurance accepts the vendor evidence and companion-app boundary"
+      ],
+      "prohibited_substitutes": [
+        "reverse-engineered protocol knowledge",
+        "public firmware binary or local dump",
+        "unsigned vendor email",
+        "companion-app OTA command or simulator"
+      ],
+      "reopens_on": [
+        "vendor grant, hardware, firmware, boot chain, signer, OTA, recovery, rollback, or protocol movement"
+      ]
+    },
+    {
+      "id": "signed-release-pilot-and-stores",
+      "gap_ids": ["HG-0012"],
+      "issue_numbers": [95],
+      "authority_class": "release_signing_authority_pilot_operator_rollback_owner_and_store_authority",
+      "status": "BLOCKED_EXTERNAL",
+      "owner": "Android/iOS signing authorities, release engineering, pilot, rollback, and store owners",
+      "source_preparation": [
+        "docs/operations/RELEASE_AND_ROLLBACK_RUNBOOK.md",
+        "contracts/release-gates-v1.json",
+        "tools/evaluate_release_gate.py"
+      ],
+      "evidence_required": [
+        "Production-signed Android and iOS binaries, public signer metadata, binary SBOMs, provenance, attestations, entitlements, and final scans",
+        "Executed pilot, support, incident, kill-switch, rollback, reliability, latency, power, thermal, crash, privacy, and accessibility results",
+        "Staged rollout decisions, exact-binary store or distribution approvals, and a passing no-override product release gate"
+      ],
+      "acceptance": [
+        "All artifacts bind to one frozen candidate, provider, firmware, policy, and binary set",
+        "Pilot and rollback thresholds are executed and accepted by named authorities",
+        "Store approvals identify the exact submitted binaries and the product release gate passes without override"
+      ],
+      "prohibited_substitutes": [
+        "debug or ad-hoc build",
+        "source SBOM represented as binary SBOM",
+        "synthetic pilot telemetry",
+        "unexecuted kill switch or rollback plan",
+        "store submission without approval or release-gate override"
+      ],
+      "reopens_on": [
+        "source, binary, signer, entitlement, provider, firmware, configuration, pilot, rollout, rollback, store, or finding movement"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "allowed_sandboxes": [
+    "read-only",
+    "workspace-write"
+  ],
+  "network_access_default": false,
+  "maximum_prompt_characters": 24000,
+  "maximum_timeout_seconds": 1800,
+  "maximum_output_bytes": 4194304,
+  "executable": "codex",
+  "maximum_workspace_entries": 100000,
+  "network_isolation_command": [
+    "unshare",
+    "--user",
+    "--map-root-user",
+    "--net",
+    "--"
+  ]
+}

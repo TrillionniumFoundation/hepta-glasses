@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "contract_id": "durable-memory-v1",
+  "parent_gap": "HG-0087",
+  "owner": "privacy",
+  "implementations": [
+    "services/skills/durable_memory.py",
+    "services/skills/durable_memory_schema.py"
+  ],
+  "tests": [
+    "services/skills/test_durable_memory.py",
+    "services/skills/test_durable_memory_schema.py",
+    "services/skills/test_durable_memory_component_identity.py"
+  ],
+  "persistence": {
+    "engine": "SQLite WAL/FULL/BEGIN IMMEDIATE",
+    "version": 1,
+    "application_id": "0x484D454D",
+    "application_id_meaning": "local component identity only; not cryptographic or anti-rollback evidence",
+    "pre_marker_adoption": "only after a complete valid version-1 authority schema; rows preserved",
+    "conflicting_application_id": "reject; never overwrite",
+    "required_tables": [
+      "memory_schema",
+      "memory_consents",
+      "memory_records",
+      "memory_deletions"
+    ],
+    "missing_or_malformed_established_state": "reject; never recreate authority tables empty",
+    "complete_table_loss_after_vacuum": "reject when the retained component application_id identifies prior custody",
+    "legacy_complete_loss_before_marker_adoption": "reject sequence-only residue; a shared database with unrelated user tables is intrinsically ambiguous",
+    "shared_autoincrement_tables": "permitted; database-global sqlite_sequence alone is not Memory identity while unrelated user tables exist",
+    "transaction_begin_failure": "release the process lock from __enter__; no transaction or Memory state mutation is acknowledged",
+    "derived_indexes": "may be rebuilt from intact tables",
+    "automatic_migration": false,
+    "stale_snapshot_restore_supported": false
+  },
+  "cryptography": {
+    "key_material_persisted": false,
+    "plaintext_values_persisted": false,
+    "cipher": "external deployment-supplied authenticated MemoryCipher",
+    "aad_fields": [
+      "memory_id",
+      "subject",
+      "purpose",
+      "data_class",
+      "created_at",
+      "expires_at"
+    ],
+    "per_subject_key_rotation": true,
+    "production_kms_or_hsm_included": false
+  },
+  "time": {
+    "clock": "trusted host integer Unix seconds",
+    "sample_after_write_lock": true,
+    "write_recheck_after_encrypt_and_insert": true,
+    "read_recheck_after_decrypt": true,
+    "operation_local_clock_rollback": "reject and roll back",
+    "global_or_backup_anti_rollback": false
+  },
+  "consent": {
+    "scope": [
+      "subject",
+      "purpose",
+      "allowed_data_classes",
+      "absolute_expiry"
+    ],
+    "forbidden_classes": [
+      "credential",
+      "raw_audio",
+      "secret"
+    ],
+    "narrowing": "delete disallowed ciphertext and create propagation tombstones",
+    "expiry": "no stale write or decrypted delivery after final local check"
+  },
+  "deletion": {
+    "atomic_with_local_ciphertext_removal": true,
+    "cursor_paginated": true,
+    "restart_safe": true,
+    "acknowledgement_is_remote_deletion_evidence": false,
+    "downstream_worker_included": false
+  },
+  "not_implemented": [
+    "authenticated product ingress",
+    "production per-subject KMS/HSM/platform key service",
+    "migration from deployed predecessor formats",
+    "encrypted backup exclusion, retention and trusted anti-rollback",
+    "authenticated downstream deletion reconciliation",
+    "independent privacy/security and deployment qualification"
+  ],
+  "claim_ceiling": "Source custody and deterministic tests only. Memory and aggregate HG-0087 remain OPEN."
+}

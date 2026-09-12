@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hepta.invalid/schemas/agent-intent-v1.json",
+  "title": "AgentIntent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "intent_id",
+    "task_id",
+    "action",
+    "arguments",
+    "requested_capabilities",
+    "risk_tier",
+    "source",
+    "policy_hash",
+    "idempotency_key",
+    "deadline"
+  ],
+  "properties": {
+    "intent_id": {
+      "type": "string"
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "action": {
+      "type": "string"
+    },
+    "arguments": {
+      "type": "object"
+    },
+    "requested_capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "risk_tier": {
+      "enum": [
+        "R0",
+        "R1",
+        "R2",
+        "R3",
+        "R4"
+      ]
+    },
+    "source": {
+      "type": "string"
+    },
+    "policy_hash": {
+      "type": "string"
+    },
+    "idempotency_key": {
+      "type": "string"
+    },
+    "deadline": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

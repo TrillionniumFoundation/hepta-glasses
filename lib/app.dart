@@ -1,6 +1,4 @@
-
-
-import 'package:demo_ai_even/services/evenai.dart';
+import 'package:hepta_glasses/services/evenai.dart';
 
 class App {
   static App? _instance;

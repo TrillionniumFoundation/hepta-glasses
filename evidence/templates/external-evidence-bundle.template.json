@@ -1,0 +1,87 @@
+{
+  "schema_version": 2,
+  "contract_id": "hepta-external-evidence-envelope-v1",
+  "trust_registry": {
+    "registry_id": "hepta-external-authority-trust-registry-v1",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "candidate": {
+    "repository": "TrillionniumFoundation/hepta-glasses",
+    "source_commit": "0000000000000000000000000000000000000000",
+    "source_tree": "0000000000000000000000000000000000000000",
+    "contracts_revision": "2026-09-01-g8",
+    "release_id": null,
+    "binary_digests": [],
+    "collected_at": "1970-01-01T00:00:00Z"
+  },
+  "submissions": [
+    {
+      "gap_id": "HG-0017",
+      "evidence_level": "ADMIN",
+      "issuer": {
+        "identity": "replace-with-pinned-repository-administrator-identity",
+        "organization": "replace-with-pinned-authoritative-organization",
+        "authority_class": "repository_administrator",
+        "key_id": "replace-with-pinned-ed25519-key-id",
+        "contact": null
+      },
+      "environment": {
+        "repository": "TrillionniumFoundation/hepta-glasses",
+        "branch": "main",
+        "api_version": "replace-with-api-version"
+      },
+      "subjects": [
+        "contracts/main-branch-protection-v1.json",
+        "main"
+      ],
+      "claims": {
+        "seven_checks_required": false,
+        "strict_status_checks": false,
+        "administrator_enforcement": false,
+        "codeowner_review_required": false,
+        "last_push_approval_required": false,
+        "stale_review_dismissal": false,
+        "conversation_resolution": false,
+        "linear_history": false,
+        "force_push_disabled": false,
+        "branch_deletion_disabled": false,
+        "fresh_api_readback_matches_contract": false
+      },
+      "artifacts": [
+        {
+          "artifact_id": "replace-with-unique-artifact-id",
+          "uri": "artifact://HG-0017/replace-with-api-observation.json",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "media_type": "application/json",
+          "issued_at": "1970-01-01T00:00:00Z",
+          "expires_at": null,
+          "contains_secrets": false,
+          "synthetic": false,
+          "signature_uri": null,
+          "signature_sha256": null
+        }
+      ],
+      "result": "inconclusive",
+      "limitations": [
+        "This committed file is a non-attesting template and must not pass closure validation."
+      ],
+      "notes": "Copy this submission once per authority-owned gap. Replace every placeholder, then sign the canonical submission statement with the externally pinned issuer key.",
+      "attestation": {
+        "signed_at": "1970-01-01T00:00:00Z",
+        "statement_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+        "signature_uri": "artifact://signatures/replace-with-issuer-signature.sig",
+        "signature_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    }
+  ],
+  "acceptance": {
+    "state": "incomplete",
+    "reviewed_at": null,
+    "reviewers": [],
+    "bundle_digest": null,
+    "decision_reference": null,
+    "limitations": [
+      "Template only; no externally pinned registry, issuer signature, reviewer signature, or authoritative evidence is present."
+    ]
+  }
+}

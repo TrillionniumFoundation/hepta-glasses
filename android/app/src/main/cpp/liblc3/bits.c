@@ -322,12 +322,12 @@ static inline void accu_load(struct lc3_bits_accu *accu,
 
     for ( ; nbytes; nbytes--) {
         accu->v >>= 8;
-        accu->v |= *(--buffer->p_bw) << (LC3_ACCU_BITS - 8);
+        accu->v |= (unsigned)*(--buffer->p_bw) << (LC3_ACCU_BITS - 8);
     }
 
     if (accu->n >= 8) {
         accu->nover = LC3_MIN(accu->nover + accu->n, LC3_ACCU_BITS);
-        accu->v >>= accu->n;
+        accu->v = accu->n >= LC3_ACCU_BITS ? 0 : accu->v >> accu->n;
         accu->n = 0;
     }
 }

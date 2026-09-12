@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "contract_id": "hepta-canonical-json-conformance-v1",
+  "scope": "JSON values with string object keys, finite numbers, UTF-8 and no insignificant whitespace",
+  "vectors": [
+    {
+      "id": "empty_object",
+      "value": {},
+      "canonical": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "sorted_keys",
+      "value": {
+        "z": 1,
+        "a": 2
+      },
+      "canonical": "{\"a\":2,\"z\":1}",
+      "sha256": "c2985c5ba6f7d2a55e768f92490ca09388e95bc4cccb9fdf11b15f4d42f93e73"
+    },
+    {
+      "id": "unicode",
+      "value": {
+        "emoji": "🧠",
+        "text": "眼镜"
+      },
+      "canonical": "{\"emoji\":\"🧠\",\"text\":\"眼镜\"}",
+      "sha256": "6260c0a26a89b9024f98a3144a60553af19b0922c878135419ba85b79f9d81f5"
+    },
+    {
+      "id": "nested",
+      "value": {
+        "b": [
+          true,
+          null,
+          {
+            "y": 2,
+            "x": 1
+          }
+        ],
+        "a": "v"
+      },
+      "canonical": "{\"a\":\"v\",\"b\":[true,null,{\"x\":1,\"y\":2}]}",
+      "sha256": "6c6642cbcf504a5ee1aa60b5beca7ecf240fb7a87b3c009ee93c7e751ea87253"
+    },
+    {
+      "id": "numbers",
+      "value": {
+        "integer": 0,
+        "negative": -7,
+        "decimal": 1.25
+      },
+      "canonical": "{\"decimal\":1.25,\"integer\":0,\"negative\":-7}",
+      "sha256": "44747b2c730471ab6dd730201784fbdc06ea10ea62a8744bfb3d1076a5ce0e60"
+    },
+    {
+      "id": "escaping",
+      "value": {
+        "line": "a\nb",
+        "quote": "\"",
+        "slash": "\\"
+      },
+      "canonical": "{\"line\":\"a\\nb\",\"quote\":\"\\\"\",\"slash\":\"\\\\\"}",
+      "sha256": "a34e6ec431a0148a914658a9171d34d6fb1f0087aaa22b2b4ebd9253b3ff3350"
+    }
+  ],
+  "invalid_cases": [
+    {
+      "id": "non_string_object_key",
+      "language_specific": true,
+      "rule": "Map/object keys must already be strings; implementations must not coerce them."
+    },
+    {
+      "id": "non_finite_number",
+      "language_specific": true,
+      "rule": "NaN and positive/negative infinity are outside JSON and must fail before hashing."
+    }
+  ]
+}

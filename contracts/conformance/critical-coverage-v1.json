@@ -1,0 +1,19 @@
+{
+  "contract_id": "hepta-critical-dart-line-coverage-v1",
+  "schema_version": 1,
+  "metric": "instrumented_line_coverage_percent",
+  "files": [
+    {
+      "module_id": "contracts-compatibility",
+      "path": "lib/runtime/canonical_json.dart",
+      "minimum_instrumented_lines": 20,
+      "minimum_percent": 90.0
+    },
+    {
+      "module_id": "g1-protocol-features",
+      "path": "lib/runtime/packet_codec.dart",
+      "minimum_instrumented_lines": 40,
+      "minimum_percent": 95.0
+    }
+  ]
+}

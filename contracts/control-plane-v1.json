@@ -1,0 +1,44 @@
+{
+  "contract_id": "hepta-glasses-control-plane-v1",
+  "version": 1,
+  "token": {
+    "algorithm": "HS256-reference-kms-production",
+    "maximum_access_ttl_seconds": 900,
+    "maximum_realtime_bootstrap_ttl_seconds": 120,
+    "required_bindings": [
+      "subject",
+      "device_id",
+      "audience",
+      "session_id",
+      "token_id",
+      "scopes",
+      "issued_at",
+      "expires_at",
+      "key_id"
+    ]
+  },
+  "revocation_dimensions": [
+    "token_id",
+    "session_id",
+    "device_id",
+    "subject"
+  ],
+  "realtime": {
+    "bootstrap_one_time": true,
+    "provider_secret_returned_to_client": false,
+    "allowed_scopes": [
+      "audio.input",
+      "audio.output",
+      "transcript.delta",
+      "tool.propose"
+    ],
+    "barge_in_generation_fencing": true
+  },
+  "capability_execution": {
+    "journal_before_effect": true,
+    "exact_argument_lease": true,
+    "idempotency_conflict_fails_closed": true,
+    "untrusted_content_cannot_authorize_mutation": true,
+    "reconciliation_on_indeterminate_result": true
+  }
+}
