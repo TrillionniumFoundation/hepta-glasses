@@ -52,7 +52,7 @@ def _policy(raw: object) -> dict[str, Any]:
             result[key] = value
         return result
 
-    document = json.loads(raw, object_pairs_hook=unique,
+    document = json.loads(raw.decode("utf-8"), object_pairs_hook=unique,
                           parse_constant=lambda _: _fail("model_capacity_policy_invalid"))
     if type(document) is not dict or set(document) != {*POLICY_LIMITS, "provider"}:
         _fail("model_capacity_policy_invalid")
@@ -111,10 +111,15 @@ def read_snapshot(path: Path, *, timeout_seconds: float = 2.0) -> dict[str, Any]
         versions = db.execute(
             "SELECT version FROM hepta_component_schema WHERE component='model_gateway'"
         ).fetchmany(2)
-        if versions != [(2,)]:
+        if len(versions) != 1 or type(versions[0][0]) is not int or versions[0][0] != 2:
             _fail("model_capacity_schema_invalid")
         rows = db.execute("SELECT id,policy,last_time,suspended FROM model_policy").fetchmany(2)
-        if len(rows) != 1 or rows[0][0] != 1 or type(rows[0][2]) is not int or not 0 <= rows[0][2] <= 253402300799 or rows[0][3] not in (0, 1):
+        if (
+            len(rows) != 1
+            or type(rows[0][0]) is not int or rows[0][0] != 1
+            or type(rows[0][2]) is not int or not 0 <= rows[0][2] <= 253402300799
+            or type(rows[0][3]) is not int or rows[0][3] not in (0, 1)
+        ):
             _fail("model_capacity_policy_invalid")
         policy = _policy(rows[0][1])
         counts = db.execute(

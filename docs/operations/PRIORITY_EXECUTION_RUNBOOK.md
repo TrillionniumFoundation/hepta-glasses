@@ -133,8 +133,9 @@ Do not promote the repository fixture cipher or local tombstone into that proof.
 Observe privacy-safe error codes, stage latency, queue depth, in-flight workers,
 capacity growth, uncertain-effect counts, cleanup age and revocation propagation.
 No raw content belongs in metric labels. Define actual alert routing and on-call
-ownership before declaring operational qualification. No exporter or paging
-integration is installed by the capacity observer.
+ownership before declaring operational qualification. The one-shot formatter in
+section 8 exports only local capacity diagnostics; no paging integration,
+HTTP listener or deployed monitoring pipeline is installed by this source.
 
 ## 6. Physical and external qualification packet
 
@@ -194,3 +195,134 @@ review roles separate from implementation. On any unsupported integration,
 missing external fact, unresolved effect, failed drill or candidate movement,
 retain the blocked state and its concrete owner/unblock condition. Never relax
 branch protection, self-approve, self-merge or use an override release path.
+
+## 8. One-shot model capacity telemetry
+
+### Responsibility, ownership and source
+
+`services/qualification/model_metrics.py` renders the observer's single local
+snapshot as 17 fixed, label-free integer gauges. It depends only on the standard
+library and `model_capacity.read_snapshot`; it never imports or constructs the
+provider or gateway. Accountable owner: ai-platform. Runtime-security reviews
+storage/privacy boundaries; release reviews how operational evidence is used.
+This is an operational supplement to `docs/development/DURABLE_MODEL_GATEWAY.md`,
+not a second authority policy, public endpoint, scheduler or release gate.
+
+### API, output and configuration
+
+`collect(path, timeout_seconds=2.0)` returns `(text, exit_status)` and propagates
+`CapacityObservationError` on failure. The CLI catches that fixed-code error.
+Run from the qualified repository root with Python 3.12 and its system SQLite:
+
+```bash
+python3 -m services.qualification.model_metrics \
+  --database /srv/hepta/state/model.sqlite --timeout-seconds 2
+```
+
+The database must already exist at a trusted, absolute, nonlinked path. Timeout
+must be finite and in `(0, 5]` seconds. There is no host/port, provider endpoint,
+credential, label, interval or policy override argument. The observer's original
+JSON CLI remains available and retains its own exit contract. The text CLI uses
+these outcomes, which must not be confused with gateway admission:
+
+| Exit | Standard output | Operator meaning |
+|---|---|---|
+| 0 | All 17 gauges; observation success 1 | Snapshot read without an attention flag; not service readiness |
+| 2 | All 17 gauges; observation success 1, attention 1 | Valid observation requiring investigation; do not discard it as a failed probe |
+| 1 | Only observation success 0; fixed-code JSON on stderr | Observation unavailable or invocation invalid; no healthy zero-capacity values |
+
+Argument errors use exit 1 and do not reflect argument values. `--help` is normal
+CLI help, not a telemetry invocation. Abrupt process termination, interpreter or
+stdout failures are supervisor failures and may produce no complete output.
+
+Every metric has prefix `hepta_model_`, one preceding `# TYPE ... gauge` line,
+no labels, no sample timestamp and a final newline. This is Prometheus text
+exposition, not the OpenMetrics EOF profile. The fixed suffixes and units are:
+
+| Suffix group | Count | Unit and semantics |
+|---|---:|---|
+| `observation_success`, `suspended`, `operator_attention_required` | 3 | Integer 0/1; local observation/control/attention only |
+| `event_rows`, `unresolved_readback_exhausted` | 2 | Retained event rows and unresolved requests with no readback allowance |
+| `requests_used`, `requests_limit`, `requests_remaining`, `requests_utilization_basis_points` | 4 | Lifetime request rows, row limit, remaining rows, and 10,000 basis points = 100% |
+| `denials_used`, `denials_limit`, `denials_remaining`, `denials_utilization_basis_points` | 4 | Combined session/request-denial row capacity and utilization |
+| `requests_prepared`, `requests_indeterminate`, `requests_committed`, `requests_cancelled` | 4 | Current retained request-state row counts, not provider job counts |
+
+A minimal successful sample is `hepta_model_observation_success 1`. It alone
+cannot establish adequate free capacity. No subject, session, request key,
+provider binding, path, question, answer or secret is exported. Aggregate counts
+still disclose activity and require operator access control and retention policy.
+
+### State, concurrency and malformed storage
+
+The call is synchronous: open a read-only database, begin one snapshot, validate
+required storage, aggregate it, close, then render. There is no background loop,
+worker pool, cached last success, retry or write transaction. Concurrent
+uncommitted changes are not included in the snapshot. Multiple invocations have
+independent snapshots and must not be combined into a claimed atomic global
+view. The supervisor should serialize probes rather than run an unbounded fleet.
+
+Policy bytes must decode as strict UTF-8 before JSON parsing; UTF-16, UTF-32 and
+UTF-8 BOM are rejected. Schema version, policy singleton ID and suspension must
+be actual integers, not numerically equal floating-point values from a malformed
+schema. These repairs prevent reproduced misleading observer success. They do
+not claim to repair the database or demonstrate a gateway authorization bypass.
+Other schema, policy, state and deadline failures retain their fixed safe codes.
+The checks are not cryptographic anti-rollback or complete SQLite integrity proof.
+
+### Deployment, alerts and failure recovery
+
+An authorized monitoring controller must own the interval, process hard timeout,
+output size cap, collector permissions, heartbeat/freshness and alert routing.
+The SQL budget bounds ordinary SQLite execution best-effort, not a stalled
+filesystem; the process supervisor must terminate a stuck probe. Output is
+bounded by the fixed inventory; require complete parse before publishing it.
+
+For a textfile collector, atomically replace the previous sample in a private
+operator-owned directory after validating output. Publish valid exit-2 results
+as well as exit-0 results. A handled exit-1 failure must replace stale success
+with the failure gauge, not retain yesterday's green sample. On no output,
+crash, hard timeout or collector failure, mark data unavailable and alert on
+freshness independently; never synthesize zeros or leave stale success trusted.
+This source does not install that supervisor or file-publishing controller.
+
+Use the existing 80%/95% diagnostic levels for warning/escalation and page for
+persistent suspension or exhausted unresolved readbacks according to the actual
+on-call policy. Missing/failed observation is a separate alert. Probe intervals,
+freshness ceilings and escalation response targets require measured host load
+and operator sign-off; this code does not claim a measured production SLO.
+Capacity alerts cannot reset authority, delete records, increase policy, retry a
+provider request or authorize service restart. Follow sections 2–4 for recovery.
+
+### Compatibility, rollback and verification
+
+Valid gateway v2 storage, JSON report shape and database layout are unchanged;
+no migration, new table, policy reset or quota refund occurs. The strict reader
+intentionally rejects previously accepted malformed encodings/scalars. Stop
+using a malformed database and investigate through its owning service; do not
+convert or restore it merely to make monitoring green. Disabling or rolling back
+the new formatter stops telemetry only and must never roll back gateway state.
+A rollback to an older observer restores its weaker validation, so it is not an
+acceptable workaround for malformed storage. Retain unavailable status instead.
+
+Run both the prior observer suite (including its real-gateway schema integration)
+and the new real-SQLite operational suite, then all seven unchanged-head jobs:
+
+```bash
+python3 -m unittest services.qualification.test_model_capacity \
+  services.qualification.test_model_capacity_operations -v
+```
+
+The new suite checks all six reproduced encoding/scalar counterexamples, valid
+read-only behavior, fixed metric shape/privacy, exit-2 attention, safe argument
+errors, missing/malformed storage, one-snapshot collection, readback exhaustion,
+uncommitted-writer isolation and the actual module CLI in a child process.
+Fixtures are local synthetic databases, not real tenant activity or an operated
+metrics backend. Real provider/host rollout, monitoring freshness/alert drills,
+independent module acceptance and E5–E7 qualification remain open.
+
+A metric name/type/unit, observer schema, limit, privacy classification or CLI
+exit change requires code, tests, this section and operator compatibility review
+in one change. Neither a green diagnostic nor author-written prose closes the
+module's independent-review or external-evidence requirements.
+
+Primary format reference: https://prometheus.io/docs/instrumenting/exposition_formats/
