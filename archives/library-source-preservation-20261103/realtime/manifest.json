@@ -1,0 +1,177 @@
+{
+  "schema": "historical-source-preservation-v1",
+  "scope": "Reviewed source, tests, build configuration and source-verification inputs. Project documentation and external delivery attachments remain held.",
+  "original_archive": {
+    "archive": "hepta-realtime-provider-binding-unpublished-25acad7c.zip",
+    "bytes": 137476,
+    "sha256": "517e654edb511d9b5c565217c9067e6d61288cb08c82f86c4030fcd3b9418c69",
+    "git_blob_sha": "fdaa02a6807684ed4225575e5528f7b0775cf6a3"
+  },
+  "original_base_commit": "25acad7c081f58f06f690f5d077515ca95069602",
+  "original_patch": {
+    "member": "patches/hepta-realtime-provider-binding-unpublished-from-25acad7c.patch",
+    "bytes": 87852,
+    "sha256": "d43474de823fb4e35f108401f0dbb914b2d8b4decc5edc6d4ef0455417bf47b1",
+    "git_blob_sha": "22756d86a38c37b51da460b523097507c4a18ee6",
+    "tracked_paths": 13
+  },
+  "publication_repository": "TrillionniumFoundation/hepta-glasses",
+  "publication_base_commit": "719b4bdb38d56e3a77a320d9765241ecdd3b4751",
+  "publication_base_tree": "a0bd9543e1ca5b6067e59eec0aa3715f837d9f42",
+  "selected_source_file_count": 13,
+  "selected_source_bytes": 142740,
+  "files": [
+    {
+      "source_relative_path": "contracts/realtime-admission-v1.json",
+      "source_archive_member": "candidate/contracts/realtime-admission-v1.json",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/realtime/files/contracts/realtime-admission-v1.json",
+      "mode": "100644",
+      "bytes": 4263,
+      "sha256": "6546833a13827d33f1defea70562e516a37c2723cd541c208f7315dc9e62a3a0",
+      "git_blob_sha": "35f351701c5538947b283756bf06793fe1dc1f57",
+      "source_category": "source_verification_data"
+    },
+    {
+      "source_relative_path": "docs/MODULE_COVERAGE.json",
+      "source_archive_member": "candidate/docs/MODULE_COVERAGE.json",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/realtime/files/docs/MODULE_COVERAGE.json",
+      "mode": "100644",
+      "bytes": 10969,
+      "sha256": "0148eea6d216aac834f7e7c688ad09ab851713ed0da57561969bc569bf77dc3a",
+      "git_blob_sha": "ead2f5d8bec167faa25654b794ad5122f070eaee",
+      "source_category": "source_verification_data"
+    },
+    {
+      "source_relative_path": "services/control_plane/durable_realtime.py",
+      "source_archive_member": "candidate/services/control_plane/durable_realtime.py",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/realtime/files/services/control_plane/durable_realtime.py",
+      "mode": "100644",
+      "bytes": 29974,
+      "sha256": "c315d5515db887e0119862444d34fa4b7c36699b81c9feb68c235f3303185ee6",
+      "git_blob_sha": "ea43efdc49c944b1c1eca00245b206111bcb4fa1",
+      "source_category": "source_test_or_build_config"
+    },
+    {
+      "source_relative_path": "services/control_plane/realtime_provider_binding.py",
+      "source_archive_member": "candidate/services/control_plane/realtime_provider_binding.py",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/realtime/files/services/control_plane/realtime_provider_binding.py",
+      "mode": "100644",
+      "bytes": 10674,
+      "sha256": "9109ee0f3d29893268dfa4bf574e11080a360bc204ddac0a20dde268edf4484d",
+      "git_blob_sha": "e5dc85ce024d2f74dd89ce58bcf422865888d643",
+      "source_category": "source_test_or_build_config"
+    },
+    {
+      "source_relative_path": "services/control_plane/realtime_recovery.py",
+      "source_archive_member": "candidate/services/control_plane/realtime_recovery.py",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/realtime/files/services/control_plane/realtime_recovery.py",
+      "mode": "100644",
+      "bytes": 8644,
+      "sha256": "03a0db403bcf26b1edc0ad16f6ddaa42a4282cc67e39e21f68c43ac5f5d48160",
+      "git_blob_sha": "fadd418103f2d17fcf373834693df9691cc417f5",
+      "source_category": "source_test_or_build_config"
+    },
+    {
+      "source_relative_path": "services/control_plane/test_durable_realtime.py",
+      "source_archive_member": "candidate/services/control_plane/test_durable_realtime.py",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/realtime/files/services/control_plane/test_durable_realtime.py",
+      "mode": "100644",
+      "bytes": 1809,
+      "sha256": "337ff48f2cd281c2fe390057c0428e4685edf7d12ecb0667f4603b997f72f3c3",
+      "git_blob_sha": "80d63559e3acad71131e2b372d1480aa61467550",
+      "source_category": "source_test_or_build_config"
+    },
+    {
+      "source_relative_path": "services/control_plane/test_realtime_admission.py",
+      "source_archive_member": "candidate/services/control_plane/test_realtime_admission.py",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/realtime/files/services/control_plane/test_realtime_admission.py",
+      "mode": "100644",
+      "bytes": 18442,
+      "sha256": "3e0c3913d6f5d27da2886c3ff9c25e4d0726fe7e5332ab5195696a89051ef551",
+      "git_blob_sha": "7276540c20b5e24c5c609bef7fd41752d44480c6",
+      "source_category": "source_test_or_build_config"
+    },
+    {
+      "source_relative_path": "services/control_plane/test_realtime_custody.py",
+      "source_archive_member": "candidate/services/control_plane/test_realtime_custody.py",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/realtime/files/services/control_plane/test_realtime_custody.py",
+      "mode": "100644",
+      "bytes": 10534,
+      "sha256": "edf0c1dfa994f89aaa2c6c23cc0f762de7d0c54d7e290b667578c99afc26e329",
+      "git_blob_sha": "da814be5cf4c8b0610935313b1de54f8e58f19fd",
+      "source_category": "source_test_or_build_config"
+    },
+    {
+      "source_relative_path": "services/control_plane/test_realtime_provider_binding.py",
+      "source_archive_member": "candidate/services/control_plane/test_realtime_provider_binding.py",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/realtime/files/services/control_plane/test_realtime_provider_binding.py",
+      "mode": "100644",
+      "bytes": 20673,
+      "sha256": "7733894ac93b10bf96e8ed02d998b6637e9d1d1cb65a96c5d5688271c7b70541",
+      "git_blob_sha": "7a4850e23890a5b78ef57a289538856d3bb5910a",
+      "source_category": "source_test_or_build_config"
+    },
+    {
+      "source_relative_path": "services/control_plane/test_realtime_recovery_budget.py",
+      "source_archive_member": "candidate/services/control_plane/test_realtime_recovery_budget.py",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/realtime/files/services/control_plane/test_realtime_recovery_budget.py",
+      "mode": "100644",
+      "bytes": 21123,
+      "sha256": "e8eccd86b6c03191ffd44c902721a24570d2ff2bbe5bb1639e5bc48a45f730ad",
+      "git_blob_sha": "10bce54ba100cdb877595e2fa31ae7c61751a1ba",
+      "source_category": "source_test_or_build_config"
+    },
+    {
+      "source_relative_path": "delivery-tools/records/probe_actual_v3_migration.py",
+      "source_archive_member": "records/probe_actual_v3_migration.py",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/realtime/files/delivery-tools/records/probe_actual_v3_migration.py",
+      "mode": "100644",
+      "bytes": 2869,
+      "sha256": "c5401c9dc011ae6fa334d026ca78b0523fcce4eb529f031ebeee22613164dedf",
+      "git_blob_sha": "c7472c55e5c451558571b5c088f3c0b3767290cd",
+      "source_category": "source_test_or_build_config"
+    },
+    {
+      "source_relative_path": "delivery-tools/records/reproduce_provider_binding.py",
+      "source_archive_member": "records/reproduce_provider_binding.py",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/realtime/files/delivery-tools/records/reproduce_provider_binding.py",
+      "mode": "100644",
+      "bytes": 1741,
+      "sha256": "24f1cb84ec18ae58622400f541677f0f55d3daa3c597d90608a86758803edaab",
+      "git_blob_sha": "e6e3b9f9293d57d2543959c86d21d897377c73b2",
+      "source_category": "source_test_or_build_config"
+    },
+    {
+      "source_relative_path": "delivery-tools/verify_delivery.py",
+      "source_archive_member": "verify_delivery.py",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/realtime/files/delivery-tools/verify_delivery.py",
+      "mode": "100644",
+      "bytes": 1025,
+      "sha256": "a5ecd10576da5fac0c05bfdb808b74b74f7366c17fa8ec3e7f001ac9736835ce",
+      "git_blob_sha": "79fdbac8aba8952727d081d4e5ed0034005e2851",
+      "source_category": "source_test_or_build_config"
+    }
+  ],
+  "held_project_document_count": 3,
+  "complete_original_archive_published": false,
+  "archive_code_executed_during_preparation": false,
+  "new_runtime_qualification_claimed": false,
+  "unchanged_and_baseline_members_preserved": {
+    "commit": "25acad7c081f58f06f690f5d077515ca95069602",
+    "tree": "55dafd00090138104f582d9589d4dfc1677394dd",
+    "exact_members": 18
+  }
+}

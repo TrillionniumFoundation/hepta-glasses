@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "contract_id": "realtime-admission-v1",
+  "parent_gap": "HG-0087",
+  "owner": "cloud",
+  "implementation": "services/control_plane/durable_realtime.py",
+  "extends_contract": "contracts/realtime-speech-custody-v2.json",
+  "api": {
+    "clock": "required trusted host Callable[[], int], Unix seconds",
+    "caller_now_supported": false,
+    "ticket_expiry": "deadline for initial activation completion; not lifetime of an already-active session",
+    "sample_points": [
+      "after write lock",
+      "before reservation commit",
+      "after worker scheduling, before provider call",
+      "before and after active-state update"
+    ],
+    "expired_recovery": "local terminal revoke with durable lookup/known-session cleanup; never new activation",
+    "provider_binding": "required non-secret operator-governed provider/tenant/configuration namespace; not remote identity proof"
+  },
+  "storage": {
+    "component": "realtime",
+    "version": 4,
+    "layout_changed": true,
+    "unmarked_existing_tables": "reject; no synthesized attempts",
+    "incomplete_marked_schema": "reject; no missing outbox recreation",
+    "old_binary_fencing": "on reopening only; stop all already-running v2 processes",
+    "mixed_version_deployment_supported": false,
+    "existing_ticket_deadlines_preserved": true,
+    "anti_rollback": false,
+    "migration": "explicit offline v3-to-v4, historical provider namespace externally verified by operator; no allowance reset; v2-to-v3 remains a separate prerequisite"
+  },
+  "deadlines": {
+    "maximum_ticket_seconds": 300,
+    "default_ticket_seconds": 60,
+    "maximum_caller_seconds": 60,
+    "cleanup_budget": "one monotonic budget across the batch and nested provider work",
+    "maximum_workers": 16,
+    "hard_process_termination": false
+  },
+  "result_custody": {
+    "late_workers_commit": false,
+    "expiry_denial_and_cleanup": "commit before raising",
+    "historical_active_session": "not expired solely by ticket TTL",
+    "remote_deletion_proof_from_absence": false
+  },
+  "tests": [
+    "services/control_plane/test_durable_realtime.py",
+    "services/control_plane/test_realtime_custody.py",
+    "services/control_plane/test_realtime_admission.py",
+    "services/control_plane/test_realtime_recovery_budget.py",
+    "services/control_plane/test_realtime_provider_binding.py"
+  ],
+  "not_provided": [
+    "real provider exchange",
+    "authenticated ingress and live identity/session revocation",
+    "production session-lifetime enforcement",
+    "authoritative provider lookup/revoke evidence",
+    "external clock/anti-rollback anchor",
+    "encrypted metadata and bounded service deployment",
+    "independent acceptance"
+  ],
+  "claim_ceiling": "Local source and regression behavior, not full HG-0087 closure, physical-device or production qualification.",
+  "recovery_budget": {
+    "implementation": "services/control_plane/realtime_recovery.py",
+    "default_readbacks_per_session": 8,
+    "default_revokes_per_known_job": 8,
+    "maximum_each": 32,
+    "reserve_before_io": true,
+    "refund_on_timeout_crash_or_saturation": false,
+    "reset_api": false,
+    "configuration_change_on_reopen": "reject",
+    "selection": "non-exhausted pending jobs, least reservations used then job ID",
+    "exhausted_work": "retained pending; explicit operator escalation, no new activation",
+    "pre_v3_history": "uncounted; migration reports unknown historical usage and new allowance"
+  },
+  "provider_namespace_and_ownership": {
+    "implementation": "services/control_plane/realtime_provider_binding.py",
+    "binding_maximum_characters": 128,
+    "scope_per_database": 1,
+    "runtime_adapter_descriptor": "binding_id, when exposed, must match configured binding",
+    "cross_session_remote_id_reuse": false,
+    "quarantine_is_terminal": true,
+    "conflict_automatic_remote_revoke": false,
+    "quarantined_work_in_pending_inventory": true,
+    "quarantined_jobs_auto_drained": false,
+    "quarantine_reset_api": false,
+    "storage_tables": [
+      "realtime_provider_scope",
+      "realtime_provider_quarantine"
+    ],
+    "historical_namespace_verification": "out-of-band operator obligation; migration report explicitly false",
+    "real_provider_account_verification": false
+  }
+}

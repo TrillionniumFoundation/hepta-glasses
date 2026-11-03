@@ -1,0 +1,117 @@
+{
+  "schema": "historical-source-preservation-v1",
+  "scope": "Reviewed source, tests, build configuration and source-verification inputs. Project documentation and external delivery attachments remain held.",
+  "original_archive": {
+    "archive": "hepta-glasses-calendar-unpublished-9f9b5aa.zip",
+    "bytes": 92026,
+    "sha256": "c6c6d59473fb7591fb4c546ff64fbb37837e41ff4dfeb61cd3463af10f82bd71",
+    "git_blob_sha": "79bfba334f2bb9c56626e0f1be95834d1e538b4e"
+  },
+  "original_base_commit": "9f9b5aaab1d324b5ef29491e7bf281d5442ba68c",
+  "original_patch": {
+    "member": "hepta-calendar-unpublished-from-9f9b5aa.patch",
+    "bytes": 83284,
+    "sha256": "36e278a9b70f287b1d5aa9922ff21e58ccb1d1b2af672d793e0576f3df6daa78",
+    "git_blob_sha": "c7f3be6dc154eacaa60e9289c50bb451ec906fce",
+    "tracked_paths": 12
+  },
+  "publication_repository": "TrillionniumFoundation/hepta-glasses",
+  "publication_base_commit": "719b4bdb38d56e3a77a320d9765241ecdd3b4751",
+  "publication_base_tree": "a0bd9543e1ca5b6067e59eec0aa3715f837d9f42",
+  "selected_source_file_count": 8,
+  "selected_source_bytes": 111378,
+  "files": [
+    {
+      "source_relative_path": "contracts/google-calendar-capability-v1.json",
+      "source_archive_member": "candidate-files/contracts/google-calendar-capability-v1.json",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/calendar/files/contracts/google-calendar-capability-v1.json",
+      "mode": "100644",
+      "bytes": 3081,
+      "sha256": "57dea2024d276a453c9ad970a5d7f871e10f8607c4b4a8ec3059decb0bab2c9b",
+      "git_blob_sha": "601bb1f43258b8afa816d429bc355f3e9f3d843e",
+      "source_category": "source_verification_data"
+    },
+    {
+      "source_relative_path": "docs/HG0087_IMPLEMENTATION_STATUS.json",
+      "source_archive_member": "candidate-files/docs/HG0087_IMPLEMENTATION_STATUS.json",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/calendar/files/docs/HG0087_IMPLEMENTATION_STATUS.json",
+      "mode": "100644",
+      "bytes": 7723,
+      "sha256": "97efc4a36846b1d3af8eb2477eabd489af0fb9cb47e8d05cd12a2ec47a451044",
+      "git_blob_sha": "cec395b4e0ca3e460c4391d8d9e9a2bacd274f15",
+      "source_category": "source_verification_data"
+    },
+    {
+      "source_relative_path": "docs/MODULE_COVERAGE.json",
+      "source_archive_member": "candidate-files/docs/MODULE_COVERAGE.json",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/calendar/files/docs/MODULE_COVERAGE.json",
+      "mode": "100644",
+      "bytes": 9870,
+      "sha256": "408404caa09912a9d03ebf10eb90674a47fd9e121c5701dfc97e86984303e202",
+      "git_blob_sha": "8feb7a703ac30d6337422d14b56928a682d6ed01",
+      "source_category": "source_verification_data"
+    },
+    {
+      "source_relative_path": "docs/MODULE_HANDOFF.json",
+      "source_archive_member": "candidate-files/docs/MODULE_HANDOFF.json",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/calendar/files/docs/MODULE_HANDOFF.json",
+      "mode": "100644",
+      "bytes": 15531,
+      "sha256": "8d11393b486f021b9fc8b4587309f8decc74d5c5506fa7237ffaf010a1e2177f",
+      "git_blob_sha": "6290a17ec2353ff46a72f4a28271042a77f6176f",
+      "source_category": "source_verification_data"
+    },
+    {
+      "source_relative_path": "services/control_plane/durable_capabilities.py",
+      "source_archive_member": "candidate-files/services/control_plane/durable_capabilities.py",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/calendar/files/services/control_plane/durable_capabilities.py",
+      "mode": "100644",
+      "bytes": 24628,
+      "sha256": "149f8c65e4cf24361ffeab9e042e300d43b922a338f3dff27a85ab3a7f3fc8ee",
+      "git_blob_sha": "3a63341401bfdaa266d5fa3b957e5a10b5aac172",
+      "source_category": "source_test_or_build_config"
+    },
+    {
+      "source_relative_path": "services/control_plane/google_calendar.py",
+      "source_archive_member": "candidate-files/services/control_plane/google_calendar.py",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/calendar/files/services/control_plane/google_calendar.py",
+      "mode": "100644",
+      "bytes": 16393,
+      "sha256": "a8e59a38768346e104f0f9fc7f4fcb953521fcd905ac677480766f4e25ef3899",
+      "git_blob_sha": "ccf90a3e96235b521e13a90676d879179ad05554",
+      "source_category": "source_test_or_build_config"
+    },
+    {
+      "source_relative_path": "services/control_plane/test_google_calendar.py",
+      "source_archive_member": "candidate-files/services/control_plane/test_google_calendar.py",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/calendar/files/services/control_plane/test_google_calendar.py",
+      "mode": "100644",
+      "bytes": 31908,
+      "sha256": "0c1c67cfa26aaa28c92704f774abdaa3515b3bbc9cc283cd70e64d1e47f0b77e",
+      "git_blob_sha": "ef17c6f9500bf8b1f2e0dd3e180b9016487c172c",
+      "source_category": "source_test_or_build_config"
+    },
+    {
+      "source_relative_path": "delivery-tools/verify_delivery.py",
+      "source_archive_member": "verify_delivery.py",
+      "origin_kind": "archive_member",
+      "path": "archives/library-source-preservation-20261103/calendar/files/delivery-tools/verify_delivery.py",
+      "mode": "100644",
+      "bytes": 2244,
+      "sha256": "712e1857f285880fe2bdbd670481dde073bab3d498e9e5be9702ca6b86a259f3",
+      "git_blob_sha": "3c076b5aee45e5a7e71dd11445e6e278553e8f70",
+      "source_category": "source_test_or_build_config"
+    }
+  ],
+  "held_project_document_count": 5,
+  "complete_original_archive_published": false,
+  "archive_code_executed_during_preparation": false,
+  "new_runtime_qualification_claimed": false
+}
